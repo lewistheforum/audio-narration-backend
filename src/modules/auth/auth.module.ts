@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
 import { User as PostgresUser } from '../user/entities/user.entity';
 import { jwtConfig } from '../../config/jwt.config';
+import { GoogleStrategy } from './google.strategy';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { jwtConfig } from '../../config/jwt.config';
     TypeOrmModule.forFeature([PostgresUser]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard],
-  exports: [AuthService, JwtStrategy, JwtAuthGuard],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],
+  exports: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],
 })
 export class AuthModule {}

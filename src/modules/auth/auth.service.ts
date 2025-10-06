@@ -30,4 +30,12 @@ export class AuthService {
 
     throw new UnauthorizedException('Invalid credentials');
   }
+
+  async googleLogin(user: any) {
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return { message: 'Google login successful', user };
+  }
 }
