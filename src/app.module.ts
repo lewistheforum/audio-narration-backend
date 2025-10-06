@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { HealthModule } from './common/health/health.module';
+import { MailerModule } from './modules/mailer/mailer.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { HealthModule } from './common/health/health.module';
     AuthModule,
     UserModule,
     HealthModule,
+    MailerModule,
   ],
   controllers: [],
   providers: [],

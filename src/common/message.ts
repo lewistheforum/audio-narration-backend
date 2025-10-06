@@ -18,6 +18,7 @@ const successMessage = {
   userCreateSuccess: 'User created successfully',
   userUpdateSuccess: 'User updated successfully',
   userDeleteSuccess: 'User deleted successfully',
+  mailSendSuccess: 'Mail sent successfully',
 };
 
 const failMessage = {
