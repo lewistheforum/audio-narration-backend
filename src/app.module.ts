@@ -15,12 +15,12 @@ import { HealthModule } from './common/health/health.module';
     }),
 
     // config MongoDB with Mongoose
-    MongooseModule.forRoot(
-      process.env.MONGO_URI || 'mongodb://localhost:27017',
-      {
-        dbName: process.env.MONGO_DATABASE || 'test_capstone',
-      },
-    ),
+    // MongooseModule.forRoot(
+    //   process.env.MONGO_URI || 'mongodb://localhost:27017',
+    //   {
+    //     dbName: process.env.MONGO_DATABASE || 'test_capstone',
+    //   },
+    // ),
 
     // config PostgreSQL with TypeOrm
     TypeOrmModule.forRoot({

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectConnection } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+// import { InjectConnection } from '@nestjs/mongoose';
+// import { Connection } from 'mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -9,25 +9,25 @@ export class DatabaseHealthService {
   private readonly logger = new Logger(DatabaseHealthService.name);
 
   constructor(
-    @InjectConnection() private readonly mongoConnection: Connection,
+    // @InjectConnection() private readonly mongoConnection: Connection,
     @InjectDataSource() private readonly postgresDataSource: DataSource,
   ) {}
 
-  checkMongoConnection(): boolean {
-    try {
-      const state = this.mongoConnection.readyState;
-      if (state === 1) {
-        this.logger.log('✅ MongoDB connected successfully');
-        return true;
-      } else {
-        this.logger.error(`❌ MongoDB connection failed. State: ${state}`);
-        return false;
-      }
-    } catch (error) {
-      this.logger.error('❌ MongoDB connection error:', error.message);
-      return false;
-    }
-  }
+  // checkMongoConnection(): boolean {
+  //   try {
+  //     const state = this.mongoConnection.readyState;
+  //     if (state === 1) {
+  //       this.logger.log('✅ MongoDB connected successfully');
+  //       return true;
+  //     } else {
+  //       this.logger.error(`❌ MongoDB connection failed. State: ${state}`);
+  //       return false;
+  //     }
+  //   } catch (error) {
+  //     this.logger.error('❌ MongoDB connection error:', error.message);
+  //     return false;
+  //   }
+  // }
 
   async checkPostgresConnection(): Promise<boolean> {
     try {
@@ -46,18 +46,18 @@ export class DatabaseHealthService {
   }
 
   async checkAllConnections(): Promise<{
-    mongo: boolean;
+    // mongo: boolean;
     postgres: boolean;
     allConnected: boolean;
   }> {
     this.logger.log('🔍 Checking database connections...');
 
-    const [mongoConnected, postgresConnected] = await Promise.all([
-      Promise.resolve(this.checkMongoConnection()),
+    const [postgresConnected] = await Promise.all([
+      // Promise.resolve(this.checkMongoConnection()),
       this.checkPostgresConnection(),
     ]);
 
-    const allConnected = mongoConnected && postgresConnected;
+    const allConnected = postgresConnected;
 
     if (allConnected) {
       this.logger.log('🎉 All database connections are healthy!');
@@ -66,29 +66,29 @@ export class DatabaseHealthService {
     }
 
     return {
-      mongo: mongoConnected,
+      // mongo: mongoConnected,
       postgres: postgresConnected,
       allConnected,
     };
   }
 
   getConnectionInfo() {
-    const mongoState = this.mongoConnection.readyState;
-    const mongoHost = this.mongoConnection.host;
-    const mongoPort = this.mongoConnection.port;
-    const mongoName = this.mongoConnection.name;
+    // const mongoState = this.mongoConnection.readyState;
+    // const mongoHost = this.mongoConnection.host;
+    // const mongoPort = this.mongoConnection.port;
+    // const mongoName = this.mongoConnection.name;
 
     const postgresInitialized = this.postgresDataSource.isInitialized;
     const postgresOptions = this.postgresDataSource.options as any;
 
     return {
-      mongo: {
-        connected: mongoState === 1,
-        state: mongoState,
-        host: mongoHost,
-        port: mongoPort,
-        database: mongoName,
-      },
+      // mongo: {
+      //   connected: mongoState === 1,
+      //   state: mongoState,
+      //   host: mongoHost,
+      //   port: mongoPort,
+      //   database: mongoName,
+      // },
       postgres: {
         connected: postgresInitialized,
         host: postgresOptions.host,
