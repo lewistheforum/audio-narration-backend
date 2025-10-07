@@ -1,31 +1,26 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User as PostgresUser } from '../../modules/user/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
+import { UserService } from '../user/user.service';
 
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(PostgresUser)
-    private postgresUserRepository: Repository<PostgresUser>,
+    private userService: UserService,
     private jwtService: JwtService,
   ) {}
 
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    const postgresUser = await this.postgresUserRepository.findOne({
-      where: { email },
-    });
-    if (
-      postgresUser &&
-      (await bcrypt.compare(password, postgresUser.password))
-    ) {
-      const payload = { sub: postgresUser.id, email: postgresUser.email };
-      return { access_token: this.jwtService.sign(payload) };
+    const user = await this.userService.findByEmail(email); 
+
+    if (user && (await bcrypt.compare(password, user.password))) {
+      const payload = { sub: user.id, email: user.email };
+      return { data: {
+        access_token: this.jwtService.sign(payload),
+      } };
     }
 
     throw new UnauthorizedException('Invalid credentials');

@@ -34,9 +34,12 @@ import { MailerModule } from './modules/mailer/mailer.module';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: process.env.NODE_ENV !== 'production',
       logging: false,
-      ssl: {
-        rejectUnauthorized: false,
-      },
+      ssl:
+      process.env.POSTGRES_SSL === 'true'
+      ? {
+          rejectUnauthorized: false,
+        }
+      : false,
     }),
 
     // import modules
