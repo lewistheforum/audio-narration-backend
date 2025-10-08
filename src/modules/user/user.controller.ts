@@ -32,7 +32,7 @@ import { CreateUserDto,
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 
-@ApiTags('users')
+@ApiTags('Users management')
 @Controller('users')
 @ApiExtraModels(UserResponseDto) 
 // @UseGuards(JwtAuthGuard)

@@ -31,9 +31,10 @@ async function bootstrap() {
     .setTitle('Capstone API')
     .setDescription('A platform for sharing and discovering doctor')
     .setVersion('1.0')
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('users', 'User management endpoints')
-    .addTag('health', 'Health check endpoints')
+    .addTag('Authentication', 'Authentication endpoints')
+    .addTag('Users management', 'User management endpoints')
+    .addTag('Health', 'Health check endpoints')
+    .addTag('Mailer', 'Mail service endpoints')
     // .addBearerAuth()
     .build();
 

@@ -1,17 +1,45 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DatabaseHealthService } from './database-health.service';
 
-@ApiTags('health')
+@ApiTags('Health')
 @Controller('health')
 export class HealthController {
   constructor(private readonly databaseHealthService: DatabaseHealthService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Health check for all services' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get the overall health status of the application',
+    description: 'Checks the status of all critical services, including the database.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Health status returned successfully',
+    description: 'The overall health status of the application.',
+    schema: {
+      properties: {
+        status: { type: 'string', example: 'healthy' },
+        timestamp: { type: 'string', format: 'date-time', example: new Date().toISOString() },
+        services: {
+          type: 'object',
+          properties: {
+            database: {
+              type: 'object',
+              properties: {
+                postgres: { type: 'string', example: 'connected' },
+                allConnected: { type: 'boolean', example: true },
+              },
+            },
+            details: {
+              type: 'object',
+              properties: {
+                postgres: { type: 'string', example: 'postgres on localhost:5432/medicare_db' },
+              },
+            },
+          },
+        },
+      },
+    },
   })
   async getHealth() {
     const connections = await this.databaseHealthService.checkAllConnections();
@@ -28,20 +56,35 @@ export class HealthController {
   }
 
   @Get('database')
-  @ApiOperation({ summary: 'Database connection health check' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check only the database connection health' })
   @ApiResponse({
     status: 200,
-    description: 'Database health status returned successfully',
+    description: 'The connection status for each configured database.',
+    schema: {
+      type: 'object',
+      properties: {
+        postgres: { type: 'string', example: 'connected' },
+        allConnected: { type: 'boolean', example: true },
+      },
+    },
   })
   async getDatabaseHealth() {
     return await this.databaseHealthService.checkAllConnections();
   }
 
   @Get('database/info')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get detailed database connection information' })
   @ApiResponse({
     status: 200,
-    description: 'Database connection info returned successfully',
+    description: 'Detailed information about each configured database connection.',
+    schema: {
+      type: 'object',
+      properties: {
+        postgres: { type: 'string', example: 'postgres on localhost:5432/medicare_db' },
+      },
+    },
   })
   getDatabaseInfo() {
     return this.databaseHealthService.getConnectionInfo();
