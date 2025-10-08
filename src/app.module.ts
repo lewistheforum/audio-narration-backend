@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { HealthModule } from './common/health/health.module';
 import { MailerModule } from './modules/mailer/mailer.module';
+import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { MailerModule } from './modules/mailer/mailer.module';
     UserModule,
     HealthModule,
     MailerModule,
+    SocketGatewayModule,
   ],
   controllers: [],
   providers: [],
