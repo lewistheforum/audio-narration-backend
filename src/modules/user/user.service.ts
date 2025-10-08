@@ -2,11 +2,12 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
-import { CreateUserDto, UpdateUserDto, UserResponseDto } from './dto';
+import { CreateUserDto, UpdatePasswordDto, UpdateUserDto, UserResponseDto } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
 
@@ -54,12 +55,9 @@ export class UserService {
   async update(id: string, updateUserDto: UpdateUserDto): Promise<UserResponseDto> {
     const user = await this.findUserEntityById(id);
 
-    // Check if email is being updated and if it already exists
     if (updateUserDto.email && updateUserDto.email !== user.email) {
-      const existingUser = await this.userRepository.findOne({
-        where: { email: updateUserDto.email },
-      });
-      if (existingUser) {
+      const existingUserWithEmail = await this.findByEmail(updateUserDto.email);
+      if (existingUserWithEmail && existingUserWithEmail.id !== id) {
         throw new ConflictException(MESSAGES.failMessage.emailAlreadyExists);
       }
     }
@@ -68,6 +66,29 @@ export class UserService {
     const updatedUser = await this.userRepository.save(user);
 
     return new UserResponseDto(updatedUser);
+  }
+
+  async updatePassword(
+    userId: string,
+    updatePasswordDto: UpdatePasswordDto,
+  ): Promise<void> {
+    const { oldPassword, newPassword } = updatePasswordDto;
+
+    const user = await this.findUserEntityById(userId);
+
+    const isPasswordMatching = await bcrypt.compare(oldPassword, user.password);
+
+    if (!isPasswordMatching) {
+      throw new UnauthorizedException(MESSAGES.failMessage.incorrectPassword);
+    }
+    if (oldPassword === newPassword) {
+      throw new ConflictException(MESSAGES.failMessage.newPasswordSameAsOld);
+    }
+
+    const salt = await bcrypt.genSalt(10); //Standard cost factor
+    user.password = await bcrypt.hash(newPassword, salt);
+    
+    await this.userRepository.save(user);
   }
 
   async remove(id: string): Promise<void> {

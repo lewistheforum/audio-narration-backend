@@ -7,6 +7,10 @@ import {
   Body,
   Param,
   UseGuards,
+  Patch,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,19 +18,23 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiExtraModels,
+  ApiOkResponse,
+  getSchemaPath,
+  ApiCreatedResponse,
 } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { CreateUserDto, 
   UpdateUserDto, 
   UserResponseDto,
-  UserSuccessResponseDto,
-  UsersSuccessResponseDto,
-  DeleteSuccessResponseDto, } from './dto';
+  UpdatePasswordDto, } from './dto';
 import { MESSAGES } from 'src/common/message';
+import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 
 @ApiTags('users')
 @Controller('users')
+@ApiExtraModels(UserResponseDto) 
 // @UseGuards(JwtAuthGuard)
 // @ApiBearerAuth()
 export class UserController {
@@ -34,12 +42,12 @@ export class UserController {
 
   @Get()
   @ApiOperation({ summary: 'Get a list of all users' })
-  @ApiResponse({
-    status: 200,
-    description: 'A list of users has been successfully retrieved.',
-    type: UsersSuccessResponseDto,
+  @ApiResponseData({
+    type: UserResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: MESSAGES.successMessage.userFetchSuccess,
+    isArray: true, // <-- Vì đây là một danh sách
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll() {
     const users = await this.userService.findAll();
     return { data: users, message: MESSAGES.successMessage.userFetchSuccess };
@@ -47,61 +55,60 @@ export class UserController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a single user by their ID' })
-  @ApiParam({ name: 'id', description: 'The unique identifier of the user (UUID)', type: 'string' })
-  @ApiResponse({
-    status: 200,
-    description: 'The user has been successfully found.',
-    type: UserSuccessResponseDto,
+  @ApiResponseData({
+    type: UserResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: MESSAGES.successMessage.userFetchSuccess,
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  @ApiResponse({ status: 404, description: 'Not Found. A user with the specified ID does not exist.' })
-  async findOne(@Param('id') id: string) {
+  @ApiResponse({ status: 404, description: 'Not Found.' })
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const user = await this.userService.findOne(id);
     return { data: user, message: MESSAGES.successMessage.userFetchSuccess };
   }
 
   @Post()
   @ApiOperation({ summary: 'Create a new user' })
-  @ApiResponse({
-    status: 201,
-    description: 'The user has been successfully created.',
-    type: UserSuccessResponseDto,
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: UserResponseDto,
+    status: MESSAGES.statusCode.created,
+    message: MESSAGES.successMessage.userCreateSuccess,
   })
-  @ApiResponse({ status: 400, description: 'Bad Request. Input data validation failed.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  @ApiResponse({ status: 409, description: 'Conflict. A user with this email already exists.' })
+  @ApiResponse({ status: 409, description: 'Conflict. Email already exists.' })
   async create(@Body() createUserDto: CreateUserDto) {
     const user = await this.userService.create(createUserDto);
     return { data: user, message: MESSAGES.successMessage.userCreateSuccess };
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Update an existing user by their ID' })
-  @ApiParam({ name: 'id', description: 'The unique identifier of the user (UUID)', type: 'string' })
-  @ApiResponse({
-    status: 200,
-    description: 'The user has been successfully updated.',
-    type: UserSuccessResponseDto,
+  @ApiOperation({ summary: 'Update user profile information' })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: UserResponseDto,
+    status: MESSAGES.statusCode.created,
+    message: MESSAGES.successMessage.userCreateSuccess,
   })
-  @ApiResponse({ status: 400, description: 'Bad Request. Input data validation failed.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  @ApiResponse({ status: 404, description: 'Not Found. A user with the specified ID does not exist.' })
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  @ApiResponse({ status: 409, description: 'Conflict. Email already exists.' })
+  async update(@Param('id', ParseUUIDPipe) id: string, @Body() updateUserDto: UpdateUserDto) {
     const user = await this.userService.update(id, updateUserDto);
     return { data: user, message: MESSAGES.successMessage.userUpdateSuccess };
   }
+  
+  @Patch(':id/password')
+  @ApiOperation({ summary: 'Update the password' })
+  @ApiResponse({ status: 204, description: 'Password successfully updated.' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async updatePassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updatePasswordDto: UpdatePasswordDto,
+  ) {
+    await this.userService.updatePassword(id, updatePasswordDto);
+  }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a user by their ID' })
-  @ApiParam({ name: 'id', description: 'The unique identifier of the user (UUID)', type: 'string' })
-  @ApiResponse({
-    status: 200,
-    description: 'The user has been successfully deleted.',
-    type: DeleteSuccessResponseDto,
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  @ApiResponse({ status: 404, description: 'Not Found. A user with the specified ID does not exist.' })
-  async remove(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Delete a user' })
+  @ApiResponse({ status: MESSAGES.statusCode.success, description: MESSAGES.successMessage.userDeleteSuccess })
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.userService.remove(id);
     return { message: MESSAGES.successMessage.userDeleteSuccess };
   }
