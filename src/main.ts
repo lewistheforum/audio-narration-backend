@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { DatabaseHealthService } from './common/health/database-health.service';
+import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,11 +31,15 @@ async function bootstrap() {
     .setTitle('Capstone API')
     .setDescription('A platform for sharing and discovering doctor')
     .setVersion('1.0')
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('users', 'User management endpoints')
-    .addTag('health', 'Health check endpoints')
+    .addTag('Authentication', 'Authentication endpoints')
+    .addTag('Users management', 'User management endpoints')
+    .addTag('Health', 'Health check endpoints')
+    .addTag('Mailer', 'Mail service endpoints')
     // .addBearerAuth()
     .build();
+
+  //config interceptors
+  app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);

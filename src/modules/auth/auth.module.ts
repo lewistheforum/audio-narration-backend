@@ -7,18 +7,19 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
 import { User as PostgresUser } from '../user/entities/user.entity';
-import { jwtConfig } from '../../config/jwt.config';
+import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: () => jwtConfig,
+      useFactory: getJwtConfig,
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([PostgresUser]),
+    UserModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],

@@ -19,6 +19,7 @@ const successMessage = {
   userUpdateSuccess: 'User updated successfully',
   userDeleteSuccess: 'User deleted successfully',
   mailSendSuccess: 'Mail sent successfully',
+  loginSuccess: 'User logged in successfully',
 };
 
 const failMessage = {
@@ -30,6 +31,8 @@ const failMessage = {
   userNotFound: 'User not found',
   emailAlreadyExists: 'Email already exists',
   userEmailAlreadyExists: 'User with this email already exists',
+  incorrectPassword: 'Incorrect current password.',
+    newPasswordSameAsOld: 'New password cannot be the same as the old password.',
 };
 
 const MESSAGES = {

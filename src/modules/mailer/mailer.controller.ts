@@ -1,21 +1,32 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { MailerService } from './mailer.service';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
 import { CreateMailerDto } from './dto/create-mailer.dto';
+import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
+import { SendMailDataDto } from './dto/send-mail-data.dto';
 
+@ApiTags('Mailer')
 @Controller('mailer')
 export class MailerController {
   constructor(private readonly mailerService: MailerService) {}
 
   @Post('send')
-  @ApiOperation({ summary: 'Send mail' })
-  @ApiResponse({
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a transactional email' })
+  @ApiBody({ type: CreateMailerDto })
+  @ApiResponseData({
+    type: SendMailDataDto,
     status: MESSAGES.statusCode.success,
-    description: 'Mail sent successfully.',
+    message: MESSAGES.successMessage.mailSendSuccess,
   })
-  async sendMail(@Body() body: CreateMailerDto) {
-    const mail = await this.mailerService.sendMail(body.targetMail);
-    return { data: mail, message: MESSAGES.successMessage.mailSendSuccess };
+  @ApiResponse({ status: 400, description: 'Bad Request. Invalid email format.' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error. The email service failed to send the mail.' })
+  async sendMail(@Body() createMailerDto: CreateMailerDto) {
+    const mailResult = await this.mailerService.sendMail(
+      createMailerDto.targetMail,
+    );
+    
+    return { data: mailResult, message: MESSAGES.successMessage.mailSendSuccess };
   }
 }
