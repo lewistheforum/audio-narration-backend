@@ -1,26 +1,598 @@
-import { Injectable } from '@nestjs/common';
-import { CreateSocketGatewayDto } from './dto/create-socket-gateway.dto';
-import { UpdateSocketGatewayDto } from './dto/update-socket-gateway.dto';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { UserService } from '../user/user.service';
+import { MessagesService } from '../messages/messages.service';
+import { ConversationService } from '../conversations/conversation.service';
+import {
+  SocketUser,
+  ClientToServerEvents,
+  ServerToClientEvents,
+  UserStatusUpdate,
+  OnlineUsersEvent,
+  ErrorEvent,
+  NewMessageEvent,
+  ConversationUpdateEvent,
+  MessageNotificationEvent,
+} from './types/socket.types';
+import { verifyToken, DecodedToken } from './utils/jwt.utils';
+import { CreateMessageDto } from '../messages/dto/create-message.dto';
 
+@WebSocketGateway({
+  cors: {
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? ['your-production-domain.com']
+        : ['http://localhost:3000', 'http://localhost:5173'],
+    credentials: true,
+  },
+  namespace: 'socket-gateway',
+  pingTimeout: 60000,
+  pingInterval: 25000,
+})
 @Injectable()
-export class SocketGatewayService {
-  create(createSocketGatewayDto: CreateSocketGatewayDto) {
-    return 'This action adds a new socketGateway';
+export class SocketGatewayService
+  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect
+{
+  @WebSocketServer()
+  server: Server<ClientToServerEvents, ServerToClientEvents>;
+
+  // User tracking maps
+  private connectedUsers = new Map<string, SocketUser>(); // userId -> SocketUser
+  private userSockets = new Map<string, string>(); // socketId -> userId
+
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly userService: UserService,
+    private readonly messagesService: MessagesService,
+    private readonly conversationService: ConversationService,
+  ) {}
+
+  onModuleInit() {
+    console.log('Socket Gateway initialized');
   }
 
-  findAll() {
-    return `This action returns all socketGateway`;
+  async handleDisconnect(client: Socket) {
+    const user = client.data.user;
+    if (user) {
+      console.log(`User ${user.username} disconnected`);
+
+      // Remove from connected users
+      this.connectedUsers.delete(user.userId);
+      this.userSockets.delete(client.id);
+
+      // Notify others that user is offline
+      client.broadcast.emit('userOffline', {
+        userId: user.userId,
+        username: user.username,
+        status: 'offline',
+      });
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} socketGateway`;
+  async handleConnection(client: Socket) {
+    try {
+      // Authentication middleware
+      const token = client.handshake.auth.token || client.handshake.query.token;
+
+      if (!token) {
+        client.emit('error', {
+          message: 'Authentication token required',
+          code: 'AUTH_TOKEN_REQUIRED',
+        });
+        client.disconnect();
+        return;
+      }
+
+      // const decoded = verifyToken(token as string, this.jwtService);
+      const user = await this.userService.findUserEntityById(token);
+
+      if (!user) {
+        client.emit('error', {
+          message: 'User not found',
+          code: 'USER_NOT_FOUND',
+        });
+        client.disconnect();
+        return;
+      }
+
+      // Store user data in socket
+      client.data.user = {
+        userId: user.id,
+        username: user.name || user.email,
+        email: user.email,
+      };
+
+      console.log(
+        `User ${client.data.user.username} connected with socket ${client.id}`,
+      );
+
+      // Store user connection
+      const socketUser: SocketUser = {
+        userId: user.id,
+        username: user.name || user.email,
+        email: user.email,
+        socketId: client.id,
+      };
+
+      this.connectedUsers.set(user.id, socketUser);
+      this.userSockets.set(client.id, user.id);
+
+      // Send current online users to the newly connected socket
+      client.emit('onlineUsers', {
+        users: Array.from(this.connectedUsers.values()),
+      });
+
+      // Notify others that user is online
+      client.broadcast.emit('userOnline', {
+        userId: user.id,
+        username: user.name || user.email,
+        status: 'online',
+      });
+    } catch (error) {
+      console.error('Connection error:', error);
+      client.emit('error', {
+        message: 'Invalid authentication token',
+        code: 'INVALID_AUTH_TOKEN',
+      });
+      client.disconnect();
+    }
   }
 
-  update(id: number, updateSocketGatewayDto: UpdateSocketGatewayDto) {
-    return `This action updates a #${id} socketGateway`;
+  // Conversation events
+  @SubscribeMessage('joinConversation')
+  async handleJoinConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() conversationId: string,
+  ) {
+    try {
+      // TODO: Implement conversation access validation
+      client.join(`conversation:${conversationId}`);
+      console.log(
+        `User ${client.data.user.username} joined conversation ${conversationId}`,
+      );
+    } catch (error) {
+      client.emit('error', {
+        message: 'Error joining conversation',
+        code: 'JOIN_CONVERSATION_ERROR',
+      });
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} socketGateway`;
+  @SubscribeMessage('leaveConversation')
+  handleLeaveConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() conversationId: string,
+  ) {
+    client.leave(`conversation:${conversationId}`);
+    console.log(
+      `User ${client.data.user.username} left conversation ${conversationId}`,
+    );
+  }
+
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      conversationId: string;
+      content: string;
+      type?: string;
+      receiverId: string;
+    },
+  ) {
+    try {
+      const createMessageDto: CreateMessageDto = {
+        conversationId: data.conversationId,
+        senderId: client.data.user.userId,
+        receiverId: data.receiverId,
+        content: data.content,
+        messageType: data.type || 'text',
+        isRead: false,
+      };
+
+      // Create the message in the database
+      // This will automatically emit socket events via messagesService.create()
+      // const savedMessage = await this.messagesService.create(createMessageDto);
+
+      // Legacy event for backward compatibility
+      this.server.emit(`onNewMessageChat-${data.conversationId}`, {
+        message: 'New message received',
+        data: createMessageDto,
+      });
+
+      console.log(
+        `Message sent in conversation ${data.conversationId} by ${client.data.user.username}`,
+      );
+    } catch (error) {
+      console.error('Error sending message:', error);
+      client.emit('error', {
+        message: 'Error sending message',
+        code: 'SEND_MESSAGE_ERROR',
+      });
+    }
+  }
+
+  @SubscribeMessage('markAsRead')
+  async handleMarkAsRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { messageId: string; conversationId: string },
+  ) {
+    try {
+      // Mark the message as read in the database
+      const updatedMessage = await this.messagesService.markAsRead(
+        data.messageId,
+      );
+
+      // Emit to all users in the conversation room that the message has been read
+      this.server
+        .to(`conversation:${data.conversationId}`)
+        .emit('messageRead', {
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          readBy: client.data.user.userId,
+          readAt: new Date(),
+        });
+
+      console.log(
+        `Message ${data.messageId} marked as read by ${client.data.user.username} in conversation ${data.conversationId}`,
+      );
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+      client.emit('error', {
+        message: 'Error marking message as read',
+        code: 'MARK_AS_READ_ERROR',
+      });
+    }
+  }
+
+  @SubscribeMessage('markMultipleAsRead')
+  async handleMarkMultipleAsRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { messageIds: string[]; conversationId: string },
+  ) {
+    try {
+      // Mark multiple messages as read in the database
+      const updatedMessages = await this.messagesService.markMultipleAsRead(
+        data.messageIds,
+      );
+
+      // Emit to all users in the conversation room that the messages have been read
+      this.server
+        .to(`conversation:${data.conversationId}`)
+        .emit('messagesRead', {
+          messageIds: data.messageIds,
+          conversationId: data.conversationId,
+          readBy: client.data.user.userId,
+          readAt: new Date(),
+          count: updatedMessages.length,
+        });
+
+      console.log(
+        `${updatedMessages.length} messages marked as read by ${client.data.user.username} in conversation ${data.conversationId}`,
+      );
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+      client.emit('error', {
+        message: 'Error marking messages as read',
+        code: 'MARK_MULTIPLE_AS_READ_ERROR',
+      });
+    }
+  }
+
+  @SubscribeMessage('markConversationAsRead')
+  async handleMarkConversationAsRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: string },
+  ) {
+    try {
+      // Mark all unread messages in the conversation as read
+      const affectedCount = await this.messagesService.markConversationAsRead(
+        data.conversationId,
+        client.data.user.userId,
+      );
+
+      // Emit to all users in the conversation room that the conversation has been read
+      this.server
+        .to(`conversation:${data.conversationId}`)
+        .emit('conversationRead', {
+          conversationId: data.conversationId,
+          readBy: client.data.user.userId,
+          readAt: new Date(),
+          messageCount: affectedCount,
+        });
+
+      console.log(
+        `Conversation ${data.conversationId} marked as read by ${client.data.user.username} (${affectedCount} messages)`,
+      );
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+      client.emit('error', {
+        message: 'Error marking conversation as read',
+        code: 'MARK_CONVERSATION_AS_READ_ERROR',
+      });
+    }
+  }
+
+  // Typing indicators
+  @SubscribeMessage('startTyping')
+  handleStartTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() conversationId: string,
+  ) {
+    client.to(`conversation:${conversationId}`).emit('typingStart', {
+      userId: client.data.user.userId,
+      conversationId,
+    });
+
+    // console.log(
+    //   `User ${client.data.user.userId} started typing in conversation ${conversationId}`,
+    // );
+  }
+
+  @SubscribeMessage('stopTyping')
+  handleStopTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() conversationId: string,
+  ) {
+    client.to(`conversation:${conversationId}`).emit('typingStop', {
+      userId: client.data.user.userId,
+      conversationId,
+    });
+
+    // console.log(
+    //   `User ${client.data.user.userId} stopped typing in conversation ${conversationId}`,
+    // );
+  }
+
+  // Legacy events for backward compatibility
+  @SubscribeMessage('updateSchedule')
+  onUpdateSchedule(@MessageBody() body: any) {
+    console.log(body);
+    (this.server as any).emit('updateScheduleData', {
+      message: 'Schedule updated',
+      data: body,
+    });
+  }
+
+  @SubscribeMessage('newMessageChat')
+  onNewMessageChat(@MessageBody() body: any) {
+    // console.log('CHECK NEW MESSAGE CHAT', body);
+    (this.server as any).emit(`onNewMessageChat-${body.conversationid}`, {
+      message: 'New message received',
+      data: body,
+    });
+  }
+
+  // Public utility methods
+  getConnectedUsers(): SocketUser[] {
+    return Array.from(this.connectedUsers.values());
+  }
+
+  isUserOnline(userId: string): boolean {
+    return this.connectedUsers.has(userId);
+  }
+
+  getUserSocket(userId: string): string | undefined {
+    return this.connectedUsers.get(userId)?.socketId;
+  }
+
+  // Send notification to specific user
+  sendNotificationToUser(userId: string, notification: ErrorEvent) {
+    const user = this.connectedUsers.get(userId);
+    if (user) {
+      this.server.to(user.socketId).emit('error', notification);
+    }
+  }
+
+  // Mark user online (called from auth service)
+  public markUserOnline(userId: string) {
+    if (!userId) return;
+    const user = this.connectedUsers.get(userId);
+    if (user) {
+      (this.server as any).emit('userStatus', {
+        userId,
+        username: user.username,
+        status: 'online',
+      });
+    }
+  }
+
+  // Mark user offline (called from auth service)
+  public markUserOffline(userId: string) {
+    if (!userId) return;
+    const user = this.connectedUsers.get(userId);
+    if (user) {
+      (this.server as any).emit('userStatus', {
+        userId,
+        username: user.username,
+        status: 'offline',
+      });
+    }
+  }
+
+  // Get current list of online users
+  public getOnlineUsers(): string[] {
+    return Array.from(this.connectedUsers.keys());
+  }
+
+  // Utility method to broadcast new message to conversation participants
+  public async broadcastNewMessage(
+    conversationId: string,
+    message: any,
+    senderId: string,
+  ): Promise<void> {
+    try {
+      // Get conversation details
+      const conversation = await this.conversationService.findOne(
+        conversationId,
+      );
+
+      // Get sender information
+      const sender = await this.userService.findUserEntityById(senderId);
+
+      // Prepare the new message event
+      const newMessageEvent: NewMessageEvent = {
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          receiverId: message.receiverId,
+          content: message.content,
+          messageType: message.messageType,
+          isRead: message.isRead,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+        },
+        sender: {
+          id: sender.id,
+          username: sender.name || sender.email,
+          email: sender.email,
+        },
+      };
+
+      // Prepare conversation update event
+      const conversationUpdateEvent: ConversationUpdateEvent = {
+        conversationId: conversationId,
+        lastMessage: {
+          id: message.id,
+          content: message.content,
+          senderId: message.senderId,
+          messageType: message.messageType,
+          createdAt: message.createdAt,
+        },
+        updatedAt: new Date(),
+      };
+
+      // Broadcast to all participants in the conversation room
+      this.server
+        .to(`conversation:${conversationId}`)
+        .emit('newMessage', newMessageEvent);
+
+      // Broadcast conversation update to all participants
+      this.server
+        .to(`conversation:${conversationId}`)
+        .emit('conversationUpdated', conversationUpdateEvent);
+
+      // Send notification to all conversation participants who are online
+      for (const participant of conversation.participants) {
+        if (participant.id !== senderId) {
+          const participantSocket = this.getUserSocket(participant.id);
+          if (participantSocket) {
+            const messageNotificationEvent: MessageNotificationEvent = {
+              conversationId: conversationId,
+              messageId: message.id,
+              senderId: message.senderId,
+              receiverId: participant.id,
+              content: message.content,
+              messageType: message.messageType,
+              isRead: message.isRead,
+              createdAt: message.createdAt,
+            };
+            this.server
+              .to(participantSocket)
+              .emit('messageNotification', messageNotificationEvent);
+          }
+        }
+      }
+
+      console.log(`Broadcasted new message in conversation ${conversationId}`);
+    } catch (error) {
+      console.error('Error broadcasting new message:', error);
+    }
+  }
+
+  // Utility method to broadcast conversation update
+  public async broadcastConversationUpdate(
+    conversationId: string,
+    lastMessage: any,
+  ): Promise<void> {
+    try {
+      const conversationUpdateEvent: ConversationUpdateEvent = {
+        conversationId: conversationId,
+        lastMessage: {
+          id: lastMessage.id,
+          content: lastMessage.content,
+          senderId: lastMessage.senderId,
+          messageType: lastMessage.messageType,
+          createdAt: lastMessage.createdAt,
+        },
+        updatedAt: new Date(),
+      };
+
+      // Broadcast conversation update to all participants
+      this.server
+        .to(`conversation:${conversationId}`)
+        .emit('conversationUpdated', conversationUpdateEvent);
+
+      console.log(`Broadcasted conversation update for ${conversationId}`);
+    } catch (error) {
+      console.error('Error broadcasting conversation update:', error);
+    }
+  }
+
+  // Utility method to send notification to specific user
+  public async sendMessageNotification(
+    userId: string,
+    conversationId: string,
+    message: any,
+  ): Promise<void> {
+    try {
+      const userSocket = this.getUserSocket(userId);
+      if (userSocket) {
+        const messageNotificationEvent: MessageNotificationEvent = {
+          conversationId: conversationId,
+          messageId: message.id,
+          senderId: message.senderId,
+          receiverId: userId,
+          content: message.content,
+          messageType: message.messageType,
+          isRead: message.isRead,
+          createdAt: message.createdAt,
+        };
+
+        this.server
+          .to(userSocket)
+          .emit('messageNotification', messageNotificationEvent);
+        console.log(`Sent message notification to user ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error sending message notification:', error);
+    }
+  }
+
+  // Utility method to get conversation participants
+  public async getConversationParticipants(
+    conversationId: string,
+  ): Promise<string[]> {
+    try {
+      const conversation = await this.conversationService.findOne(
+        conversationId,
+      );
+      return conversation.participants.map((participant) => participant.id);
+    } catch (error) {
+      console.error('Error getting conversation participants:', error);
+      return [];
+    }
+  }
+
+  // Utility method to check if user is in conversation room
+  public isUserInConversation(userId: string, conversationId: string): boolean {
+    const userSocket = this.getUserSocket(userId);
+    if (!userSocket) return false;
+
+    const socket = this.server.sockets.sockets.get(userSocket);
+    return socket ? socket.rooms.has(`conversation:${conversationId}`) : false;
   }
 }

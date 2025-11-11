@@ -7,9 +7,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
-import { CreateUserDto, UpdatePasswordDto, UpdateUserDto, UserResponseDto } from './dto';
+import {
+  CreateUserDto,
+  UpdatePasswordDto,
+  UpdateUserDto,
+  UserResponseDto,
+} from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
+import { In } from 'typeorm';
 
 @Injectable()
 export class UserService {
@@ -52,7 +58,10 @@ export class UserService {
     return new UserResponseDto(savedUser);
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<UserResponseDto> {
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserResponseDto> {
     const user = await this.findUserEntityById(id);
 
     if (updateUserDto.email && updateUserDto.email !== user.email) {
@@ -87,11 +96,11 @@ export class UserService {
 
     const salt = await bcrypt.genSalt(10); //Standard cost factor
     user.password = await bcrypt.hash(newPassword, salt);
-    
+
     await this.userRepository.save(user);
   }
 
-  async remove(id: string): Promise<void> {
+  async delete(id: string): Promise<void> {
     const result = await this.userRepository.delete(id);
 
     if (result.affected === 0) {
@@ -103,5 +112,12 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
-  
+  async findUsersByIds(ids: string[]): Promise<User[]> {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+    return this.userRepository.find({
+      where: { id: In(ids) },
+    });
+  }
 }

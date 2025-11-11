@@ -32,7 +32,9 @@ const failMessage = {
   emailAlreadyExists: 'Email already exists',
   userEmailAlreadyExists: 'User with this email already exists',
   incorrectPassword: 'Incorrect current password.',
-    newPasswordSameAsOld: 'New password cannot be the same as the old password.',
+  newPasswordSameAsOld: 'New password cannot be the same as the old password.',
+  conversationNotFound: 'Conversation not found',
+  messageNotFound: 'Message not found',
 };
 
 const MESSAGES = {

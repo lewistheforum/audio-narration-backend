@@ -10,6 +10,7 @@ import { User as PostgresUser } from '../user/entities/user.entity';
 import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
 import { UserModule } from '../user/user.module';
+import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserModule } from '../user/user.module';
       inject: [ConfigService],
     }),
     UserModule,
+    SocketGatewayModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],

@@ -25,16 +25,18 @@ import {
 } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
-import { CreateUserDto, 
-  UpdateUserDto, 
+import {
+  CreateUserDto,
+  UpdateUserDto,
   UserResponseDto,
-  UpdatePasswordDto, } from './dto';
+  UpdatePasswordDto,
+} from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 
 @ApiTags('Users management')
 @Controller('users')
-@ApiExtraModels(UserResponseDto) 
+@ApiExtraModels(UserResponseDto)
 // @UseGuards(JwtAuthGuard)
 // @ApiBearerAuth()
 export class UserController {
@@ -89,11 +91,14 @@ export class UserController {
     message: MESSAGES.successMessage.userCreateSuccess,
   })
   @ApiResponse({ status: 409, description: 'Conflict. Email already exists.' })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() updateUserDto: UpdateUserDto) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
     const user = await this.userService.update(id, updateUserDto);
     return { data: user, message: MESSAGES.successMessage.userUpdateSuccess };
   }
-  
+
   @Patch(':id/password')
   @ApiOperation({ summary: 'Update the password' })
   @ApiResponse({ status: 204, description: 'Password successfully updated.' })
@@ -107,9 +112,12 @@ export class UserController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a user' })
-  @ApiResponse({ status: MESSAGES.statusCode.success, description: MESSAGES.successMessage.userDeleteSuccess })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.userService.remove(id);
+  @ApiResponse({
+    status: MESSAGES.statusCode.success,
+    description: MESSAGES.successMessage.userDeleteSuccess,
+  })
+  async delete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.userService.delete(id);
     return { message: MESSAGES.successMessage.userDeleteSuccess };
   }
 }

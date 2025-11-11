@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { HealthModule } from './common/health/health.module';
 import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
+import { ConversationModule } from './modules/conversations/conversation.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 @Module({
   imports: [
@@ -49,6 +50,8 @@ import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.mod
     HealthModule,
     MailerModule,
     SocketGatewayModule,
+    ConversationModule,
+    MessagesModule,
   ],
   controllers: [],
   providers: [],
