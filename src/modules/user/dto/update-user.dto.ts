@@ -1,33 +1,84 @@
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  MaxLength,
+  IsOptional,
+  IsEnum,
+  ValidateIf,
+  IsUUID,
+  Matches,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { UserRole } from '../entities/user.entity';
 
+/**
+ * Update User DTO
+ * 
+ * Used for updating user profile information
+ * All fields are optional - only provided fields will be updated
+ * 
+ * Special Rules:
+ * - Email is automatically normalized (lowercase, trimmed)
+ * - Name is automatically trimmed
+ * - If changing role to CLINIC_STAFF, patientOwnerId is required
+ * - Password updates should use UpdatePasswordDto instead
+ */
 export class UpdateUserDto {
   @ApiProperty({
-    description: 'Email của người dùng',
+    description: 'User email address',
     example: 'user@example.com',
     required: false,
   })
-  @IsEmail()
   @IsOptional()
+  @IsEmail({}, { message: 'Invalid email format' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email?: string;
 
   @ApiProperty({
-    description: 'Mật khẩu của người dùng',
-    example: 'password123',
+    description: 'User password (min 6 characters, must contain letter and number)',
+    example: 'NewPass123',
     minLength: 6,
+    maxLength: 50,
     required: false,
   })
-  @IsString()
-  @MinLength(6)
   @IsOptional()
+  @IsString()
+  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @MaxLength(50, { message: 'Password must not exceed 50 characters' })
+  @Matches(/^(?=.*[A-Za-z])(?=.*\d)/, {
+    message: 'Password must contain at least one letter and one number',
+  })
   password?: string;
 
   @ApiProperty({
-    description: 'Tên của người dùng',
-    example: 'Nguyễn Văn A',
+    description: 'User display name',
+    example: 'Jane Doe',
+    required: false,
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString({ message: 'Name must be a string' })
+  @MaxLength(100, { message: 'Name must not exceed 100 characters' })
+  @Transform(({ value }) => value?.trim())
+  name?: string;
+
+  @ApiProperty({
+    description: 'User role',
+    enum: UserRole,
     required: false,
   })
-  @IsString()
   @IsOptional()
-  name?: string;
+  @IsEnum(UserRole, { message: 'Invalid role' })
+  role?: UserRole;
+
+  @ApiProperty({
+    description: 'Patient ID for clinic staff accounts (required if role is CLINIC_STAFF)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    required: false,
+  })
+  @ValidateIf((o) => o.role === UserRole.CLINIC_STAFF)
+  @IsUUID('4', { message: 'Patient owner ID must be a valid UUID' })
+  patientOwnerId?: string;
 }

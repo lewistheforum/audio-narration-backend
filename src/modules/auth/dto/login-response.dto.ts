@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+/**
+ * Login Response Data Transfer Object
+ * 
+ * Returned after successful authentication (login or OAuth)
+ * Contains JWT token and user identifier
+ */
 export class LoginResponseDto {
   @ApiProperty({
     description: 'JWT Access Token',

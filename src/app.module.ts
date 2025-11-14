@@ -8,6 +8,8 @@ import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { AdminSeederService } from './common/seeders/admin-seeder.service';
+import { User } from './modules/user/entities/user.entity';
 
 @Module({
   imports: [
@@ -44,6 +46,9 @@ import { MessagesModule } from './modules/messages/messages.module';
           : false,
     }),
 
+    // TypeORM feature for seeder access to User repository
+    TypeOrmModule.forFeature([User]),
+
     // import modules
     AuthModule,
     UserModule,
@@ -54,6 +59,6 @@ import { MessagesModule } from './modules/messages/messages.module';
     MessagesModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [AdminSeederService],
 })
 export class AppModule {}

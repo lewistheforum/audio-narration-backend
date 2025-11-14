@@ -11,9 +11,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 /**
- * Create User DTO
+ * Create Clinic Staff DTO
  * 
- * Used for patient registration with standard authentication
+ * Used for clinic staff registration linked to a patient account
  * Email is automatically normalized (lowercase, trimmed)
  * Name is automatically trimmed
  * 
@@ -22,11 +22,13 @@ import { Transform } from 'class-transformer';
  * - Maximum 50 characters
  * - Must contain at least one letter
  * - Must contain at least one number
+ * 
+ * Note: Patient ID is provided as URL parameter, not in this DTO
  */
-export class CreateUserDto {
+export class CreateClinicStaffDto {
   @ApiProperty({
-    description: 'User email address',
-    example: 'user@example.com',
+    description: 'Clinic staff email address',
+    example: 'staff@clinic.com',
   })
   @IsNotEmpty({ message: 'Email is required' })
   @IsEmail({}, { message: 'Invalid email format' })
@@ -34,8 +36,8 @@ export class CreateUserDto {
   email: string;
 
   @ApiProperty({
-    description: 'User password (min 6 characters, must contain letter and number)',
-    example: 'Pass123456',
+    description: 'Clinic staff password (min 6 characters, must contain letter and number)',
+    example: 'StaffPass123',
     minLength: 6,
     maxLength: 50,
   })
@@ -49,8 +51,8 @@ export class CreateUserDto {
   password: string;
 
   @ApiProperty({
-    description: 'User display name',
-    example: 'John Doe',
+    description: 'Clinic staff display name',
+    example: 'Dr. Smith Assistant',
     required: false,
     maxLength: 100,
   })

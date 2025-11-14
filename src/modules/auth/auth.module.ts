@@ -12,6 +12,21 @@ import { GoogleStrategy } from './google.strategy';
 import { UserModule } from '../user/user.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 
+/**
+ * Authentication Module
+ * 
+ * Provides authentication services including:
+ * - Standard email/password login
+ * - Google OAuth 2.0 authentication
+ * - JWT token generation and validation
+ * - Patient and clinic staff registration
+ * 
+ * Dependencies:
+ * - UserModule: For user CRUD operations
+ * - SocketGatewayModule: For online status tracking
+ * - PassportModule: For authentication strategies
+ * - JwtModule: For token generation and verification
+ */
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),

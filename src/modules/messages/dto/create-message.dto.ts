@@ -5,48 +5,61 @@ import {
   IsBoolean,
   MaxLength,
   IsIn,
+  IsNotEmpty,
+  MinLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class CreateMessageDto {
   @ApiProperty({
-    description: 'ID of the conversation this message belongs to',
+    description: 'Conversation ID this message belongs to',
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
-  @IsUUID()
+  @IsNotEmpty({ message: 'Conversation ID is required' })
+  @IsUUID('4', { message: 'Conversation ID must be a valid UUID' })
   conversationId: string;
 
   @ApiProperty({
-    description: 'ID of the user sending the message',
+    description: 'Sender user ID',
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
-  @IsUUID()
+  @IsNotEmpty({ message: 'Sender ID is required' })
+  @IsUUID('4', { message: 'Sender ID must be a valid UUID' })
   senderId: string;
 
   @ApiProperty({
-    description: 'ID of the user receiving the message',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Receiver user ID',
+    example: '223e4567-e89b-12d3-a456-426614174001',
   })
-  @IsUUID()
+  @IsNotEmpty({ message: 'Receiver ID is required' })
+  @IsUUID('4', { message: 'Receiver ID must be a valid UUID' })
   receiverId: string;
 
   @ApiProperty({
-    description: 'Content of the message',
+    description: 'Message content',
     example: 'Hello, how are you feeling today?',
+    minLength: 1,
+    maxLength: 2000,
   })
-  @IsString()
-  @MaxLength(2000)
+  @IsNotEmpty({ message: 'Message content is required' })
+  @IsString({ message: 'Content must be a string' })
+  @MinLength(1, { message: 'Message content cannot be empty' })
+  @MaxLength(2000, { message: 'Message content must not exceed 2000 characters' })
+  @Transform(({ value }) => value?.trim())
   content: string;
 
   @ApiProperty({
-    description: 'Type of the message',
+    description: 'Message type',
     example: 'text',
     enum: ['text', 'image', 'file', 'audio', 'video'],
     required: false,
   })
   @IsOptional()
   @IsString()
-  @IsIn(['text', 'image', 'file', 'audio', 'video'])
+  @IsIn(['text', 'image', 'file', 'audio', 'video'], {
+    message: 'Message type must be one of: text, image, file, audio, video',
+  })
   messageType?: string;
 
   @ApiProperty({
@@ -55,7 +68,7 @@ export class CreateMessageDto {
     required: false,
   })
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({ message: 'isRead must be a boolean value' })
   isRead?: boolean;
 
   @ApiProperty({
@@ -64,6 +77,6 @@ export class CreateMessageDto {
     required: false,
   })
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({ message: 'isUpdated must be a boolean value' })
   isUpdated?: boolean;
 }
