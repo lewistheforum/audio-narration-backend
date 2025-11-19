@@ -5,6 +5,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull } from 'typeorm';
@@ -18,6 +20,7 @@ import {
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
+import { ProfileService } from '../profile/profile.service';
 
 /**
  * User Service
@@ -40,6 +43,8 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @Inject(forwardRef(() => ProfileService))
+    private profileService?: any, // ProfileService injected for automatic profile creation
   ) {}
 
   /**
@@ -147,6 +152,16 @@ export class UserService {
     // Generate verification code
     const verificationCode = await this.generateAndSaveVerificationCode(savedUser);
     
+    // Create empty profile for the new user
+    if (this.profileService) {
+      try {
+        await this.profileService.createEmptyProfile(savedUser.id);
+      } catch (error) {
+        // Profile creation is non-critical, log and continue
+        console.error('Failed to create profile for user:', error);
+      }
+    }
+    
     return { 
       user: new UserResponseDto(savedUser),
       verificationCode 
@@ -198,6 +213,17 @@ export class UserService {
     });
 
     const savedStaff = await this.userRepository.save(staff);
+    
+    // Create empty profile for the new clinic staff
+    if (this.profileService) {
+      try {
+        await this.profileService.createEmptyProfile(savedStaff.id);
+      } catch (error) {
+        // Profile creation is non-critical, log and continue
+        console.error('Failed to create profile for clinic staff:', error);
+      }
+    }
+    
     return new UserResponseDto(savedStaff);
   }
 
@@ -248,6 +274,17 @@ export class UserService {
     });
 
     const savedUser = await this.userRepository.save(user);
+    
+    // Create profile with Google profile picture for OAuth user
+    if (this.profileService) {
+      try {
+        await this.profileService.createEmptyProfile(savedUser.id, dto.profilePicture);
+      } catch (error) {
+        // Profile creation is non-critical, log and continue
+        console.error('Failed to create profile for OAuth user:', error);
+      }
+    }
+    
     return new UserResponseDto(savedUser);
   }
 

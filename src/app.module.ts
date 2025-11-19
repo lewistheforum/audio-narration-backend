@@ -8,6 +8,7 @@ import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { ProfileModule } from './modules/profile/profile.module';
 import { AdminSeederService } from './common/seeders/admin-seeder.service';
 import { User } from './modules/user/entities/user.entity';
 
@@ -57,6 +58,7 @@ import { User } from './modules/user/entities/user.entity';
     SocketGatewayModule,
     ConversationModule,
     MessagesModule,
+    ProfileModule,
   ],
   controllers: [],
   providers: [AdminSeederService],

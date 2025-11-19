@@ -36,6 +36,11 @@ const successMessage = {
   passwordUpdateSuccess: 'Password updated successfully',
   // Profile Update
   profileUpdatedWithEmailChange: 'Profile updated successfully. Your new email needs verification. Use /auth/send-verification-code to receive verification email.',
+  // Profile Management
+  profileFetchSuccess: 'Profile fetched successfully',
+  profileCreateSuccess: 'Profile created successfully',
+  profileUpdateSuccess: 'Profile updated successfully',
+  profileDeleteSuccess: 'Profile deleted successfully',
   // Mail Service
   mailSendSuccess: 'Mail sent successfully',
 };
@@ -81,6 +86,10 @@ const failMessage = {
   // Conversation & Message Errors
   conversationNotFound: 'Conversation not found',
   messageNotFound: 'Message not found',
+  // Profile Errors
+  profileNotFound: 'Profile not found',
+  profileAlreadyExists: 'Profile already exists for this user',
+  cannotUpdateOtherProfile: 'You can only update your own profile',
 };
 
 const MESSAGES = {

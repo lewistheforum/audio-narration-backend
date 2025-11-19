@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 import { User as PostgresUser } from './entities/user.entity';
 import { MailerModule } from '../mailer/mailer.module';
+import { ProfileModule } from '../profile/profile.module';
 
 /**
  * User Module
@@ -14,6 +15,7 @@ import { MailerModule } from '../mailer/mailer.module';
  * - Password management
  * - User search and retrieval
  * - Email verification
+ * - Automatic profile creation on user registration
  * 
  * Exported Services:
  * - UserService: Used by AuthModule for user operations during authentication
@@ -22,6 +24,7 @@ import { MailerModule } from '../mailer/mailer.module';
   imports: [
     TypeOrmModule.forFeature([PostgresUser]),
     MailerModule,
+    forwardRef(() => ProfileModule),
   ],
   controllers: [UserController],
   providers: [UserService],

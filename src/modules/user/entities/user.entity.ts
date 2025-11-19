@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 
 /**
@@ -175,4 +176,14 @@ export class User {
    */
   @DeleteDateColumn()
   deletedAt?: Date;
+
+  /**
+   * Profile Relationship
+   * 
+   * One-to-one relationship with Profile entity
+   * Contains extended user information (health data, emergency contacts, etc.)
+   * Automatically deleted when user is deleted (CASCADE)
+   */
+  @OneToOne('Profile', 'user', { cascade: true })
+  profile?: any;
 }
