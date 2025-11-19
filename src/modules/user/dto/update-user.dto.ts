@@ -53,16 +53,28 @@ export class UpdateUserDto {
   password?: string;
 
   @ApiProperty({
-    description: 'User display name',
-    example: 'Jane Doe',
+    description: 'User first name',
+    example: 'Jane',
     required: false,
-    maxLength: 100,
+    maxLength: 50,
   })
   @IsOptional()
-  @IsString({ message: 'Name must be a string' })
-  @MaxLength(100, { message: 'Name must not exceed 100 characters' })
+  @IsString({ message: 'First name must be a string' })
+  @MaxLength(50, { message: 'First name must not exceed 50 characters' })
   @Transform(({ value }) => value?.trim())
-  name?: string;
+  firstName?: string;
+
+  @ApiProperty({
+    description: 'User last name',
+    example: 'Doe',
+    required: false,
+    maxLength: 50,
+  })
+  @IsOptional()
+  @IsString({ message: 'Last name must be a string' })
+  @MaxLength(50, { message: 'Last name must not exceed 50 characters' })
+  @Transform(({ value }) => value?.trim())
+  lastName?: string;
 
   @ApiProperty({
     description: 'User role',

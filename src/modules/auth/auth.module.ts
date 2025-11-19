@@ -11,6 +11,7 @@ import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
 import { UserModule } from '../user/user.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 /**
  * Authentication Module
@@ -20,10 +21,12 @@ import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
  * - Google OAuth 2.0 authentication
  * - JWT token generation and validation
  * - Patient and clinic staff registration
+ * - Email verification with 6-digit code
  * 
  * Dependencies:
  * - UserModule: For user CRUD operations
  * - SocketGatewayModule: For online status tracking
+ * - MailerModule: For sending verification emails
  * - PassportModule: For authentication strategies
  * - JwtModule: For token generation and verification
  */
@@ -37,6 +40,7 @@ import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
     }),
     UserModule,
     SocketGatewayModule,
+    MailerModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],

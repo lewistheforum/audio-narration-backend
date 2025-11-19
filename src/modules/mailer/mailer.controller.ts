@@ -22,7 +22,7 @@ export class MailerController {
   })
   @ApiResponse({ status: 400, description: 'Bad Request. Invalid email format.' })
   @ApiResponse({ status: 500, description: 'Internal Server Error. The email service failed to send the mail.' })
-  async sendMail(@Body() createMailerDto: CreateMailerDto) {
+  async sendMail(@Body() createMailerDto: CreateMailerDto): Promise<{ data: any; message: string }> {
     const mailResult = await this.mailerService.sendMail(
       createMailerDto.targetMail,
     );

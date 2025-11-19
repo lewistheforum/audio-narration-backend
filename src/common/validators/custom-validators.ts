@@ -20,7 +20,7 @@ export function IsStrongPassword(validationOptions?: ValidationOptions) {
       propertyName: propertyName,
       options: validationOptions,
       validator: {
-        validate(value: any) {
+        validate(value: any): boolean {
           if (typeof value !== 'string') return false;
           
           const hasUpperCase = /[A-Z]/.test(value);
@@ -31,7 +31,7 @@ export function IsStrongPassword(validationOptions?: ValidationOptions) {
 
           return hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar && isLongEnough;
         },
-        defaultMessage(args: ValidationArguments) {
+        defaultMessage(args: ValidationArguments): string {
           return 'Password must be at least 8 characters and contain uppercase, lowercase, number, and special character';
         },
       },
@@ -52,12 +52,12 @@ export function Match(property: string, validationOptions?: ValidationOptions) {
       constraints: [property],
       options: validationOptions,
       validator: {
-        validate(value: any, args: ValidationArguments) {
+        validate(value: any, args: ValidationArguments): boolean {
           const [relatedPropertyName] = args.constraints;
           const relatedValue = (args.object as any)[relatedPropertyName];
           return value === relatedValue;
         },
-        defaultMessage(args: ValidationArguments) {
+        defaultMessage(args: ValidationArguments): string {
           const [relatedPropertyName] = args.constraints;
           return `${propertyName} must match ${relatedPropertyName}`;
         },

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from '../../modules/user/entities/user.entity';
+import { User, UserRole, UserStatus } from '../../modules/user/entities/user.entity';
 import * as bcrypt from 'bcrypt';
 
 /**
@@ -19,7 +19,8 @@ export class AdminSeederService implements OnModuleInit {
   private readonly DEFAULT_ADMIN = {
     email: 'admin@medicare.com',
     password: 'Admin@123456',
-    name: 'System Administrator',
+    firstName: 'System',
+    lastName: 'Administrator',
     role: UserRole.ADMIN,
   };
 
@@ -31,7 +32,7 @@ export class AdminSeederService implements OnModuleInit {
   /**
    * Lifecycle hook - runs when module initializes
    */
-  async onModuleInit() {
+  async onModuleInit(): Promise<void> {
     await this.seedAdmin();
   }
 
@@ -57,8 +58,11 @@ export class AdminSeederService implements OnModuleInit {
       const admin = this.userRepository.create({
         email: this.DEFAULT_ADMIN.email,
         password: hashedPassword,
-        name: this.DEFAULT_ADMIN.name,
+        firstName: this.DEFAULT_ADMIN.firstName,
+        lastName: this.DEFAULT_ADMIN.lastName,
         role: this.DEFAULT_ADMIN.role,
+        status: UserStatus.ACTIVE,
+        isEmailVerified: true,
       });
 
       await this.userRepository.save(admin);

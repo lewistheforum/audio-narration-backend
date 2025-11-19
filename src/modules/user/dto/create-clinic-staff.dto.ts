@@ -51,14 +51,26 @@ export class CreateClinicStaffDto {
   password: string;
 
   @ApiProperty({
-    description: 'Clinic staff display name',
-    example: 'Dr. Smith Assistant',
+    description: 'Clinic staff first name',
+    example: 'John',
     required: false,
-    maxLength: 100,
+    maxLength: 50,
   })
   @IsOptional()
-  @IsString({ message: 'Name must be a string' })
-  @MaxLength(100, { message: 'Name must not exceed 100 characters' })
+  @IsString({ message: 'First name must be a string' })
+  @MaxLength(50, { message: 'First name must not exceed 50 characters' })
   @Transform(({ value }) => value?.trim())
-  name?: string;
+  firstName?: string;
+
+  @ApiProperty({
+    description: 'Clinic staff last name',
+    example: 'Smith',
+    required: false,
+    maxLength: 50,
+  })
+  @IsOptional()
+  @IsString({ message: 'Last name must be a string' })
+  @MaxLength(50, { message: 'Last name must not exceed 50 characters' })
+  @Transform(({ value }) => value?.trim())
+  lastName?: string;
 }

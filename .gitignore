@@ -21,6 +21,7 @@ lerna-debug.log*
 
 # Testing documentation and flows
 /TestFlow
+/document
 
 # IDEs and editors
 /.idea

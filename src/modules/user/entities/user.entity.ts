@@ -4,6 +4,7 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
   OneToMany,
 } from 'typeorm';
@@ -22,6 +23,22 @@ export enum UserRole {
   CLINIC_STAFF = 'CLINIC_STAFF',
   DOCTOR = 'DOCTOR',
   ADMIN = 'ADMIN',
+}
+
+/**
+ * User Status Enumeration
+ * 
+ * Defines the account status and access state:
+ * - ACTIVE: Normal active account, full access to all features
+ * - INACTIVE: Temporarily deactivated by user, can be reactivated
+ * - BANNED: Suspended by admin due to policy violation, cannot login
+ * - PENDING_VERIFICATION: New account waiting for email verification
+ */
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  BANNED = 'BANNED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
 }
 
 /**
@@ -52,7 +69,10 @@ export class User {
   password: string;
 
   @Column({ nullable: true })
-  name: string;
+  firstName: string;
+
+  @Column({ nullable: true })
+  lastName: string;
 
   @Column({
     type: 'enum',
@@ -62,15 +82,46 @@ export class User {
   role: UserRole;
 
   /**
+   * Account Status
+   * 
+   * Controls user access to the system:
+   * - PENDING_VERIFICATION: New accounts waiting for email verification
+   * - ACTIVE: Normal active account with full access
+   * - INACTIVE: Temporarily deactivated, can be reactivated
+   * - BANNED: Suspended by admin, cannot login
+   */
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.PENDING_VERIFICATION,
+  })
+  status: UserStatus;
+
+  /**
+   * Ban Information
+   * 
+   * Stores reason and timestamp when account was banned
+   * Only populated when status is BANNED
+   */
+  @Column({ nullable: true })
+  banReason?: string;
+
+  @Column({ nullable: true })
+  bannedAt?: Date;
+
+  @Column({ nullable: true })
+  bannedBy?: string; // Admin ID who banned this user
+
+  /**
    * Email Verification Fields
    * Used for standard registration flow (not OAuth)
-   * TODO: Implement email verification service
+   * Stores a 6-digit verification code that expires after 15 minutes
    */
   @Column({ default: false })
   isEmailVerified: boolean;
 
   @Column({ nullable: true })
-  emailVerificationToken?: string;
+  emailVerificationCode?: string;
 
   @Column({ nullable: true })
   emailVerificationExpires?: Date;
@@ -114,4 +165,14 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /**
+   * Soft Delete Timestamp
+   * 
+   * When set, the user is considered deleted but data is retained
+   * Allows for account recovery and data audit trails
+   * TypeORM automatically excludes soft-deleted records from queries
+   */
+  @DeleteDateColumn()
+  deletedAt?: Date;
 }

@@ -11,7 +11,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, LoginResponseDto } from './dto';
+import { LoginDto, LoginResponseDto, VerifyEmailDto, ResendVerificationDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiOperation, ApiResponse, ApiBody, ApiTags, ApiBearerAuth, ApiExtraModels } from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
@@ -22,10 +22,11 @@ import { JwtAuthGuard } from './jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../user/entities/user.entity';
+import { MailerService } from '../mailer/mailer.service';
 
 /**
  * Authentication Controller
- * Handles user authentication, registration, and OAuth operations
+ * Handles user authentication, registration, email verification, and OAuth operations
  * 
  * @tag Authentication
  */
@@ -36,6 +37,7 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private userService: UserService,
+    private mailerService: MailerService,
   ) {}
 
   /**
@@ -56,7 +58,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  async login(@Body() loginDto: LoginDto) {
+  async login(@Body() loginDto: LoginDto): Promise<{ data: any; message: string }> {
     const tokenData = await this.authService.login(loginDto);
     return { data: tokenData, message: MESSAGES.successMessage.loginSuccess };
   }
@@ -69,7 +71,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirects to Google login page' })
   @UseGuards(AuthGuard('google'))
-  async googleAuth() {}
+  async googleAuth(): Promise<void> {}
 
   /**
    * Google OAuth Callback Handler
@@ -83,11 +85,11 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Returns JWT token and user info' })
   @ApiResponse({ status: 401, description: 'Google authentication failed' })
   @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Req() req) {
+  async googleAuthRedirect(@Req() req: any): Promise<{ statusCode: number; message: string; data: any }> {
     const tokenData = await this.authService.googleLogin(req.user);
     return {
-      statusCode: 200,
-      message: 'Google login successful',
+      statusCode: MESSAGES.statusCode.success,
+      message: MESSAGES.successMessage.googleLoginSuccess,
       data: tokenData,
     };
   }
@@ -95,6 +97,8 @@ export class AuthController {
   /**
    * Patient Registration (Public Endpoint)
    * Creates a new patient account with standard authentication
+   * Generates verification code but does NOT auto-send email
+   * Use /auth/send-verification-code to send the verification email
    * 
    * @param createUserDto - Patient registration data
    * @returns Created patient user object
@@ -105,13 +109,143 @@ export class AuthController {
   @ApiResponseData({
     type: UserResponseDto,
     status: MESSAGES.statusCode.created,
-    message: MESSAGES.successMessage.userCreateSuccess,
+    message: 'Account created successfully. Use /auth/send-verification-code to receive verification email.',
   })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error - Check password requirements' })
-  async register(@Body() createUserDto: CreateUserDto) {
-    const user = await this.userService.createPatient(createUserDto);
-    return { data: user, message: MESSAGES.successMessage.userCreateSuccess };
+  async register(@Body() createUserDto: CreateUserDto): Promise<{ data: UserResponseDto; message: string }> {
+    const { user } = await this.userService.createPatient(createUserDto);
+    
+    return { 
+      data: user, 
+      message: MESSAGES.successMessage.accountCreatedSuccess 
+    };
+  }
+
+  /**
+   * Verify Email with 6-digit Code
+   * Verifies user's email address with verification code
+   * Sends welcome email after successful verification
+   * 
+   * @param verifyEmailDto - Email and verification code
+   * @returns Success message
+   */
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify email with 6-digit code' })
+  @ApiBody({ type: VerifyEmailDto })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired verification code' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 409, description: 'Email already verified' })
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<{ message: string }> {
+    const user = await this.userService.verifyEmailCode(
+      verifyEmailDto.email,
+      verifyEmailDto.code,
+    );
+    
+    // Send welcome email
+    await this.mailerService.sendWelcomeEmail(
+      user.email,
+      user.firstName,
+      user.lastName,
+    );
+    
+    return { 
+      message: MESSAGES.successMessage.emailVerifiedSuccess 
+    };
+  }
+
+  /**
+   * Send Verification Code
+   * Generates a new verification code and sends it to user's email
+   * Can be used for initial verification or resending code
+   * 
+   * @param resendVerificationDto - User email
+   * @returns Success message
+   */
+  @Post('send-verification-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send verification code to email' })
+  @ApiBody({ type: ResendVerificationDto })
+  @ApiResponse({ status: 200, description: 'Verification code sent successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 409, description: 'Email already verified' })
+  async sendVerificationCode(@Body() resendVerificationDto: ResendVerificationDto): Promise<{ message: string }> {
+    const { code, user } = await this.userService.resendVerificationCode(
+      resendVerificationDto.email,
+    );
+    
+    // Send verification email
+    await this.mailerService.sendVerificationCode(
+      user.email,
+      code,
+      user.firstName,
+    );
+    
+    return { 
+      message: MESSAGES.successMessage.verificationCodeSentSuccess 
+    };
+  }
+
+  /**
+   * Forgot Password - Request Reset Code
+   * Initiates password reset process by sending reset code to user's email
+   * Public endpoint - no authentication required
+   * 
+   * @param forgotPasswordDto - User email
+   * @returns Success message
+   */
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset code' })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiResponse({ status: 200, description: 'Reset code sent to email' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 400, description: 'OAuth users cannot reset password' })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+    const { code, user } = await this.userService.initiatePasswordReset(
+      forgotPasswordDto.email,
+    );
+    
+    // Send password reset email
+    await this.mailerService.sendPasswordResetCode(
+      user.email,
+      code,
+      user.firstName,
+    );
+    
+    return { 
+      message: MESSAGES.successMessage.passwordResetCodeSentSuccess 
+    };
+  }
+
+  /**
+   * Reset Password with Code
+   * Resets user password using the code sent to their email
+   * Public endpoint - no authentication required
+   * 
+   * @param resetPasswordDto - Email, reset code, and new password
+   * @returns Success message
+   */
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with code' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired reset code' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 400, description: 'Validation error or OAuth user' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+    await this.userService.resetPasswordWithCode(
+      resetPasswordDto.email,
+      resetPasswordDto.code,
+      resetPasswordDto.newPassword,
+    );
+    
+    return { 
+      message: MESSAGES.successMessage.passwordResetSuccess 
+    };
   }
 
   /**
@@ -141,8 +275,8 @@ export class AuthController {
   async registerClinicStaff(
     @Param('patientId', ParseUUIDPipe) patientId: string,
     @Body() createClinicStaffDto: CreateClinicStaffDto,
-  ) {
+  ): Promise<{ data: UserResponseDto; message: string }> {
     const staff = await this.userService.createClinicStaff(patientId, createClinicStaffDto);
-    return { data: staff, message: 'Clinic staff account created successfully' };
+    return { data: staff, message: MESSAGES.successMessage.clinicStaffCreatedSuccess };
   }
 }

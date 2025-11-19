@@ -87,20 +87,27 @@ export class ConversationResponseDto {
   })
   updatedAt: Date;
 
-  constructor(conversation: any, userService?: UserService) {
-    this.id = conversation.id;
-    this.title = conversation.title;
-    this.description = conversation.description;
-    this.participants = conversation.participants || [];
+  constructor(
+    conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & { 
+      participants?: string[] | UserResponseDto[] 
+    }, 
+    userService?: UserService
+  ) {
+    this.id = conversation.id || '';
+    this.title = conversation.title || '';
+    this.description = conversation.description || '';
+    this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string') 
+      ? [] 
+      : (conversation.participants as UserResponseDto[] || []);
     this.lastMessage = conversation.lastMessage || null;
     this.deletedBy = conversation.deletedBy || [];
-    this.createdAt = conversation.createdAt;
-    this.updatedAt = conversation.updatedAt;
+    this.createdAt = conversation.createdAt || new Date();
+    this.updatedAt = conversation.updatedAt || new Date();
   }
 
   // Static method to create with populated participants and last message
   static async createWithParticipants(
-    conversation: any,
+    conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] },
     userService: UserService,
     messagesService?: MessagesService,
   ): Promise<ConversationResponseDto> {

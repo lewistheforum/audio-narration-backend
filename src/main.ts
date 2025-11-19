@@ -5,7 +5,7 @@ import { AppModule } from './app.module';
 import { DatabaseHealthService } from './common/health/database-health.service';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
   // config CORS

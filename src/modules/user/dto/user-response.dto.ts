@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { User, UserRole } from '../entities/user.entity';
+import { User, UserRole, UserStatus } from '../entities/user.entity';
 
 /**
  * User Response DTO
  * 
  * Sanitized user data returned to clients
- * Excludes sensitive fields like password, verification tokens, etc.
+ * Excludes sensitive fields like password, verification codes, etc.
  * 
  * Usage:
  * - API responses for user queries
@@ -26,12 +26,85 @@ export class UserResponseDto {
   email: string;
 
   @ApiProperty({
-    description: 'User display name',
-    example: 'John Doe',
+    description: 'User first name',
+    example: 'John',
     required: false,
     nullable: true,
   })
-  name: string;
+  firstName: string;
+
+  @ApiProperty({
+    description: 'User last name',
+    example: 'Doe',
+    required: false,
+    nullable: true,
+  })
+  lastName: string;
+
+  @ApiProperty({
+    description: 'User role defining access permissions',
+    enum: UserRole,
+    example: UserRole.PATIENT,
+  })
+  role: UserRole;
+
+  @ApiProperty({
+    description: 'Account status',
+    enum: UserStatus,
+    example: UserStatus.ACTIVE,
+  })
+  status: UserStatus;
+
+  @ApiProperty({
+    description: 'Ban reason (only if status is BANNED)',
+    example: 'Violated terms of service',
+    required: false,
+    nullable: true,
+  })
+  banReason?: string;
+
+  @ApiProperty({
+    description: 'When account was banned',
+    example: '2023-10-27T10:00:00.000Z',
+    required: false,
+    nullable: true,
+  })
+  bannedAt?: Date;
+
+  @ApiProperty({
+    description: 'Whether email has been verified',
+    example: true,
+  })
+  isEmailVerified: boolean;
+
+  @ApiProperty({
+    description: 'Whether user registered via OAuth (Google)',
+    example: false,
+  })
+  isOAuthUser: boolean;
+
+  @ApiProperty({
+    description: 'Google user ID (null if not OAuth user)',
+    example: '1234567890',
+    required: false,
+    nullable: true,
+  })
+  googleId?: string;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/avatar.jpg',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string;
+
+  @ApiProperty({
+    description: 'ID of the patient who owns this clinic staff account (null for non-staff users)',
+    required: false,
+    nullable: true,
+  })
+  patientOwnerId?: string;
 
   @ApiProperty({
     description: 'Account creation timestamp',
@@ -46,27 +119,29 @@ export class UserResponseDto {
   updatedAt: Date;
 
   @ApiProperty({
-    description: 'User role defining access permissions',
-    enum: UserRole,
-    example: UserRole.PATIENT,
-  })
-  role: UserRole;
-
-  @ApiProperty({
-    description:
-      'ID of the patient who owns this clinic staff account (null for non-staff users)',
+    description: 'Soft delete timestamp (null if not deleted)',
+    example: '2023-10-27T10:00:00.000Z',
     required: false,
     nullable: true,
   })
-  patientOwnerId?: string;
+  deletedAt?: Date;
 
   constructor(user: Partial<User>) {
     this.id = user.id;
     this.email = user.email;
-    this.name = user.name;
+    this.firstName = user.firstName;
+    this.lastName = user.lastName;
+    this.role = user.role;
+    this.status = user.status ?? UserStatus.PENDING_VERIFICATION;
+    this.banReason = user.banReason;
+    this.bannedAt = user.bannedAt;
+    this.isEmailVerified = user.isEmailVerified ?? false;
+    this.isOAuthUser = user.isOAuthUser ?? false;
+    this.googleId = user.googleId;
+    this.profilePicture = user.profilePicture;
+    this.patientOwnerId = user.patientOwner?.id;
     this.createdAt = user.createdAt;
     this.updatedAt = user.updatedAt;
-    this.role = user.role;
-    this.patientOwnerId = user.patientOwner?.id;
+    this.deletedAt = user.deletedAt;
   }
 }

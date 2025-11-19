@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { UserService } from '../user/user.service';
 import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 import { randomBytes } from 'crypto';
+import { UserResponseDto } from '../user/dto/user-response.dto';
+import { MESSAGES } from 'src/common/message';
 
 /**
  * Authentication Service
@@ -21,16 +23,26 @@ export class AuthService {
   /**
    * Standard email/password login
    * - Validates credentials against database
-   * - Returns JWT token with user ID, email, and role
+   * - Checks user status (bans, inactive accounts)
+   * - Returns JWT token with user ID, email, role, and complete user info
    * - Marks user as online via socket gateway
    */
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto): Promise<{
+    data: {
+      access_token: string;
+      userId: string;
+      user: UserResponseDto;
+    };
+  }> {
     const { email, password } = loginDto;
     const user = await this.userService.findByEmail(email);
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
+
+    // Check if user account is banned or inactive
+    this.userService.validateUserAccess(user);
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     this.socketGatewayService.markUserOnline(String(user.id));
@@ -39,6 +51,7 @@ export class AuthService {
       data: {
         access_token: this.jwtService.sign(payload),
         userId: user.id,
+        user: new UserResponseDto(user),
       },
     };
   }
@@ -50,16 +63,20 @@ export class AuthService {
    * - Stores Google ID and profile picture
    * - Generates random password for OAuth users
    */
-  async googleLogin(googleUser: any): Promise<any> {
+  async googleLogin(googleUser: any): Promise<{
+    access_token: string;
+    userId: string;
+    user: UserResponseDto;
+  }> {
     if (!googleUser) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
     const { googleId, email, firstName, lastName, picture } = googleUser;
 
     if (!email) {
       throw new UnauthorizedException(
-        'Google account does not provide an email address',
+        MESSAGES.failMessage.googleAccountNoEmail,
       );
     }
 
@@ -81,12 +98,12 @@ export class AuthService {
     } else {
       // Create new patient account via Google OAuth
       const randomPassword = randomBytes(16).toString('hex');
-      const displayName = [firstName, lastName].filter(Boolean).join(' ');
       
       const createdUser = await this.userService.createPatientViaOAuth({
         email,
         password: randomPassword,
-        name: displayName || email,
+        firstName,
+        lastName,
         googleId,
         profilePicture: picture,
       });
@@ -96,24 +113,20 @@ export class AuthService {
     }
 
     user = await this.userService.findUserEntityById(userId);
+    
+    // Check if user account is banned or inactive
+    this.userService.validateUserAccess(user);
+    
     const payload = { sub: userId, email: userEmail, role: user.role };
     const accessToken = this.jwtService.sign(payload);
 
     this.socketGatewayService.markUserOnline(String(userId));
 
-    // Return token data directly for backend testing
+    // Return token data with complete user information
     return {
       access_token: accessToken,
-      user: {
-        id: userId,
-        email: userEmail,
-        name: user.name,
-        role: user.role,
-        isOAuthUser: user.isOAuthUser,
-        googleId: user.googleId,
-        isEmailVerified: user.isEmailVerified,
-        profilePicture: user.profilePicture,
-      },
+      userId: userId,
+      user: new UserResponseDto(user),
     };
   }
 }

@@ -79,17 +79,18 @@ export class MessageResponseDto {
   })
   deletedAt: Date | null;
 
-  constructor(message: any) {
-    this.id = message.id;
-    this.conversationId = message.conversationId;
-    this.senderId = message.senderId;
-    this.receiverId = message.receiverId;
-    this.content = message.content;
-    this.messageType = message.messageType;
-    this.isRead = message.isRead;
+  constructor(message: Partial<MessageResponseDto>) {
+    this.id = message.id || '';
+    this.conversationId = message.conversationId || '';
+    this.senderId = message.senderId || '';
+    this.receiverId = message.receiverId || '';
+    this.content = message.content || '';
+    this.messageType = message.messageType || 'text';
+    this.isRead = message.isRead ?? false;
     this.deletedBy = message.deletedBy || [];
-    this.createdAt = message.createdAt;
-    this.updatedAt = message.updatedAt;
+    this.validatedAt = message.validatedAt || new Date();
+    this.createdAt = message.createdAt || new Date();
+    this.updatedAt = message.updatedAt || new Date();
     this.deletedAt = message.deletedAt || null;
   }
 }

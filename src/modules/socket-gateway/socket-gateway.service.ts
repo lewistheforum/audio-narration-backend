@@ -63,7 +63,7 @@ export class SocketGatewayService
     console.log('Socket Gateway initialized');
   }
 
-  async handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket): Promise<void> {
     const user = client.data.user;
     if (user) {
       console.log(`User ${user.username} disconnected`);
@@ -81,7 +81,7 @@ export class SocketGatewayService
     }
   }
 
-  async handleConnection(client: Socket) {
+  async handleConnection(client: Socket): Promise<void> {
     try {
       // Authentication middleware
       const token = client.handshake.auth.token || client.handshake.query.token;
@@ -108,9 +108,10 @@ export class SocketGatewayService
       }
 
       // Store user data in socket
+      const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
       client.data.user = {
         userId: user.id,
-        username: user.name || user.email,
+        username: fullName || user.email,
         email: user.email,
       };
 
@@ -121,7 +122,7 @@ export class SocketGatewayService
       // Store user connection
       const socketUser: SocketUser = {
         userId: user.id,
-        username: user.name || user.email,
+        username: fullName || user.email,
         email: user.email,
         socketId: client.id,
       };
@@ -137,7 +138,7 @@ export class SocketGatewayService
       // Notify others that user is online
       client.broadcast.emit('userOnline', {
         userId: user.id,
-        username: user.name || user.email,
+        username: fullName || user.email,
         status: 'online',
       });
     } catch (error) {
@@ -155,7 +156,7 @@ export class SocketGatewayService
   async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): Promise<void> {
     try {
       // TODO: Implement conversation access validation
       client.join(`conversation:${conversationId}`);
@@ -174,7 +175,7 @@ export class SocketGatewayService
   handleLeaveConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): void {
     client.leave(`conversation:${conversationId}`);
     console.log(
       `User ${client.data.user.username} left conversation ${conversationId}`,
@@ -191,7 +192,7 @@ export class SocketGatewayService
       type?: string;
       receiverId: string;
     },
-  ) {
+  ): Promise<void> {
     try {
       const createMessageDto: CreateMessageDto = {
         conversationId: data.conversationId,
@@ -228,7 +229,7 @@ export class SocketGatewayService
   async handleMarkAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageId: string; conversationId: string },
-  ) {
+  ): Promise<void> {
     try {
       // Mark the message as read in the database
       const updatedMessage = await this.messagesService.markAsRead(
@@ -261,7 +262,7 @@ export class SocketGatewayService
   async handleMarkMultipleAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageIds: string[]; conversationId: string },
-  ) {
+  ): Promise<void> {
     try {
       // Mark multiple messages as read in the database
       const updatedMessages = await this.messagesService.markMultipleAsRead(
@@ -295,7 +296,7 @@ export class SocketGatewayService
   async handleMarkConversationAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
-  ) {
+  ): Promise<void> {
     try {
       // Mark all unread messages in the conversation as read
       const affectedCount = await this.messagesService.markConversationAsRead(
@@ -330,7 +331,7 @@ export class SocketGatewayService
   handleStartTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): void {
     client.to(`conversation:${conversationId}`).emit('typingStart', {
       userId: client.data.user.userId,
       conversationId,
@@ -345,7 +346,7 @@ export class SocketGatewayService
   handleStopTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): void {
     client.to(`conversation:${conversationId}`).emit('typingStop', {
       userId: client.data.user.userId,
       conversationId,
@@ -358,7 +359,7 @@ export class SocketGatewayService
 
   // Legacy events for backward compatibility
   @SubscribeMessage('updateSchedule')
-  onUpdateSchedule(@MessageBody() body: any) {
+  onUpdateSchedule(@MessageBody() body: any): void {
     console.log(body);
     (this.server as any).emit('updateScheduleData', {
       message: 'Schedule updated',
@@ -367,7 +368,7 @@ export class SocketGatewayService
   }
 
   @SubscribeMessage('newMessageChat')
-  onNewMessageChat(@MessageBody() body: any) {
+  onNewMessageChat(@MessageBody() body: any): void {
     // console.log('CHECK NEW MESSAGE CHAT', body);
     (this.server as any).emit(`onNewMessageChat-${body.conversationid}`, {
       message: 'New message received',
@@ -397,7 +398,7 @@ export class SocketGatewayService
   }
 
   // Mark user online (called from auth service)
-  public markUserOnline(userId: string) {
+  public markUserOnline(userId: string): void {
     if (!userId) return;
     const user = this.connectedUsers.get(userId);
     if (user) {
@@ -410,7 +411,7 @@ export class SocketGatewayService
   }
 
   // Mark user offline (called from auth service)
-  public markUserOffline(userId: string) {
+  public markUserOffline(userId: string): void {
     if (!userId) return;
     const user = this.connectedUsers.get(userId);
     if (user) {
@@ -441,6 +442,7 @@ export class SocketGatewayService
 
       // Get sender information
       const sender = await this.userService.findUserEntityById(senderId);
+      const senderFullName = [sender.firstName, sender.lastName].filter(Boolean).join(' ');
 
       // Prepare the new message event
       const newMessageEvent: NewMessageEvent = {
@@ -457,7 +459,7 @@ export class SocketGatewayService
         },
         sender: {
           id: sender.id,
-          username: sender.name || sender.email,
+          username: senderFullName || sender.email,
           email: sender.email,
         },
       };

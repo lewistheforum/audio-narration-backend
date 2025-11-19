@@ -6,11 +6,11 @@ import * as nodemailer from 'nodemailer';
 export class MailerService {
   constructor(private readonly configService: ConfigService) {}
 
-  mailTransport() {
+  mailTransport(): nodemailer.Transporter {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
-      port: 465, //465 (MAIN) || 587 (TRASH)
-      secure: true, // true (MAIN) || false (TRASH)
+      port: 465,
+      secure: true,
       auth: {
         user: this.configService.get<string>('EMAIL_USER'),
         pass: this.configService.get<string>('EMAIL_PASSWORD'),
@@ -19,8 +19,251 @@ export class MailerService {
     return transporter;
   }
 
-  mailOptions(targetMail: string) {
-    return {
+  /**
+   * Send Email Verification Code
+   * Sends a 6-digit verification code to user's email
+   */
+  async sendVerificationCode(email: string, code: string, firstName?: string): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = firstName || 'User';
+    
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Verify Your Email - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #4F46E5; margin: 0 0 20px 0;">Email Verification</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
+              Hi ${displayName},
+            </p>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
+              Thank you for registering with Medicare. Please use the verification code below to verify your email address:
+            </p>
+            
+            <div style="background: white; border: 2px dashed #4F46E5; border-radius: 8px; padding: 20px; margin: 30px 0;">
+              <h2 style="color: #4F46E5; font-size: 36px; letter-spacing: 8px; margin: 0;">
+                ${code}
+              </h2>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0;">
+              This code will expire in <strong>15 minutes</strong>.
+            </p>
+            <p style="color: #6B7280; font-size: 14px; margin: 10px 0 0 0;">
+              If you didn't create an account with Medicare, please ignore this email.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Verification code sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send verification email:', error);
+      throw new Error('Failed to send verification email');
+    }
+  }
+
+  /**
+   * Send Password Reset Code
+   * Sends a 6-digit reset code to user's email for password reset
+   */
+  async sendPasswordResetCode(email: string, code: string, firstName?: string): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = firstName || 'User';
+    
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Password Reset Request - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #DC2626; margin: 0 0 20px 0;">🔐 Password Reset Request</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
+              Hi ${displayName},
+            </p>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
+              We received a request to reset your password. Use the code below to proceed:
+            </p>
+            
+            <div style="background: white; border: 2px dashed #DC2626; border-radius: 8px; padding: 20px; margin: 30px 0;">
+              <h2 style="color: #DC2626; font-size: 36px; letter-spacing: 8px; margin: 0;">
+                ${code}
+              </h2>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0;">
+              This code will expire in <strong>15 minutes</strong>.
+            </p>
+            <p style="color: #DC2626; font-size: 14px; margin: 10px 0 0 0; font-weight: 600;">
+              ⚠️ If you didn't request this password reset, please ignore this email or contact support if you're concerned.
+            </p>
+          </div>
+          
+          <div style="background: #F3F4F6; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Security Tips:</h3>
+            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+              <li>Never share your reset code with anyone</li>
+              <li>Medicare will never ask for your password via email</li>
+              <li>Use a strong, unique password for your account</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Password reset code sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send password reset email:', error);
+      throw new Error('Failed to send password reset email');
+    }
+  }
+
+  /**
+   * Send Welcome Email
+   * Sends a welcome email after successful email verification
+   */
+  async sendWelcomeEmail(email: string, firstName?: string, lastName?: string): Promise<void> {
+    const transporter = this.mailTransport();
+    const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User';
+    
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Welcome to Medicare!',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🎉 Welcome to Medicare!</h1>
+            <p style="font-size: 18px; margin: 0 0 10px 0;">
+              Hi ${fullName},
+            </p>
+            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
+              Your email has been successfully verified!
+            </p>
+          </div>
+          
+          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
+            <h2 style="color: #111827; margin: 0 0 20px 0;">What's Next?</h2>
+            
+            <div style="margin: 20px 0;">
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">1</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Complete Your Profile</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Add your personal information to get started</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">2</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Explore Our Services</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Discover healthcare services tailored for you</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start;">
+                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">3</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Stay Connected</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">We'll keep you updated with the latest health tips</p>
+                </div>
+              </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
+                 style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+                Get Started
+              </a>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need help? Contact us at 
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Welcome email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send welcome email:', error);
+      throw new Error('Failed to send welcome email');
+    }
+  }
+
+  /**
+   * Legacy send mail method
+   * @deprecated Use sendVerificationCode or sendWelcomeEmail instead
+   */
+  async sendMail(targetMail: string): Promise<any> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
       from: {
         name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
@@ -61,11 +304,6 @@ export class MailerService {
             </div>
             `,
       attachments: [
-        // {
-        //   filename: 'test.pdf',
-        //   path: path.join(__dirname, 'test.pdf'),
-        //   contentType: 'application/pdf',
-        // },
         {
           filename: 'logo-medicare.png',
           path: 'https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png',
@@ -73,11 +311,7 @@ export class MailerService {
         },
       ],
     };
-  }
-
-  async sendMail(targetMail: string) {
-    const transporter = this.mailTransport();
-    const mailOptions = this.mailOptions(targetMail);
+    
     try {
       return await transporter.sendMail(mailOptions);
     } catch (error) {
