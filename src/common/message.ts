@@ -20,6 +20,8 @@ const successMessage = {
   userDeleteSuccess: 'User deleted successfully',
   mailSendSuccess: 'Mail sent successfully',
   loginSuccess: 'User logged in successfully',
+  paymentCreateSuccess: 'Payment QR created successfully',
+  paymentUpdateSuccess: 'Payment status updated successfully',
 };
 
 const failMessage = {
@@ -35,6 +37,9 @@ const failMessage = {
   newPasswordSameAsOld: 'New password cannot be the same as the old password.',
   conversationNotFound: 'Conversation not found',
   messageNotFound: 'Message not found',
+  paymentNotFound: 'Payment transaction not found',
+  paymentInvalidAmount: 'Invalid payment amount',
+  seepayConfigMissing: 'Seepay configuration is missing',
 };
 
 const MESSAGES = {

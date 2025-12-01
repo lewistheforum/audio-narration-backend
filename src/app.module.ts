@@ -8,6 +8,7 @@ import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     SocketGatewayModule,
     ConversationModule,
     MessagesModule,
+    PaymentsModule,
   ],
   controllers: [],
   providers: [],

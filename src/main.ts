@@ -35,6 +35,8 @@ async function bootstrap() {
     .addTag('Users management', 'User management endpoints')
     .addTag('Health', 'Health check endpoints')
     .addTag('Mailer', 'Mail service endpoints')
+    .addTag('Payments', 'QR Seepay') 
+
     // .addBearerAuth()
     .build();
 
@@ -56,6 +58,7 @@ async function bootstrap() {
     console.log(`🏥 Health Check: http://localhost:${PORT}/api/health`);
     console.log(`🔐 Auth Routes: http://localhost:${PORT}/api/auth/*`);
     console.log(`👥 User Routes: http://localhost:${PORT}/api/users/*`);
+    console.log(`💳 Payment Routes: http://localhost:${PORT}/payments/*`);
   });
 }
 
