@@ -31,6 +31,7 @@ import {
   UpdateUserDto,
   UserResponseDto,
   UpdatePasswordDto,
+  UsernameEmailListDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -54,6 +55,22 @@ export class UserController {
   async findAll() {
     const users = await this.userService.findAll();
     return { data: users, message: MESSAGES.successMessage.userFetchSuccess };
+  }
+
+  // Get user and email
+  @Get('username-email-list')
+  @ApiOperation({ summary: 'Get full list of usernames and emails' })
+  @ApiResponseData({
+    type: UsernameEmailListDto,
+    status: MESSAGES.statusCode.success,
+    message: MESSAGES.successMessage.userFetchSuccess,
+  })
+  async getUsernameEmailList() {
+    const data = await this.userService.getUserEmailList();
+    return {
+      message: 'Successfully get the list of usernames and emails',
+      data,
+    };
   }
 
   @Get(':id')

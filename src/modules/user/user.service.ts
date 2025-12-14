@@ -12,6 +12,7 @@ import {
   UpdatePasswordDto,
   UpdateUserDto,
   UserResponseDto,
+  UsernameEmailListDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -49,12 +50,17 @@ export class UserService {
       throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
     }
 
+    if (!createUserDto.profilePicture) {
+    createUserDto.profilePicture =
+      'https://cdn-icons-png.flaticon.com/512/847/847969.png';
+  }
+
     const salt = await bcrypt.genSalt(10); //Standard cost factor
     const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
     createUserDto.password = hashedPassword;
 
-    const user = this.userRepository.create(createUserDto);
-    const savedUser = await this.userRepository.save(user);
+    const user = this.userRepository.create(createUserDto as any);
+    const savedUser = await this.userRepository.save(user as any);
     return new UserResponseDto(savedUser);
   }
 
@@ -119,5 +125,19 @@ export class UserService {
     return this.userRepository.find({
       where: { id: In(ids) },
     });
+  }
+
+  // Get username and email
+  async getUserEmailList(): Promise<UsernameEmailListDto> {
+    const users = await this.userRepository.find({
+      select: ['name', 'email'],
+    })
+
+    return {
+      username: users
+      .map((u) => u.name)
+      .filter((name) => !!name),
+      email: users.map((u) => u.email)
+    }
   }
 }

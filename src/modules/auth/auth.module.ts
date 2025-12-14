@@ -6,11 +6,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
-import { User as PostgresUser } from '../user/entities/user.entity';
 import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
 import { UserModule } from '../user/user.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
+import { EmailVerification } from './entities/email-verification.entity';
+import { PasswordReset } from './entities/password-reset.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,9 @@ import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
       useFactory: getJwtConfig,
       inject: [ConfigService],
     }),
+
+    TypeOrmModule.forFeature([EmailVerification, PasswordReset]),
+
     UserModule,
     SocketGatewayModule,
   ],
