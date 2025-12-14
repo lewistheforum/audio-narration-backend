@@ -9,6 +9,7 @@ import {
   OneToMany,
   OneToOne,
 } from 'typeorm';
+import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
 
 /**
  * User Role Enumeration
@@ -63,7 +64,24 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  /**
+   * Email Address (Encrypted)
+   * 
+   * Stored encrypted in database using AES-256-GCM
+   * Automatically decrypted when retrieved via TypeORM
+   * 
+   * Security:
+   * - Encryption key stored in ENCRYPTION_KEY environment variable
+   * - Each encryption uses a unique IV (Initialization Vector)
+   * - Authentication tag ensures data integrity
+   * 
+   * Note: WHERE clause searches won't work on encrypted emails.
+   * Use findByEmail() method which loads and compares decrypted values.
+   */
+  @Column({ 
+    unique: true,
+    transformer: encryptionTransformer
+  })
   email: string;
 
   @Column()

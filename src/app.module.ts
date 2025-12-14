@@ -9,6 +9,7 @@ import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.mod
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { ProfileModule } from './modules/profile/profile.module';
+import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 import { AdminSeederService } from './common/seeders/admin-seeder.service';
 import { User } from './modules/user/entities/user.entity';
 
@@ -59,6 +60,7 @@ import { User } from './modules/user/entities/user.entity';
     ConversationModule,
     MessagesModule,
     ProfileModule,
+    PrescriptionsModule,
   ],
   controllers: [],
   providers: [AdminSeederService],

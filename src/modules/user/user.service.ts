@@ -568,14 +568,26 @@ export class UserService {
    * 
    * Used for authentication and duplicate email validation
    * 
-   * @param email - User email address
+   * Note: When email encryption is enabled, this method loads all users
+   * and compares decrypted emails since WHERE clause cannot search encrypted fields.
+   * For better performance with large user bases, consider:
+   * - Using a separate searchable email hash column
+   * - Implementing email-based indexing solution
+   * 
+   * @param email - User email address (plaintext)
    * @returns User entity with patientOwner relation, or null if not found
    */
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOne({ 
-      where: { email }, 
+    // Load all users with relations
+    // TypeORM transformer will decrypt emails automatically
+    const users = await this.userRepository.find({ 
       relations: ['patientOwner'] 
     });
+    
+    // Find user by comparing decrypted emails
+    const user = users.find(u => u.email === email);
+    
+    return user || null;
   }
 
   /**

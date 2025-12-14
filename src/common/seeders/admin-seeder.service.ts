@@ -38,12 +38,15 @@ export class AdminSeederService implements OnModuleInit {
 
   /**
    * Seed default admin account if it doesn't exist
+   * 
+   * Note: With email encryption enabled, we need to load all users
+   * and compare decrypted emails since WHERE clause won't work on encrypted data
    */
   private async seedAdmin(): Promise<void> {
     try {
-      const existingAdmin = await this.userRepository.findOne({
-        where: { email: this.DEFAULT_ADMIN.email },
-      });
+      // Load all users and find admin by decrypted email
+      const allUsers = await this.userRepository.find();
+      const existingAdmin = allUsers.find(u => u.email === this.DEFAULT_ADMIN.email);
 
       if (existingAdmin) {
         this.logger.log('Default admin account already exists');
