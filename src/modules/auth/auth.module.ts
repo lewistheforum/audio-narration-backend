@@ -12,6 +12,8 @@ import { GoogleStrategy } from './google.strategy';
 import { ClientModule } from '../client/client.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { MailerModule } from '../mailer/mailer.module';
+import { EmailVerification } from './entities/email-verification.entity';
+import { PasswordReset } from './entities/password-reset.entity';
 
 /**
  * Authentication Module
@@ -39,6 +41,8 @@ import { MailerModule } from '../mailer/mailer.module';
       inject: [ConfigService],
     }),
     ClientModule,
+    TypeOrmModule.forFeature([EmailVerification, PasswordReset]),
+    // UserModule,
     SocketGatewayModule,
     MailerModule,
   ],

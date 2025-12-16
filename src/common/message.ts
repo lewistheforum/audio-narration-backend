@@ -43,6 +43,7 @@ const successMessage = {
   profileDeleteSuccess: 'Profile deleted successfully',
   // Mail Service
   mailSendSuccess: 'Mail sent successfully',
+  registerSuccess: 'User register successfully',
 };
 
 const failMessage = {
