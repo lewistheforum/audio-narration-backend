@@ -6,10 +6,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
-import { User as PostgresUser } from '../user/entities/user.entity';
+import { User as PostgresUser } from '../client/entities/accounts.entity';
 import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
-import { UserModule } from '../user/user.module';
+import { ClientModule } from '../client/client.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { MailerModule } from '../mailer/mailer.module';
 
@@ -24,7 +24,7 @@ import { MailerModule } from '../mailer/mailer.module';
  * - Email verification with 6-digit code
  * 
  * Dependencies:
- * - UserModule: For user CRUD operations
+ * - ClientModule: For client CRUD operations
  * - SocketGatewayModule: For online status tracking
  * - MailerModule: For sending verification emails
  * - PassportModule: For authentication strategies
@@ -38,7 +38,7 @@ import { MailerModule } from '../mailer/mailer.module';
       useFactory: getJwtConfig,
       inject: [ConfigService],
     }),
-    UserModule,
+    ClientModule,
     SocketGatewayModule,
     MailerModule,
   ],
@@ -46,4 +46,4 @@ import { MailerModule } from '../mailer/mailer.module';
   providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],
   exports: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],
 })
-export class AuthModule {}
+export class AuthModule { }

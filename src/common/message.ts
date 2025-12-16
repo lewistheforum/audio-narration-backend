@@ -63,6 +63,7 @@ const failMessage = {
   incorrectPassword: 'Incorrect current password',
   newPasswordSameAsOld: 'New password cannot be the same as the old password',
   passwordResetNotAvailableForOAuth: 'Password reset is not available for OAuth users. Please login with Google',
+  oauthUserCannotResetPassword: 'OAuth users cannot reset password. Please login with your OAuth provider',
   // Ban/Status Errors
   userAlreadyBanned: 'User is already banned',
   userNotBanned: 'User is not banned',

@@ -134,12 +134,12 @@ async function importMedicines() {
         if (batch.length >= BATCH_SIZE) {
           await insertBatch(repository, batch);
           totalInserted += batch.length;
-          
+
           // Progress update
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           const rate = (totalProcessed / parseFloat(elapsed)).toFixed(0);
           console.log(`✅ Processed: ${totalProcessed.toLocaleString()} | Inserted: ${totalInserted.toLocaleString()} | Rate: ${rate} rec/sec | Errors: ${errorCount}`);
-          
+
           batch = []; // Clear batch
         }
       } catch (error) {
@@ -186,13 +186,13 @@ async function importMedicines() {
  */
 async function insertBatch(repository: any, batch: Medicine[]): Promise<void> {
   const queryRunner = repository.manager.connection.createQueryRunner();
-  
+
   try {
     await queryRunner.connect();
     await queryRunner.startTransaction();
-    
+
     await queryRunner.manager.save(Medicine, batch);
-    
+
     await queryRunner.commitTransaction();
   } catch (error) {
     await queryRunner.rollbackTransaction();

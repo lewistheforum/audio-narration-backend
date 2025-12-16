@@ -2,10 +2,10 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { UserService } from '../user/user.service';
+import { ClientService } from '../client/client.service';
 import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 import { randomBytes } from 'crypto';
-import { UserResponseDto } from '../user/dto/user-response.dto';
+import { ClientResponseDto } from '../client/dto/client-response.dto';
 import { MESSAGES } from 'src/common/message';
 
 /**
@@ -15,10 +15,10 @@ import { MESSAGES } from 'src/common/message';
 @Injectable()
 export class AuthService {
   constructor(
-    private userService: UserService,
+    private clientService: ClientService,
     private jwtService: JwtService,
     private socketGatewayService: SocketGatewayService,
-  ) {}
+  ) { }
 
   /**
    * Standard email/password login
@@ -31,27 +31,30 @@ export class AuthService {
     data: {
       access_token: string;
       userId: string;
-      user: UserResponseDto;
+      user: ClientResponseDto;
     };
   }> {
     const { email, password } = loginDto;
-    const user = await this.userService.findByEmail(email);
+    const user = await this.clientService.findByEmail(email);
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
     // Check if user account is banned or inactive
-    this.userService.validateUserAccess(user);
+    this.clientService.validateUserAccess(user);
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     this.socketGatewayService.markUserOnline(String(user.id));
+
+    // Get general account data for response
+    const generalAccount = await this.clientService.findGeneralAccountByUserId(user.id);
 
     return {
       data: {
         access_token: this.jwtService.sign(payload),
         userId: user.id,
-        user: new UserResponseDto(user),
+        user: new ClientResponseDto(user, generalAccount),
       },
     };
   }
@@ -60,19 +63,19 @@ export class AuthService {
    * Google OAuth login flow
    * - Only creates PATIENT accounts (business rule)
    * - Email is automatically verified for OAuth users
-   * - Stores Google ID and profile picture
+   * - Stores profile picture
    * - Generates random password for OAuth users
    */
   async googleLogin(googleUser: any): Promise<{
     access_token: string;
     userId: string;
-    user: UserResponseDto;
+    user: ClientResponseDto;
   }> {
     if (!googleUser) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
-    const { googleId, email, firstName, lastName, picture } = googleUser;
+    const { email, firstName, lastName, picture } = googleUser;
 
     if (!email) {
       throw new UnauthorizedException(
@@ -80,43 +83,47 @@ export class AuthService {
       );
     }
 
-    let user = await this.userService.findByEmail(email);
+    let user = await this.clientService.findByEmail(email);
     let userId: string;
     let userEmail: string;
+    let generalAccount = null;
 
     if (user) {
-      // Update existing user with Google data if not already set
-      if (!user.googleId && googleId) {
-        user.googleId = googleId;
+      // Update existing user with OAuth data if not already set
+      if (!user.isOAuthUser) {
         user.isOAuthUser = true;
         user.isEmailVerified = true;
         user.profilePicture = picture;
-        await this.userService.updateUserEntity(user);
+        await this.clientService.updateUserEntity(user);
       }
       userId = user.id;
       userEmail = user.email;
+      generalAccount = await this.clientService.findGeneralAccountByUserId(userId);
     } else {
       // Create new patient account via Google OAuth
       const randomPassword = randomBytes(16).toString('hex');
-      
-      const createdUser = await this.userService.createPatientViaOAuth({
+
+      // Construct fullName from first and last name
+      const fullName = [firstName, lastName].filter(Boolean).join(' ') || undefined;
+
+      const createdUser = await this.clientService.createPatientViaOAuth({
         email,
         password: randomPassword,
-        firstName,
-        lastName,
-        googleId,
+        username: email.split('@')[0],
+        fullName,
         profilePicture: picture,
       });
-      
+
       userId = createdUser.id;
       userEmail = createdUser.email;
+      generalAccount = await this.clientService.findGeneralAccountByUserId(userId);
     }
 
-    user = await this.userService.findUserEntityById(userId);
-    
+    user = await this.clientService.findUserEntityById(userId);
+
     // Check if user account is banned or inactive
-    this.userService.validateUserAccess(user);
-    
+    this.clientService.validateUserAccess(user);
+
     const payload = { sub: userId, email: userEmail, role: user.role };
     const accessToken = this.jwtService.sign(payload);
 
@@ -126,7 +133,7 @@ export class AuthService {
     return {
       access_token: accessToken,
       userId: userId,
-      user: new UserResponseDto(user),
+      user: new ClientResponseDto(user, generalAccount),
     };
   }
 }

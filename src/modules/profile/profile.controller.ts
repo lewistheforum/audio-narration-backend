@@ -23,7 +23,7 @@ import { ProfileService } from './profile.service';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../user/entities/user.entity';
+import { UserRole } from '../client/entities/accounts.entity';
 import {
   CreateProfileDto,
   UpdateProfileDto,
@@ -51,7 +51,7 @@ import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(private readonly profileService: ProfileService) { }
 
   /**
    * Get My Profile

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
-import { UserModule } from './modules/user/user.module';
+import { ClientModule } from './modules/client/client.module';
 import { HealthModule } from './common/health/health.module';
 import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
@@ -10,8 +10,8 @@ import { ConversationModule } from './modules/conversations/conversation.module'
 import { MessagesModule } from './modules/messages/messages.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
-import { AdminSeederService } from './common/seeders/admin-seeder.service';
-import { User } from './modules/user/entities/user.entity';
+// import { AdminSeederService } from './common/seeders/admin-seeder.service';
+import { User } from './modules/client/entities/accounts.entity';
 
 @Module({
   imports: [
@@ -38,13 +38,13 @@ import { User } from './modules/user/entities/user.entity';
       password: process.env.POSTGRES_PASSWORD || '',
       database: process.env.POSTGRES_DATABASE || '',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: true, // TEMPORARY: Disabled due to FK constraint issues. Reset DB with: DROP SCHEMA public CASCADE; CREATE SCHEMA public;
       logging: false,
       ssl:
         process.env.POSTGRES_SSL === 'true'
           ? {
-              rejectUnauthorized: false,
-            }
+            rejectUnauthorized: false,
+          }
           : false,
     }),
 
@@ -53,7 +53,7 @@ import { User } from './modules/user/entities/user.entity';
 
     // import modules
     AuthModule,
-    UserModule,
+    ClientModule,
     HealthModule,
     MailerModule,
     SocketGatewayModule,
@@ -63,6 +63,6 @@ import { User } from './modules/user/entities/user.entity';
     PrescriptionsModule,
   ],
   controllers: [],
-  providers: [AdminSeederService],
+  providers: [],
 })
-export class AppModule {}
+export class AppModule { }

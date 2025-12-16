@@ -20,7 +20,7 @@ export class MessagesService {
     private socketGatewayService: SocketGatewayService,
     @Inject(forwardRef(() => ConversationService))
     private conversationService: ConversationService,
-  ) {}
+  ) { }
 
   async create(
     createMessageDto: CreateMessageDto,

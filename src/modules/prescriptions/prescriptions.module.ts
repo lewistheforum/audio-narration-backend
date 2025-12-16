@@ -23,4 +23,4 @@ import { Medicine } from './entities/medicine.entity';
   providers: [PrescriptionsService],
   exports: [PrescriptionsService],
 })
-export class PrescriptionsModule {}
+export class PrescriptionsModule { }

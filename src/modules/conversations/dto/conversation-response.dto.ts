@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MessageResponseDto } from 'src/modules/messages/dto/message-response.dto';
-import { UserResponseDto } from 'src/modules/user/dto';
-import { UserService } from 'src/modules/user/user.service';
+import { ClientResponseDto } from 'src/modules/client/dto';
+import { ClientService } from 'src/modules/client/client.service';
 import { MessagesService } from 'src/modules/messages/messages.service';
 
 export class ConversationResponseDto {
@@ -27,7 +27,7 @@ export class ConversationResponseDto {
 
   @ApiProperty({
     description: 'List of participants in the conversation',
-    type: [UserResponseDto],
+    type: [ClientResponseDto],
     example: [
       {
         id: '123e4567-e89b-12d3-a456-426614174000',
@@ -45,7 +45,7 @@ export class ConversationResponseDto {
       },
     ],
   })
-  participants: UserResponseDto[];
+  participants: ClientResponseDto[];
 
   @ApiProperty({
     description: 'Last message in the conversation',
@@ -88,17 +88,17 @@ export class ConversationResponseDto {
   updatedAt: Date;
 
   constructor(
-    conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & { 
-      participants?: string[] | UserResponseDto[] 
-    }, 
-    userService?: UserService
+    conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & {
+      participants?: string[] | ClientResponseDto[]
+    },
+    clientService?: ClientService
   ) {
     this.id = conversation.id || '';
     this.title = conversation.title || '';
     this.description = conversation.description || '';
-    this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string') 
-      ? [] 
-      : (conversation.participants as UserResponseDto[] || []);
+    this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string')
+      ? []
+      : (conversation.participants as ClientResponseDto[] || []);
     this.lastMessage = conversation.lastMessage || null;
     this.deletedBy = conversation.deletedBy || [];
     this.createdAt = conversation.createdAt || new Date();
@@ -108,18 +108,18 @@ export class ConversationResponseDto {
   // Static method to create with populated participants and last message
   static async createWithParticipants(
     conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] },
-    userService: UserService,
+    clientService: ClientService,
     messagesService?: MessagesService,
   ): Promise<ConversationResponseDto> {
-    const dto = new ConversationResponseDto(conversation, userService);
+    const dto = new ConversationResponseDto(conversation, clientService);
 
     if (conversation.participants && conversation.participants.length > 0) {
       try {
-        const participantUsers = await userService.findUsersByIds(
+        const participantUsers = await clientService.findUsersByIds(
           conversation.participants,
         );
         dto.participants = participantUsers.map(
-          (user) => new UserResponseDto(user),
+          (user) => new ClientResponseDto(user),
         );
       } catch (error) {
         console.error('Error fetching participant data:', error);

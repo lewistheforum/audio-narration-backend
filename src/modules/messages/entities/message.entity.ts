@@ -8,7 +8,7 @@ import {
   JoinColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '../../client/entities/accounts.entity';
 import { Conversation } from '../../conversations/entities/conversation.entity';
 
 @Entity('messages')

@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { Profile } from './entities/profile.entity';
 import { CreateProfileDto, UpdateProfileDto, ProfileResponseDto } from './dto';
 import { MESSAGES } from 'src/common/message';
-import { UserRole } from '../user/entities/user.entity';
+import { UserRole } from '../client/entities/accounts.entity';
 
 /**
  * Profile Service
@@ -25,7 +25,7 @@ export class ProfileService {
   constructor(
     @InjectRepository(Profile)
     private profileRepository: Repository<Profile>,
-  ) {}
+  ) { }
 
   /**
    * Create Profile
@@ -76,7 +76,7 @@ export class ProfileService {
    */
   async findByUserId(userId: string): Promise<ProfileResponseDto> {
     const profile = await this.profileRepository.findOne({ where: { userId } });
-    
+
     if (!profile) {
       throw new NotFoundException(MESSAGES.failMessage.profileNotFound);
     }
@@ -95,7 +95,7 @@ export class ProfileService {
    */
   async findProfileEntityByUserId(userId: string): Promise<Profile> {
     const profile = await this.profileRepository.findOne({ where: { userId } });
-    
+
     if (!profile) {
       throw new NotFoundException(MESSAGES.failMessage.profileNotFound);
     }
@@ -162,7 +162,7 @@ export class ProfileService {
    */
   async delete(userId: string): Promise<void> {
     const result = await this.profileRepository.delete({ userId });
-    
+
     if (result.affected === 0) {
       throw new NotFoundException(MESSAGES.failMessage.profileNotFound);
     }

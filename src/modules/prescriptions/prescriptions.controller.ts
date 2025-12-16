@@ -23,7 +23,7 @@ import { Medicine } from './entities/medicine.entity';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../user/entities/user.entity';
+import { UserRole } from '../client/entities/accounts.entity';
 
 /**
  * Prescriptions Controller
@@ -36,7 +36,7 @@ import { UserRole } from '../user/entities/user.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class PrescriptionsController {
-  constructor(private readonly prescriptionsService: PrescriptionsService) {}
+  constructor(private readonly prescriptionsService: PrescriptionsService) { }
 
   /**
    * Create a new medicine

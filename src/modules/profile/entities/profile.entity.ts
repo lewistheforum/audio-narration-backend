@@ -7,7 +7,7 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '../../client/entities/accounts.entity';
 
 /**
  * Gender Enumeration
@@ -105,10 +105,10 @@ export class Profile {
   })
   bloodType?: BloodType;
 
-  @Column({ 
-    type: 'decimal', 
-    precision: 5, 
-    scale: 2, 
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
     nullable: true,
     transformer: {
       to: (value: number) => value,
@@ -117,10 +117,10 @@ export class Profile {
   })
   height?: number; // in cm
 
-  @Column({ 
-    type: 'decimal', 
-    precision: 5, 
-    scale: 2, 
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
     nullable: true,
     transformer: {
       to: (value: number) => value,

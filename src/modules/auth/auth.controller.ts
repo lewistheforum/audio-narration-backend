@@ -16,12 +16,12 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiOperation, ApiResponse, ApiBody, ApiTags, ApiBearerAuth, ApiExtraModels } from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
-import { UserService } from '../user/user.service';
-import { CreateUserDto, CreateClinicStaffDto, UserResponseDto } from '../user/dto';
+import { ClientService } from '../client/client.service';
+import { CreateClientDto, CreateClinicStaffDto, ClientResponseDto } from '../client/dto';
 import { JwtAuthGuard } from './jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../user/entities/user.entity';
+import { UserRole } from '../client/entities/accounts.entity';
 import { MailerService } from '../mailer/mailer.service';
 
 /**
@@ -32,13 +32,13 @@ import { MailerService } from '../mailer/mailer.service';
  */
 @ApiTags('Authentication')
 @Controller('auth')
-@ApiExtraModels(UserResponseDto, LoginResponseDto)
+@ApiExtraModels(ClientResponseDto, LoginResponseDto)
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private userService: UserService,
+    private clientService: ClientService,
     private mailerService: MailerService,
-  ) {}
+  ) { }
 
   /**
    * User Login
@@ -71,7 +71,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirects to Google login page' })
   @UseGuards(AuthGuard('google'))
-  async googleAuth(): Promise<void> {}
+  async googleAuth(): Promise<void> { }
 
   /**
    * Google OAuth Callback Handler
@@ -107,18 +107,18 @@ export class AuthController {
   @ApiOperation({ summary: 'Register new patient account (Public)' })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
-    type: UserResponseDto,
+    type: ClientResponseDto,
     status: MESSAGES.statusCode.created,
     message: 'Account created successfully. Use /auth/send-verification-code to receive verification email.',
   })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error - Check password requirements' })
-  async register(@Body() createUserDto: CreateUserDto): Promise<{ data: UserResponseDto; message: string }> {
-    const { user } = await this.userService.createPatient(createUserDto);
-    
-    return { 
-      data: user, 
-      message: MESSAGES.successMessage.accountCreatedSuccess 
+  async register(@Body() createClientDto: CreateClientDto): Promise<{ data: ClientResponseDto; message: string }> {
+    const { user } = await this.clientService.createPatient(createClientDto);
+
+    return {
+      data: user,
+      message: MESSAGES.successMessage.accountCreatedSuccess
     };
   }
 
@@ -139,20 +139,20 @@ export class AuthController {
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 409, description: 'Email already verified' })
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<{ message: string }> {
-    const user = await this.userService.verifyEmailCode(
+    const user = await this.clientService.verifyEmailCode(
       verifyEmailDto.email,
       verifyEmailDto.code,
     );
-    
+
     // Send welcome email
     await this.mailerService.sendWelcomeEmail(
       user.email,
       user.firstName,
       user.lastName,
     );
-    
-    return { 
-      message: MESSAGES.successMessage.emailVerifiedSuccess 
+
+    return {
+      message: MESSAGES.successMessage.emailVerifiedSuccess
     };
   }
 
@@ -172,19 +172,19 @@ export class AuthController {
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 409, description: 'Email already verified' })
   async sendVerificationCode(@Body() resendVerificationDto: ResendVerificationDto): Promise<{ message: string }> {
-    const { code, user } = await this.userService.resendVerificationCode(
+    const { code, user } = await this.clientService.resendVerificationCode(
       resendVerificationDto.email,
     );
-    
+
     // Send verification email
     await this.mailerService.sendVerificationCode(
       user.email,
       code,
       user.firstName,
     );
-    
-    return { 
-      message: MESSAGES.successMessage.verificationCodeSentSuccess 
+
+    return {
+      message: MESSAGES.successMessage.verificationCodeSentSuccess
     };
   }
 
@@ -204,19 +204,19 @@ export class AuthController {
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 400, description: 'OAuth users cannot reset password' })
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { code, user } = await this.userService.initiatePasswordReset(
+    const { code, user } = await this.clientService.initiatePasswordReset(
       forgotPasswordDto.email,
     );
-    
+
     // Send password reset email
     await this.mailerService.sendPasswordResetCode(
       user.email,
       code,
       user.firstName,
     );
-    
-    return { 
-      message: MESSAGES.successMessage.passwordResetCodeSentSuccess 
+
+    return {
+      message: MESSAGES.successMessage.passwordResetCodeSentSuccess
     };
   }
 
@@ -237,14 +237,14 @@ export class AuthController {
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 400, description: 'Validation error or OAuth user' })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    await this.userService.resetPasswordWithCode(
+    await this.clientService.resetPasswordWithCode(
       resetPasswordDto.email,
       resetPasswordDto.code,
       resetPasswordDto.newPassword,
     );
-    
-    return { 
-      message: MESSAGES.successMessage.passwordResetSuccess 
+
+    return {
+      message: MESSAGES.successMessage.passwordResetSuccess
     };
   }
 
@@ -264,7 +264,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Register clinic staff account linked to patient' })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
-    type: UserResponseDto,
+    type: ClientResponseDto,
     status: MESSAGES.statusCode.created,
     message: 'Clinic staff account created successfully',
   })
@@ -275,8 +275,8 @@ export class AuthController {
   async registerClinicStaff(
     @Param('patientId', ParseUUIDPipe) patientId: string,
     @Body() createClinicStaffDto: CreateClinicStaffDto,
-  ): Promise<{ data: UserResponseDto; message: string }> {
-    const staff = await this.userService.createClinicStaff(patientId, createClinicStaffDto);
+  ): Promise<{ data: ClientResponseDto; message: string }> {
+    const staff = await this.clientService.createClinicStaff(patientId, createClinicStaffDto);
     return { data: staff, message: MESSAGES.successMessage.clinicStaffCreatedSuccess };
   }
 }

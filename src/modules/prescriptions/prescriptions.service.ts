@@ -16,7 +16,7 @@ export class PrescriptionsService {
   constructor(
     @InjectRepository(Medicine)
     private readonly medicineRepository: Repository<Medicine>,
-  ) {}
+  ) { }
 
   /**
    * Create a new medicine record

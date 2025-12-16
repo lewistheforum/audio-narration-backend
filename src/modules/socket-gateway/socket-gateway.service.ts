@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserService } from '../user/user.service';
+import { ClientService } from '../client/client.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationService } from '../conversations/conversation.service';
 import {
@@ -42,8 +42,7 @@ import { CreateMessageDto } from '../messages/dto/create-message.dto';
 })
 @Injectable()
 export class SocketGatewayService
-  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server<ClientToServerEvents, ServerToClientEvents>;
 
@@ -54,10 +53,10 @@ export class SocketGatewayService
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly userService: UserService,
+    private readonly clientService: ClientService,
     private readonly messagesService: MessagesService,
     private readonly conversationService: ConversationService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     console.log('Socket Gateway initialized');
@@ -96,7 +95,7 @@ export class SocketGatewayService
       }
 
       // const decoded = verifyToken(token as string, this.jwtService);
-      const user = await this.userService.findUserEntityById(token);
+      const user = await this.clientService.findUserEntityById(token);
 
       if (!user) {
         client.emit('error', {
@@ -108,10 +107,9 @@ export class SocketGatewayService
       }
 
       // Store user data in socket
-      const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
       client.data.user = {
         userId: user.id,
-        username: fullName || user.email,
+        username: user.username || user.email,
         email: user.email,
       };
 
@@ -122,7 +120,7 @@ export class SocketGatewayService
       // Store user connection
       const socketUser: SocketUser = {
         userId: user.id,
-        username: fullName || user.email,
+        username: user.username || user.email,
         email: user.email,
         socketId: client.id,
       };
@@ -138,7 +136,7 @@ export class SocketGatewayService
       // Notify others that user is online
       client.broadcast.emit('userOnline', {
         userId: user.id,
-        username: fullName || user.email,
+        username: user.username || user.email,
         status: 'online',
       });
     } catch (error) {
@@ -441,8 +439,7 @@ export class SocketGatewayService
       );
 
       // Get sender information
-      const sender = await this.userService.findUserEntityById(senderId);
-      const senderFullName = [sender.firstName, sender.lastName].filter(Boolean).join(' ');
+      const sender = await this.clientService.findUserEntityById(senderId);
 
       // Prepare the new message event
       const newMessageEvent: NewMessageEvent = {
@@ -459,7 +456,7 @@ export class SocketGatewayService
         },
         sender: {
           id: sender.id,
-          username: senderFullName || sender.email,
+          username: sender.username || sender.email,
           email: sender.email,
         },
       };
