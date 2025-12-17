@@ -1,0 +1,13 @@
+export enum UserRole {
+  PATIENT = 'PATIENT',
+  CLINIC_STAFF = 'CLINIC_STAFF',
+  DOCTOR = 'DOCTOR',
+  ADMIN = 'ADMIN',
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  BANNED = 'BANNED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+}

@@ -23,10 +23,14 @@ export class MailerService {
    * Send Email Verification Code
    * Sends a 6-digit verification code to user's email
    */
-  async sendVerificationCode(email: string, code: string, firstName?: string): Promise<void> {
+  async sendVerificationCode(
+    email: string,
+    code: string,
+    firstName?: string,
+  ): Promise<void> {
     const transporter = this.mailTransport();
     const displayName = firstName || 'User';
-    
+
     const mailOptions = {
       from: {
         name: 'Medicare',
@@ -89,10 +93,14 @@ export class MailerService {
    * Send Password Reset Code
    * Sends a 6-digit reset code to user's email for password reset
    */
-  async sendPasswordResetCode(email: string, code: string, firstName?: string): Promise<void> {
+  async sendPasswordResetCode(
+    email: string,
+    code: string,
+    firstName?: string,
+  ): Promise<void> {
     const transporter = this.mailTransport();
     const displayName = firstName || 'User';
-    
+
     const mailOptions = {
       from: {
         name: 'Medicare',
@@ -164,10 +172,14 @@ export class MailerService {
    * Send Welcome Email
    * Sends a welcome email after successful email verification
    */
-  async sendWelcomeEmail(email: string, firstName?: string, lastName?: string): Promise<void> {
+  async sendWelcomeEmail(
+    email: string,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<void> {
     const transporter = this.mailTransport();
     const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User';
-    
+
     const mailOptions = {
       from: {
         name: 'Medicare',
@@ -225,7 +237,10 @@ export class MailerService {
             </div>
             
             <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
+              <a href="${
+                this.configService.get<string>('FRONTEND_URL') ||
+                'http://localhost:5173'
+              }" 
                  style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
                 Get Started
               </a>
@@ -311,12 +326,181 @@ export class MailerService {
         },
       ],
     };
-    
+
     try {
       return await transporter.sendMail(mailOptions);
     } catch (error) {
       console.log('❌ Failed to send mail: ', error);
       throw new Error('Failed to send mail');
     }
+  }
+
+  // Gửi email verify đăng ký (HTML đẹp)
+  async sendVerificationEmail(email: string, code: string) {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!user || !pass) {
+      console.error('SMTP_USER hoặc SMTP_PASS chưa được cấu hình trong .env');
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    });
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Xác thực email đăng ký tài khoản</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 16px 30px rgba(15,23,42,0.18);">
+            <tr>
+              <td style="padding:24px 28px 16px 28px;">
+                <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;">
+                  Medicare App
+                </p>
+                <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
+                  Xác thực email đăng ký tài khoản
+                </h1>
+                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
+                  Medicare xin chào,
+                </p>
+                <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
+                  Cảm ơn bạn đã đăng ký tài khoản trên <strong>Medicare</strong>.<br/>
+                  Mã xác thực email của bạn là:
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:8px 28px 16px 28px;">
+                <span style="display:inline-block;padding:12px 24px;border-radius:999px;background-color:#111827;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.35em;">
+                  ${code}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 28px 20px 28px;">
+                <p style="margin:0 0 4px 0;font-size:13px;line-height:1.6;color:#4b5563;">
+                  Mã này có hiệu lực trong <strong>10 phút</strong>. Vui lòng không chia sẻ mã cho bất kỳ ai.
+                </p>
+                <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#4b5563;">
+                  Nếu bạn không thực hiện đăng ký, vui lòng bỏ qua email này.
+                </p>
+                <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
+                  Đây là email tự động, vui lòng không trả lời.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+    const mailOptions = {
+      from: `"Medicare App" <${user}>`,
+      to: email,
+      subject: 'Xác thực email đăng ký tài khoản',
+      text: `Mã xác thực của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`,
+      html,
+    };
+
+    await transporter.sendMail(mailOptions);
+  }
+
+  // Email reset password (HTML đẹp)
+  private async sendResetPasswordEmail(email: string, code: string) {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!user || !pass) {
+      console.error('SMTP_USER hoặc SMTP_PASS chưa được cấu hình trong .env');
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    });
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Yêu cầu đặt lại mật khẩu</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 16px 30px rgba(15,23,42,0.18);">
+            <tr>
+              <td style="padding:24px 28px 16px 28px;">
+                <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;">
+                  Medicare App
+                </p>
+                <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
+                  Yêu cầu đặt lại mật khẩu
+                </h1>
+                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
+                  Medicare xin chào,
+                </p>
+                <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
+                  Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản sử dụng email:
+                  <strong>${email}</strong>.<br/>
+                  Mã đặt lại mật khẩu của bạn là:
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:8px 28px 16px 28px;">
+                <span style="display:inline-block;padding:12px 24px;border-radius:999px;background-color:#111827;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.35em;">
+                  ${code}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 28px 20px 28px;">
+                <p style="margin:0 0 4px 0;font-size:13px;line-height:1.6;color:#4b5563;">
+                  Mã này có hiệu lực trong <strong>10 phút</strong>. Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.
+                </p>
+                <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#4b5563;">
+                  Vì lý do bảo mật, tuyệt đối không chia sẻ mã này cho bất kỳ ai.
+                </p>
+                <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
+                  Đây là email tự động, vui lòng không trả lời.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+    const mailOptions = {
+      from: `"Medicare App" <${user}>`,
+      to: email,
+      subject: 'Yêu cầu đặt lại mật khẩu',
+      text: `Mã đặt lại mật khẩu của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`,
+      html,
+    };
+
+    await transporter.sendMail(mailOptions);
   }
 }

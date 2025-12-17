@@ -8,7 +8,6 @@ import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
-import { ProfileModule } from './modules/profile/profile.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 // import { AdminSeederService } from './common/seeders/admin-seeder.service';
 import { User } from './modules/client/entities/accounts.entity';
@@ -43,8 +42,8 @@ import { User } from './modules/client/entities/accounts.entity';
       ssl:
         process.env.POSTGRES_SSL === 'true'
           ? {
-            rejectUnauthorized: false,
-          }
+              rejectUnauthorized: false,
+            }
           : false,
     }),
 
@@ -59,10 +58,9 @@ import { User } from './modules/client/entities/accounts.entity';
     SocketGatewayModule,
     ConversationModule,
     MessagesModule,
-    ProfileModule,
     PrescriptionsModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule { }
+export class AppModule {}
