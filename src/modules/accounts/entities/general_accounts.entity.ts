@@ -1,3 +1,4 @@
+import { Gender } from '../enums';
 import {
   Entity,
   Column,
@@ -5,24 +6,16 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-
-/**
- * Gender Enumeration
- *
- * Defines gender options for user profiles
- */
-export enum Gender {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE',
-  OTHER = 'OTHER',
-}
+import { Account } from './accounts.entity';
 
 /**
  * GeneralAccount Entity
  *
  * Stores general account information for patients and admins
- * Linked to the main User entity via general_acc_id
+ * Linked to the main Account entity via general_acc_id
  */
 @Entity('general_accounts')
 export class GeneralAccount {
@@ -30,16 +23,16 @@ export class GeneralAccount {
   id: string;
 
   /**
-   * Reference to the main User account
+   * Reference to the main Account
    */
   @Column({ name: 'general_acc_id', type: 'uuid' })
   generalAccId: string;
 
-  // @ManyToOne(() => User, {
-  //     onDelete: 'CASCADE',
-  // })
-  // @JoinColumn({ name: 'general_acc_id' })
-  // generalAccount?: User;
+  @ManyToOne(() => Account, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'general_acc_id' })
+  generalAccount?: Account;
 
   @Column({ name: 'full_name', type: 'text', nullable: true })
   fullName?: string;

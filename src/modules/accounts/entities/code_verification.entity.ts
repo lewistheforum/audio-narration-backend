@@ -2,29 +2,35 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  ManyToOne,
-  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-import { Account } from 'src/modul../accounts/entities/accounts.entity';
-import { VerificationType } from 'src/enums/verification-code/enum';
+import { Account } from './accounts.entity';
+import { VerificationType } from '../enums';
 
+/**
+ * CodeVerification Entity
+ *
+ * Stores verification codes for email verification and password reset
+ */
 @Entity('code_verification')
 export class CodeVerification {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
 
-  @Column({ name: 'user_id' })
+  @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 
-  @ManyToOne(() => Account)
+  @ManyToOne(() => Account, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'user_id' })
-  account: Account;
+  user?: Account;
 
-  @Column({ name: 'code', type: 'varchar', length: 16 })
+  @Column({ name: 'code', type: 'varchar', length: 100 })
   code: string;
 
   @Column({ name: 'expired_at', type: 'timestamptz' })
@@ -47,5 +53,5 @@ export class CodeVerification {
   updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
-  deletedAt: Date;
+  deletedAt?: Date;
 }

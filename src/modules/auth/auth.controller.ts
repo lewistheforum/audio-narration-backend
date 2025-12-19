@@ -31,18 +31,18 @@ import {
 } from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
-import { ClientService } from '../client/client.service';
+import { AccountsService } from '../accounts/client.service';
 import {
-  CreateClientDto,
+  CreateAccountDto,
   CreateClinicStaffDto,
-  ClientResponseDto,
-} from '../client/dto';
+  AccountResponseDto,
+} from '../accounts/dto';
 import { JwtAuthGuard } from './jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 import { MailerService } from '../mailer/mailer.service';
-import { UserRole } from 'src/enums/client/enum';
+import { UserRole } from 'src/enu../accounts/enum';
 
 /**
  * Authentication Controller
@@ -52,11 +52,11 @@ import { UserRole } from 'src/enums/client/enum';
  */
 @ApiTags('Authentication')
 @Controller('auth')
-@ApiExtraModels(ClientResponseDto, LoginResponseDto)
+@ApiExtraModels(AccountResponseDto, LoginResponseDto)
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private clientService: ClientService,
+    private AccountsService: AccountsService,
     private mailerService: MailerService,
   ) {}
 
@@ -212,7 +212,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Register new patient account (Public)' })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
-    type: ClientResponseDto,
+    type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
     message:
       'Account created successfully. Use /auth/send-verification-code to receive verification email.',
@@ -223,9 +223,9 @@ export class AuthController {
     description: 'Validation error - Check password requirements',
   })
   async register(
-    @Body() createClientDto: CreateClientDto,
-  ): Promise<{ data: ClientResponseDto; message: string }> {
-    const { user } = await this.clientService.createPatient(createClientDto);
+    @Body() CreateAccountDto: CreateAccountDto,
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const { user } = await this.AccountsService.createPatient(CreateAccountDto);
 
     return {
       data: user,
@@ -255,7 +255,7 @@ export class AuthController {
   async verifyEmail(
     @Body() verifyEmailDto: VerifyEmailDto,
   ): Promise<{ message: string }> {
-    const user = await this.clientService.verifyEmailCode(
+    const user = await this.AccountsService.verifyEmailCode(
       verifyEmailDto.email,
       verifyEmailDto.code,
     );
@@ -291,7 +291,7 @@ export class AuthController {
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<{ message: string }> {
-    await this.clientService.resetPasswordWithCode(
+    await this.AccountsService.resetPasswordWithCode(
       resetPasswordDto.email,
       // resetPasswordDto.code,s
       resetPasswordDto.newPassword,
@@ -318,7 +318,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Register clinic staff account linked to patient' })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
-    type: ClientResponseDto,
+    type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
     message: 'Clinic staff account created successfully',
   })
@@ -338,8 +338,8 @@ export class AuthController {
   async registerClinicStaff(
     @Param('patientId', ParseUUIDPipe) patientId: string,
     @Body() createClinicStaffDto: CreateClinicStaffDto,
-  ): Promise<{ data: ClientResponseDto; message: string }> {
-    const staff = await this.clientService.createClinicStaff(
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const staff = await this.AccountsService.createClinicStaff(
       patientId,
       createClinicStaffDto,
     );

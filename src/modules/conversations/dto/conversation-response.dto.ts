@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MessageResponseDto } from 'src/modules/messages/dto/message-response.dto';
-import { ClientResponseDto } from 'src/modules/client/dto';
-import { ClientService } from 'src/modules/client/client.service';
+import { AccountResponseDto } from 'src/modul../accounts/dto';
+import { AccountsService } from 'src/modul../accounts/client.service';
 import { MessagesService } from 'src/modules/messages/messages.service';
 
 export class ConversationResponseDto {
@@ -27,7 +27,7 @@ export class ConversationResponseDto {
 
   @ApiProperty({
     description: 'List of participants in the conversation',
-    type: [ClientResponseDto],
+    type: [AccountResponseDto],
     example: [
       {
         id: '123e4567-e89b-12d3-a456-426614174000',
@@ -45,7 +45,7 @@ export class ConversationResponseDto {
       },
     ],
   })
-  participants: ClientResponseDto[];
+  participants: AccountResponseDto[];
 
   @ApiProperty({
     description: 'Last message in the conversation',
@@ -89,16 +89,16 @@ export class ConversationResponseDto {
 
   constructor(
     conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & {
-      participants?: string[] | ClientResponseDto[]
+      participants?: string[] | AccountResponseDto[]
     },
-    clientService?: ClientService
+    AccountsService?: AccountsService
   ) {
     this.id = conversation.id || '';
     this.title = conversation.title || '';
     this.description = conversation.description || '';
     this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string')
       ? []
-      : (conversation.participants as ClientResponseDto[] || []);
+      : (conversation.participants as AccountResponseDto[] || []);
     this.lastMessage = conversation.lastMessage || null;
     this.deletedBy = conversation.deletedBy || [];
     this.createdAt = conversation.createdAt || new Date();
@@ -108,18 +108,18 @@ export class ConversationResponseDto {
   // Static method to create with populated participants and last message
   static async createWithParticipants(
     conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] },
-    clientService: ClientService,
+    AccountsService: AccountsService,
     messagesService?: MessagesService,
   ): Promise<ConversationResponseDto> {
-    const dto = new ConversationResponseDto(conversation, clientService);
+    const dto = new ConversationResponseDto(conversation, AccountsService);
 
     if (conversation.participants && conversation.participants.length > 0) {
       try {
-        const participantUsers = await clientService.findUsersByIds(
+        const participantUsers = await AccountsService.findUsersByIds(
           conversation.participants,
         );
         dto.participants = participantUsers.map(
-          (user) => new ClientResponseDto(user),
+          (user) => new AccountResponseDto(user),
         );
       } catch (error) {
         console.error('Error fetching participant data:', error);

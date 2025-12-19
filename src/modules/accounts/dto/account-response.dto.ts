@@ -1,21 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { User } from '../entities/accounts.entity';
-import { Gender, GeneralAccount } from '../entities/general_accounts.entity';
-import { UserRole, UserStatus } from 'src/enums/client/enum';
+import { Account } from '../entities/accounts.entity';
+import { GeneralAccount } from '../entities/general_accounts.entity';
+import { Gender, AccountRole, AccountStatus } from '../enums';
 
 /**
- * Client Response DTO
+ * Account Response DTO
  *
- * Sanitized client data returned to API consumers
- * Combines data from User entity and GeneralAccount entity
+ * Sanitized account data returned to API consumers
+ * Combines data from Account entity and GeneralAccount entity
  * Excludes sensitive fields like password, verification codes, etc.
  *
  * Usage:
- * - API responses for client queries
- * - Client profile information
+ * - API responses for account queries
+ * - Account profile information
  * - Authentication responses
  */
-export class ClientResponseDto {
+export class AccountResponseDto {
   @ApiProperty({
     description: 'Unique client identifier',
     example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
@@ -52,17 +52,17 @@ export class ClientResponseDto {
 
   @ApiProperty({
     description: 'Client role defining access permissions',
-    enum: UserRole,
-    example: UserRole.PATIENT,
+    enum: AccountRole,
+    example: AccountRole.PATIENT,
   })
-  role: UserRole;
+  role: AccountRole;
 
   @ApiProperty({
     description: 'Account status',
-    enum: UserStatus,
-    example: UserStatus.ACTIVE,
+    enum: AccountStatus,
+    example: AccountStatus.ACTIVE,
   })
-  status: UserStatus;
+  status: AccountStatus;
 
   @ApiProperty({
     description: 'Whether email has been verified',
@@ -90,6 +90,20 @@ export class ClientResponseDto {
     nullable: true,
   })
   parentId?: string;
+
+  @ApiProperty({
+    description: 'Number of times account has been banned',
+    example: 0,
+  })
+  banCounts: number;
+
+  @ApiProperty({
+    description: 'Description of ban reason',
+    example: 'Violation of terms of service',
+    required: false,
+    nullable: true,
+  })
+  banDescription?: string;
 
   // GeneralAccount fields
   @ApiProperty({
@@ -129,21 +143,23 @@ export class ClientResponseDto {
   })
   deletedAt?: Date;
 
-  constructor(user: Partial<User>, generalAccount?: Partial<GeneralAccount>) {
-    this.id = user.id;
-    this.email = user.email;
-    this.username = user.username;
-    this.phone = user.phone;
-    this.dob = user.dob;
-    this.role = user.role;
-    this.status = user.status ?? UserStatus.PENDING_VERIFICATION;
-    this.isEmailVerified = user.isEmailVerified ?? false;
-    this.isOAuthUser = user.isOAuthUser ?? false;
-    this.profilePicture = user.profilePicture;
-    this.parentId = user.parentId;
-    this.createdAt = user.createdAt;
-    this.updatedAt = user.updatedAt;
-    this.deletedAt = user.deletedAt;
+  constructor(account: Partial<Account>, generalAccount?: Partial<GeneralAccount>) {
+    this.id = account.id;
+    this.email = account.email;
+    this.username = account.username;
+    this.phone = account.phone;
+    this.dob = account.dob;
+    this.role = account.role;
+    this.status = account.status ?? AccountStatus.PENDING_VERIFICATION;
+    this.isEmailVerified = account.isEmailVerified ?? false;
+    this.isOAuthUser = account.isOAuthUser ?? false;
+    this.profilePicture = account.profilePicture;
+    this.parentId = account.parentId;
+    this.banCounts = account.banCounts ?? 0;
+    this.banDescription = account.banDescription;
+    this.createdAt = account.createdAt;
+    this.updatedAt = account.updatedAt;
+    this.deletedAt = account.deletedAt;
 
     // GeneralAccount data
     if (generalAccount) {

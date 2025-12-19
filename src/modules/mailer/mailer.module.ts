@@ -4,7 +4,7 @@ import { MailerController } from './mailer.controller';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PassportModule } from '@nestjs/passport';
-import { ClientModule } from '../client/client.module';
+import { AccountsModule } from '../accounts/client.module';
 import { CodeVerification } from './entities/mailer.entity';
 
 @Module({
@@ -12,7 +12,7 @@ import { CodeVerification } from './entities/mailer.entity';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     ConfigModule,
     TypeOrmModule.forFeature([CodeVerification]),
-    forwardRef(() => ClientModule), // Circular dependency with ClientModule
+    forwardRef(() => AccountsModule), // Circular dependency with AccountsModule
   ],
   controllers: [MailerController],
   providers: [MailerService],

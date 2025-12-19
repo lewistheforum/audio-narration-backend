@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
-import { ClientModule } from './modules/client/client.module';
+import { AccountsModule } from './modules/accounts/accounts.module';
 import { HealthModule } from './common/health/health.module';
 import { MailerModule } from './modules/mailer/mailer.module';
 import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
@@ -10,7 +10,7 @@ import { ConversationModule } from './modules/conversations/conversation.module'
 import { MessagesModule } from './modules/messages/messages.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 // import { AdminSeederService } from './common/seeders/admin-seeder.service';
-import { User } from './modules/client/entities/accounts.entity';
+import { Account } from './modules/accounts/entities/accounts.entity';
 
 @Module({
   imports: [
@@ -47,12 +47,12 @@ import { User } from './modules/client/entities/accounts.entity';
           : false,
     }),
 
-    // TypeORM feature for seeder access to User repository
-    TypeOrmModule.forFeature([User]),
+    // TypeORM feature for seeder access to Account repository
+    TypeOrmModule.forFeature([Account]),
 
     // import modules
     AuthModule,
-    ClientModule,
+    AccountsModule,
     HealthModule,
     MailerModule,
     SocketGatewayModule,

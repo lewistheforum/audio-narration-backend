@@ -2,11 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
 
 /**
- * Ban Client DTO
+ * Ban Account DTO
  * 
- * Request body for banning a client account
+ * Request body for banning an account
  */
-export class BanClientDto {
+export class BanAccountDto {
     @ApiProperty({
         description: 'Reason for banning the client',
         example: 'Violated terms of service by posting inappropriate content',

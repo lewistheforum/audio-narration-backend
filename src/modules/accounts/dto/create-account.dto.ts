@@ -11,15 +11,15 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { Gender } from '../entities/general_accounts.entity';
+import { Gender } from '../enums';
 
 /**
- * Create Client DTO
+ * Create Account DTO
  * 
  * Used for patient registration with standard authentication
  * Data is saved to two tables:
- * 1. User (users) - Common account data
- * 2. GeneralAccount (general_accounts) - Client-specific data (fullName, gender)
+ * 1. Account (accounts) - Common account data
+ * 2. GeneralAccount (general_accounts) - Patient-specific data (fullName, gender)
  * 
  * Password Requirements:
  * - Minimum 6 characters
@@ -27,7 +27,7 @@ import { Gender } from '../entities/general_accounts.entity';
  * - Must contain at least one letter
  * - Must contain at least one number
  */
-export class CreateClientDto {
+export class CreateAccountDto {
     @ApiProperty({
         description: 'Client username',
         example: 'johndoe',

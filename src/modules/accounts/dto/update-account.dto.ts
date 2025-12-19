@@ -9,16 +9,15 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { Gender } from '../entities/general_accounts.entity';
-import { UserRole } from 'src/enums/client/enum';
+import { Gender, AccountRole } from '../enums';
 
 /**
- * Update Client DTO
+ * Update Account DTO
  *
- * Used for updating client profile information
+ * Used for updating account profile information
  * All fields are optional - only provided fields will be updated
  */
-export class UpdateClientDto {
+export class UpdateAccountDto {
   @ApiProperty({
     description: 'Client username',
     example: 'johndoe',
@@ -72,14 +71,14 @@ export class UpdateClientDto {
   profilePicture?: string;
 
   @ApiProperty({
-    description: 'Client role',
-    enum: UserRole,
-    example: UserRole.PATIENT,
+    description: 'Account role',
+    enum: AccountRole,
+    example: AccountRole.PATIENT,
     required: false,
   })
   @IsOptional()
-  @IsEnum(UserRole, { message: 'Invalid user role' })
-  role?: UserRole;
+  @IsEnum(AccountRole, { message: 'Invalid account role' })
+  role?: AccountRole;
 
   // GeneralAccount fields
 

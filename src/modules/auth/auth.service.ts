@@ -6,9 +6,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { ClientService } from '../client/client.service';
+import { AccountsService } from '../accounts/client.service';
 import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
-import { ClientResponseDto } from '../client/dto/client-response.dto';
+import { AccountResponseDto } from '../accounts/dto/client-response.dto';
 import { MESSAGES } from 'src/common/message';
 import { RegisterDto } from './dto/register.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -29,7 +29,7 @@ import { CodeVerification } from '../mailer/entities/mailer.entity';
 @Injectable()
 export class AuthService {
   constructor(
-    private clientService: ClientService,
+    private AccountsService: AccountsService,
     private jwtService: JwtService,
     private socketGatewayService: SocketGatewayService,
     @InjectRepository(CodeVerification)
@@ -47,24 +47,24 @@ export class AuthService {
     data: {
       access_token: string;
       userId: string;
-      user: ClientResponseDto;
+      user: AccountResponseDto;
     };
   }> {
     const { email, password } = loginDto;
-    const user = await this.clientService.findByEmail(email);
+    const user = await this.AccountsService.findByEmail(email);
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
     // Check if user account is banned or inactive
-    this.clientService.validateUserAccess(user);
+    this.AccountsService.validateUserAccess(user);
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     this.socketGatewayService.markUserOnline(String(user.id));
 
     // Get general account data for response
-    const generalAccount = await this.clientService.findGeneralAccountByUserId(
+    const generalAccount = await this.AccountsService.findGeneralAccountByUserId(
       user.id,
     );
 
@@ -72,7 +72,7 @@ export class AuthService {
       data: {
         access_token: this.jwtService.sign(payload),
         userId: user.id,
-        user: new ClientResponseDto(user, generalAccount),
+        user: new AccountResponseDto(user, generalAccount),
       },
     };
   }
@@ -87,13 +87,13 @@ export class AuthService {
   // async googleLogin(googleUser: any): Promise<{
   //   access_token: string;
   //   userId: string;
-  //   user: ClientResponseDto;
+  //   user: AccountResponseDto;
   // }> {
   // Register
   async register(registerDto: RegisterDto) {
     const { username, password, email, gender, dateOfBirth } = registerDto;
 
-    const createResult = await this.clientService.create({
+    const createResult = await this.AccountsService.create({
       email,
       password,
       name: username,
@@ -203,7 +203,7 @@ export class AuthService {
       );
     }
 
-    let user = await this.clientService.findByEmail(email);
+    let user = await this.AccountsService.findByEmail(email);
     let userId: string;
     let userEmail: string;
     let generalAccount = null;
@@ -214,11 +214,11 @@ export class AuthService {
         user.isOAuthUser = true;
         user.isEmailVerified = true;
         user.profilePicture = picture;
-        await this.clientService.updateUserEntity(user);
+        await this.AccountsService.updateUserEntity(user);
       }
       userId = user.id;
       userEmail = user.email;
-      generalAccount = await this.clientService.findGeneralAccountByUserId(
+      generalAccount = await this.AccountsService.findGeneralAccountByUserId(
         userId,
       );
       if (user) {
@@ -242,7 +242,7 @@ export class AuthService {
         }
 
         if (needUpdate) {
-          await this.clientService.updateUserEntity(user);
+          await this.AccountsService.updateUserEntity(user);
         }
 
         userId = user.id;
@@ -255,7 +255,7 @@ export class AuthService {
         const fullName =
           [firstName, lastName].filter(Boolean).join(' ') || undefined;
 
-        const createdUser = await this.clientService.createPatientViaOAuth({
+        const createdUser = await this.AccountsService.createPatientViaOAuth({
           email,
           password: randomPassword,
           username: email.split('@')[0],
@@ -265,15 +265,15 @@ export class AuthService {
 
         userId = createdUser.id;
         userEmail = createdUser.email;
-        generalAccount = await this.clientService.findGeneralAccountByUserId(
+        generalAccount = await this.AccountsService.findGeneralAccountByUserId(
           userId,
         );
       }
 
-      user = await this.clientService.findUserEntityById(userId);
+      user = await this.AccountsService.findUserEntityById(userId);
 
       // Check if user account is banned or inactive
-      this.clientService.validateUserAccess(user);
+      this.AccountsService.validateUserAccess(user);
 
       const payload = { sub: userId, email: userEmail, role: user.role };
       const accessToken = this.jwtService.sign(payload);
@@ -284,7 +284,7 @@ export class AuthService {
       return {
         access_token: accessToken,
         userId: userId,
-        user: new ClientResponseDto(user, generalAccount),
+        user: new AccountResponseDto(user, generalAccount),
       };
       // const baseUrl = process.env.GOOGLE_URL;
       // if (!baseUrl) {
@@ -336,7 +336,7 @@ export class AuthService {
   async verifyResetPasswordCode(dto: VerifyResetPasswordDto) {
     const { email, code } = dto;
 
-    const user = await this.clientService.findByEmail(email);
+    const user = await this.AccountsService.findByEmail(email);
     if (!user) {
       throw new BadRequestException('User không tồn tại');
     }

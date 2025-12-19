@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { ClientService } from '../client/client.service';
+import { AccountsService } from '../accounts/client.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationService } from '../conversations/conversation.service';
 import {
@@ -53,7 +53,7 @@ export class SocketGatewayService
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly clientService: ClientService,
+    private readonly AccountsService: AccountsService,
     private readonly messagesService: MessagesService,
     private readonly conversationService: ConversationService,
   ) { }
@@ -95,7 +95,7 @@ export class SocketGatewayService
       }
 
       // const decoded = verifyToken(token as string, this.jwtService);
-      const user = await this.clientService.findUserEntityById(token);
+      const user = await this.AccountsService.findUserEntityById(token);
 
       if (!user) {
         client.emit('error', {
@@ -439,7 +439,7 @@ export class SocketGatewayService
       );
 
       // Get sender information
-      const sender = await this.clientService.findUserEntityById(senderId);
+      const sender = await this.AccountsService.findUserEntityById(senderId);
 
       // Prepare the new message event
       const newMessageEvent: NewMessageEvent = {

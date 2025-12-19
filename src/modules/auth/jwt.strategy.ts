@@ -3,8 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { AuthGuard } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { User } from '../client/entities/accounts.entity';
-import { ClientService } from '../client/client.service';
+import { Account } from '../accounts/entities/accounts.entity';
+import { AccountsService } from '../accounts/accounts.service';
 
 /**
  * JWT Authentication Strategy
@@ -21,7 +21,7 @@ import { ClientService } from '../client/client.service';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly configService: ConfigService,
-    private readonly clientService: ClientService,
+    private readonly AccountsService: AccountsService,
   ) {
     const jwtSecret = configService.get<string>('JWT_SECRET');
 
@@ -45,8 +45,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * @returns Full user entity with all fields including role
    * @throws UnauthorizedException if user not found or invalid token
    */
-  async validate(payload: { sub: string; email: string; role?: string }): Promise<User> {
-    const user = await this.clientService.findUserEntityById(payload.sub);
+  async validate(payload: { sub: string; email: string; role?: string }): Promise<Account> {
+    const user = await this.AccountsService.findUserEntityById(payload.sub);
 
     if (!user) {
       throw new UnauthorizedException('Invalid token or user does not exist');

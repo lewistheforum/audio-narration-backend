@@ -6,10 +6,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
-import { User as PostgresUser } from '../client/entities/accounts.entity';
+import { User as PostgresUser } from '../accounts/entities/accounts.entity';
 import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
-import { ClientModule } from '../client/client.module';
+import { AccountsModule } from '../accounts/client.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { CodeVerification } from '../mailer/entities/mailer.entity';
@@ -25,7 +25,7 @@ import { CodeVerification } from '../mailer/entities/mailer.entity';
  * - Email verification with 6-digit code
  *
  * Dependencies:
- * - ClientModule: For client CRUD operations
+ * - AccountsModule: For client CRUD operations
  * - SocketGatewayModule: For online status tracking
  * - MailerModule: For sending verification emails
  * - PassportModule: For authentication strategies
@@ -39,7 +39,7 @@ import { CodeVerification } from '../mailer/entities/mailer.entity';
       useFactory: getJwtConfig,
       inject: [ConfigService],
     }),
-    ClientModule,
+    AccountsModule,
     TypeOrmModule.forFeature([CodeVerification]),
     // UserModule,
     SocketGatewayModule,

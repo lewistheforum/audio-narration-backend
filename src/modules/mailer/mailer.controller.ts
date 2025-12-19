@@ -6,14 +6,14 @@ import { CreateMailerDto } from './dto/create-mailer.dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { SendMailDataDto } from './dto/send-mail-data.dto';
 import { ForgotPasswordDto, ResendVerificationDto } from '../auth/dto';
-import { ClientService } from '../client/client.service';
+import { AccountsService } from '../accounts/client.service';
 
 @ApiTags('Mailer')
 @Controller('mailer')
 export class MailerController {
   constructor(
     private mailerService: MailerService,
-    private clientService: ClientService,
+    private AccountsService: AccountsService,
   ) {}
 
   @Post('send')
@@ -68,7 +68,7 @@ export class MailerController {
   async sendVerificationCode(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<{ message: string }> {
-    const { code, user } = await this.clientService.resendVerificationCode(
+    const { code, user } = await this.AccountsService.resendVerificationCode(
       resendVerificationDto.email,
     );
 
@@ -105,7 +105,7 @@ export class MailerController {
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
   ): Promise<{ message: string }> {
-    const { code, user } = await this.clientService.initiatePasswordReset(
+    const { code, user } = await this.AccountsService.initiatePasswordReset(
       forgotPasswordDto.email,
     );
 

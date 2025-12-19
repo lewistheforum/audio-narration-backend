@@ -12,7 +12,7 @@ import {
   ConversationResponseDto,
 } from './dto';
 import { Conversation } from './entities/conversation.entity';
-import { ClientService } from '../client/client.service';
+import { AccountsService } from '../accounts/client.service';
 import { MessagesService } from '../messages/messages.service';
 
 @Injectable()
@@ -20,7 +20,7 @@ export class ConversationService {
   constructor(
     @InjectRepository(Conversation)
     private conversationRepository: Repository<Conversation>,
-    private clientService: ClientService,
+    private AccountsService: AccountsService,
     @Inject(forwardRef(() => MessagesService))
     private messagesService: MessagesService,
   ) { }
@@ -57,7 +57,7 @@ export class ConversationService {
         );
         return ConversationResponseDto.createWithParticipants(
           updatedConversation,
-          this.clientService,
+          this.AccountsService,
           this.messagesService,
         );
       }
@@ -65,7 +65,7 @@ export class ConversationService {
       // If conversation exists but user is not in deletedBy, return existing conversation
       return ConversationResponseDto.createWithParticipants(
         existingConversation,
-        this.clientService,
+        this.AccountsService,
         this.messagesService,
       );
     }
@@ -79,7 +79,7 @@ export class ConversationService {
     );
     return ConversationResponseDto.createWithParticipants(
       savedConversation,
-      this.clientService,
+      this.AccountsService,
       this.messagesService,
     );
   }
@@ -118,7 +118,7 @@ export class ConversationService {
       conversations.map((conversation) =>
         ConversationResponseDto.createWithParticipants(
           conversation,
-          this.clientService,
+          this.AccountsService,
           this.messagesService,
         ),
       ),
@@ -129,7 +129,7 @@ export class ConversationService {
     const conversation = await this.findConversationEntityById(id);
     return ConversationResponseDto.createWithParticipants(
       conversation,
-      this.clientService,
+      this.AccountsService,
       this.messagesService,
     );
   }
@@ -147,7 +147,7 @@ export class ConversationService {
       conversations.map((conversation) =>
         ConversationResponseDto.createWithParticipants(
           conversation,
-          this.clientService,
+          this.AccountsService,
           this.messagesService,
         ),
       ),
@@ -167,7 +167,7 @@ export class ConversationService {
 
     return ConversationResponseDto.createWithParticipants(
       updatedConversation,
-      this.clientService,
+      this.AccountsService,
     );
   }
 

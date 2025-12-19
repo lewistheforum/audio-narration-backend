@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { UserRole } from 'src/enums/client/enum';
+import { AccountRole } from '../modules/accounts/enums';
 
 /**
  * Guard to enforce role-based access control
@@ -19,7 +19,7 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(
+    const requiredRoles = this.reflector.getAllAndOverride<AccountRole[]>(
       ROLES_KEY,
       [context.getHandler(), context.getClass()],
     );

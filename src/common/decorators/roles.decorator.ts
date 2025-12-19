@@ -1,10 +1,10 @@
 import { SetMetadata } from '@nestjs/common';
-import { UserRole } from 'src/enums/client/enum';
+import { AccountRole } from '../modules/accounts/enums';
 
 export const ROLES_KEY = 'roles';
 
 /**
  * Decorator to specify which roles are allowed to access an endpoint
- * Usage: @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+ * Usage: @Roles(AccountRole.ADMIN, AccountRole.DOCTOR)
  */
-export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
+export const Roles = (...roles: AccountRole[]) => SetMetadata(ROLES_KEY, roles);

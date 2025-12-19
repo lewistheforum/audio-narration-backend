@@ -1,7 +1,7 @@
 // import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 // import { InjectRepository } from '@nestjs/typeorm';
 // import { Repository } from 'typeorm';
-// import { User, UserRole, UserStatus } from '../../modules/user/entities/user.entity';
+// import { User, AccountRole, UserStatus } from '../../modules/user/entities/user.entity';
 // import * as bcrypt from 'bcrypt';
 
 // /**
@@ -21,7 +21,7 @@
 //     password: 'Admin@123456',
 //     firstName: 'System',
 //     lastName: 'Administrator',
-//     role: UserRole.ADMIN,
+//     role: AccountRole.ADMIN,
 //   };
 
 //   constructor(

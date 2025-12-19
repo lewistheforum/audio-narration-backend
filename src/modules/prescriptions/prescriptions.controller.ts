@@ -23,7 +23,7 @@ import { Medicine } from './entities/medicine.entity';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from 'src/enums/client/enum';
+import { AccountRole } from 'src/enu../accounts/enum';
 
 /**
  * Prescriptions Controller
@@ -43,7 +43,7 @@ export class PrescriptionsController {
    * Admin only
    */
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Create a new medicine (Admin only)' })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -105,7 +105,7 @@ export class PrescriptionsController {
    * Get habit-forming medicines
    */
   @Get('habit-forming')
-  @Roles(UserRole.DOCTOR, UserRole.ADMIN)
+  @Roles(AccountRole.DOCTOR, AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get habit-forming medicines (Doctor/Admin only)' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -164,7 +164,7 @@ export class PrescriptionsController {
    * Admin only
    */
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Update medicine (Admin only)' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -196,7 +196,7 @@ export class PrescriptionsController {
    * Admin only
    */
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Soft delete medicine (Admin only)' })
   @ApiResponse({
     status: HttpStatus.NO_CONTENT,
@@ -220,7 +220,7 @@ export class PrescriptionsController {
    * Admin only
    */
   @Patch(':id/restore')
-  @Roles(UserRole.ADMIN)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Restore soft-deleted medicine (Admin only)' })
   @ApiResponse({
     status: HttpStatus.OK,

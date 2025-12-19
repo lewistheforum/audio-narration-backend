@@ -1,0 +1,9 @@
+export { AccountRepository } from './account.repository';
+export { AddressRepository } from './address.repository';
+export { ClinicInformationRepository } from './clinic-information.repository';
+export { ClinicStaffInformationRepository } from './clinic-staff-information.repository';
+export { ClinicsLegalDocumentsRepository } from './clinics-legal-documents.repository';
+export { CodeVerificationRepository } from './code-verification.repository';
+export { DoctorInformationRepository } from './doctor-information.repository';
+export { GeneralAccountRepository } from './general-account.repository';
+export { GoogleIframeRepository } from './google-iframe.repository';

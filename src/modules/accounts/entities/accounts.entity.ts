@@ -1,4 +1,4 @@
-import { UserRole, UserStatus } from 'src/enums/client/enum';
+import { AccountRole, AccountStatus } from '../enums';
 import {
   Entity,
   Column,
@@ -12,7 +12,7 @@ import {
 } from 'typeorm';
 
 /**
- * User Entity
+ * Account Entity
  *
  * Core user account model supporting multiple authentication methods
  *
@@ -22,9 +22,10 @@ import {
  * - Email verification system
  * - Role-based access control
  * - Parent-Child account relationship
+ * - Account ban management
  */
 @Entity('accounts')
-export class User {
+export class Account {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
 
@@ -36,15 +37,15 @@ export class User {
   @Column({ name: 'parent_id', type: 'uuid', nullable: true })
   parentId?: string;
 
-  @ManyToOne(() => User, (user) => user.children, {
+  @ManyToOne(() => Account, (account) => account.children, {
     nullable: true,
     onDelete: 'SET NULL',
   })
   @JoinColumn({ name: 'parent_id' })
-  parent?: User;
+  parent?: Account;
 
-  @OneToMany(() => User, (user) => user.parent)
-  children?: User[];
+  @OneToMany(() => Account, (account) => account.parent)
+  children?: Account[];
 
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;
@@ -73,18 +74,24 @@ export class User {
   @Column({
     name: 'role',
     type: 'enum',
-    enum: UserRole,
-    default: UserRole.PATIENT,
+    enum: AccountRole,
+    default: AccountRole.PATIENT,
   })
-  role: UserRole;
+  role: AccountRole;
 
   @Column({
     name: 'status',
     type: 'enum',
-    enum: UserStatus,
-    default: UserStatus.PENDING_VERIFICATION,
+    enum: AccountStatus,
+    default: AccountStatus.PENDING_VERIFICATION,
   })
-  status: UserStatus;
+  status: AccountStatus;
+
+  @Column({ name: 'ban_counts', type: 'integer', default: 0 })
+  banCounts: number;
+
+  @Column({ name: 'ban_description', type: 'varchar', length: 255, nullable: true })
+  banDescription?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
