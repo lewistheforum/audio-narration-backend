@@ -46,7 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * @throws UnauthorizedException if user not found or invalid token
    */
   async validate(payload: { sub: string; email: string; role?: string }): Promise<Account> {
-    const user = await this.AccountsService.findUserEntityById(payload.sub);
+    const user = await this.AccountsService.findAccountEntityById(payload.sub);
 
     if (!user) {
       throw new UnauthorizedException('Invalid token or user does not exist');

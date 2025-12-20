@@ -9,7 +9,7 @@ import {
   DeleteDateColumn,
   OneToMany,
 } from 'typeorm';
-import { Account } from 'src/modul../accounts/entities/accounts.entity';
+import { Account } from 'src/modules/accounts/entities/accounts.entity';
 import { VerificationType } from 'src/enums/verification-code/enum';
 
 @Entity('code_verification')

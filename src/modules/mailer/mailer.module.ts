@@ -4,7 +4,7 @@ import { MailerController } from './mailer.controller';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PassportModule } from '@nestjs/passport';
-import { AccountsModule } from '../accounts/client.module';
+import { AccountsModule } from '../accounts/accounts.module';
 import { CodeVerification } from './entities/mailer.entity';
 
 @Module({

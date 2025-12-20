@@ -23,7 +23,7 @@ import { Medicine } from './entities/medicine.entity';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { AccountRole } from 'src/enu../accounts/enum';
+import { AccountRole } from 'src/modules/accounts/enums';
 
 /**
  * Prescriptions Controller

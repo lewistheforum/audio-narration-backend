@@ -49,6 +49,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       lastName: name.familyName,
       picture: photos?.[0]?.value,
       accessToken,
+      isEmailVerified: true, // Google OAuth users have verified emails
     };
     
     done(null, user);

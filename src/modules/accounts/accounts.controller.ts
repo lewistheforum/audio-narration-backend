@@ -164,7 +164,7 @@ export class AccountsController {
     message: MESSAGES.successMessage.userFetchSuccess,
   })
   async getUsernameEmailList() {
-    const data = await this.accountsService.getUserEmailList();
+    const data = await this.accountsService.getUsernamesAndEmails();
     return {
       message: 'Successfully retrieved the list of usernames and emails',
       data,
@@ -238,7 +238,7 @@ export class AccountsController {
    *
    * Request Body:
    * - username: New username (optional)
-   * - email: New email address (optional, triggers re-verification)
+   * - email: New email address (optional, PATIENT only, triggers re-verification)
    * - phone: New phone number (optional)
    * - dob: Date of birth (optional)
    * - profilePicture: Profile picture URL (optional)
@@ -246,15 +246,17 @@ export class AccountsController {
    * - fullName: Full name (optional, updates GeneralAccount)
    * - gender: Gender (optional, updates GeneralAccount)
    *
-   * Email Change Workflow:
-   * - If email is changed, isEmailVerified is set to false
-   * - Response includes emailChanged flag
-   * - Client should send new verification email
-   * - User must verify new email to maintain full access
+   * Email Change Workflow (PATIENT only):
+   * - Only PATIENT role can change their email
+   * - Other roles (DOCTOR, CLINIC_STAFF, CLINIC_MANAGER, ADMIN) cannot change email
+   * - If email is changed: isEmailVerified = false, status = PENDING_VERIFICATION
+   * - User must manually request verification code via POST /mailer/send-verification-code
+   * - User must verify new email to reactivate account
    *
    * Access Control:
    * - Users can update their own profile
    * - Admins can update any profile
+   * - Email change: PATIENT only
    * - Role changes require admin privileges (enforce at business logic level)
    *
    * @param {string} id - Account UUID to update
@@ -265,6 +267,7 @@ export class AccountsController {
    * @security JWT-auth
    * @response 200 - Successfully updated account
    * @response 401 - Unauthorized - Missing or invalid JWT token
+   * @response 403 - Forbidden - Non-PATIENT trying to change email
    * @response 404 - Account not found
    * @response 409 - Email already exists for another account
    */
@@ -299,11 +302,11 @@ export class AccountsController {
       updateAccountDto,
     );
 
-    // If email changed, inform client to verify new email
+    // If email changed, inform client to manually request verification code
     if (emailChanged) {
       return {
         data: user,
-        message: MESSAGES.successMessage.profileUpdatedWithEmailChange,
+        message: 'Email updated successfully. Your account status is now PENDING_VERIFICATION. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
       };
     }
 

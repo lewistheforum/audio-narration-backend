@@ -6,28 +6,27 @@ import {
   IsOptional,
   IsNotEmpty,
   Matches,
+  IsEnum,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { Gender, ClinicRole } from '../enums';
 
 /**
- * Create Clinic Staff DTO
+ * Create Staff By Clinic Manager DTO
  * 
- * Used for clinic staff registration linked to a patient account
- * Email is automatically normalized (lowercase, trimmed)
- * Name is automatically trimmed
+ * Used by clinic managers to add clinic staff accounts
+ * Staff accounts are linked to the clinic manager's clinic
  * 
  * Password Requirements:
  * - Minimum 6 characters
  * - Maximum 50 characters
  * - Must contain at least one letter
  * - Must contain at least one number
- * 
- * Note: Patient ID is provided as URL parameter, not in this DTO
  */
-export class CreateClinicStaffDto {
+export class CreateStaffByClinicManagerDto {
   @ApiProperty({
-    description: 'Clinic staff email address',
+    description: 'Staff email address',
     example: 'staff@clinic.com',
   })
   @IsNotEmpty({ message: 'Email is required' })
@@ -36,7 +35,7 @@ export class CreateClinicStaffDto {
   email: string;
 
   @ApiProperty({
-    description: 'Clinic staff password (min 6 characters, must contain letter and number)',
+    description: 'Staff password (min 6 characters, must contain letter and number)',
     example: 'StaffPass123',
     minLength: 6,
     maxLength: 50,
@@ -51,26 +50,32 @@ export class CreateClinicStaffDto {
   password: string;
 
   @ApiProperty({
-    description: 'Clinic staff first name',
-    example: 'John',
-    required: false,
-    maxLength: 50,
+    description: 'Staff full name',
+    example: 'Jane Doe',
+    maxLength: 255,
   })
-  @IsOptional()
-  @IsString({ message: 'First name must be a string' })
-  @MaxLength(50, { message: 'First name must not exceed 50 characters' })
+  @IsNotEmpty({ message: 'Full name is required' })
+  @IsString({ message: 'Full name must be a string' })
+  @MaxLength(255, { message: 'Full name must not exceed 255 characters' })
   @Transform(({ value }) => value?.trim())
-  firstName?: string;
+  fullName: string;
 
   @ApiProperty({
-    description: 'Clinic staff last name',
-    example: 'Smith',
+    description: 'Staff gender',
+    enum: Gender,
+    example: Gender.FEMALE,
     required: false,
-    maxLength: 50,
   })
   @IsOptional()
-  @IsString({ message: 'Last name must be a string' })
-  @MaxLength(50, { message: 'Last name must not exceed 50 characters' })
-  @Transform(({ value }) => value?.trim())
-  lastName?: string;
+  @IsEnum(Gender, { message: 'Gender must be one of: MALE, FEMALE, OTHER' })
+  gender?: Gender;
+
+  @ApiProperty({
+    description: 'Staff role in clinic',
+    enum: ClinicRole,
+    example: ClinicRole.STAFF,
+  })
+  @IsNotEmpty({ message: 'Clinic role is required' })
+  @IsEnum(ClinicRole, { message: 'Invalid clinic role' })
+  clinicRole: ClinicRole;
 }

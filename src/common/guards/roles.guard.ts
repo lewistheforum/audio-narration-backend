@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { AccountRole } from '../modules/accounts/enums';
+import { AccountRole } from '../../modules/accounts/enums';
 
 /**
  * Guard to enforce role-based access control

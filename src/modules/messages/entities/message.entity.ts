@@ -49,13 +49,13 @@ export class Message {
   @JoinColumn({ name: 'conversation_id' })
   conversation: Conversation;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Account, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'sender_id' })
-  sender: User;
+  sender: Account;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Account, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'receiver_id' })
-  receiver: User;
+  receiver: Account;
 
   @CreateDateColumn({ name: 'validated_at' })
   validatedAt: Date;

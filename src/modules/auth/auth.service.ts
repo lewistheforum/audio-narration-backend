@@ -6,9 +6,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { AccountsService } from '../accounts/client.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
-import { AccountResponseDto } from '../accounts/dto/client-response.dto';
+import { AccountResponseDto } from '../accounts/dto/account-response.dto';
 import { MESSAGES } from 'src/common/message';
 import { RegisterDto } from './dto/register.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -58,7 +58,7 @@ export class AuthService {
     }
 
     // Check if user account is banned or inactive
-    this.AccountsService.validateUserAccess(user);
+    this.AccountsService.validateAccountAccess(user);
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     this.socketGatewayService.markUserOnline(String(user.id));
@@ -89,53 +89,6 @@ export class AuthService {
   //   userId: string;
   //   user: AccountResponseDto;
   // }> {
-  // Register
-  async register(registerDto: RegisterDto) {
-    const { username, password, email, gender, dateOfBirth } = registerDto;
-
-    const createResult = await this.AccountsService.create({
-      email,
-      password,
-      name: username,
-      isOAuthUser: false,
-      isEmailVerified: false,
-      profilePicture: undefined,
-      gender,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-    } as any);
-
-    const createdUser = createResult.user;
-
-    // Create 6-code send to user
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-
-    // Save code
-    const verification = this.codeVerificationRepo.create({
-      account: { id: createdUser.id } as any,
-      code,
-      expiredAt: expiresAt,
-      used: false,
-    });
-    await this.codeVerificationRepo.save(verification);
-
-    // TODO: Implement sendVerificationEmail method or use MailerService
-    // await this.sendVerificationEmail(email, code);
-    console.log(`[DEV] Verification code for ${email}: ${code}`);
-
-    const payload = { sub: createdUser.id, email: createdUser.email };
-    const accessToken = this.jwtService.sign(payload);
-
-    this.socketGatewayService.markUserOnline(String(createdUser.id));
-
-    return {
-      access_token: accessToken,
-      userId: createdUser.id,
-      message: 'Mã xác thực đã được gửi tới email. Vui lòng kiểm tra hộp thư.',
-    };
-  }
 
   // Verify email
   // async verifyEmail(dto: VerifyEmailDto) {
@@ -214,7 +167,7 @@ export class AuthService {
         user.isOAuthUser = true;
         user.isEmailVerified = true;
         user.profilePicture = picture;
-        await this.AccountsService.updateUserEntity(user);
+        await this.AccountsService.updateAccountEntity(user);
       }
       userId = user.id;
       userEmail = user.email;
@@ -242,7 +195,7 @@ export class AuthService {
         }
 
         if (needUpdate) {
-          await this.AccountsService.updateUserEntity(user);
+          await this.AccountsService.updateAccountEntity(user);
         }
 
         userId = user.id;
@@ -270,10 +223,10 @@ export class AuthService {
         );
       }
 
-      user = await this.AccountsService.findUserEntityById(userId);
+      user = await this.AccountsService.findAccountEntityById(userId);
 
       // Check if user account is banned or inactive
-      this.AccountsService.validateUserAccess(user);
+      this.AccountsService.validateAccountAccess(user);
 
       const payload = { sub: userId, email: userEmail, role: user.role };
       const accessToken = this.jwtService.sign(payload);

@@ -9,20 +9,29 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus } from './enums';
 import { GeneralAccount } from './entities/general_accounts.entity';
+import { ClinicInformation } from './entities/clinic_information.entity';
+import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
+import { DoctorInformation } from './entities/doctor_information.entity';
 import {
   CreateAccountDto,
   UpdatePasswordDto,
   UpdateAccountDto,
   AccountResponseDto,
   BanAccountDto,
+  CreateAccountBasicDto,
+  CreateAccountProfileDto,
+  CreateClinicManagerDto,
+  CreateStaffByClinicManagerDto,
+  CreateDoctorByClinicManagerDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
-import { AccountsRepository } from './accounts.repository';
+import { AccountRepository } from './repositories/account.repository';
+import { GeneralAccountRepository } from './repositories/general-account.repository';
 import { CodeVerification } from '../mailer/entities/mailer.entity';
 import { VerificationType } from 'src/enums/verification-code/enum';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
@@ -80,11 +89,23 @@ export class AccountsService {
    *
    * @param {AccountsRepository} accountsRepository - Repository for Account and GeneralAccount data access
    * @param {Repository<CodeVerification>} codeVerificationRepo - Repository for verification code management
+   * @param {DataSource} dataSource - TypeORM DataSource for transaction management
+   * @param {Repository<ClinicInformation>} clinicInfoRepo - Repository for clinic information
+   * @param {Repository<ClinicStaffInformation>} clinicStaffRepo - Repository for clinic staff information
+   * @param {Repository<DoctorInformation>} doctorInfoRepo - Repository for doctor information
    */
   constructor(
-    private readonly accountsRepository: AccountsRepository,
+    private readonly accountRepository: AccountRepository,
+    private readonly generalAccountRepository: GeneralAccountRepository,
     @InjectRepository(CodeVerification)
     private readonly codeVerificationRepo: Repository<CodeVerification>,
+    private readonly dataSource: DataSource,
+    @InjectRepository(ClinicInformation)
+    private readonly clinicInfoRepo: Repository<ClinicInformation>,
+    @InjectRepository(ClinicStaffInformation)
+    private readonly clinicStaffRepo: Repository<ClinicStaffInformation>,
+    @InjectRepository(DoctorInformation)
+    private readonly doctorInfoRepo: Repository<DoctorInformation>,
   ) {}
 
   /**
@@ -115,12 +136,12 @@ export class AccountsService {
    * ```
    */
   async findAll(includeDeleted: boolean = false): Promise<AccountResponseDto[]> {
-    const accounts = await this.accountsRepository.findAllAccounts(includeDeleted);
+    const accounts = await this.accountRepository.findAllAccounts(includeDeleted);
 
     const result: AccountResponseDto[] = [];
     for (const account of accounts) {
       const generalAccount =
-        await this.accountsRepository.findGeneralAccountByUserId(account.id);
+        await this.generalAccountRepository.findGeneralAccountByUserId(account.id);
       result.push(new AccountResponseDto(account, generalAccount));
     }
 
@@ -149,7 +170,7 @@ export class AccountsService {
    * ```
    */
   async findAccountEntityById(id: string): Promise<Account> {
-    const account = await this.accountsRepository.findAccountById(id);
+    const account = await this.accountRepository.findAccountById(id);
     if (!account) {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
@@ -176,7 +197,7 @@ export class AccountsService {
   async findGeneralAccountByUserId(
     userId: string,
   ): Promise<GeneralAccount | null> {
-    return this.accountsRepository.findGeneralAccountByUserId(userId);
+    return this.generalAccountRepository.findGeneralAccountByUserId(userId);
   }
 
   /**
@@ -204,28 +225,6 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
     const generalAccount = await this.findGeneralAccountByUserId(id);
     return new AccountResponseDto(account, generalAccount);
-  }
-
-  /**
-   * Create Account (Legacy Method)
-   *
-   * Backward compatibility wrapper that delegates to createPatient().
-   * Maintained for existing code that calls this method.
-   *
-   * @deprecated Use createPatient() instead for explicit patient account creation
-   * @param {CreateAccountDto} createAccountDto - Patient registration data
-   * @returns {Promise<{user: AccountResponseDto}>} Created patient account DTO
-   *
-   * @example
-   * ```typescript
-   * const result = await accountsService.create(createAccountDto);
-   * // Equivalent to: accountsService.createPatient(createAccountDto)
-   * ```
-   */
-  async create(
-    createAccountDto: CreateAccountDto,
-  ): Promise<{ user: AccountResponseDto }> {
-    return this.createPatient(createAccountDto);
   }
 
   /**
@@ -288,7 +287,7 @@ export class AccountsService {
     );
 
     // Step 3: Create and save Account entity
-    const account = this.accountsRepository.createAccount({
+    const account = this.accountRepository.createAccount({
       username: createAccountDto.username,
       email: createAccountDto.email,
       password: hashedPassword,
@@ -299,17 +298,17 @@ export class AccountsService {
       status: AccountStatus.PENDING_VERIFICATION,
     });
 
-    const savedAccount = await this.accountsRepository.saveAccount(account);
+    const savedAccount = await this.accountRepository.saveAccount(account);
 
     // Step 4: Create and save GeneralAccount entity with the Account ID
     let generalAccount: GeneralAccount | null = null;
     if (createAccountDto.fullName || createAccountDto.gender) {
-      generalAccount = this.accountsRepository.createGeneralAccount({
+      generalAccount = this.generalAccountRepository.createGeneralAccount({
         generalAccId: savedAccount.id,
         fullName: createAccountDto.fullName,
         gender: createAccountDto.gender,
       });
-      await this.accountsRepository.saveGeneralAccount(generalAccount);
+      await this.generalAccountRepository.saveGeneralAccount(generalAccount);
     }
 
     // Step 5: Return combined DTO
@@ -377,7 +376,7 @@ export class AccountsService {
     );
 
     // Step 3: Create and save Account entity with OAuth flags
-    const account = this.accountsRepository.createAccount({
+    const account = this.accountRepository.createAccount({
       username: dto.username || dto.email.split('@')[0], // Use email prefix as default username
       email: dto.email,
       password: hashedPassword,
@@ -388,16 +387,16 @@ export class AccountsService {
       profilePicture: dto.profilePicture,
     });
 
-    const savedAccount = await this.accountsRepository.saveAccount(account);
+    const savedAccount = await this.accountRepository.saveAccount(account);
 
     // Step 4: Create GeneralAccount with fullName if provided
     let generalAccount: GeneralAccount | null = null;
     if (dto.fullName) {
-      generalAccount = this.accountsRepository.createGeneralAccount({
+      generalAccount = this.generalAccountRepository.createGeneralAccount({
         generalAccId: savedAccount.id,
         fullName: dto.fullName,
       });
-      await this.accountsRepository.saveGeneralAccount(generalAccount);
+      await this.generalAccountRepository.saveGeneralAccount(generalAccount);
     }
 
     return new AccountResponseDto(savedAccount, generalAccount);
@@ -421,7 +420,7 @@ export class AccountsService {
    * ```
    */
   async updateAccountEntity(account: Account): Promise<Account> {
-    return this.accountsRepository.saveAccount(account);
+    return this.accountRepository.saveAccount(account);
   }
 
   /**
@@ -468,8 +467,14 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
     let emailChanged = false;
 
-    // Validate email uniqueness if changed
+    // Validate email change permission - only PATIENT can change their own email
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
+      if (account.role !== AccountRole.PATIENT) {
+        throw new ForbiddenException(
+          'Only PATIENT accounts can change their email address. Other roles must contact administrator.',
+        );
+      }
+
       const existingAccountWithEmail = await this.findByEmail(
         updateAccountDto.email,
       );
@@ -479,6 +484,7 @@ export class AccountsService {
 
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
+      account.status = AccountStatus.PENDING_VERIFICATION; // Require re-verification
       emailChanged = true;
     }
 
@@ -501,7 +507,7 @@ export class AccountsService {
       account.profilePicture = updateAccountDto.profilePicture;
     }
 
-    const updatedAccount = await this.accountsRepository.saveAccount(account);
+    const updatedAccount = await this.accountRepository.saveAccount(account);
 
     // Update GeneralAccount if needed
     if (updateAccountDto.fullName !== undefined || updateAccountDto.gender !== undefined) {
@@ -581,7 +587,7 @@ export class AccountsService {
 
     // Hash and save new password
     account.password = await bcrypt.hash(newPassword, this.BCRYPT_SALT_ROUNDS);
-    await this.accountsRepository.saveAccount(account);
+    await this.accountRepository.saveAccount(account);
   }
 
   /**
@@ -620,9 +626,9 @@ export class AccountsService {
    */
   async delete(id: string): Promise<void> {
     const account = await this.findAccountEntityById(id);
-    await this.accountsRepository.softDeleteAccount(id);
+    await this.accountRepository.softDeleteAccount(id);
     // Also soft delete the general account
-    await this.accountsRepository.softDeleteGeneralAccount(id);
+    await this.generalAccountRepository.softDeleteGeneralAccount(id);
   }
 
   /**
@@ -657,7 +663,7 @@ export class AccountsService {
    * ```
    */
   async restore(id: string): Promise<AccountResponseDto> {
-    const account = await this.accountsRepository.findAccountByIdWithDeleted(id);
+    const account = await this.accountRepository.findAccountByIdWithDeleted(id);
 
     if (!account) {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
@@ -667,8 +673,8 @@ export class AccountsService {
       throw new BadRequestException(MESSAGES.failMessage.userNotDeleted);
     }
 
-    await this.accountsRepository.restoreAccount(id);
-    await this.accountsRepository.restoreGeneralAccount(id);
+    await this.accountRepository.restoreAccount(id);
+    await this.generalAccountRepository.restoreGeneralAccount(id);
 
     const restoredAccount = await this.findAccountEntityById(id);
     const generalAccount = await this.findGeneralAccountByUserId(id);
@@ -709,8 +715,8 @@ export class AccountsService {
    */
   async permanentDelete(id: string): Promise<void> {
     // Delete GeneralAccount first (foreign key constraint)
-    await this.accountsRepository.deleteGeneralAccount(id);
-    const affected = await this.accountsRepository.deleteAccount(id);
+    await this.generalAccountRepository.deleteGeneralAccount(id);
+    const affected = await this.accountRepository.deleteAccount(id);
     if (affected === 0) {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
@@ -780,7 +786,7 @@ export class AccountsService {
     account.banCounts = (account.banCounts || 0) + 1;
     account.banDescription = banDto.reason;
     
-    const bannedAccount = await this.accountsRepository.saveAccount(account);
+    const bannedAccount = await this.accountRepository.saveAccount(account);
     const generalAccount = await this.findGeneralAccountByUserId(accountId);
     return new AccountResponseDto(bannedAccount, generalAccount);
   }
@@ -822,7 +828,7 @@ export class AccountsService {
     }
 
     account.status = AccountStatus.ACTIVE;
-    const unbannedAccount = await this.accountsRepository.saveAccount(account);
+    const unbannedAccount = await this.accountRepository.saveAccount(account);
     const generalAccount = await this.findGeneralAccountByUserId(accountId);
     return new AccountResponseDto(unbannedAccount, generalAccount);
   }
@@ -834,9 +840,10 @@ export class AccountsService {
    * This method is called during authentication to enforce account status rules.
    *
    * Access Rules:
+   * - INCOMPLETE accounts cannot login (profile not completed)
+   * - PENDING_VERIFICATION accounts cannot login (email not verified)
    * - BANNED accounts cannot access the system
    * - SUSPENDED accounts cannot access the system
-   * - PENDING_VERIFICATION accounts may have limited access (define based on business requirements)
    * - ACTIVE accounts have full access
    *
    * Integration Points:
@@ -846,7 +853,7 @@ export class AccountsService {
    *
    * @param {Account} account - Account entity to validate
    * @returns {void} No return value - throws exception on validation failure
-   * @throws {ForbiddenException} If account is banned or suspended
+   * @throws {ForbiddenException} If account is not in ACTIVE status
    *
    * @example
    * ```typescript
@@ -856,6 +863,18 @@ export class AccountsService {
    * ```
    */
   validateAccountAccess(account: Account): void {
+    if (account.status === AccountStatus.INCOMPLETE) {
+      throw new ForbiddenException(
+        'Account registration is incomplete. Please complete your profile.',
+      );
+    }
+
+    if (account.status === AccountStatus.PENDING_VERIFICATION) {
+      throw new ForbiddenException(
+        'Email verification required. Please verify your email to activate your account.',
+      );
+    }
+
     if (account.status === AccountStatus.BANNED) {
       throw new ForbiddenException(MESSAGES.failMessage.userAccountBanned);
     }
@@ -893,7 +912,7 @@ export class AccountsService {
    * ```
    */
   async findByEmail(email: string): Promise<Account | null> {
-    return this.accountsRepository.findAccountByEmail(email);
+    return this.accountRepository.findAccountByEmail(email);
   }
 
   /**
@@ -926,7 +945,7 @@ export class AccountsService {
    * ```
    */
   async findAccountsByIds(ids: string[]): Promise<Account[]> {
-    return this.accountsRepository.findAccountsByIds(ids);
+    return this.accountRepository.findAccountsByIds(ids);
   }
 
   /**
@@ -975,15 +994,15 @@ export class AccountsService {
       if (data.gender !== undefined) {
         generalAccount.gender = data.gender as any;
       }
-      return this.accountsRepository.saveGeneralAccount(generalAccount);
+      return this.generalAccountRepository.saveGeneralAccount(generalAccount);
     } else {
       // Create new
-      generalAccount = this.accountsRepository.createGeneralAccount({
+      generalAccount = this.generalAccountRepository.createGeneralAccount({
         generalAccId: userId,
         fullName: data.fullName,
         gender: data.gender as any,
       });
-      return this.accountsRepository.saveGeneralAccount(generalAccount);
+      return this.generalAccountRepository.saveGeneralAccount(generalAccount);
     }
   }
 
@@ -1067,7 +1086,7 @@ export class AccountsService {
     // Mark email as verified and activate account
     account.isEmailVerified = true;
     account.status = AccountStatus.ACTIVE;
-    await this.accountsRepository.saveAccount(account);
+    await this.accountRepository.saveAccount(account);
 
     // Get general account for firstName/lastName (split fullName)
     const generalAccount = await this.findGeneralAccountByUserId(account.id);
@@ -1307,98 +1326,11 @@ export class AccountsService {
 
     // Hash and update password
     account.password = await bcrypt.hash(newPassword, this.BCRYPT_SALT_ROUNDS);
-    await this.accountsRepository.saveAccount(account);
+    await this.accountRepository.saveAccount(account);
   }
 
   /**
-   * Create Clinic Staff Account
-   *
-   * Creates a clinic staff account linked to an existing patient account.
-   * Implements parent-child account relationship for clinic management.
-   *
-   * Account Hierarchy:
-   * - Parent: Patient account (clinic owner/manager)
-   * - Child: Clinic staff account (created via this method)
-   *
-   * Business Rules:
-   * - Parent patient account must exist
-   * - Email must be unique across all accounts
-   * - Role is automatically set to CLINIC_STAFF
-   * - Status is set to ACTIVE (no email verification required)
-   * - isEmailVerified is set to true (trusted creation)
-   * - Account is immediately usable
-   *
-   * Use Cases:
-   * - Clinic owner creating staff accounts
-   * - Adding doctors to clinic
-   * - Multi-user clinic management
-   *
-   * @param {string} patientId - UUID of parent patient account (clinic owner)
-   * @param {any} dto - Clinic staff registration data (CreateClinicStaffDto)
-   * @returns {Promise<AccountResponseDto>} Created clinic staff account DTO
-   * @throws {NotFoundException} If parent patient account does not exist
-   * @throws {ConflictException} If email already exists
-   *
-   * @example
-   * ```typescript
-   * const staffAccount = await accountsService.createClinicStaff(
-   *   'patient-uuid',
-   *   {
-   *     email: 'staff@clinic.com',
-   *     password: 'SecurePass123',
-   *     fullName: 'Dr. Jane Smith'
-   *   }
-   * );
-   * ```
-   */
-  async createClinicStaff(
-    patientId: string,
-    dto: any,
-  ): Promise<AccountResponseDto> {
-    // Validate parent patient exists
-    const parentPatient = await this.findAccountEntityById(patientId);
-
-    // Check email uniqueness
-    const existingAccount = await this.findByEmail(dto.email);
-    if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
-    }
-
-    const hashedPassword = await bcrypt.hash(
-      dto.password,
-      this.BCRYPT_SALT_ROUNDS,
-    );
-
-    // Create clinic staff account linked to patient
-    const clinicStaff = this.accountsRepository.createAccount({
-      username: dto.username || dto.email.split('@')[0],
-      email: dto.email,
-      password: hashedPassword,
-      parentId: patientId,
-      role: AccountRole.CLINIC_STAFF,
-      status: AccountStatus.ACTIVE, // Clinic staff is auto-activated
-      isEmailVerified: true, // Auto-verified since created by authenticated user
-    });
-
-    const savedStaff = await this.accountsRepository.saveAccount(clinicStaff);
-
-    // Create GeneralAccount for clinic staff
-    let generalAccount: GeneralAccount | null = null;
-    const fullName =
-      dto.fullName || [dto.firstName, dto.lastName].filter(Boolean).join(' ');
-    if (fullName) {
-      generalAccount = this.accountsRepository.createGeneralAccount({
-        generalAccId: savedStaff.id,
-        fullName: fullName,
-      });
-      await this.accountsRepository.saveGeneralAccount(generalAccount);
-    }
-
-    return new AccountResponseDto(savedStaff, generalAccount);
-  }
-
-  /**
-   * Get Username and Email List
+   * Get Usernames and Emails
    *
    * Retrieves lists of all usernames and emails in the system.
    * Useful for frontend validation to check username/email availability during registration.
@@ -1422,17 +1354,497 @@ export class AccountsService {
    *
    * @example
    * ```typescript
-   * const { username, email } = await accountsService.getUserEmailList();
+   * const { username, email } = await accountsService.getUsernamesAndEmails();
    * // username: ['john', 'jane', 'admin']
    * // email: ['john@example.com', 'jane@example.com', 'admin@example.com']
    * ```
    */
-  async getUserEmailList(): Promise<UsernameEmailListDto> {
-    const accounts = await this.accountsRepository.findAllAccounts();
+  async getUsernamesAndEmails(): Promise<UsernameEmailListDto> {
+    const accounts = await this.accountRepository.findAllAccounts();
 
     return {
       username: accounts.map((account) => account.username).filter((name) => !!name),
       email: accounts.map((account) => account.email),
     };
   }
+
+  /**
+   * Create Account Basic (Step 1 of 2-Step Registration)
+   *
+   * Creates the basic account entity with INCOMPLETE status.
+   * This is the first step of the two-step registration process.
+   * 
+   * Two-Step Registration Flow:
+   * 1. Call this method to create account with INCOMPLETE status
+   * 2. Call createAccountProfile() to add profile data and activate account
+   * 
+   * Business Rules:
+   * - Role is automatically set to PATIENT
+   * - Status is set to INCOMPLETE (not usable until profile is completed)
+   * - Email must be unique across all accounts
+   * - Password is hashed with bcrypt before storage
+   * - Account will be auto-deleted if profile is not completed within reasonable time
+   * 
+   * Security:
+   * - Password is hashed with bcrypt (10 rounds)
+   * - Email uniqueness is validated
+   * 
+   * @param {CreateAccountBasicDto} dto - Basic account data (username, email, password, etc.)
+   * @returns {Promise<{accountId: string, email: string, username: string}>} Created account ID and info
+   * @throws {ConflictException} If email already exists
+   * 
+   * @example
+   * ```typescript
+   * const result = await accountsService.createAccountBasic({
+   *   username: 'johndoe',
+   *   email: 'john@example.com',
+   *   password: 'SecurePass123'
+   * });
+   * // result: { accountId: 'uuid', email: 'john@example.com', username: 'johndoe' }
+   * // Next: Call createAccountProfile(result.accountId, profileData)
+   * ```
+   */
+  async createAccountBasic(
+    dto: CreateAccountBasicDto,
+  ): Promise<{ accountId: string; email: string; username: string }> {
+    // Step 1: Validate email uniqueness
+    const existingAccount = await this.findByEmail(dto.email);
+    if (existingAccount) {
+      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    }
+
+    // Step 2: Hash password for secure storage
+    const hashedPassword = await bcrypt.hash(
+      dto.password,
+      this.BCRYPT_SALT_ROUNDS,
+    );
+
+    // Step 3: Create and save Account entity with INCOMPLETE status
+    const account = this.accountRepository.createAccount({
+      username: dto.username,
+      email: dto.email,
+      password: hashedPassword,
+      phone: dto.phone,
+      dob: dto.dob ? new Date(dto.dob) : undefined,
+      profilePicture: dto.profilePicture,
+      role: AccountRole.PATIENT, // Default role is PATIENT
+      status: AccountStatus.INCOMPLETE, // Not usable until profile is completed
+    });
+
+    const savedAccount = await this.accountRepository.saveAccount(account);
+
+    return {
+      accountId: savedAccount.id,
+      email: savedAccount.email,
+      username: savedAccount.username,
+    };
+  }
+
+  /**
+   * Create Account Profile (Step 2 of 2-Step Registration)
+   *
+   * Creates the GeneralAccount profile data and activates the account.
+   * This is the second step of the two-step registration process.
+   * 
+   * Transaction Behavior:
+   * - If profile creation fails, the account is automatically deleted (rollback)
+   * - Account status changes from INCOMPLETE to PENDING_VERIFICATION
+   * - This ensures data integrity across both tables
+   * 
+   * Business Rules:
+   * - Account must exist and be in INCOMPLETE status
+   * - fullName and gender are required
+   * - Upon success, account status changes to PENDING_VERIFICATION
+   * - User must verify email before account becomes ACTIVE
+   * 
+   * Rollback Mechanism:
+   * - If GeneralAccount creation fails, Account is deleted automatically
+   * - This ensures we never have orphaned accounts without profiles
+   * 
+   * @param {string} accountId - Account UUID from step 1 (createAccountBasic)
+   * @param {CreateAccountProfileDto} dto - Profile data (fullName, gender)
+   * @returns {Promise<AccountResponseDto>} Complete account with profile data
+   * @throws {NotFoundException} If account does not exist
+   * @throws {BadRequestException} If account is not in INCOMPLETE status
+   * @throws {Error} Any error will trigger account deletion
+   * 
+   * @example
+   * ```typescript
+   * try {
+   *   const account = await accountsService.createAccountProfile(accountId, {
+   *     fullName: 'John Doe',
+   *     gender: Gender.MALE
+   *   });
+   *   // Account is now PENDING_VERIFICATION, ready for email verification
+   * } catch (error) {
+   *   // If this fails, the account created in step 1 is automatically deleted
+   * }
+   * ```
+   */
+  async createAccountProfile(
+    accountId: string,
+    dto: CreateAccountProfileDto,
+  ): Promise<AccountResponseDto> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Step 1: Find and validate account
+      const account = await this.accountRepository.findAccountById(accountId);
+      if (!account) {
+        throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+      }
+
+      // Step 2: Validate account is in INCOMPLETE status
+      if (account.status !== AccountStatus.INCOMPLETE) {
+        throw new BadRequestException(
+          'Account profile has already been completed or account is not in incomplete state',
+        );
+      }
+
+      // Step 3: Create GeneralAccount entity
+      const generalAccount = this.generalAccountRepository.createGeneralAccount({
+        generalAccId: accountId,
+        fullName: dto.fullName,
+        gender: dto.gender,
+      });
+
+      await queryRunner.manager.save(generalAccount);
+
+      // Step 4: Update account status to PENDING_VERIFICATION
+      account.status = AccountStatus.PENDING_VERIFICATION;
+      await queryRunner.manager.save(account);
+
+      await queryRunner.commitTransaction();
+
+      // Return complete account DTO
+      return new AccountResponseDto(account, generalAccount);
+    } catch (error) {
+      // Rollback transaction
+      await queryRunner.rollbackTransaction();
+
+      // If profile creation failed, delete the account (cleanup)
+      try {
+        await this.accountRepository.deleteAccount(accountId);
+      } catch (deleteError) {
+        // Log but don't throw - original error is more important
+        console.error('Failed to delete incomplete account:', deleteError);
+      }
+
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Create Clinic Manager Account
+   *
+   * Creates a clinic manager account with full permissions to manage clinic operations.
+   * Clinic managers have the following permissions:
+   * - Add CLINIC_STAFF accounts
+   * - Add DOCTOR accounts
+   * - Update clinic legal documents
+   * - Update Google iframe information
+   * - Update doctor documents
+   * 
+   * This method creates:
+   * 1. Account entity with CLINIC_MANAGER role
+   * 2. GeneralAccount entity with manager's personal info
+   * 3. ClinicInformation entity with clinic details
+   * 
+   * Transaction Behavior:
+   * - If any step fails, all changes are rolled back
+   * - Ensures data integrity across all three tables
+   * 
+   * @param {CreateClinicManagerDto} dto - Clinic manager registration data
+   * @returns {Promise<AccountResponseDto>} Created clinic manager account with all related data
+   * @throws {ConflictException} If email already exists
+   * @throws {Error} Any error will trigger rollback
+   * 
+   * @example
+   * ```typescript
+   * const manager = await accountsService.createClinicManager({
+   *   username: 'clinicmanager',
+   *   email: 'manager@clinic.com',
+   *   password: 'ManagerPass123',
+   *   fullName: 'Dr. John Smith',
+   *   clinicName: 'City Medical Clinic',
+   *   description: 'A modern healthcare facility'
+   * });
+   * ```
+   */
+  async createClinicManager(
+    patientId: string,
+    dto: CreateClinicManagerDto,
+  ): Promise<AccountResponseDto> {
+    // Step 1: Validate patient exists and has PATIENT role
+    const patient = await this.findAccountEntityById(patientId);
+    if (patient.role !== AccountRole.PATIENT) {
+      throw new ForbiddenException('Only PATIENT accounts can create clinic manager');
+    }
+
+    // TODO: Add validation for clinic service purchase/subscription
+    // if (!patient.hasClinicServiceSubscription) {
+    //   throw new ForbiddenException('You must purchase clinic service first');
+    // }
+
+    // Step 2: Validate email uniqueness
+    const existingAccount = await this.findByEmail(dto.email);
+    if (existingAccount) {
+      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Step 2: Hash password
+      const hashedPassword = await bcrypt.hash(
+        dto.password,
+        this.BCRYPT_SALT_ROUNDS,
+      );
+
+      // Step 3: Create Account entity with CLINIC_MANAGER role
+      const account = this.accountRepository.createAccount({
+        username: dto.username,
+        email: dto.email,
+        password: hashedPassword,
+        phone: dto.phone,
+        role: AccountRole.CLINIC_MANAGER, // Clinic manager role
+        status: AccountStatus.ACTIVE, // Clinic managers are immediately active
+        isEmailVerified: true, // No email verification required for clinic managers
+      });
+
+      const savedAccount = await queryRunner.manager.save(account);
+
+      // Step 4: Create GeneralAccount entity
+      const generalAccount = this.generalAccountRepository.createGeneralAccount({
+        generalAccId: savedAccount.id,
+        fullName: dto.fullName,
+      });
+
+      await queryRunner.manager.save(generalAccount);
+
+      // Step 5: Create ClinicInformation entity
+      const clinicInfo = this.clinicInfoRepo.create({
+        clinicId: savedAccount.id,
+        clinicName: dto.clinicName,
+        description: dto.description,
+      });
+
+      await queryRunner.manager.save(clinicInfo);
+
+      await queryRunner.commitTransaction();
+
+      // Return complete account DTO
+      return new AccountResponseDto(savedAccount, generalAccount);
+    } catch (error) {
+      // Rollback transaction
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Create Clinic Staff by Clinic Manager
+   *
+   * Allows clinic managers to add staff accounts to their clinic.
+   * Staff accounts are linked to the clinic manager's clinic.
+   * 
+   * Permission Check:
+   * - Validates that the manager has CLINIC_MANAGER role
+   * - Only clinic managers can add staff
+   * 
+   * This method creates:
+   * 1. Account entity with CLINIC_STAFF role
+   * 2. ClinicStaffInformation entity with staff details
+   * 
+   * @param {string} managerId - Clinic manager's account UUID
+   * @param {CreateStaffByClinicManagerDto} dto - Staff registration data
+   * @returns {Promise<AccountResponseDto>} Created staff account
+   * @throws {NotFoundException} If manager account doesn't exist
+   * @throws {ForbiddenException} If account is not a clinic manager
+   * @throws {ConflictException} If email already exists
+   * 
+   * @example
+   * ```typescript
+   * const staff = await accountsService.createStaffByClinicManager(managerId, {
+   *   email: 'staff@clinic.com',
+   *   password: 'StaffPass123',
+   *   fullName: 'Jane Doe',
+   *   gender: Gender.FEMALE,
+   *   clinicRole: ClinicRole.RECEPTIONIST
+   * });
+   * ```
+   */
+  async createStaffByClinicManager(
+    managerId: string,
+    dto: CreateStaffByClinicManagerDto,
+  ): Promise<AccountResponseDto> {
+    // Step 1: Validate manager exists and has CLINIC_MANAGER role
+    const manager = await this.findAccountEntityById(managerId);
+    if (manager.role !== AccountRole.CLINIC_MANAGER) {
+      throw new ForbiddenException('Only clinic managers can add staff members');
+    }
+
+    // Step 2: Validate email uniqueness
+    const existingAccount = await this.findByEmail(dto.email);
+    if (existingAccount) {
+      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Step 3: Hash password
+      const hashedPassword = await bcrypt.hash(
+        dto.password,
+        this.BCRYPT_SALT_ROUNDS,
+      );
+
+      // Step 4: Create Account entity with CLINIC_STAFF role
+      // Following 2-step registration pattern: Create INCOMPLETE account first
+      const account = this.accountRepository.createAccount({
+        username: dto.email.split('@')[0],
+        email: dto.email,
+        password: hashedPassword,
+        parentId: managerId, // Link to clinic manager
+        role: AccountRole.CLINIC_STAFF,
+        status: AccountStatus.INCOMPLETE, // 2-step pattern: Start with INCOMPLETE
+        isEmailVerified: false, // Staff must verify themselves
+      });
+
+      const savedAccount = await queryRunner.manager.save(account);
+
+      // Step 5: Create ClinicStaffInformation entity with basic info
+      const staffInfo = this.clinicStaffRepo.create({
+        clinicAccId: savedAccount.id,
+        fullName: dto.fullName,
+        gender: dto.gender,
+        clinicRole: dto.clinicRole,
+      });
+
+      await queryRunner.manager.save(staffInfo);
+
+      await queryRunner.commitTransaction();
+
+      // Return account DTO
+      // Note: Staff account is INCOMPLETE - staff must complete profile themselves
+      return new AccountResponseDto(savedAccount, null);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Create Doctor by Clinic Manager
+   *
+   * Allows clinic managers to add doctor accounts to their clinic.
+   * Doctor accounts are linked to the clinic manager's clinic.
+   * 
+   * Permission Check:
+   * - Validates that the manager has CLINIC_MANAGER role
+   * - Only clinic managers can add doctors
+   * 
+   * This method creates:
+   * 1. Account entity with DOCTOR role
+   * 2. DoctorInformation entity with doctor details
+   * 
+   * @param {string} managerId - Clinic manager's account UUID
+   * @param {CreateDoctorByClinicManagerDto} dto - Doctor registration data
+   * @returns {Promise<AccountResponseDto>} Created doctor account
+   * @throws {NotFoundException} If manager account doesn't exist
+   * @throws {ForbiddenException} If account is not a clinic manager
+   * @throws {ConflictException} If email already exists
+   * 
+   * @example
+   * ```typescript
+   * const doctor = await accountsService.createDoctorByClinicManager(managerId, {
+   *   email: 'doctor@clinic.com',
+   *   password: 'DoctorPass123',
+   *   fullName: 'Dr. John Smith',
+   *   gender: Gender.MALE,
+   *   academicDegree: 'MD, PhD',
+   *   specialization: 'Cardiology',
+   *   consultationFee: 500000
+   * });
+   * ```
+   */
+  async createDoctorByClinicManager(
+    managerId: string,
+    dto: CreateDoctorByClinicManagerDto,
+  ): Promise<AccountResponseDto> {
+    // Step 1: Validate manager exists and has CLINIC_MANAGER role
+    const manager = await this.findAccountEntityById(managerId);
+    if (manager.role !== AccountRole.CLINIC_MANAGER) {
+      throw new ForbiddenException('Only clinic managers can add doctors');
+    }
+
+    // Step 2: Validate email uniqueness
+    const existingAccount = await this.findByEmail(dto.email);
+    if (existingAccount) {
+      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Step 3: Hash password
+      const hashedPassword = await bcrypt.hash(
+        dto.password,
+        this.BCRYPT_SALT_ROUNDS,
+      );
+
+      // Step 4: Create Account entity with DOCTOR role
+      // Following 2-step registration pattern: Create INCOMPLETE account first
+      const account = this.accountRepository.createAccount({
+        username: dto.email.split('@')[0],
+        email: dto.email,
+        password: hashedPassword,
+        parentId: managerId, // Link to clinic manager
+        role: AccountRole.DOCTOR,
+        status: AccountStatus.INCOMPLETE, // 2-step pattern: Start with INCOMPLETE
+        isEmailVerified: false, // Doctor must verify themselves
+      });
+
+      const savedAccount = await queryRunner.manager.save(account);
+
+      // Step 5: Create DoctorInformation entity with basic info
+      const doctorInfo = this.doctorInfoRepo.create({
+        doctorAccId: savedAccount.id,
+        fullName: dto.fullName,
+        gender: dto.gender,
+        academicDegree: dto.academicDegree,
+        experience: dto.experience,
+        position: dto.position,
+        // Note: specialization and consultationFee are not fields in DoctorInformation entity
+      });
+
+      await queryRunner.manager.save(doctorInfo);
+
+      await queryRunner.commitTransaction();
+
+      // Return account DTO
+      // Note: Doctor account is INCOMPLETE - doctor must complete profile themselves
+      return new AccountResponseDto(savedAccount, null);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }
+

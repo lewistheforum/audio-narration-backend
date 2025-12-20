@@ -6,7 +6,7 @@ import { CreateMailerDto } from './dto/create-mailer.dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { SendMailDataDto } from './dto/send-mail-data.dto';
 import { ForgotPasswordDto, ResendVerificationDto } from '../auth/dto';
-import { AccountsService } from '../accounts/client.service';
+import { AccountsService } from '../accounts/accounts.service';
 
 @ApiTags('Mailer')
 @Controller('mailer')

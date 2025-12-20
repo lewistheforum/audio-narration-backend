@@ -1,83 +1,97 @@
-// import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-// import { InjectRepository } from '@nestjs/typeorm';
-// import { Repository } from 'typeorm';
-// import { User, AccountRole, UserStatus } from '../../modules/user/entities/user.entity';
-// import * as bcrypt from 'bcrypt';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { Account } from '../../modules/accounts/entities/accounts.entity';
+import { GeneralAccount } from '../../modules/accounts/entities/general_accounts.entity';
+import { AccountRole, AccountStatus } from '../../modules/accounts/enums';
+import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { GeneralAccountRepository } from '../../modules/accounts/repositories/general-account.repository';
 
-// /**
-//  * Admin seeder service
-//  * - Runs on application startup
-//  * - Checks if default admin account exists
-//  * - Creates admin if not found
-//  */
-// @Injectable()
-// export class AdminSeederService implements OnModuleInit {
-//   private readonly logger = new Logger(AdminSeederService.name);
-//   private readonly BCRYPT_SALT_ROUNDS = 10;
+/**
+ * Admin Seeder Service
+ * - Runs on application startup
+ * - Checks if default admin account exists
+ * - Creates admin account with GeneralAccount if not found
+ * - Admin account is immediately ACTIVE with verified email
+ */
+@Injectable()
+export class AdminSeederService implements OnModuleInit {
+  private readonly logger = new Logger(AdminSeederService.name);
+  private readonly BCRYPT_SALT_ROUNDS = 10;
 
-//   // Default admin credentials - should be changed after first login
-//   private readonly DEFAULT_ADMIN = {
-//     email: 'admin@medicare.com',
-//     password: 'Admin@123456',
-//     firstName: 'System',
-//     lastName: 'Administrator',
-//     role: AccountRole.ADMIN,
-//   };
+  // Default admin credentials - should be changed after first login
+  private readonly DEFAULT_ADMIN = {
+    username: 'admin',
+    email: 'admin@medicare.com',
+    password: 'Admin@123456',
+    fullName: 'System Administrator',
+    role: AccountRole.ADMIN,
+  };
 
-//   constructor(
-//     @InjectRepository(User)
-//     private userRepository: Repository<User>,
-//   ) {}
+  constructor(
+    private readonly accountRepository: AccountRepository,
+    private readonly generalAccountRepository: GeneralAccountRepository,
+  ) {}
 
-//   /**
-//    * Lifecycle hook - runs when module initializes
-//    */
-//   async onModuleInit(): Promise<void> {
-//     await this.seedAdmin();
-//   }
+  /**
+   * Lifecycle hook - runs when module initializes
+   */
+  async onModuleInit(): Promise<void> {
+    await this.seedAdmin();
+  }
 
-//   /**
-//    * Seed default admin account if it doesn't exist
-//    * 
-//    * Note: With email encryption enabled, we need to load all users
-//    * and compare decrypted emails since WHERE clause won't work on encrypted data
-//    */
-//   private async seedAdmin(): Promise<void> {
-//     try {
-//       // Load all users and find admin by decrypted email
-//       const allUsers = await this.userRepository.find();
-//       const existingAdmin = allUsers.find(u => u.email === this.DEFAULT_ADMIN.email);
+  /**
+   * Seed default admin account if it doesn't exist
+   * 
+   * Creates both Account and GeneralAccount entities
+   * Admin account is immediately ACTIVE with verified email
+   */
+  private async seedAdmin(): Promise<void> {
+    try {
+      // Check if admin already exists by email
+      const existingAdmin = await this.accountRepository.findAccountByEmail(
+        this.DEFAULT_ADMIN.email,
+      );
 
-//       if (existingAdmin) {
-//         this.logger.log('Default admin account already exists');
-//         return;
-//       }
+      if (existingAdmin) {
+        this.logger.log('Default admin account already exists');
+        return;
+      }
 
-//       const hashedPassword = await bcrypt.hash(
-//         this.DEFAULT_ADMIN.password,
-//         this.BCRYPT_SALT_ROUNDS,
-//       );
+      // Hash password
+      const hashedPassword = await bcrypt.hash(
+        this.DEFAULT_ADMIN.password,
+        this.BCRYPT_SALT_ROUNDS,
+      );
 
-//       const admin = this.userRepository.create({
-//         email: this.DEFAULT_ADMIN.email,
-//         password: hashedPassword,
-//         firstName: this.DEFAULT_ADMIN.firstName,
-//         lastName: this.DEFAULT_ADMIN.lastName,
-//         role: this.DEFAULT_ADMIN.role,
-//         status: UserStatus.ACTIVE,
-//         isEmailVerified: true,
-//       });
+      // Create Account entity
+      const admin = this.accountRepository.createAccount({
+        username: this.DEFAULT_ADMIN.username,
+        email: this.DEFAULT_ADMIN.email,
+        password: hashedPassword,
+        role: this.DEFAULT_ADMIN.role,
+        status: AccountStatus.ACTIVE,
+        isEmailVerified: true,
+        isOAuthUser: false,
+      });
 
-//       await this.userRepository.save(admin);
+      const savedAdmin = await this.accountRepository.saveAccount(admin);
 
-//       this.logger.log(
-//         `✅ Default admin account created successfully: ${this.DEFAULT_ADMIN.email}`,
-//       );
-//       this.logger.warn(
-//         `⚠️  Default password: ${this.DEFAULT_ADMIN.password} - CHANGE IMMEDIATELY!`,
-//       );
-//     } catch (error) {
-//       this.logger.error('Failed to seed admin account', error.stack);
-//     }
-//   }
-// }
+      // Create GeneralAccount entity
+      const generalAccount = this.generalAccountRepository.createGeneralAccount({
+        generalAccId: savedAdmin.id,
+        fullName: this.DEFAULT_ADMIN.fullName,
+      });
+
+      await this.generalAccountRepository.saveGeneralAccount(generalAccount);
+
+      this.logger.log(
+        `✅ Default admin account created successfully: ${this.DEFAULT_ADMIN.email}`,
+      );
+      this.logger.warn(
+        `⚠️  Default password: ${this.DEFAULT_ADMIN.password} - CHANGE IMMEDIATELY!`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to seed admin account', error.stack);
+    }
+  }
+}

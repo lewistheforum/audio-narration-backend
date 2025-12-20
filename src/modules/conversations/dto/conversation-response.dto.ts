@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MessageResponseDto } from 'src/modules/messages/dto/message-response.dto';
-import { AccountResponseDto } from 'src/modul../accounts/dto';
-import { AccountsService } from 'src/modul../accounts/client.service';
+import { AccountResponseDto } from 'src/modules/accounts/dto';
+import { AccountsService } from 'src/modules/accounts/accounts.service';
 import { MessagesService } from 'src/modules/messages/messages.service';
 
 export class ConversationResponseDto {
@@ -115,7 +115,7 @@ export class ConversationResponseDto {
 
     if (conversation.participants && conversation.participants.length > 0) {
       try {
-        const participantUsers = await AccountsService.findUsersByIds(
+        const participantUsers = await AccountsService.findAccountsByIds(
           conversation.participants,
         );
         dto.participants = participantUsers.map(

@@ -12,7 +12,7 @@ import {
   ConversationResponseDto,
 } from './dto';
 import { Conversation } from './entities/conversation.entity';
-import { AccountsService } from '../accounts/client.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { MessagesService } from '../messages/messages.service';
 
 @Injectable()

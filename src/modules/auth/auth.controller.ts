@@ -31,18 +31,22 @@ import {
 } from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
-import { AccountsService } from '../accounts/client.service';
+import { AccountsService } from '../accounts/accounts.service';
 import {
   CreateAccountDto,
-  CreateClinicStaffDto,
   AccountResponseDto,
+  CreateAccountBasicDto,
+  CreateAccountProfileDto,
+  CreateClinicManagerDto,
+  CreateStaffByClinicManagerDto,
+  CreateDoctorByClinicManagerDto,
 } from '../accounts/dto';
 import { JwtAuthGuard } from './jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 import { MailerService } from '../mailer/mailer.service';
-import { UserRole } from 'src/enu../accounts/enum';
+import { AccountRole } from '../accounts/enums';
 
 /**
  * Authentication Controller
@@ -200,36 +204,86 @@ export class AuthController {
   }
 
   /**
-   * Patient Registration (Public Endpoint)
-   * Creates a new patient account with standard authentication
-   * Generates verification code but does NOT auto-send email
-   * Use /auth/send-verification-code to send the verification email
+   * Step 1: Create Account Basic (New 2-Step Registration)
+   * Creates basic account with INCOMPLETE status
+   * Must be followed by Step 2 to complete registration
+   * Role is automatically set to PATIENT
    *
-   * @param createUserDto - Patient registration data
-   * @returns Created patient user object
+   * @param createAccountBasicDto - Basic account data (username, email, password)
+   * @returns Account ID and basic info for Step 2
    */
-  @Post('register')
-  @ApiOperation({ summary: 'Register new patient account (Public)' })
+  @Post('register/account')
+  @ApiOperation({ 
+    summary: 'Step 1: Create basic account (PATIENT role)',
+    description: 'Creates account with INCOMPLETE status. Must call Step 2 to complete registration.'
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponse({
+    status: 201,
+    description: 'Account created successfully. Proceed to Step 2 to add profile.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string', format: 'uuid' },
+            email: { type: 'string' },
+            username: { type: 'string' }
+          }
+        },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  async registerAccountBasic(
+    @Body() createAccountBasicDto: CreateAccountBasicDto,
+  ): Promise<{ data: { accountId: string; email: string; username: string }; message: string }> {
+    const result = await this.AccountsService.createAccountBasic(createAccountBasicDto);
+
+    return {
+      data: result,
+      message: 'Account created successfully. Please complete your profile in Step 2.',
+    };
+  }
+
+  /**
+   * Step 2: Create Account Profile (Complete Registration)
+   * Creates profile data and activates account to PENDING_VERIFICATION status
+   * If this fails, the account from Step 1 is automatically deleted
+   * User must manually request verification code via POST /mailer/send-verification-code
+   *
+   * @param accountId - Account UUID from Step 1
+   * @param createAccountProfileDto - Profile data (fullName, gender)
+   * @returns Complete account data with profile
+   */
+  @Post('register/profile/:accountId')
+  @ApiOperation({ 
+    summary: 'Step 2: Complete account profile',
+    description: 'Adds profile data and changes status to PENDING_VERIFICATION. User must manually request verification code. If this fails, account is deleted.'
+  })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
-    message:
-      'Account created successfully. Use /auth/send-verification-code to receive verification email.',
+    message: 'Profile created successfully. Please request verification code to activate your account.',
   })
-  @ApiResponse({ status: 409, description: 'Email already exists' })
-  @ApiResponse({
-    status: 400,
-    description: 'Validation error - Check password requirements',
-  })
-  async register(
-    @Body() CreateAccountDto: CreateAccountDto,
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  @ApiResponse({ status: 400, description: 'Account not in INCOMPLETE status or validation error' })
+  async registerAccountProfile(
+    @Param('accountId', ParseUUIDPipe) accountId: string,
+    @Body() createAccountProfileDto: CreateAccountProfileDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const { user } = await this.AccountsService.createPatient(CreateAccountDto);
+    const account = await this.AccountsService.createAccountProfile(
+      accountId,
+      createAccountProfileDto,
+    );
 
     return {
-      data: user,
-      message: MESSAGES.successMessage.accountCreatedSuccess,
+      data: account,
+      message: 'Profile created successfully. Please request verification code via POST /mailer/send-verification-code to activate your account.',
     };
   }
 
@@ -303,49 +357,141 @@ export class AuthController {
   }
 
   /**
-   * Clinic Staff Registration (Protected Endpoint)
-   * Creates a clinic staff account linked to an existing patient account
-   * Requires authentication and PATIENT or ADMIN role
+   * Clinic Manager Registration (Protected Endpoint - PATIENT Only)
+   * Allows PATIENT accounts who purchased clinic service to upgrade to CLINIC_MANAGER
+   * Manager can add staff, doctors, and manage clinic documents
    *
-   * @param patientId - UUID of the patient who owns this clinic staff account
-   * @param createClinicStaffDto - Clinic staff registration data
-   * @returns Created clinic staff user object
+   * Business Rule:
+   * - Only PATIENT role can create clinic manager account
+   * - PATIENT must have purchased clinic service (TODO: validate subscription/payment)
+   * - This upgrades the PATIENT account to CLINIC_MANAGER role
+   *
+   * @param req - Request object containing authenticated patient user
+   * @param createClinicManagerDto - Clinic manager registration data
+   * @returns Created clinic manager account
    */
-  @Post('register-clinic-staff/:patientId')
+  @Post('register-clinic-manager')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PATIENT, UserRole.ADMIN)
+  @Roles(AccountRole.PATIENT)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Register clinic staff account linked to patient' })
+  @ApiOperation({ 
+    summary: 'Register clinic manager account (PATIENT only - requires clinic service purchase)',
+    description: 'Allows PATIENT who purchased clinic service to create clinic manager account with full permissions'
+  })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
-    message: 'Clinic staff account created successfully',
+    message: 'Clinic manager account created successfully',
   })
-  @ApiResponse({
-    status: 409,
-    description: 'Email already exists or invalid patient',
-  })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Missing or invalid token' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Requires PATIENT role and clinic service purchase' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Missing or invalid token',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Requires PATIENT or ADMIN role',
-  })
-  async registerClinicStaff(
-    @Param('patientId', ParseUUIDPipe) patientId: string,
-    @Body() createClinicStaffDto: CreateClinicStaffDto,
+  async registerClinicManager(
+    @Req() req: any,
+    @Body() createClinicManagerDto: CreateClinicManagerDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const staff = await this.AccountsService.createClinicStaff(
+    const patientId = req.user.id;
+    const manager = await this.AccountsService.createClinicManager(
       patientId,
-      createClinicStaffDto,
+      createClinicManagerDto,
+    );
+    return {
+      data: manager,
+      message: 'Clinic manager account created successfully',
+    };
+  }
+
+  /**
+   * Add Clinic Staff by Manager (Protected Endpoint)
+   * Allows clinic managers to add staff accounts to their clinic
+   * Requires authentication and CLINIC_MANAGER role
+   *
+   * 2-Step Registration Pattern:
+   * - Creates account with INCOMPLETE status
+   * - Staff must complete profile themselves via separate endpoint
+   * - Account cannot login until profile is completed
+   *
+   * @param req - Request object containing authenticated user
+   * @param createStaffDto - Staff registration data
+   * @returns Created staff account (INCOMPLETE status)
+   */
+  @Post('clinic-manager/add-staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ 
+    summary: 'Add clinic staff (CLINIC_MANAGER only) - Creates INCOMPLETE account',
+    description: 'Creates staff account with INCOMPLETE status. Staff must complete profile before login.'
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: MESSAGES.statusCode.created,
+    message: 'Staff account created (INCOMPLETE). Staff must complete profile.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Requires CLINIC_MANAGER role' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  async addStaffByManager(
+    @Req() req: any,
+    @Body() createStaffDto: CreateStaffByClinicManagerDto,
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const managerId = req.user.id;
+    const staff = await this.AccountsService.createStaffByClinicManager(
+      managerId,
+      createStaffDto,
     );
     return {
       data: staff,
-      message: MESSAGES.successMessage.clinicStaffCreatedSuccess,
+      message: 'Staff account created successfully',
+    };
+  }
+
+  /**
+   * Add Doctor by Manager (Protected Endpoint)
+   * Allows clinic managers to add doctor accounts to their clinic
+   * Requires authentication and CLINIC_MANAGER role
+   *
+   * 2-Step Registration Pattern:
+   * - Creates account with INCOMPLETE status
+   * - Doctor must complete profile themselves via separate endpoint
+   * - Account cannot login until profile is completed
+   *
+   * @param req - Request object containing authenticated user
+   * @param createDoctorDto - Doctor registration data
+   * @returns Created doctor account (INCOMPLETE status)
+   */
+  @Post('clinic-manager/add-doctor')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ 
+    summary: 'Add doctor (CLINIC_MANAGER only) - Creates INCOMPLETE account',
+    description: 'Creates doctor account with INCOMPLETE status. Doctor must complete profile before login.'
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: MESSAGES.statusCode.created,
+    message: 'Doctor account created (INCOMPLETE). Doctor must complete profile.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Requires CLINIC_MANAGER role' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  async addDoctorByManager(
+    @Req() req: any,
+    @Body() createDoctorDto: CreateDoctorByClinicManagerDto,
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const managerId = req.user.id;
+    const doctor = await this.AccountsService.createDoctorByClinicManager(
+      managerId,
+      createDoctorDto,
+    );
+    return {
+      data: doctor,
+      message: 'Doctor account created successfully',
     };
   }
 }
