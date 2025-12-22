@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrescriptionsService } from './prescriptions.service';
 import { PrescriptionsController } from './prescriptions.controller';
 import { Medicine } from './entities/medicine.entity';
+import { MedicineRepository } from './repositories';
 
 /**
  * Prescriptions Module
@@ -20,7 +21,7 @@ import { Medicine } from './entities/medicine.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([Medicine])],
   controllers: [PrescriptionsController],
-  providers: [PrescriptionsService],
+  providers: [PrescriptionsService, MedicineRepository],
   exports: [PrescriptionsService],
 })
 export class PrescriptionsModule { }

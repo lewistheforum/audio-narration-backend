@@ -4,12 +4,13 @@ import {
   IsOptional,
   IsBoolean,
   MaxLength,
-  IsIn,
+  IsEnum,
   IsNotEmpty,
   MinLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { MessageType } from '../enums';
 
 export class CreateMessageDto {
   @ApiProperty({
@@ -51,16 +52,15 @@ export class CreateMessageDto {
 
   @ApiProperty({
     description: 'Message type',
-    example: 'text',
-    enum: ['text', 'image', 'file', 'audio', 'video'],
+    example: MessageType.TEXT,
+    enum: MessageType,
     required: false,
   })
   @IsOptional()
-  @IsString()
-  @IsIn(['text', 'image', 'file', 'audio', 'video'], {
+  @IsEnum(MessageType, {
     message: 'Message type must be one of: text, image, file, audio, video',
   })
-  messageType?: string;
+  messageType?: MessageType;
 
   @ApiProperty({
     description: 'Whether the message has been read',

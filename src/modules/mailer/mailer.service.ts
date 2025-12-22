@@ -335,13 +335,13 @@ export class MailerService {
     }
   }
 
-  // Gửi email verify đăng ký (HTML đẹp)
+  // Send email verification (HTML template)
   async sendVerificationEmail(email: string, code: string) {
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
 
     if (!user || !pass) {
-      console.error('SMTP_USER hoặc SMTP_PASS chưa được cấu hình trong .env');
+      console.error('SMTP_USER or SMTP_PASS not configured in .env file');
       return;
     }
 
@@ -357,7 +357,7 @@ export class MailerService {
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Xác thực email đăng ký tài khoản</title>
+    <title>Email Verification for Account Registration</title>
   </head>
   <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
@@ -370,14 +370,14 @@ export class MailerService {
                   Medicare App
                 </p>
                 <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
-                  Xác thực email đăng ký tài khoản
+                  Email Verification for Account Registration
                 </h1>
                 <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
-                  Medicare xin chào,
+                  Hello from Medicare,
                 </p>
                 <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
-                  Cảm ơn bạn đã đăng ký tài khoản trên <strong>Medicare</strong>.<br/>
-                  Mã xác thực email của bạn là:
+                  Thank you for registering an account on <strong>Medicare</strong>.<br/>
+                  Your email verification code is:
                 </p>
               </td>
             </tr>
@@ -391,13 +391,13 @@ export class MailerService {
             <tr>
               <td style="padding:0 28px 20px 28px;">
                 <p style="margin:0 0 4px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  Mã này có hiệu lực trong <strong>10 phút</strong>. Vui lòng không chia sẻ mã cho bất kỳ ai.
+                  This code is valid for <strong>10 minutes</strong>. Please do not share this code with anyone.
                 </p>
                 <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  Nếu bạn không thực hiện đăng ký, vui lòng bỏ qua email này.
+                  If you did not register for this account, please ignore this email.
                 </p>
                 <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
-                  Đây là email tự động, vui lòng không trả lời.
+                  This is an automated email, please do not reply.
                 </p>
               </td>
             </tr>
@@ -411,21 +411,21 @@ export class MailerService {
     const mailOptions = {
       from: `"Medicare App" <${user}>`,
       to: email,
-      subject: 'Xác thực email đăng ký tài khoản',
-      text: `Mã xác thực của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`,
+      subject: 'Email Verification for Account Registration',
+      text: `Your verification code is: ${code}. Code is valid for 10 minutes.`,
       html,
     };
 
     await transporter.sendMail(mailOptions);
   }
 
-  // Email reset password (HTML đẹp)
+  // Send password reset email (HTML template)
   private async sendResetPasswordEmail(email: string, code: string) {
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
 
     if (!user || !pass) {
-      console.error('SMTP_USER hoặc SMTP_PASS chưa được cấu hình trong .env');
+      console.error('SMTP_USER or SMTP_PASS not configured in .env file');
       return;
     }
 
@@ -441,7 +441,7 @@ export class MailerService {
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Yêu cầu đặt lại mật khẩu</title>
+    <title>Password Reset Request</title>
   </head>
   <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
@@ -454,15 +454,15 @@ export class MailerService {
                   Medicare App
                 </p>
                 <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
-                  Yêu cầu đặt lại mật khẩu
+                  Password Reset Request
                 </h1>
                 <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
-                  Medicare xin chào,
+                  Hello from Medicare,
                 </p>
                 <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
-                  Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản sử dụng email:
+                  We received a password reset request for the account using email:
                   <strong>${email}</strong>.<br/>
-                  Mã đặt lại mật khẩu của bạn là:
+                  Your password reset code is:
                 </p>
               </td>
             </tr>
@@ -476,13 +476,13 @@ export class MailerService {
             <tr>
               <td style="padding:0 28px 20px 28px;">
                 <p style="margin:0 0 4px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  Mã này có hiệu lực trong <strong>10 phút</strong>. Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.
+                  This code is valid for <strong>10 minutes</strong>. If you did not request a password reset, please ignore this email.
                 </p>
                 <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  Vì lý do bảo mật, tuyệt đối không chia sẻ mã này cho bất kỳ ai.
+                  For security reasons, never share this code with anyone.
                 </p>
                 <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
-                  Đây là email tự động, vui lòng không trả lời.
+                  This is an automated email, please do not reply.
                 </p>
               </td>
             </tr>
@@ -496,8 +496,8 @@ export class MailerService {
     const mailOptions = {
       from: `"Medicare App" <${user}>`,
       to: email,
-      subject: 'Yêu cầu đặt lại mật khẩu',
-      text: `Mã đặt lại mật khẩu của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`,
+      subject: 'Password Reset Request',
+      text: `Your password reset code is: ${code}. Code is valid for 10 minutes.`,
       html,
     };
 

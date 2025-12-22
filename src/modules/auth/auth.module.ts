@@ -2,17 +2,14 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
-import { Account } from '../accounts/entities/accounts.entity';
 import { getJwtConfig } from '../../config/jwt.config';
 import { GoogleStrategy } from './google.strategy';
 import { AccountsModule } from '../accounts/accounts.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { MailerModule } from '../mailer/mailer.module';
-import { CodeVerification } from '../mailer/entities/mailer.entity';
 
 /**
  * Authentication Module
@@ -25,7 +22,7 @@ import { CodeVerification } from '../mailer/entities/mailer.entity';
  * - Email verification with 6-digit code
  *
  * Dependencies:
- * - AccountsModule: For client CRUD operations
+ * - AccountsModule: For client CRUD operations and CodeVerificationRepository
  * - SocketGatewayModule: For online status tracking
  * - MailerModule: For sending verification emails
  * - PassportModule: For authentication strategies
@@ -40,8 +37,6 @@ import { CodeVerification } from '../mailer/entities/mailer.entity';
       inject: [ConfigService],
     }),
     AccountsModule,
-    TypeOrmModule.forFeature([CodeVerification]),
-    // UserModule,
     SocketGatewayModule,
     MailerModule,
   ],

@@ -10,9 +10,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
 
-    // username
     @ApiProperty({
-        description: 'Tên đăng nhập',
+        description: 'Username for login',
         example: 'baotran1003',
         minLength: 3,
     })
@@ -20,9 +19,8 @@ export class RegisterDto {
     @MinLength(3)
     username: string;
 
-    // password
     @ApiProperty({
-        description: 'Mật khẩu',
+        description: 'Account password',
         example: 'password123',
         minLength: 6,
     })
@@ -30,9 +28,8 @@ export class RegisterDto {
     @MinLength(6)
     password: string;
 
-    // email
     @ApiProperty({
-        description: 'Email đăng ký',
+        description: 'Registration email',
         example: 'userexample@gmail.com',
         minLength: 6,
     })
@@ -40,9 +37,8 @@ export class RegisterDto {
     @MinLength(6)
     email: string;
 
-    // gender
     @ApiProperty({
-        description: 'Giới tính',
+        description: 'Gender',
         example: 'mail',
         required: false,
         enum: ['male', 'female', 'other'],
@@ -52,9 +48,8 @@ export class RegisterDto {
     @IsOptional()
     gender?: string;
 
-    // DOB
     @ApiProperty({
-        description: 'Ngày sinh (YYYY-MM-DD)',
+        description: 'Date of birth (YYYY-MM-DD)',
         example: '2004-03-10',
         required: false,
     })

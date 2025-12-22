@@ -27,6 +27,7 @@ import {
 } from './types/socket.types';
 import { verifyToken, DecodedToken } from './utils/jwt.utils';
 import { CreateMessageDto } from '../messages/dto/create-message.dto';
+import { MessageType } from '../messages/enums';
 
 @WebSocketGateway({
   cors: {
@@ -67,11 +68,9 @@ export class SocketGatewayService
     if (user) {
       console.log(`User ${user.username} disconnected`);
 
-      // Remove from connected users
       this.connectedUsers.delete(user.userId);
       this.userSockets.delete(client.id);
 
-      // Notify others that user is offline
       client.broadcast.emit('userOffline', {
         userId: user.userId,
         username: user.username,
@@ -82,7 +81,7 @@ export class SocketGatewayService
 
   async handleConnection(client: Socket): Promise<void> {
     try {
-      // Authentication middleware
+      // Extract and validate authentication token
       const token = client.handshake.auth.token || client.handshake.query.token;
 
       if (!token) {
@@ -94,7 +93,6 @@ export class SocketGatewayService
         return;
       }
 
-      // const decoded = verifyToken(token as string, this.jwtService);
       const user = await this.AccountsService.findAccountEntityById(token);
 
       if (!user) {
@@ -117,7 +115,6 @@ export class SocketGatewayService
         `User ${client.data.user.username} connected with socket ${client.id}`,
       );
 
-      // Store user connection
       const socketUser: SocketUser = {
         userId: user.id,
         username: user.username || user.email,
@@ -156,7 +153,7 @@ export class SocketGatewayService
     @MessageBody() conversationId: string,
   ): Promise<void> {
     try {
-      // TODO: Implement conversation access validation
+      // TODO: Validate user has access to this conversation
       client.join(`conversation:${conversationId}`);
       console.log(
         `User ${client.data.user.username} joined conversation ${conversationId}`,
@@ -197,13 +194,9 @@ export class SocketGatewayService
         senderId: client.data.user.userId,
         receiverId: data.receiverId,
         content: data.content,
-        messageType: data.type || 'text',
+        messageType: (data.type as MessageType) || MessageType.TEXT,
         isRead: false,
       };
-
-      // Create the message in the database
-      // This will automatically emit socket events via messagesService.create()
-      // const savedMessage = await this.messagesService.create(createMessageDto);
 
       // Legacy event for backward compatibility
       this.server.emit(`onNewMessageChat-${data.conversationId}`, {
@@ -334,10 +327,6 @@ export class SocketGatewayService
       userId: client.data.user.userId,
       conversationId,
     });
-
-    // console.log(
-    //   `User ${client.data.user.userId} started typing in conversation ${conversationId}`,
-    // );
   }
 
   @SubscribeMessage('stopTyping')
@@ -349,10 +338,6 @@ export class SocketGatewayService
       userId: client.data.user.userId,
       conversationId,
     });
-
-    // console.log(
-    //   `User ${client.data.user.userId} stopped typing in conversation ${conversationId}`,
-    // );
   }
 
   // Legacy events for backward compatibility
@@ -367,7 +352,6 @@ export class SocketGatewayService
 
   @SubscribeMessage('newMessageChat')
   onNewMessageChat(@MessageBody() body: any): void {
-    // console.log('CHECK NEW MESSAGE CHAT', body);
     (this.server as any).emit(`onNewMessageChat-${body.conversationid}`, {
       message: 'New message received',
       data: body,

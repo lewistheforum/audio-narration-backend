@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MessageType } from '../enums';
 
 export class MessageResponseDto {
   @ApiProperty({
@@ -33,10 +34,10 @@ export class MessageResponseDto {
 
   @ApiProperty({
     description: 'Type of the message',
-    example: 'text',
-    enum: ['text', 'image', 'file', 'audio', 'video'],
+    example: MessageType.TEXT,
+    enum: MessageType,
   })
-  messageType: string;
+  messageType: MessageType;
 
   @ApiProperty({
     description: 'Whether the message has been read',
@@ -85,7 +86,7 @@ export class MessageResponseDto {
     this.senderId = message.senderId || '';
     this.receiverId = message.receiverId || '';
     this.content = message.content || '';
-    this.messageType = message.messageType || 'text';
+    this.messageType = message.messageType || MessageType.TEXT;
     this.isRead = message.isRead ?? false;
     this.deletedBy = message.deletedBy || [];
     this.validatedAt = message.validatedAt || new Date();

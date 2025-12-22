@@ -12,7 +12,7 @@ export class LoginResponseDto {
     description: 'JWT Access Token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  access_token: string;
+  accessToken: string;
 
   @ApiProperty({
     description: 'User ID',

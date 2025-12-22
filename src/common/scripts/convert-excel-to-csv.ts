@@ -36,11 +36,11 @@ const COLUMN_MAPPING = {
   'substitute3': 'subtitle3',
   'substitute4': 'subtitle4',
   
-  // Merged side effects and uses (ignore individual sideEffect0-2 and use0)
+  // Merged side effects and uses
   'fullSideEffect': 'fullSideEffect',
   'fullUse': 'fullUse',
   
-  // Classifications (note: Excel has spaces in column names)
+  // Classifications
   'Chemical Class': 'chemicalClass',
   'Habit Forming': 'habitForming',
   'Therapeutic Class': 'therapeuticClass',

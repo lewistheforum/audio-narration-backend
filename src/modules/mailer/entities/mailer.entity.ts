@@ -10,7 +10,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Account } from 'src/modules/accounts/entities/accounts.entity';
-import { VerificationType } from 'src/enums/verification-code/enum';
+import { VerificationType } from '../enums';
 
 @Entity('code_verification')
 export class CodeVerification {

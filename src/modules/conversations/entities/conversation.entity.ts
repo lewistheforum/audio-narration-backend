@@ -28,10 +28,6 @@ export class Conversation {
   })
   deletedBy: string[];
 
-  // @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  // @JoinColumn({ name: 'user_id' })
-  // user: User;
-
   @CreateDateColumn()
   createdAt: Date;
 

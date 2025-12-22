@@ -8,8 +8,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus } from './enums';
 import { GeneralAccount } from './entities/general_accounts.entity';
@@ -32,8 +31,13 @@ import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
 import { AccountRepository } from './repositories/account.repository';
 import { GeneralAccountRepository } from './repositories/general-account.repository';
-import { CodeVerification } from '../mailer/entities/mailer.entity';
-import { VerificationType } from 'src/enums/verification-code/enum';
+import {
+  CodeVerificationRepository,
+  ClinicInformationRepository,
+  ClinicStaffInformationRepository,
+  DoctorInformationRepository,
+} from './repositories';
+import { VerificationType } from '../mailer/enums';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
 import { generateVerificationCode } from 'src/common/utils/util';
 
@@ -88,24 +92,20 @@ export class AccountsService {
    * Constructs the AccountsService with required dependencies
    *
    * @param {AccountsRepository} accountsRepository - Repository for Account and GeneralAccount data access
-   * @param {Repository<CodeVerification>} codeVerificationRepo - Repository for verification code management
+   * @param {CodeVerificationRepository} codeVerificationRepository - Repository for verification code management
    * @param {DataSource} dataSource - TypeORM DataSource for transaction management
-   * @param {Repository<ClinicInformation>} clinicInfoRepo - Repository for clinic information
-   * @param {Repository<ClinicStaffInformation>} clinicStaffRepo - Repository for clinic staff information
-   * @param {Repository<DoctorInformation>} doctorInfoRepo - Repository for doctor information
+   * @param {ClinicInformationRepository} clinicInfoRepository - Repository for clinic information
+   * @param {ClinicStaffInformationRepository} clinicStaffRepository - Repository for clinic staff information
+   * @param {DoctorInformationRepository} doctorInfoRepository - Repository for doctor information
    */
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly generalAccountRepository: GeneralAccountRepository,
-    @InjectRepository(CodeVerification)
-    private readonly codeVerificationRepo: Repository<CodeVerification>,
+    private readonly codeVerificationRepository: CodeVerificationRepository,
     private readonly dataSource: DataSource,
-    @InjectRepository(ClinicInformation)
-    private readonly clinicInfoRepo: Repository<ClinicInformation>,
-    @InjectRepository(ClinicStaffInformation)
-    private readonly clinicStaffRepo: Repository<ClinicStaffInformation>,
-    @InjectRepository(DoctorInformation)
-    private readonly doctorInfoRepo: Repository<DoctorInformation>,
+    private readonly clinicInfoRepository: ClinicInformationRepository,
+    private readonly clinicStaffRepository: ClinicStaffInformationRepository,
+    private readonly doctorInfoRepository: DoctorInformationRepository,
   ) {}
 
   /**
@@ -115,15 +115,11 @@ export class AccountsService {
    * Combines data from both Account and GeneralAccount tables to build complete user profiles.
    *
    * Use Cases:
-   * - Admin dashboard displaying all users
-   * - User management interfaces
-   * - Audit trails and reporting
+   * - Admin dashboard
+   * - User management
+   * - Reporting
    *
-   * Performance Considerations:
-   * - Executes N+1 queries (1 for accounts, N for general accounts)
-   * - Consider pagination for large datasets
-   *
-   * @param {boolean} includeDeleted - Whether to include soft-deleted accounts in results (default: false)
+   * @param {boolean} includeDeleted - Include soft-deleted accounts (default: false)
    * @returns {Promise<AccountResponseDto[]>} Array of account DTOs with sensitive data excluded
    *
    * @example
@@ -149,25 +145,13 @@ export class AccountsService {
   }
 
   /**
-   * Find Account Entity by ID (Internal)
-   *
-   * Internal service method to retrieve the full Account entity for business logic operations.
-   * This method returns the raw entity with all fields including password hash.
-   *
-   * Security Note:
-   * - This is an internal method - never expose the result directly to clients
-   * - Use findOne() for public-facing operations
+   * Find Account Entity by ID (Internal Use Only)
+   * Returns full Account entity including sensitive data
+   * WARNING: Never expose directly to clients
    *
    * @param {string} id - Account UUID
-   * @returns {Promise<Account>} Full Account entity with all fields
-   * @throws {NotFoundException} If account does not exist
-   *
-   * @private
-   * @example
-   * ```typescript
-   * const account = await accountsService.findAccountEntityById('uuid-here');
-   * // account contains password hash and all sensitive data
-   * ```
+   * @returns {Promise<Account>} Full Account entity
+   * @throws {NotFoundException} If account not found
    */
   async findAccountEntityById(id: string): Promise<Account> {
     const account = await this.accountRepository.findAccountById(id);
@@ -179,20 +163,10 @@ export class AccountsService {
 
   /**
    * Find General Account by User ID
-   *
-   * Retrieves the general account profile data associated with a user account.
-   * Returns null if no general account exists (possible for accounts created before this feature).
+   * Returns profile data (fullName, gender) or null if not found
    *
    * @param {string} userId - User Account UUID
-   * @returns {Promise<GeneralAccount | null>} General account data or null if not found
-   *
-   * @example
-   * ```typescript
-   * const generalAccount = await accountsService.findGeneralAccountByUserId('uuid');
-   * if (generalAccount) {
-   *   console.log(generalAccount.fullName, generalAccount.gender);
-   * }
-   * ```
+   * @returns {Promise<GeneralAccount | null>} General account or null
    */
   async findGeneralAccountByUserId(
     userId: string,
@@ -571,7 +545,6 @@ export class AccountsService {
     const { oldPassword, newPassword } = updatePasswordDto;
     const account = await this.findAccountEntityById(accountId);
 
-    // Verify old password
     const isPasswordMatching = await bcrypt.compare(
       oldPassword,
       account.password,
@@ -1056,15 +1029,11 @@ export class AccountsService {
     }
 
     // Find the verification code in the database
-    const storedCode = await this.codeVerificationRepo.findOne({
-      where: {
-        userId: account.id,
-        code,
-        used: false,
-        type: VerificationType.EMAIL,
-      },
-      order: { createdAt: 'DESC' },
-    });
+    const storedCode = await this.codeVerificationRepository.findValidByUserIdAndCode(
+      account.id,
+      code,
+      VerificationType.EMAIL,
+    );
 
     if (!storedCode) {
       throw new UnauthorizedException(
@@ -1080,8 +1049,7 @@ export class AccountsService {
     }
 
     // Mark code as used (prevent reuse)
-    storedCode.used = true;
-    await this.codeVerificationRepo.save(storedCode);
+    await this.codeVerificationRepository.markAsUsed(storedCode.id);
 
     // Mark email as verified and activate account
     account.isEmailVerified = true;
@@ -1149,14 +1117,14 @@ export class AccountsService {
     const expiredAt = new Date();
     expiredAt.setMinutes(expiredAt.getMinutes() + 10);
 
-    const verification = this.codeVerificationRepo.create({
+    const verification = this.codeVerificationRepository.create({
       userId: account.id,
       code,
       expiredAt,
       used: false,
       type: VerificationType.EMAIL,
     });
-    await this.codeVerificationRepo.save(verification);
+    await this.codeVerificationRepository.save(verification);
 
     // Get general account for firstName
     const generalAccount = await this.findGeneralAccountByUserId(account.id);
@@ -1231,14 +1199,14 @@ export class AccountsService {
     const expiredAt = new Date();
     expiredAt.setMinutes(expiredAt.getMinutes() + 15);
 
-    const verification = this.codeVerificationRepo.create({
+    const verification = this.codeVerificationRepository.create({
       userId: account.id,
       code,
       expiredAt,
       used: false,
       type: VerificationType.RESET,
     });
-    await this.codeVerificationRepo.save(verification);
+    await this.codeVerificationRepository.save(verification);
 
     return {
       code,
@@ -1280,6 +1248,7 @@ export class AccountsService {
    * ```typescript
    * await accountsService.resetPasswordWithCode(
    *   'user@example.com',
+   *   '123456',
    *   'NewSecurePass123'
    * );
    * // Password is now reset
@@ -1287,6 +1256,7 @@ export class AccountsService {
    */
   async resetPasswordWithCode(
     email: string,
+    code: string,
     newPassword: string,
   ): Promise<void> {
     const account = await this.findByEmail(email);
@@ -1302,14 +1272,11 @@ export class AccountsService {
     }
 
     // Find the reset code in the database
-    const storedCode = await this.codeVerificationRepo.findOne({
-      where: {
-        userId: account.id,
-        used: false,
-        type: VerificationType.RESET,
-      },
-      order: { createdAt: 'DESC' },
-    });
+    const storedCode = await this.codeVerificationRepository.findValidByUserIdAndCode(
+      account.id,
+      code,
+      VerificationType.RESET,
+    );
 
     if (!storedCode) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidResetCode);
@@ -1321,8 +1288,7 @@ export class AccountsService {
     }
 
     // Mark code as used
-    storedCode.used = true;
-    await this.codeVerificationRepo.save(storedCode);
+    await this.codeVerificationRepository.markAsUsed(storedCode.id);
 
     // Hash and update password
     account.password = await bcrypt.hash(newPassword, this.BCRYPT_SALT_ROUNDS);
@@ -1629,7 +1595,7 @@ export class AccountsService {
       await queryRunner.manager.save(generalAccount);
 
       // Step 5: Create ClinicInformation entity
-      const clinicInfo = this.clinicInfoRepo.create({
+      const clinicInfo = this.clinicInfoRepository.create({
         clinicId: savedAccount.id,
         clinicName: dto.clinicName,
         description: dto.description,
@@ -1724,7 +1690,7 @@ export class AccountsService {
       const savedAccount = await queryRunner.manager.save(account);
 
       // Step 5: Create ClinicStaffInformation entity with basic info
-      const staffInfo = this.clinicStaffRepo.create({
+      const staffInfo = this.clinicStaffRepository.create({
         clinicAccId: savedAccount.id,
         fullName: dto.fullName,
         gender: dto.gender,
@@ -1735,8 +1701,7 @@ export class AccountsService {
 
       await queryRunner.commitTransaction();
 
-      // Return account DTO
-      // Note: Staff account is INCOMPLETE - staff must complete profile themselves
+      // Staff account requires additional profile completion by user
       return new AccountResponseDto(savedAccount, null);
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -1822,22 +1787,20 @@ export class AccountsService {
       const savedAccount = await queryRunner.manager.save(account);
 
       // Step 5: Create DoctorInformation entity with basic info
-      const doctorInfo = this.doctorInfoRepo.create({
+      const doctorInfo = this.doctorInfoRepository.create({
         doctorAccId: savedAccount.id,
         fullName: dto.fullName,
         gender: dto.gender,
         academicDegree: dto.academicDegree,
         experience: dto.experience,
         position: dto.position,
-        // Note: specialization and consultationFee are not fields in DoctorInformation entity
       });
 
       await queryRunner.manager.save(doctorInfo);
 
       await queryRunner.commitTransaction();
 
-      // Return account DTO
-      // Note: Doctor account is INCOMPLETE - doctor must complete profile themselves
+      // Doctor account requires additional profile completion by user
       return new AccountResponseDto(savedAccount, null);
     } catch (error) {
       await queryRunner.rollbackTransaction();

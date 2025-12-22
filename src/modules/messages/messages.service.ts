@@ -4,18 +4,17 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { ArrayContains, Repository } from 'typeorm';
 import { CreateMessageDto, UpdateMessageDto, MessageResponseDto } from './dto';
 import { Message } from './entities/message.entity';
+import { MessageType } from './enums';
+import { MessageRepository } from './repositories';
 import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 import { ConversationService } from '../conversations/conversation.service';
 
 @Injectable()
 export class MessagesService {
   constructor(
-    @InjectRepository(Message)
-    private messageRepository: Repository<Message>,
+    private readonly messageRepository: MessageRepository,
     @Inject(forwardRef(() => SocketGatewayService))
     private socketGatewayService: SocketGatewayService,
     @Inject(forwardRef(() => ConversationService))
@@ -41,15 +40,15 @@ export class MessagesService {
       console.error('Error checking/clearing conversation deletedBy:', error);
     }
 
-    const message = this.messageRepository.create({
+    const messageData = {
       ...createMessageDto,
       validatedAt: new Date(Date.now() + 20 * 60 * 1000), // 20 minutes from now
       createdAt: new Date(Date.now()),
       updatedAt: new Date(Date.now()),
-      messageType: createMessageDto.messageType || 'text',
+      messageType: createMessageDto.messageType || MessageType.TEXT,
       isRead: createMessageDto.isRead || false,
-    });
-    const savedMessage = await this.messageRepository.save(message);
+    };
+    const savedMessage = await this.messageRepository.createMessage(messageData);
 
     // Emit socket events for new message
     try {
@@ -66,10 +65,8 @@ export class MessagesService {
   }
 
   async findAll(): Promise<MessageResponseDto[]> {
-    const messages = await this.messageRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-    return messages.map((message) => new MessageResponseDto(message));
+    const messages = await this.messageRepository.findAllMessages();
+    return messages.map((message) => new MessageResponseDto(message as any));
   }
 
   async findOne(id: string): Promise<MessageResponseDto> {
@@ -81,19 +78,19 @@ export class MessagesService {
     conversationId: string,
     userId: string,
   ): Promise<Message[]> {
-    return await this.messageRepository.find({
-      where: { conversationId, deletedBy: ArrayContains([userId]) },
-    });
+    return await this.messageRepository.findDeletedMessagesByUser(
+      conversationId,
+      userId,
+    );
   }
 
   async findByConversation(
     conversationId: string,
     userId: string,
   ): Promise<MessageResponseDto[]> {
-    const messages = await this.messageRepository.find({
-      where: { conversationId },
-      order: { createdAt: 'ASC' },
-    });
+    const messages = await this.messageRepository.findMessagesByConversationId(
+      conversationId,
+    );
 
     const deletedMessages =
       await this.findDeletedMessagesInConversationByUserId(
@@ -125,18 +122,16 @@ export class MessagesService {
   }
 
   async findBySender(senderId: string): Promise<MessageResponseDto[]> {
-    const messages = await this.messageRepository.find({
-      where: { senderId },
-      order: { createdAt: 'DESC' },
-    });
+    const messages = await this.messageRepository.findMessagesBySenderId(
+      senderId,
+    );
     return messages.map((message) => new MessageResponseDto(message));
   }
 
   async findByReceiver(receiverId: string): Promise<MessageResponseDto[]> {
-    const messages = await this.messageRepository.find({
-      where: { receiverId },
-      order: { createdAt: 'DESC' },
-    });
+    const messages = await this.messageRepository.findMessagesBySenderId(
+      receiverId,
+    );
     return messages.map((message) => new MessageResponseDto(message));
   }
 
@@ -147,33 +142,34 @@ export class MessagesService {
     const message = await this.findMessageEntityById(id);
 
     Object.assign(message, updateMessageDto);
-    const updatedMessage = await this.messageRepository.save(message);
+    const updatedMessage = await this.messageRepository.updateMessage(
+      id,
+      updateMessageDto,
+    );
 
     return new MessageResponseDto(updatedMessage);
   }
 
   async delete(id: string): Promise<void> {
-    await this.messageRepository.update(id, {
-      deletedAt: new Date(),
-    });
+    await this.messageRepository.softDeleteMessage(id);
   }
 
   async markAsRead(id: string): Promise<MessageResponseDto> {
-    const message = await this.findMessageEntityById(id);
-    message.isRead = true;
-    const updatedMessage = await this.messageRepository.save(message);
+    const updatedMessage = await this.messageRepository.updateMessage(id, {
+      isRead: true,
+    });
     return new MessageResponseDto(updatedMessage);
   }
 
   async markMultipleAsRead(
     messageIds: string[],
   ): Promise<MessageResponseDto[]> {
-    const messages = await this.messageRepository.findByIds(messageIds);
+    const messages = await this.messageRepository.findMessagesByIds(messageIds);
     const updatedMessages = messages.map((message) => {
       message.isRead = true;
       return message;
     });
-    const savedMessages = await this.messageRepository.save(updatedMessages);
+    const savedMessages = await this.messageRepository.bulkSaveMessages(updatedMessages);
     return savedMessages.map((message) => new MessageResponseDto(message));
   }
 
@@ -181,28 +177,23 @@ export class MessagesService {
     conversationId: string,
     userId: string,
   ): Promise<number> {
-    const result = await this.messageRepository.update(
-      {
-        conversationId,
-        receiverId: userId,
-        isRead: false,
-      },
-      { isRead: true },
+    await this.messageRepository.markMessagesAsRead(conversationId, userId);
+    return await this.messageRepository.countUnreadMessages(
+      conversationId,
+      userId,
     );
-    return result.affected || 0;
   }
 
   async deleteByConversation(conversationId: string): Promise<void> {
-    await this.messageRepository.delete({ conversationId });
+    await this.messageRepository.deleteMessagesByConversation(conversationId);
   }
 
   async findLastMessageByConversation(
     conversationId: string,
   ): Promise<MessageResponseDto | null> {
-    const lastMessage = await this.messageRepository.findOne({
-      where: { conversationId },
-      order: { createdAt: 'DESC' },
-    });
+    const lastMessage = await this.messageRepository.findLastMessageByConversation(
+      conversationId,
+    );
 
     return lastMessage ? new MessageResponseDto(lastMessage) : null;
   }
@@ -212,10 +203,9 @@ export class MessagesService {
     userId: string,
   ): Promise<MessageResponseDto | null> {
     // Get the last message in the conversation
-    const lastMessage = await this.messageRepository.findOne({
-      where: { conversationId },
-      order: { createdAt: 'DESC' },
-    });
+    const lastMessage = await this.messageRepository.findLastMessageByConversation(
+      conversationId,
+    );
 
     if (!lastMessage) {
       return null;
@@ -224,9 +214,10 @@ export class MessagesService {
     // Update the deletedBy array to include the userId
     const updatedDeletedBy = [...(lastMessage.deletedBy || []), userId];
 
-    await this.messageRepository.update(lastMessage.id, {
-      deletedBy: updatedDeletedBy,
-    });
+    await this.messageRepository.updateMessageDeletedBy(
+      lastMessage.id,
+      updatedDeletedBy,
+    );
 
     // Return the updated message
     const updatedMessage = await this.findMessageEntityById(lastMessage.id);
@@ -234,9 +225,7 @@ export class MessagesService {
   }
 
   private async findMessageEntityById(id: string): Promise<Message> {
-    const message = await this.messageRepository.findOne({
-      where: { id },
-    });
+    const message = await this.messageRepository.findMessageById(id);
     if (!message) {
       throw new NotFoundException('Message not found');
     }

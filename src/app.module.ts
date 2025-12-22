@@ -9,7 +9,6 @@ import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.mod
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
-// import { AdminSeederService } from './common/seeders/admin-seeder.service';
 import { Account } from './modules/accounts/entities/accounts.entity';
 
 @Module({
@@ -20,15 +19,7 @@ import { Account } from './modules/accounts/entities/accounts.entity';
       envFilePath: '.env',
     }),
 
-    // config MongoDB with Mongoose
-    // MongooseModule.forRoot(
-    //   process.env.MONGO_URI || 'mongodb://localhost:27017',
-    //   {
-    //     dbName: process.env.MONGO_DATABASE || 'test_capstone',
-    //   },
-    // ),
-
-    // config PostgreSQL with TypeOrm
+    // PostgreSQL database configuration
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.POSTGRES_HOST || '',
@@ -37,7 +28,7 @@ import { Account } from './modules/accounts/entities/accounts.entity';
       password: process.env.POSTGRES_PASSWORD || '',
       database: process.env.POSTGRES_DATABASE || '',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // TEMPORARY: Disabled due to FK constraint issues. Reset DB with: DROP SCHEMA public CASCADE; CREATE SCHEMA public;
+      synchronize: true, // WARNING: Disable in production
       logging: false,
       ssl:
         process.env.POSTGRES_SSL === 'true'

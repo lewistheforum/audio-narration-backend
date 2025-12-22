@@ -16,6 +16,6 @@ import { CodeVerification } from './entities/mailer.entity';
   ],
   controllers: [MailerController],
   providers: [MailerService],
-  exports: [MailerService], // Export để dùng trong AuthModule
+  exports: [MailerService], // Export for use in AuthModule
 })
 export class MailerModule {}

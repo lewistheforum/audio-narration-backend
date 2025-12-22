@@ -100,8 +100,4 @@ export class CreateDoctorByClinicManagerDto {
   @IsString({ message: 'Position must be a string' })
   @Transform(({ value }) => value?.trim())
   position?: string;
-
-  // Note: specialization and consultationFee fields removed
-  // These fields don't exist in DoctorInformation entity
-  // If needed in future, add columns to doctor_information table first
 }

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { Message } from './entities/message.entity';
+import { MessageRepository } from './repositories';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { ConversationModule } from '../conversations/conversation.module';
 
@@ -13,7 +14,7 @@ import { ConversationModule } from '../conversations/conversation.module';
     forwardRef(() => ConversationModule),
   ],
   controllers: [MessagesController],
-  providers: [MessagesService],
+  providers: [MessagesService, MessageRepository],
   exports: [MessagesService],
 })
 export class MessagesModule { }

@@ -1,7 +1,7 @@
 /**
  * Generate 6-digit Verification Code
  *
- * may cai ham nay viet trong util
+ * Utility function to generate random verification codes
  *
  * @returns 6-digit string code
  */

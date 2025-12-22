@@ -3,7 +3,7 @@ import { IsEmail, IsString, Length, MinLength } from 'class-validator';
 
 export class ForgotPasswordDto {
   @ApiProperty({
-    description: 'Email dùng để reset mật khẩu',
+    description: 'Email address for password reset',
     example: 'user@gmail.com',
   })
   @IsEmail()
@@ -12,14 +12,14 @@ export class ForgotPasswordDto {
 
 export class VerifyResetPasswordDto {
   @ApiProperty({
-    description: 'Email dùng để reset mật khẩu',
+    description: 'Email address for password reset',
     example: 'user@gmail.com',
   })
   @IsEmail()
   email: string;
 
   @ApiProperty({
-    description: 'Mã xác thực 6 số được gửi qua email',
+    description: '6-digit verification code sent via email',
     example: '123456',
   })
   @IsString()
@@ -29,14 +29,14 @@ export class VerifyResetPasswordDto {
 
 export class SetNewPasswordDto {
   @ApiProperty({
-    description: 'Email dùng để reset mật khẩu',
+    description: 'Email address for password reset',
     example: 'user@gmail.com',
   })
   @IsEmail()
   email: string;
 
   @ApiProperty({
-    description: 'Mật khẩu mới',
+    description: 'New password',
     example: 'NewStrongPass123!',
     minLength: 6,
   })

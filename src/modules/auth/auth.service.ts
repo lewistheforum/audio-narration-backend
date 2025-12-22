@@ -11,8 +11,6 @@ import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 import { AccountResponseDto } from '../accounts/dto/account-response.dto';
 import { MESSAGES } from 'src/common/message';
 import { RegisterDto } from './dto/register.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   VerifyEmailDto,
   ForgotPasswordDto,
@@ -20,7 +18,7 @@ import {
   SetNewPasswordDto,
 } from './dto';
 import { randomBytes } from 'crypto';
-import { CodeVerification } from '../mailer/entities/mailer.entity';
+import { CodeVerificationRepository } from '../accounts/repositories';
 
 /**
  * Authentication Service
@@ -32,8 +30,7 @@ export class AuthService {
     private AccountsService: AccountsService,
     private jwtService: JwtService,
     private socketGatewayService: SocketGatewayService,
-    @InjectRepository(CodeVerification)
-    private codeVerificationRepo: Repository<CodeVerification>,
+    private codeVerificationRepository: CodeVerificationRepository,
   ) {}
 
   /**
@@ -45,7 +42,7 @@ export class AuthService {
    */
   async login(loginDto: LoginDto): Promise<{
     data: {
-      access_token: string;
+      accessToken: string;
       userId: string;
       user: AccountResponseDto;
     };
@@ -70,7 +67,7 @@ export class AuthService {
 
     return {
       data: {
-        access_token: this.jwtService.sign(payload),
+        accessToken: this.jwtService.sign(payload),
         userId: user.id,
         user: new AccountResponseDto(user, generalAccount),
       },
@@ -78,75 +75,15 @@ export class AuthService {
   }
 
   /**
-   * Google OAuth login flow
-   * - Only creates PATIENT accounts (business rule)
-   * - Email is automatically verified for OAuth users
-   * - Stores profile picture
-   * - Generates random password for OAuth users
+   * Google OAuth Login
+   * Handles Google OAuth authentication flow
+   * Creates new PATIENT accounts or updates existing users with OAuth data
    */
-  // async googleLogin(googleUser: any): Promise<{
-  //   access_token: string;
-  //   userId: string;
-  //   user: AccountResponseDto;
-  // }> {
-
-  // Verify email
-  // async verifyEmail(dto: VerifyEmailDto) {
-  //   const { email, code } = dto;
-
-  //   const user = await this.userService.findByEmail(email);
-  //   if (!user) {
-  //     throw new BadRequestException('User không tồn tại');
-  //   }
-
-  //   if (user.isEmailVerified) {
-  //     throw new BadRequestException('Email đã được xác thực trước đó');
-  //   }
-
-  //   const now = new Date();
-
-  //   const record = await this.emailVerificationRepo.findOne({
-  //     where: {
-  //       user: { id: user.id },
-  //       code,
-  //       used: false,
-  //     },
-  //     order: { createdAt: 'DESC' },
-  //     relations: ['user'],
-  //   });
-
-  //   if (!record) {
-  //     throw new BadRequestException('Mã xác thực không chính xác');
-  //   }
-
-  //   if (record.expiresAt < now) {
-  //     throw new BadRequestException('Mã xác thực đã hết hạn');
-  //   }
-
-  //   record.used = true;
-  //   await this.emailVerificationRepo.save(record);
-
-  //   user.isEmailVerified = true;
-  //   await this.userService['userRepository'].save(user as any);
-
-  //   const payload = { sub: user.id, email: user.email };
-  //   const accessToken = this.jwtService.sign(payload);
-
-  //   this.socketGatewayService.markUserOnline(String(user.id));
-
-  //   return {
-  //     access_token: accessToken,
-  //     userId: user.id,
-  //   };
-  // }
-
-  // Google Login
   async googleLogin(googleUser: any): Promise<any> {
     if (!googleUser) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
-    // const { email, firstName, lastName, picture } = googleUser;
     const { email, firstName, lastName, picture, googleId, isEmailVerified } =
       googleUser;
 
@@ -162,45 +99,32 @@ export class AuthService {
     let generalAccount = null;
 
     if (user) {
-      // Update existing user with OAuth data if not already set
+      // Update existing user with OAuth data
+      let needUpdate = false;
+
       if (!user.isOAuthUser) {
         user.isOAuthUser = true;
-        user.isEmailVerified = true;
+        needUpdate = true;
+      }
+      if (picture && user.profilePicture !== picture) {
         user.profilePicture = picture;
+        needUpdate = true;
+      }
+      if (isEmailVerified && !user.isEmailVerified) {
+        user.isEmailVerified = true;
+        needUpdate = true;
+      }
+
+      if (needUpdate) {
         await this.AccountsService.updateAccountEntity(user);
       }
+
       userId = user.id;
       userEmail = user.email;
       generalAccount = await this.AccountsService.findGeneralAccountByUserId(
         userId,
       );
-      if (user) {
-        let needUpdate = false;
-
-        if (!user.isOAuthUser) {
-          user.isOAuthUser = true;
-          needUpdate = true;
-        }
-        // if (!user.googleId && googleId) {
-        //   user.googleId = googleId;
-        //   needUpdate = true;
-        // }
-        if (picture && user.profilePicture !== picture) {
-          user.profilePicture = picture;
-          needUpdate = true;
-        }
-        if (isEmailVerified && !user.isEmailVerified) {
-          user.isEmailVerified = true;
-          needUpdate = true;
-        }
-
-        if (needUpdate) {
-          await this.AccountsService.updateAccountEntity(user);
-        }
-
-        userId = user.id;
-        userEmail = user.email;
-      } else {
+    } else {
         // Create new patient account via Google OAuth
         const randomPassword = randomBytes(16).toString('hex');
 
@@ -233,135 +157,42 @@ export class AuthService {
 
       this.socketGatewayService.markUserOnline(String(userId));
 
-      // Return token data with complete user information
       return {
-        access_token: accessToken,
+        accessToken: accessToken,
         userId: userId,
         user: new AccountResponseDto(user, generalAccount),
       };
-      // const baseUrl = process.env.GOOGLE_URL;
-      // if (!baseUrl) {
-      //   throw new UnauthorizedException('Google redirect URL is not configured');
-      // }
-
-      // const redirectUrl = new URL(baseUrl);
-      // if (!redirectUrl.pathname.endsWith('/sso')) {
-      //   redirectUrl.pathname = redirectUrl.pathname.replace(/\/$/, '') + '/sso';
-      // }
-      // redirectUrl.searchParams.set('account_id', userId);
-      // redirectUrl.searchParams.set('access_token', accessToken);
-
-      // return redirectUrl.toString();
-    }
   }
 
-  // Forget password
-  // async requestPasswordReset(dto: ForgotPasswordDto) {
-  //   const { email } = dto;
-  //   const user = await this.userService.findByEmail(email);
-  //   if (!user) {
-  //     throw new BadRequestException('User không tồn tại');
-  //   }
-
-  //   const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-  //   const expiresAt = new Date();
-  //   expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-
-  //   const reset = this.passwordResetRepo.create({
-  //     user: { id: user.id } as any,
-  //     code,
-  //     expiresAt,
-  //     verified: false,
-  //     used: false,
-  //   });
-
-  //   await this.passwordResetRepo.save(reset);
-  //   await this.sendResetPasswordEmail(email, code);
-
-  //   return {
-  //     message:
-  //       'Mã đặt lại mật khẩu đã được gửi tới email. Vui lòng kiểm tra hộp thư.',
-  //   };
-  // }
-
-  // verify email when enter reset button
   async verifyResetPasswordCode(dto: VerifyResetPasswordDto) {
     const { email, code } = dto;
 
     const user = await this.AccountsService.findByEmail(email);
     if (!user) {
-      throw new BadRequestException('User không tồn tại');
+      throw new BadRequestException('User does not exist');
     }
 
     const now = new Date();
 
-    const record = await this.codeVerificationRepo.findOne({
-      where: {
-        account: { id: user.id },
-        code,
-        used: false,
-      },
-      order: { createdAt: 'DESC' },
-    });
+    // Find latest unused code for this user
+    const userCodes = await this.codeVerificationRepository.findByUserId(user.id);
+    const record = userCodes
+      .filter(c => c.code === code && !c.used)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 
     if (!record) {
-      throw new BadRequestException('Mã xác thực không chính xác');
+      throw new BadRequestException('Invalid verification code');
     }
 
     if (record.expiredAt < now) {
-      throw new BadRequestException('Mã xác thực đã hết hạn');
+      throw new BadRequestException('Verification code has expired');
     }
 
-    record.used = true;
-    await this.codeVerificationRepo.save(record);
+    await this.codeVerificationRepository.markAsUsed(record.id);
 
     return {
-      message: 'Xác thực mã thành công, bạn có thể đặt mật khẩu mới.',
+      message: 'Verification code validated successfully. You can now set a new password.',
     };
   }
 
-  // user enter new password
-  // async setNewPassword(dto: SetNewPasswordDto) {
-  //   const { email, newPassword } = dto;
-
-  //   const user = await this.userService.findByEmail(email);
-  //   if (!user) {
-  //     throw new BadRequestException('User không tồn tại');
-  //   }
-
-  //   const record = await this.passwordResetRepo.findOne({
-  //     where: {
-  //       user: { id: user.id },
-  //       verified: true,
-  //       used: false,
-  //     },
-  //     order: { createdAt: 'DESC' },
-  //   });
-
-  //   if (!record) {
-  //     throw new BadRequestException(
-  //       'Bạn chưa xác thực mã hoặc mã đã được sử dụng.',
-  //     );
-  //   }
-
-  //   const isSameAsOld = await bcrypt.compare(newPassword, user.password);
-  //   if (isSameAsOld) {
-  //     throw new BadRequestException(
-  //       'Mật khẩu mới không được trùng với mật khẩu hiện tại',
-  //     );
-  //   }
-
-  //   const salt = await bcrypt.genSalt(10);
-  //   user.password = await bcrypt.hash(newPassword, salt);
-  //   await this.userService['userRepository'].save(user as any);
-
-  //   record.used = true;
-  //   await this.passwordResetRepo.save(record);
-
-  //   return {
-  //     message:
-  //       'Đổi mật khẩu thành công, vui lòng sử dụng mật khẩu mới để đăng nhập.',
-  //   };
-  // }
-}
+  }

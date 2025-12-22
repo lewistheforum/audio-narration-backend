@@ -24,7 +24,6 @@ import {
   DoctorInformationRepository,
   CodeVerificationRepository,
 } from './repositories';
-import { CodeVerification as MailerCodeVerification } from '../mailer/entities/mailer.entity';
 import { MailerModule } from '../mailer/mailer.module';
 
 /**
@@ -68,7 +67,6 @@ import { MailerModule } from '../mailer/mailer.module';
       ClinicStaffInformation,
       DoctorInformation,
       CodeVerification,
-      MailerCodeVerification,
     ]),
     forwardRef(() => MailerModule),
   ],
@@ -85,6 +83,6 @@ import { MailerModule } from '../mailer/mailer.module';
     CodeVerificationRepository,
     AccountsService,
   ],
-  exports: [AccountsService],
+  exports: [AccountsService, CodeVerificationRepository],
 })
 export class AccountsModule {}

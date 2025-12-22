@@ -94,61 +94,6 @@ export class AuthController {
    * Google OAuth Login Initiation
    * Redirects user to Google consent screen
    */
-  // Register
-  // @Post('register')
-  // @HttpCode(HttpStatus.CREATED)
-  // @ApiOperation({ summary: 'Register user with email and password' })
-  // @ApiBody({ type: RegisterDto })
-  // @ApiResponseData({
-  //   type: LoginResponseDto,
-  //   status: MESSAGES.statusCode.success,
-  //   message: MESSAGES.successMessage.registerSuccess,
-  // })
-  // @ApiResponse({
-  //   status: 409,
-  //   description: 'Conflict. Email already exist',
-  // })
-  // @ApiResponse({ status: 400, description: 'Bad Request. Validation error.' })
-  // async register(@Body() registerDto: RegisterDto) {
-  //   const tokenData = await this.authService.register(registerDto);
-
-  //   return {
-  //     data: tokenData,
-  //     message: MESSAGES.successMessage.registerSuccess,
-  //   };
-  // }
-
-  // Verify Email
-  // @Post('verify-email')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({ summary: 'Verify your email with 6-codes' })
-  // @ApiBody({ type: VerifyEmailDto })
-  // @ApiResponseData({
-  //   type: LoginResponseDto,
-  //   status: MESSAGES.statusCode.success,
-  //   message: 'Verify successfully!',
-  // })
-  // async verifyEmail(@Body() dto: VerifyEmailDto) {
-  //   const tokenData = await this.authService.verifyEmail(dto);
-  //   return {
-  //     data: tokenData,
-  //     message: 'Verify successfully!',
-  //   };
-  // }
-
-  // Forget Password
-  // @Post('forgot-password')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({ summary: 'Send password reset code to email' })
-  // @ApiBody({ type: ForgotPasswordDto })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Password reset code has been sent to email if exists.',
-  // })
-  // async forgotPassword(@Body() dto: ForgotPasswordDto) {
-  //   return await this.authService.requestPasswordReset(dto);
-  // }
-
   @Post('verify-reset-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Password reset code authentication' })
@@ -161,19 +106,6 @@ export class AuthController {
     return await this.authService.verifyResetPasswordCode(dto);
   }
 
-  // @Post('set-new-password')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({ summary: 'Set a new password after verifying the code' })
-  // @ApiBody({ type: SetNewPasswordDto })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Password changed successfully.',
-  // })
-  // async setNewPassword(@Body() dto: SetNewPasswordDto) {
-  //   return await this.authService.setNewPassword(dto);
-  // }
-
-  //Google OAuth
   @Get('google')
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirects to Google login page' })
@@ -347,7 +279,7 @@ export class AuthController {
   ): Promise<{ message: string }> {
     await this.AccountsService.resetPasswordWithCode(
       resetPasswordDto.email,
-      // resetPasswordDto.code,s
+      resetPasswordDto.code,
       resetPasswordDto.newPassword,
     );
 

@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { Conversation } from '../../conversations/entities/conversation.entity';
+import { MessageType } from '../enums';
 
 @Entity('messages')
 export class Message {
@@ -28,8 +29,12 @@ export class Message {
   @Column({ type: 'text' })
   content: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'text' })
-  messageType: string;
+  @Column({
+    type: 'enum',
+    enum: MessageType,
+    default: MessageType.TEXT,
+  })
+  messageType: MessageType;
 
   @Column({ default: false })
   isRead: boolean;
