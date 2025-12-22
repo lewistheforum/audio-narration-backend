@@ -9,6 +9,15 @@ import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.mod
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { BlogsModule } from './modules/blogs/blogs.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { SchedulesModule } from './modules/schedules/schedules.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { TransactionsModule } from './modules/transactions/transactions.module';
+import { ClinicServicesModule } from './modules/clinic-services/clinic-services.module';
+import { ServiceConfigsModule } from './modules/service-configs/service-configs.module';
+import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
 
 @Module({
@@ -50,6 +59,15 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     ConversationModule,
     MessagesModule,
     PrescriptionsModule,
+    NotificationsModule,
+    BlogsModule,
+    SubscriptionsModule,
+    SchedulesModule,
+    ReportsModule,
+    TransactionsModule,
+    ClinicServicesModule,
+    ServiceConfigsModule,
+    AppointmentsModule,
   ],
   controllers: [],
   providers: [],

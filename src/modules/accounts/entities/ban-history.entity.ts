@@ -9,16 +9,16 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
-import { BankName } from '../enums';
+import { BanType } from '../enums';
 
 /**
- * ClinicsLegalDocuments Entity
+ * BanHistory Entity
  *
- * Stores legal documents for clinics
+ * Stores ban history for accounts
  */
-@Entity('clinics_legal_documents')
-export class ClinicsLegalDocuments {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
+@Entity('ban_history')
+export class BanHistory {
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
 
   @Column({ name: 'account_id', type: 'uuid' })
@@ -30,25 +30,18 @@ export class ClinicsLegalDocuments {
   @JoinColumn({ name: 'account_id' })
   account?: Account;
 
-  @Column({ name: 'operating_license', type: 'text', nullable: true })
-  operatingLicense?: string;
-
-  @Column({ name: 'business_license', type: 'text', nullable: true })
-  businessLicense?: string;
+  @Column({ name: 'ban_counts', type: 'int', default: 0 })
+  banCounts: number;
 
   @Column({
-    name: 'bank_name',
+    name: 'type',
     type: 'enum',
-    enum: BankName,
-    nullable: true,
+    enum: BanType,
   })
-  bankName?: BankName;
+  type: BanType;
 
-  @Column({ name: 'sepay_va', type: 'text', nullable: true })
-  sepayVa?: string;
-
-  @Column({ name: 'is_sepay_verify', type: 'boolean', default: false })
-  isSepayVerify: boolean;
+  @Column({ name: 'ban_description', type: 'varchar', length: 255, nullable: true })
+  banDescription?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

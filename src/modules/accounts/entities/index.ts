@@ -7,3 +7,4 @@ export * from './clinic_information.entity';
 export * from './clinic_staff_information.entity';
 export * from './doctor_information.entity';
 export * from './code_verification.entity';
+export * from './ban-history.entity';

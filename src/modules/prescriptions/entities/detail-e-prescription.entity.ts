@@ -1,0 +1,53 @@
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { EPrescription } from './e-prescription.entity';
+import { Medicine } from './medicine.entity';
+
+/**
+ * DetailEPrescription Entity
+ *
+ * Stores detailed medicine information for prescriptions
+ */
+@Entity('detail_e_prescriptions')
+export class DetailEPrescription {
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  id: string;
+
+  @Column({ name: 'e_prescription_id', type: 'uuid' })
+  ePrescriptionId: string;
+
+  @ManyToOne(() => EPrescription, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'e_prescription_id' })
+  ePrescription?: EPrescription;
+
+  @Column({ name: 'medicine_id', type: 'uuid' })
+  medicineId: string;
+
+  @ManyToOne(() => Medicine, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'medicine_id' })
+  medicine?: Medicine;
+
+  @Column({ name: 'check_out', type: 'text', nullable: true })
+  checkOut?: string;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
+  deletedAt?: Date;
+}
