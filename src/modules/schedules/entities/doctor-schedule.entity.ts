@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
+import { ClinicRoom } from '../../accounts/entities/clinic_room.entity';
 import { ClinicShift } from './clinic-shift.entity';
 import { WeekDay } from '../enums';
 
@@ -59,8 +60,15 @@ export class DoctorSchedule {
   })
   weekDay: WeekDay;
 
-  @Column({ name: 'room', type: 'text', nullable: true })
-  room?: string;
+  @Column({ name: 'room_id', type: 'uuid', nullable: true })
+  roomId?: string;
+
+  @ManyToOne(() => ClinicRoom, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'room_id' })
+  room?: ClinicRoom;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

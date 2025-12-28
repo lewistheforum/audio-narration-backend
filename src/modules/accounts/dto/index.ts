@@ -1,6 +1,4 @@
 export * from './create-account.dto';
-export * from './create-account-basic.dto';
-export * from './create-account-profile.dto';
 export * from './create-clinic-manager.dto';
 export * from './create-staff-by-manager.dto';
 export * from './create-doctor-by-manager.dto';

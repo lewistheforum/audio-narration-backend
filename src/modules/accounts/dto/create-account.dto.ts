@@ -16,8 +16,8 @@ import { Gender } from '../enums';
 /**
  * Create Account DTO
  * 
- * Used for patient registration with standard authentication
- * Data is saved to two tables:
+ * Used for patient registration with standard authentication (Single-Step)
+ * Data is saved to two tables in one transaction:
  * 1. Account (accounts) - Common account data
  * 2. GeneralAccount (general_accounts) - Patient-specific data (fullName, gender)
  * 
@@ -98,22 +98,22 @@ export class CreateAccountDto {
     @ApiProperty({
         description: 'Client full name',
         example: 'John Doe',
-        required: false,
+        required: true,
         maxLength: 255,
     })
-    @IsOptional()
+    @IsNotEmpty({ message: 'Full name is required' })
     @IsString({ message: 'Full name must be a string' })
     @MaxLength(255, { message: 'Full name must not exceed 255 characters' })
     @Transform(({ value }) => value?.trim())
-    fullName?: string;
+    fullName: string;
 
     @ApiProperty({
         description: 'Client gender',
         enum: Gender,
         example: Gender.MALE,
-        required: false,
+        required: true,
     })
-    @IsOptional()
+    @IsNotEmpty({ message: 'Gender is required' })
     @IsEnum(Gender, { message: 'Gender must be one of: MALE, FEMALE, OTHER' })
-    gender?: Gender;
+    gender: Gender;
 }

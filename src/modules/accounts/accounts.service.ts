@@ -21,8 +21,6 @@ import {
   UpdateAccountDto,
   AccountResponseDto,
   BanAccountDto,
-  CreateAccountBasicDto,
-  CreateAccountProfileDto,
   CreateClinicManagerDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
@@ -1335,44 +1333,47 @@ export class AccountsService {
   }
 
   /**
-   * Create Account Basic (Step 1 of 2-Step Registration)
+   * Create Account (Single-Step Registration)
    *
-   * Creates the basic account entity with INCOMPLETE status.
-   * This is the first step of the two-step registration process.
+   * Creates a complete account with profile in a single transaction.
+   * This is the new unified registration method that combines account creation and profile setup.
    * 
-   * Two-Step Registration Flow:
-   * 1. Call this method to create account with INCOMPLETE status
-   * 2. Call createAccountProfile() to add profile data and activate account
+   * Transaction Behavior:
+   * - Creates Account entity with PENDING_VERIFICATION status
+   * - Creates GeneralAccount profile data
+   * - If any step fails, entire transaction is rolled back
+   * - This ensures data integrity across both tables
    * 
    * Business Rules:
    * - Role is automatically set to PATIENT
-   * - Status is set to INCOMPLETE (not usable until profile is completed)
+   * - Status is set to PENDING_VERIFICATION
    * - Email must be unique across all accounts
    * - Password is hashed with bcrypt before storage
-   * - Account will be auto-deleted if profile is not completed within reasonable time
+   * - fullName and gender are required for profile
+   * - User must verify email before account becomes ACTIVE
    * 
    * Security:
    * - Password is hashed with bcrypt (10 rounds)
    * - Email uniqueness is validated
    * 
-   * @param {CreateAccountBasicDto} dto - Basic account data (username, email, password, etc.)
-   * @returns {Promise<{accountId: string, email: string, username: string}>} Created account ID and info
+   * @param {CreateAccountDto} dto - Complete account data (credentials + profile)
+   * @returns {Promise<AccountResponseDto>} Created account with profile data
    * @throws {ConflictException} If email already exists
+   * @throws {Error} Any error will trigger transaction rollback
    * 
    * @example
    * ```typescript
-   * const result = await accountsService.createAccountBasic({
+   * const account = await accountsService.createAccount({
    *   username: 'johndoe',
    *   email: 'john@example.com',
-   *   password: 'SecurePass123'
+   *   password: 'SecurePass123',
+   *   fullName: 'John Doe',
+   *   gender: Gender.MALE
    * });
-   * // result: { accountId: 'uuid', email: 'john@example.com', username: 'johndoe' }
-   * // Next: Call createAccountProfile(result.accountId, profileData)
+   * // Account is now PENDING_VERIFICATION, ready for email verification
    * ```
    */
-  async createAccountBasic(
-    dto: CreateAccountBasicDto,
-  ): Promise<{ accountId: string; email: string; username: string }> {
+  async createAccount(dto: CreateAccountDto): Promise<AccountResponseDto> {
     // Step 1: Validate email uniqueness
     const existingAccount = await this.findByEmail(dto.email);
     if (existingAccount) {
@@ -1385,119 +1386,40 @@ export class AccountsService {
       this.BCRYPT_SALT_ROUNDS,
     );
 
-    // Step 3: Create and save Account entity with INCOMPLETE status
-    const account = this.accountRepository.createAccount({
-      username: dto.username,
-      email: dto.email,
-      password: hashedPassword,
-      phone: dto.phone,
-      dob: dto.dob ? new Date(dto.dob) : undefined,
-      profilePicture: dto.profilePicture,
-      role: AccountRole.PATIENT, // Default role is PATIENT
-      status: AccountStatus.INCOMPLETE, // Not usable until profile is completed
-    });
-
-    const savedAccount = await this.accountRepository.saveAccount(account);
-
-    return {
-      accountId: savedAccount.id,
-      email: savedAccount.email,
-      username: savedAccount.username,
-    };
-  }
-
-  /**
-   * Create Account Profile (Step 2 of 2-Step Registration)
-   *
-   * Creates the GeneralAccount profile data and activates the account.
-   * This is the second step of the two-step registration process.
-   * 
-   * Transaction Behavior:
-   * - If profile creation fails, the account is automatically deleted (rollback)
-   * - Account status changes from INCOMPLETE to PENDING_VERIFICATION
-   * - This ensures data integrity across both tables
-   * 
-   * Business Rules:
-   * - Account must exist and be in INCOMPLETE status
-   * - fullName and gender are required
-   * - Upon success, account status changes to PENDING_VERIFICATION
-   * - User must verify email before account becomes ACTIVE
-   * 
-   * Rollback Mechanism:
-   * - If GeneralAccount creation fails, Account is deleted automatically
-   * - This ensures we never have orphaned accounts without profiles
-   * 
-   * @param {string} accountId - Account UUID from step 1 (createAccountBasic)
-   * @param {CreateAccountProfileDto} dto - Profile data (fullName, gender)
-   * @returns {Promise<AccountResponseDto>} Complete account with profile data
-   * @throws {NotFoundException} If account does not exist
-   * @throws {BadRequestException} If account is not in INCOMPLETE status
-   * @throws {Error} Any error will trigger account deletion
-   * 
-   * @example
-   * ```typescript
-   * try {
-   *   const account = await accountsService.createAccountProfile(accountId, {
-   *     fullName: 'John Doe',
-   *     gender: Gender.MALE
-   *   });
-   *   // Account is now PENDING_VERIFICATION, ready for email verification
-   * } catch (error) {
-   *   // If this fails, the account created in step 1 is automatically deleted
-   * }
-   * ```
-   */
-  async createAccountProfile(
-    accountId: string,
-    dto: CreateAccountProfileDto,
-  ): Promise<AccountResponseDto> {
+    // Step 3: Create both Account and GeneralAccount in a transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Step 1: Find and validate account
-      const account = await this.accountRepository.findAccountById(accountId);
-      if (!account) {
-        throw new NotFoundException(MESSAGES.failMessage.userNotFound);
-      }
+      // Create Account entity with PENDING_VERIFICATION status
+      const account = this.accountRepository.createAccount({
+        username: dto.username,
+        email: dto.email,
+        password: hashedPassword,
+        phone: dto.phone,
+        dob: dto.dob ? new Date(dto.dob) : undefined,
+        profilePicture: dto.profilePicture,
+        role: AccountRole.PATIENT,
+        status: AccountStatus.PENDING_VERIFICATION,
+      });
 
-      // Step 2: Validate account is in INCOMPLETE status
-      if (account.status !== AccountStatus.INCOMPLETE) {
-        throw new BadRequestException(
-          'Account profile has already been completed or account is not in incomplete state',
-        );
-      }
+      const savedAccount = await queryRunner.manager.save(account);
 
-      // Step 3: Create GeneralAccount entity
+      // Create GeneralAccount profile
       const generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: accountId,
+        generalAccId: savedAccount.id,
         fullName: dto.fullName,
         gender: dto.gender,
       });
 
-      await queryRunner.manager.save(generalAccount);
-
-      // Step 4: Update account status to PENDING_VERIFICATION
-      account.status = AccountStatus.PENDING_VERIFICATION;
-      await queryRunner.manager.save(account);
+      const savedGeneralAccount = await queryRunner.manager.save(generalAccount);
 
       await queryRunner.commitTransaction();
 
-      // Return complete account DTO
-      return new AccountResponseDto(account, generalAccount);
+      return new AccountResponseDto(savedAccount, savedGeneralAccount);
     } catch (error) {
-      // Rollback transaction
       await queryRunner.rollbackTransaction();
-
-      // If profile creation failed, delete the account (cleanup)
-      try {
-        await this.accountRepository.deleteAccount(accountId);
-      } catch (deleteError) {
-        // Log but don't throw - original error is more important
-        console.error('Failed to delete incomplete account:', deleteError);
-      }
-
       throw error;
     } finally {
       await queryRunner.release();

@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
+import { FeedbackType } from '../enums';
 
 /**
  * Feedback Entity
@@ -49,6 +50,13 @@ export class Feedback {
 
   @Column({ name: 'feedback_images', type: 'jsonb', nullable: true })
   feedbackImages?: any;
+
+  @Column({
+    name: 'type',
+    type: 'enum',
+    enum: FeedbackType,
+  })
+  type: FeedbackType;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

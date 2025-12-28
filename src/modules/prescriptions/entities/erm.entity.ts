@@ -63,6 +63,9 @@ export class ERM {
   @Column({ name: 'signed_at', type: 'timestamptz', nullable: true })
   signedAt?: Date;
 
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
   @Column({ name: 'updated_by', type: 'uuid', nullable: true })
   updatedBy?: string;
 

@@ -48,6 +48,12 @@ export class ClinicStaffInformation {
   })
   clinicRole: ClinicRole;
 
+  @Column({ name: 'dob', type: 'date', nullable: true })
+  dob?: Date;
+
+  @Column({ name: 'profile_picture', type: 'text', nullable: true })
+  profilePicture?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

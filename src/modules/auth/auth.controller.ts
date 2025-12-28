@@ -35,8 +35,6 @@ import { AccountsService } from '../accounts/accounts.service';
 import {
   CreateAccountDto,
   AccountResponseDto,
-  CreateAccountBasicDto,
-  CreateAccountProfileDto,
   CreateClinicManagerDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
@@ -136,86 +134,34 @@ export class AuthController {
   }
 
   /**
-   * Step 1: Create Account Basic (New 2-Step Registration)
-   * Creates basic account with INCOMPLETE status
-   * Must be followed by Step 2 to complete registration
-   * Role is automatically set to PATIENT
+   * Register Account (Single-Step Registration)
+   * Creates complete account with profile in one transaction
+   * Frontend can handle multi-step UI while backend processes everything in one call
    *
-   * @param createAccountBasicDto - Basic account data (username, email, password)
-   * @returns Account ID and basic info for Step 2
+   * @param createAccountDto - Complete account data (credentials + profile)
+   * @returns Complete account with PENDING_VERIFICATION status
    */
-  @Post('register/account')
+  @Post('register')
   @ApiOperation({ 
-    summary: 'Step 1: Create basic account (PATIENT role)',
-    description: 'Creates account with INCOMPLETE status. Must call Step 2 to complete registration.'
-  })
-  @HttpCode(HttpStatus.CREATED)
-  @ApiResponse({
-    status: 201,
-    description: 'Account created successfully. Proceed to Step 2 to add profile.',
-    schema: {
-      type: 'object',
-      properties: {
-        data: {
-          type: 'object',
-          properties: {
-            accountId: { type: 'string', format: 'uuid' },
-            email: { type: 'string' },
-            username: { type: 'string' }
-          }
-        },
-        message: { type: 'string' }
-      }
-    }
-  })
-  @ApiResponse({ status: 409, description: 'Email already exists' })
-  @ApiResponse({ status: 400, description: 'Validation error' })
-  async registerAccountBasic(
-    @Body() createAccountBasicDto: CreateAccountBasicDto,
-  ): Promise<{ data: { accountId: string; email: string; username: string }; message: string }> {
-    const result = await this.AccountsService.createAccountBasic(createAccountBasicDto);
-
-    return {
-      data: result,
-      message: 'Account created successfully. Please complete your profile in Step 2.',
-    };
-  }
-
-  /**
-   * Step 2: Create Account Profile (Complete Registration)
-   * Creates profile data and activates account to PENDING_VERIFICATION status
-   * If this fails, the account from Step 1 is automatically deleted
-   * User must manually request verification code via POST /mailer/send-verification-code
-   *
-   * @param accountId - Account UUID from Step 1
-   * @param createAccountProfileDto - Profile data (fullName, gender)
-   * @returns Complete account data with profile
-   */
-  @Post('register/profile/:accountId')
-  @ApiOperation({ 
-    summary: 'Step 2: Complete account profile',
-    description: 'Adds profile data and changes status to PENDING_VERIFICATION. User must manually request verification code. If this fails, account is deleted.'
+    summary: 'Register new account (PATIENT role)',
+    description: 'Single-step registration. Creates account and profile in one transaction. Account status will be PENDING_VERIFICATION.'
   })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
-    message: 'Profile created successfully. Please request verification code to activate your account.',
+    message: 'Account created successfully. Please request verification code to activate your account.',
   })
-  @ApiResponse({ status: 404, description: 'Account not found' })
-  @ApiResponse({ status: 400, description: 'Account not in INCOMPLETE status or validation error' })
-  async registerAccountProfile(
-    @Param('accountId', ParseUUIDPipe) accountId: string,
-    @Body() createAccountProfileDto: CreateAccountProfileDto,
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  async register(
+    @Body() createAccountDto: CreateAccountDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const account = await this.AccountsService.createAccountProfile(
-      accountId,
-      createAccountProfileDto,
-    );
+    const account = await this.AccountsService.createAccount(createAccountDto);
 
     return {
       data: account,
-      message: 'Profile created successfully. Please request verification code via POST /mailer/send-verification-code to activate your account.',
+      message: 'Account created successfully. Please request verification code via POST /mailer/send-verification-code to activate your account.',
     };
   }
 

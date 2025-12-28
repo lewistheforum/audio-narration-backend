@@ -41,12 +41,6 @@ export class ClinicService {
   @Column({ name: 'service_functions', type: 'text', array: true, nullable: true })
   serviceFunctions?: string[];
 
-  @Column({ name: 'default_duration_min', type: 'timestamptz', nullable: true })
-  defaultDurationMin?: Date;
-
-  @Column({ name: 'is_popular', type: 'boolean', default: false })
-  isPopular: boolean;
-
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 

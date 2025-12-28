@@ -56,14 +56,8 @@ export class Account {
   @Column({ name: 'phone', type: 'varchar', length: 20, nullable: true })
   phone?: string;
 
-  @Column({ name: 'dob', type: 'date', nullable: true })
-  dob?: Date;
-
   @Column({ name: 'password', type: 'varchar', length: 255 })
   password: string;
-
-  @Column({ name: 'profile_picture', type: 'text', nullable: true })
-  profilePicture?: string;
 
   @Column({ name: 'is_OAuth_user', type: 'boolean', default: false })
   isOAuthUser: boolean;

@@ -50,6 +50,9 @@ export class ClinicsLegalDocuments {
   @Column({ name: 'is_sepay_verify', type: 'boolean', default: false })
   isSepayVerify: boolean;
 
+  @Column({ name: 'processing_step', type: 'integer', nullable: true })
+  processingStep?: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

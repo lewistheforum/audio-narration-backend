@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { ServiceType } from '../enums';
 
 /**
  * SubscriptionService Entity
@@ -21,12 +20,8 @@ export class SubscriptionService {
   @Column({ name: 'service_name', type: 'varchar', length: 150 })
   serviceName: string;
 
-  @Column({
-    name: 'type',
-    type: 'enum',
-    enum: ServiceType,
-  })
-  type: ServiceType;
+  @Column({ name: 'code', type: 'text' })
+  code: string;
 
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
