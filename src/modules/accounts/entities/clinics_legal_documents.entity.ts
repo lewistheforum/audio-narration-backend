@@ -21,7 +21,7 @@ export class ClinicsLegalDocuments {
   @PrimaryGeneratedColumn('uuid', { name: 'id' })
   id: string;
 
-  @Column({ name: 'account_id', type: 'uuid' })
+  @Column({ name: 'account_id', type: 'uuid', unique: true })
   accountId: string;
 
   @OneToOne(() => Account, {

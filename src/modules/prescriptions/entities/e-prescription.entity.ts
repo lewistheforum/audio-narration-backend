@@ -21,7 +21,7 @@ export class EPrescription {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
 
-  @Column({ name: 'appointment_id', type: 'uuid' })
+  @Column({ name: 'appointment_id', type: 'uuid', unique: true })
   appointmentId: string;
 
   @OneToOne(() => Appointment, {

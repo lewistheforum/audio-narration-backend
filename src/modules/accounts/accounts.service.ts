@@ -395,6 +395,27 @@ export class AccountsService {
   }
 
   /**
+   * Update GeneralAccount Entity (Internal)
+   *
+   * Internal method to persist changes to a GeneralAccount entity.
+   * This is a low-level data access method.
+   *
+   * @param {GeneralAccount} generalAccount - GeneralAccount entity with changes to persist
+   * @returns {Promise<GeneralAccount>} Updated general account entity from database
+   *
+   * @private
+   * @example
+   * ```typescript
+   * const generalAccount = await accountsService.findGeneralAccountByUserId(id);
+   * generalAccount.profilePicture = 'new-url';
+   * await accountsService.updateGeneralAccountEntity(generalAccount);
+   * ```
+   */
+  async updateGeneralAccountEntity(generalAccount: GeneralAccount): Promise<GeneralAccount> {
+    return this.generalAccountRepository.saveGeneralAccount(generalAccount);
+  }
+
+  /**
    * Update Account Profile
    *
    * Updates account profile information with comprehensive validation.

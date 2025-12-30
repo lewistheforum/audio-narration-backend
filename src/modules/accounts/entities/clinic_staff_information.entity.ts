@@ -21,7 +21,7 @@ export class ClinicStaffInformation {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
 
-  @Column({ name: 'clinic_acc_id', type: 'uuid' })
+  @Column({ name: 'clinic_acc_id', type: 'uuid', unique: true })
   clinicAccId: string;
 
   @OneToOne(() => Account, {

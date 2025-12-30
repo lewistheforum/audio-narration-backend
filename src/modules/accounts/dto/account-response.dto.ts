@@ -148,12 +148,10 @@ export class AccountResponseDto {
     this.email = account.email;
     this.username = account.username;
     this.phone = account.phone;
-    this.dob = account.dob;
     this.role = account.role;
     this.status = account.status ?? AccountStatus.PENDING_VERIFICATION;
     this.isEmailVerified = account.isEmailVerified ?? false;
     this.isOAuthUser = account.isOAuthUser ?? false;
-    this.profilePicture = account.profilePicture;
     this.parentId = account.parentId;
     this.banCounts = account.banCounts ?? 0;
     this.banDescription = account.banDescription;
@@ -165,6 +163,8 @@ export class AccountResponseDto {
     if (generalAccount) {
       this.fullName = generalAccount.fullName;
       this.gender = generalAccount.gender;
+      this.dob = generalAccount.dob;
+      this.profilePicture = generalAccount.profilePicture;
     }
   }
 }

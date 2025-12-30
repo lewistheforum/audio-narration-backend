@@ -101,13 +101,10 @@ export class AuthService {
     if (user) {
       // Update existing user with OAuth data
       let needUpdate = false;
+      let needUpdateGeneralAccount = false;
 
       if (!user.isOAuthUser) {
         user.isOAuthUser = true;
-        needUpdate = true;
-      }
-      if (picture && user.profilePicture !== picture) {
-        user.profilePicture = picture;
         needUpdate = true;
       }
       if (isEmailVerified && !user.isEmailVerified) {
@@ -119,11 +116,22 @@ export class AuthService {
         await this.AccountsService.updateAccountEntity(user);
       }
 
+      // Update profilePicture in GeneralAccount if needed
+      generalAccount = await this.AccountsService.findGeneralAccountByUserId(
+        user.id,
+      );
+      
+      if (picture && generalAccount && generalAccount.profilePicture !== picture) {
+        generalAccount.profilePicture = picture;
+        needUpdateGeneralAccount = true;
+      }
+
+      if (needUpdateGeneralAccount && generalAccount) {
+        await this.AccountsService.updateGeneralAccountEntity(generalAccount);
+      }
+
       userId = user.id;
       userEmail = user.email;
-      generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-        userId,
-      );
     } else {
         // Create new patient account via Google OAuth
         const randomPassword = randomBytes(16).toString('hex');

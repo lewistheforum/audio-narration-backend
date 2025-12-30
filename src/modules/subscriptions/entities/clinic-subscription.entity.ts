@@ -22,7 +22,7 @@ export class ClinicSubscription {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
 
-  @Column({ name: 'clinic_id', type: 'uuid' })
+  @Column({ name: 'clinic_id', type: 'uuid', unique: true })
   clinicId: string;
 
   @OneToOne(() => Account, {

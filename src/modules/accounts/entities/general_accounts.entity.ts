@@ -25,7 +25,7 @@ export class GeneralAccount {
   /**
    * Reference to the main Account
    */
-  @Column({ name: 'general_acc_id', type: 'uuid' })
+  @Column({ name: 'general_acc_id', type: 'uuid', unique: true })
   generalAccId: string;
 
   @OneToOne(() => Account, {
