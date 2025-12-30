@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
-import { AccountRole, AccountStatus } from './enums';
+import { AccountRole, AccountStatus, VerificationType } from './enums';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicInformation } from './entities/clinic_information.entity';
 import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
@@ -35,7 +35,6 @@ import {
   ClinicStaffInformationRepository,
   DoctorInformationRepository,
 } from './repositories';
-import { VerificationType } from '../mailer/enums';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
 import { generateVerificationCode } from 'src/common/utils/util';
 
@@ -264,8 +263,6 @@ export class AccountsService {
       email: createAccountDto.email,
       password: hashedPassword,
       phone: createAccountDto.phone,
-      dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
-      profilePicture: createAccountDto.profilePicture,
       role: AccountRole.PATIENT,
       status: AccountStatus.PENDING_VERIFICATION,
     });
@@ -274,11 +271,13 @@ export class AccountsService {
 
     // Step 4: Create and save GeneralAccount entity with the Account ID
     let generalAccount: GeneralAccount | null = null;
-    if (createAccountDto.fullName || createAccountDto.gender) {
+    if (createAccountDto.fullName || createAccountDto.gender || createAccountDto.dob || createAccountDto.profilePicture) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
         generalAccId: savedAccount.id,
         fullName: createAccountDto.fullName,
         gender: createAccountDto.gender,
+        dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
+        profilePicture: createAccountDto.profilePicture,
       });
       await this.generalAccountRepository.saveGeneralAccount(generalAccount);
     }
@@ -356,17 +355,17 @@ export class AccountsService {
       status: AccountStatus.ACTIVE, // OAuth accounts are immediately active
       isOAuthUser: true,
       isEmailVerified: true, // Email pre-verified by OAuth provider
-      profilePicture: dto.profilePicture,
     });
 
     const savedAccount = await this.accountRepository.saveAccount(account);
 
-    // Step 4: Create GeneralAccount with fullName if provided
+    // Step 4: Create GeneralAccount with fullName and profilePicture if provided
     let generalAccount: GeneralAccount | null = null;
-    if (dto.fullName) {
+    if (dto.fullName || dto.profilePicture) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
         generalAccId: savedAccount.id,
         fullName: dto.fullName,
+        profilePicture: dto.profilePicture,
       });
       await this.generalAccountRepository.saveGeneralAccount(generalAccount);
     }
@@ -472,20 +471,16 @@ export class AccountsService {
     if (updateAccountDto.phone !== undefined) {
       account.phone = updateAccountDto.phone;
     }
-    if (updateAccountDto.dob !== undefined) {
-      account.dob = updateAccountDto.dob ? new Date(updateAccountDto.dob) : undefined;
-    }
-    if (updateAccountDto.profilePicture !== undefined) {
-      account.profilePicture = updateAccountDto.profilePicture;
-    }
 
     const updatedAccount = await this.accountRepository.saveAccount(account);
 
     // Update GeneralAccount if needed
-    if (updateAccountDto.fullName !== undefined || updateAccountDto.gender !== undefined) {
+    if (updateAccountDto.fullName !== undefined || updateAccountDto.gender !== undefined || updateAccountDto.dob !== undefined || updateAccountDto.profilePicture !== undefined) {
       await this.updateGeneralAccount(id, {
         fullName: updateAccountDto.fullName,
         gender: updateAccountDto.gender,
+        dob: updateAccountDto.dob ? new Date(updateAccountDto.dob) : undefined,
+        profilePicture: updateAccountDto.profilePicture,
       });
     }
 
@@ -953,7 +948,7 @@ export class AccountsService {
    */
   async updateGeneralAccount(
     userId: string,
-    data: { fullName?: string; gender?: string },
+    data: { fullName?: string; gender?: string; dob?: Date; profilePicture?: string },
   ): Promise<GeneralAccount> {
     let generalAccount = await this.findGeneralAccountByUserId(userId);
 
@@ -965,6 +960,12 @@ export class AccountsService {
       if (data.gender !== undefined) {
         generalAccount.gender = data.gender as any;
       }
+      if (data.dob !== undefined) {
+        generalAccount.dob = data.dob;
+      }
+      if (data.profilePicture !== undefined) {
+        generalAccount.profilePicture = data.profilePicture;
+      }
       return this.generalAccountRepository.saveGeneralAccount(generalAccount);
     } else {
       // Create new
@@ -972,6 +973,8 @@ export class AccountsService {
         generalAccId: userId,
         fullName: data.fullName,
         gender: data.gender as any,
+        dob: data.dob,
+        profilePicture: data.profilePicture,
       });
       return this.generalAccountRepository.saveGeneralAccount(generalAccount);
     }
@@ -1030,7 +1033,7 @@ export class AccountsService {
     const storedCode = await this.codeVerificationRepository.findValidByUserIdAndCode(
       account.id,
       code,
-      VerificationType.EMAIL,
+      VerificationType.VERIFY,
     );
 
     if (!storedCode) {
@@ -1080,7 +1083,7 @@ export class AccountsService {
    * - 6-digit numeric code
    * - Expires in 10 minutes
    * - One-time use
-   * - Type: EMAIL verification
+   * - Type: VERIFY (account verification)
    *
    * @param {string} email - Account email address
    * @returns {Promise<{code: string, user: Account & {firstName?: string}}>} Generated code and user data for email
@@ -1120,7 +1123,7 @@ export class AccountsService {
       code,
       expiredAt,
       used: false,
-      type: VerificationType.EMAIL,
+      type: VerificationType.VERIFY,
     });
     await this.codeVerificationRepository.save(verification);
 
@@ -1398,8 +1401,6 @@ export class AccountsService {
         email: dto.email,
         password: hashedPassword,
         phone: dto.phone,
-        dob: dto.dob ? new Date(dto.dob) : undefined,
-        profilePicture: dto.profilePicture,
         role: AccountRole.PATIENT,
         status: AccountStatus.PENDING_VERIFICATION,
       });
@@ -1411,6 +1412,8 @@ export class AccountsService {
         generalAccId: savedAccount.id,
         fullName: dto.fullName,
         gender: dto.gender,
+        dob: dto.dob ? new Date(dto.dob) : undefined,
+        profilePicture: dto.profilePicture,
       });
 
       const savedGeneralAccount = await queryRunner.manager.save(generalAccount);

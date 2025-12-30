@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
@@ -23,7 +23,7 @@ export class ClinicInformation {
   @Column({ name: 'clinic_id', type: 'uuid' })
   clinicId: string;
 
-  @ManyToOne(() => Account, {
+  @OneToOne(() => Account, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'clinic_id' })

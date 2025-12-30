@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { ERM } from './erm.entity';
@@ -24,7 +24,7 @@ export class EPrescription {
   @Column({ name: 'appointment_id', type: 'uuid' })
   appointmentId: string;
 
-  @ManyToOne(() => Appointment, {
+  @OneToOne(() => Appointment, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'appointment_id' })
