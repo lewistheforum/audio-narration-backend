@@ -1523,10 +1523,12 @@ export class AccountsService {
     dto: CreateClinicManagerDto,
   ): Promise<AccountResponseDto> {
     // Step 1: Validate patient exists and has PATIENT role
-    // const patient = await this.findAccountEntityById(patientId);
-    // if (patient.role !== AccountRole.PATIENT) {
-    //   throw new ForbiddenException('Only PATIENT accounts can create clinic manager');
-    // }
+    const patient = await this.findAccountEntityById(patientId);
+    if (patient.role !== AccountRole.PATIENT) {
+      throw new ForbiddenException(
+        'Only PATIENT accounts can create clinic manager',
+      );
+    }
 
     // TODO: Add validation for clinic service purchase/subscription
     // if (!patient.hasClinicServiceSubscription) {
@@ -1535,9 +1537,9 @@ export class AccountsService {
 
     // Step 2: Validate email uniqueness
     const existingAccount = await this.findByEmail(dto.email);
-    // if (existingAccount) {
-    //   throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
-    // }
+    if (existingAccount) {
+      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

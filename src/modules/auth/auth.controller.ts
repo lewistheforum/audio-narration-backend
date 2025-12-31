@@ -284,8 +284,7 @@ export class AuthController {
   ): Promise<{ data: AccountResponseDto; message: string }> {
     const patientId = req.user.id;
     const manager = await this.AccountsService.createClinicManager(
-      // patientId,
-      '10626b9c-0bd3-4b9e-b1fa-ce143db305e6',
+      patientId,
       createClinicManagerDto,
     );
     return {
