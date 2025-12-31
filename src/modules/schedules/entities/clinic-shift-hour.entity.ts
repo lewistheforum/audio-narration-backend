@@ -5,6 +5,8 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { ClinicShift } from './clinic-shift.entity';
 
@@ -35,6 +37,12 @@ export class ClinicShiftHour {
 
   @Column({ name: 'limit', type: 'smallint' })
   limit: number;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
   deletedAt?: Date;

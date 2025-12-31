@@ -37,15 +37,15 @@ export class Account {
   @Column({ name: 'parent_id', type: 'uuid', nullable: true })
   parentId?: string;
 
-  @ManyToOne(() => Account, (account) => account.children, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  @JoinColumn({ name: 'parent_id' })
-  parent?: Account;
+  // @ManyToOne(() => Account, (account) => account.children, {
+  //   nullable: true,
+  //   onDelete: 'SET NULL',
+  // })
+  // @JoinColumn({ name: 'parent_id' })
+  // parent?: Account;
 
-  @OneToMany(() => Account, (account) => account.parent)
-  children?: Account[];
+  // @OneToMany(() => Account, (account) => account.parent)
+  // children?: Account[];
 
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;
@@ -84,7 +84,12 @@ export class Account {
   @Column({ name: 'ban_counts', type: 'integer', default: 0 })
   banCounts: number;
 
-  @Column({ name: 'ban_description', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'ban_description',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   banDescription?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

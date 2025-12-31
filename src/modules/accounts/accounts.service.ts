@@ -128,13 +128,19 @@ export class AccountsService {
    * const allAccounts = await accountsService.findAll(true);
    * ```
    */
-  async findAll(includeDeleted: boolean = false): Promise<AccountResponseDto[]> {
-    const accounts = await this.accountRepository.findAllAccounts(includeDeleted);
+  async findAll(
+    includeDeleted: boolean = false,
+  ): Promise<AccountResponseDto[]> {
+    const accounts = await this.accountRepository.findAllAccounts(
+      includeDeleted,
+    );
 
     const result: AccountResponseDto[] = [];
     for (const account of accounts) {
       const generalAccount =
-        await this.generalAccountRepository.findGeneralAccountByUserId(account.id);
+        await this.generalAccountRepository.findGeneralAccountByUserId(
+          account.id,
+        );
       result.push(new AccountResponseDto(account, generalAccount));
     }
 
@@ -271,7 +277,12 @@ export class AccountsService {
 
     // Step 4: Create and save GeneralAccount entity with the Account ID
     let generalAccount: GeneralAccount | null = null;
-    if (createAccountDto.fullName || createAccountDto.gender || createAccountDto.dob || createAccountDto.profilePicture) {
+    if (
+      createAccountDto.fullName ||
+      createAccountDto.gender ||
+      createAccountDto.dob ||
+      createAccountDto.profilePicture
+    ) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
         generalAccId: savedAccount.id,
         fullName: createAccountDto.fullName,
@@ -411,7 +422,9 @@ export class AccountsService {
    * await accountsService.updateGeneralAccountEntity(generalAccount);
    * ```
    */
-  async updateGeneralAccountEntity(generalAccount: GeneralAccount): Promise<GeneralAccount> {
+  async updateGeneralAccountEntity(
+    generalAccount: GeneralAccount,
+  ): Promise<GeneralAccount> {
     return this.generalAccountRepository.saveGeneralAccount(generalAccount);
   }
 
@@ -496,7 +509,12 @@ export class AccountsService {
     const updatedAccount = await this.accountRepository.saveAccount(account);
 
     // Update GeneralAccount if needed
-    if (updateAccountDto.fullName !== undefined || updateAccountDto.gender !== undefined || updateAccountDto.dob !== undefined || updateAccountDto.profilePicture !== undefined) {
+    if (
+      updateAccountDto.fullName !== undefined ||
+      updateAccountDto.gender !== undefined ||
+      updateAccountDto.dob !== undefined ||
+      updateAccountDto.profilePicture !== undefined
+    ) {
       await this.updateGeneralAccount(id, {
         fullName: updateAccountDto.fullName,
         gender: updateAccountDto.gender,
@@ -772,7 +790,7 @@ export class AccountsService {
     account.status = AccountStatus.BANNED;
     account.banCounts = (account.banCounts || 0) + 1;
     account.banDescription = banDto.reason;
-    
+
     const bannedAccount = await this.accountRepository.saveAccount(account);
     const generalAccount = await this.findGeneralAccountByUserId(accountId);
     return new AccountResponseDto(bannedAccount, generalAccount);
@@ -969,7 +987,12 @@ export class AccountsService {
    */
   async updateGeneralAccount(
     userId: string,
-    data: { fullName?: string; gender?: string; dob?: Date; profilePicture?: string },
+    data: {
+      fullName?: string;
+      gender?: string;
+      dob?: Date;
+      profilePicture?: string;
+    },
   ): Promise<GeneralAccount> {
     let generalAccount = await this.findGeneralAccountByUserId(userId);
 
@@ -1051,11 +1074,12 @@ export class AccountsService {
     }
 
     // Find the verification code in the database
-    const storedCode = await this.codeVerificationRepository.findValidByUserIdAndCode(
-      account.id,
-      code,
-      VerificationType.VERIFY,
-    );
+    const storedCode =
+      await this.codeVerificationRepository.findValidByUserIdAndCode(
+        account.id,
+        code,
+        VerificationType.VERIFY,
+      );
 
     if (!storedCode) {
       throw new UnauthorizedException(
@@ -1294,11 +1318,12 @@ export class AccountsService {
     }
 
     // Find the reset code in the database
-    const storedCode = await this.codeVerificationRepository.findValidByUserIdAndCode(
-      account.id,
-      code,
-      VerificationType.RESET,
-    );
+    const storedCode =
+      await this.codeVerificationRepository.findValidByUserIdAndCode(
+        account.id,
+        code,
+        VerificationType.RESET,
+      );
 
     if (!storedCode) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidResetCode);
@@ -1351,7 +1376,9 @@ export class AccountsService {
     const accounts = await this.accountRepository.findAllAccounts();
 
     return {
-      username: accounts.map((account) => account.username).filter((name) => !!name),
+      username: accounts
+        .map((account) => account.username)
+        .filter((name) => !!name),
       email: accounts.map((account) => account.email),
     };
   }
@@ -1361,13 +1388,13 @@ export class AccountsService {
    *
    * Creates a complete account with profile in a single transaction.
    * This is the new unified registration method that combines account creation and profile setup.
-   * 
+   *
    * Transaction Behavior:
    * - Creates Account entity with PENDING_VERIFICATION status
    * - Creates GeneralAccount profile data
    * - If any step fails, entire transaction is rolled back
    * - This ensures data integrity across both tables
-   * 
+   *
    * Business Rules:
    * - Role is automatically set to PATIENT
    * - Status is set to PENDING_VERIFICATION
@@ -1375,16 +1402,16 @@ export class AccountsService {
    * - Password is hashed with bcrypt before storage
    * - fullName and gender are required for profile
    * - User must verify email before account becomes ACTIVE
-   * 
+   *
    * Security:
    * - Password is hashed with bcrypt (10 rounds)
    * - Email uniqueness is validated
-   * 
+   *
    * @param {CreateAccountDto} dto - Complete account data (credentials + profile)
    * @returns {Promise<AccountResponseDto>} Created account with profile data
    * @throws {ConflictException} If email already exists
    * @throws {Error} Any error will trigger transaction rollback
-   * 
+   *
    * @example
    * ```typescript
    * const account = await accountsService.createAccount({
@@ -1429,15 +1456,19 @@ export class AccountsService {
       const savedAccount = await queryRunner.manager.save(account);
 
       // Create GeneralAccount profile
-      const generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAccount.id,
-        fullName: dto.fullName,
-        gender: dto.gender,
-        dob: dto.dob ? new Date(dto.dob) : undefined,
-        profilePicture: dto.profilePicture,
-      });
+      const generalAccount = this.generalAccountRepository.createGeneralAccount(
+        {
+          generalAccId: savedAccount.id,
+          fullName: dto.fullName,
+          gender: dto.gender,
+          dob: dto.dob ? new Date(dto.dob) : undefined,
+          profilePicture: dto.profilePicture,
+        },
+      );
 
-      const savedGeneralAccount = await queryRunner.manager.save(generalAccount);
+      const savedGeneralAccount = await queryRunner.manager.save(
+        generalAccount,
+      );
 
       await queryRunner.commitTransaction();
 
@@ -1460,21 +1491,21 @@ export class AccountsService {
    * - Update clinic legal documents
    * - Update Google iframe information
    * - Update doctor documents
-   * 
+   *
    * This method creates:
    * 1. Account entity with CLINIC_MANAGER role
    * 2. GeneralAccount entity with manager's personal info
    * 3. ClinicInformation entity with clinic details
-   * 
+   *
    * Transaction Behavior:
    * - If any step fails, all changes are rolled back
    * - Ensures data integrity across all three tables
-   * 
+   *
    * @param {CreateClinicManagerDto} dto - Clinic manager registration data
    * @returns {Promise<AccountResponseDto>} Created clinic manager account with all related data
    * @throws {ConflictException} If email already exists
    * @throws {Error} Any error will trigger rollback
-   * 
+   *
    * @example
    * ```typescript
    * const manager = await accountsService.createClinicManager({
@@ -1492,10 +1523,10 @@ export class AccountsService {
     dto: CreateClinicManagerDto,
   ): Promise<AccountResponseDto> {
     // Step 1: Validate patient exists and has PATIENT role
-    const patient = await this.findAccountEntityById(patientId);
-    if (patient.role !== AccountRole.PATIENT) {
-      throw new ForbiddenException('Only PATIENT accounts can create clinic manager');
-    }
+    // const patient = await this.findAccountEntityById(patientId);
+    // if (patient.role !== AccountRole.PATIENT) {
+    //   throw new ForbiddenException('Only PATIENT accounts can create clinic manager');
+    // }
 
     // TODO: Add validation for clinic service purchase/subscription
     // if (!patient.hasClinicServiceSubscription) {
@@ -1504,9 +1535,9 @@ export class AccountsService {
 
     // Step 2: Validate email uniqueness
     const existingAccount = await this.findByEmail(dto.email);
-    if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
-    }
+    // if (existingAccount) {
+    //   throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    // }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1527,24 +1558,36 @@ export class AccountsService {
         phone: dto.phone,
         role: AccountRole.CLINIC_MANAGER, // Clinic manager role
         status: AccountStatus.ACTIVE, // Clinic managers are immediately active
+        isOAuthUser: false,
         isEmailVerified: true, // No email verification required for clinic managers
+        banCounts: 0,
+        banDescription: '',
       });
 
       const savedAccount = await queryRunner.manager.save(account);
 
-      // Step 4: Create GeneralAccount entity
-      const generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAccount.id,
-        fullName: dto.fullName,
-      });
+      console.log('check account ID: ', savedAccount.id);
 
-      await queryRunner.manager.save(generalAccount);
+      // Step 4: Create GeneralAccount entity
+      // const generalAccount = this.generalAccountRepository.createGeneralAccount(
+      //   {
+      //     generalAccId: savedAccount.id,
+      //     fullName: dto.fullName,
+      //   },
+      // );
+
+      // await queryRunner.manager.save(generalAccount);
 
       // Step 5: Create ClinicInformation entity
       const clinicInfo = this.clinicInfoRepository.create({
         clinicId: savedAccount.id,
         clinicName: dto.clinicName,
         description: dto.description,
+        specializedIn: dto.specializedIn,
+        pros: dto.pros,
+        paraclinical: dto.paraclinical,
+        dob: dto.dob,
+        profilePicture: dto.profilePicture,
       });
 
       await queryRunner.manager.save(clinicInfo);
@@ -1552,7 +1595,7 @@ export class AccountsService {
       await queryRunner.commitTransaction();
 
       // Return complete account DTO
-      return new AccountResponseDto(savedAccount, generalAccount);
+      return new AccountResponseDto(savedAccount);
     } catch (error) {
       // Rollback transaction
       await queryRunner.rollbackTransaction();
@@ -1567,22 +1610,22 @@ export class AccountsService {
    *
    * Allows clinic managers to add staff accounts to their clinic.
    * Staff accounts are linked to the clinic manager's clinic.
-   * 
+   *
    * Permission Check:
    * - Validates that the manager has CLINIC_MANAGER role
    * - Only clinic managers can add staff
-   * 
+   *
    * This method creates:
    * 1. Account entity with CLINIC_STAFF role
    * 2. ClinicStaffInformation entity with staff details
-   * 
+   *
    * @param {string} managerId - Clinic manager's account UUID
    * @param {CreateStaffByClinicManagerDto} dto - Staff registration data
    * @returns {Promise<AccountResponseDto>} Created staff account
    * @throws {NotFoundException} If manager account doesn't exist
    * @throws {ForbiddenException} If account is not a clinic manager
    * @throws {ConflictException} If email already exists
-   * 
+   *
    * @example
    * ```typescript
    * const staff = await accountsService.createStaffByClinicManager(managerId, {
@@ -1601,7 +1644,9 @@ export class AccountsService {
     // Step 1: Validate manager exists and has CLINIC_MANAGER role
     const manager = await this.findAccountEntityById(managerId);
     if (manager.role !== AccountRole.CLINIC_MANAGER) {
-      throw new ForbiddenException('Only clinic managers can add staff members');
+      throw new ForbiddenException(
+        'Only clinic managers can add staff members',
+      );
     }
 
     // Step 2: Validate email uniqueness
@@ -1662,22 +1707,22 @@ export class AccountsService {
    *
    * Allows clinic managers to add doctor accounts to their clinic.
    * Doctor accounts are linked to the clinic manager's clinic.
-   * 
+   *
    * Permission Check:
    * - Validates that the manager has CLINIC_MANAGER role
    * - Only clinic managers can add doctors
-   * 
+   *
    * This method creates:
    * 1. Account entity with DOCTOR role
    * 2. DoctorInformation entity with doctor details
-   * 
+   *
    * @param {string} managerId - Clinic manager's account UUID
    * @param {CreateDoctorByClinicManagerDto} dto - Doctor registration data
    * @returns {Promise<AccountResponseDto>} Created doctor account
    * @throws {NotFoundException} If manager account doesn't exist
    * @throws {ForbiddenException} If account is not a clinic manager
    * @throws {ConflictException} If email already exists
-   * 
+   *
    * @example
    * ```typescript
    * const doctor = await accountsService.createDoctorByClinicManager(managerId, {
@@ -1756,4 +1801,3 @@ export class AccountsService {
     }
   }
 }
-

@@ -6,13 +6,15 @@ import {
   IsOptional,
   IsNotEmpty,
   Matches,
+  IsDateString,
+  IsUrl,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 /**
  * Create Clinic Manager DTO
- * 
+ *
  * Used for clinic manager registration (clinic owner)
  * Clinic manager has the following permissions:
  * - Add CLINIC_STAFF accounts
@@ -20,7 +22,7 @@ import { Transform } from 'class-transformer';
  * - Update clinic legal documents
  * - Update Google iframe information
  * - Update doctor documents
- * 
+ *
  * Password Requirements:
  * - Minimum 6 characters
  * - Maximum 50 characters
@@ -49,7 +51,8 @@ export class CreateClinicManagerDto {
   email: string;
 
   @ApiProperty({
-    description: 'Clinic manager password (min 6 characters, must contain letter and number)',
+    description:
+      'Clinic manager password (min 6 characters, must contain letter and number)',
     example: 'ManagerPass123',
     minLength: 6,
     maxLength: 50,
@@ -70,21 +73,35 @@ export class CreateClinicManagerDto {
   })
   @IsOptional()
   @IsString({ message: 'Phone must be a string' })
-  @Matches(/^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/, {
-    message: 'Invalid phone number format',
-  })
+  @Matches(
+    /^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/,
+    {
+      message: 'Invalid phone number format',
+    },
+  )
   phone?: string;
 
+  // @ApiProperty({
+  //   description: 'Clinic manager full name',
+  //   example: 'Dr. John Smith',
+  //   maxLength: 255,
+  // })
+  // @IsNotEmpty({ message: 'Full name is required' })
+  // @IsString({ message: 'Full name must be a string' })
+  // @MaxLength(255, { message: 'Full name must not exceed 255 characters' })
+  // @Transform(({ value }) => value?.trim())
+  // fullName: string;
+
   @ApiProperty({
-    description: 'Clinic manager full name',
-    example: 'Dr. John Smith',
+    description: 'Clinic manager role',
+    example: 'MANAGER',
     maxLength: 255,
   })
-  @IsNotEmpty({ message: 'Full name is required' })
-  @IsString({ message: 'Full name must be a string' })
-  @MaxLength(255, { message: 'Full name must not exceed 255 characters' })
+  @IsNotEmpty({ message: 'Role is required' })
+  @IsString({ message: 'Role must be a string' })
+  @MaxLength(255, { message: 'Role must not exceed 255 characters' })
   @Transform(({ value }) => value?.trim())
-  fullName: string;
+  role: string;
 
   @ApiProperty({
     description: 'Clinic name',
@@ -99,11 +116,67 @@ export class CreateClinicManagerDto {
 
   @ApiProperty({
     description: 'Clinic description',
-    example: 'A modern healthcare facility providing comprehensive medical services',
+    example:
+      'A modern healthcare facility providing comprehensive medical services',
     required: false,
   })
   @IsOptional()
   @IsString({ message: 'Description must be a string' })
   @Transform(({ value }) => value?.trim())
   description?: string;
+
+  @ApiProperty({
+    description: 'Clinic specializations',
+    example: ['Cardiology', 'Neurology', 'Pediatrics'],
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsString({ each: true, message: 'Each specialization must be a string' })
+  specializedIn?: string[];
+
+  @ApiProperty({
+    description: 'Clinic pros/advantages',
+    example: ['Modern equipment', 'Experienced doctors', '24/7 service'],
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsString({ each: true, message: 'Each pro must be a string' })
+  pros?: string[];
+
+  @ApiProperty({
+    description: 'Paraclinical services offered',
+    example: ['X-Ray', 'MRI', 'Blood test', 'Ultrasound'],
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsString({
+    each: true,
+    message: 'Each paraclinical service must be a string',
+  })
+  paraclinical?: string[];
+
+  @ApiProperty({
+    description: 'Date of birth',
+    example: '1990-01-15',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString(
+    {},
+    { message: 'Date of birth must be a valid date string (YYYY-MM-DD)' },
+  )
+  dob?: string;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/profile/image.jpg',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Profile picture must be a string' })
+  @IsUrl({}, { message: 'Profile picture must be a valid URL' })
+  profilePicture?: string;
 }

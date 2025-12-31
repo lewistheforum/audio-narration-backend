@@ -5,6 +5,8 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ShiftType } from '../enums';
@@ -34,6 +36,12 @@ export class ClinicShift {
     enum: ShiftType,
   })
   shift: ShiftType;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
   deletedAt?: Date;

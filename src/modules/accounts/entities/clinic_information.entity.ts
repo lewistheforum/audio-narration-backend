@@ -23,11 +23,11 @@ export class ClinicInformation {
   @Column({ name: 'clinic_id', type: 'uuid', unique: true })
   clinicId: string;
 
-  @OneToOne(() => Account, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'clinic_id' })
-  clinic?: Account;
+  // @OneToOne(() => Account, {
+  //   onDelete: 'CASCADE',
+  // })
+  // @JoinColumn({ name: 'clinic_id' })
+  // clinic?: Account;
 
   @Column({ name: 'clinic_name', type: 'text' })
   clinicName: string;

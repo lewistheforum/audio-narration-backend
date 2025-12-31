@@ -31,6 +31,7 @@ import {
   AccountResponseDto,
   UpdatePasswordDto,
   BanAccountDto,
+  CreateClinicManagerDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -124,7 +125,10 @@ export class AccountsController {
   ): Promise<{ data: AccountResponseDto[]; message: string }> {
     const shouldIncludeDeleted = includeDeleted === 'true';
     const accounts = await this.accountsService.findAll(shouldIncludeDeleted);
-    return { data: accounts, message: MESSAGES.successMessage.userFetchSuccess };
+    return {
+      data: accounts,
+      message: MESSAGES.successMessage.userFetchSuccess,
+    };
   }
 
   /**
@@ -306,7 +310,8 @@ export class AccountsController {
     if (emailChanged) {
       return {
         data: user,
-        message: 'Email updated successfully. Your account status is now PENDING_VERIFICATION. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
+        message:
+          'Email updated successfully. Your account status is now PENDING_VERIFICATION. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
       };
     }
 
@@ -557,7 +562,10 @@ export class AccountsController {
     status: MESSAGES.statusCode.success,
     message: MESSAGES.successMessage.userBannedSuccess,
   })
-  @ApiResponse({ status: 403, description: 'Cannot ban admin accounts or self' })
+  @ApiResponse({
+    status: 403,
+    description: 'Cannot ban admin accounts or self',
+  })
   @ApiResponse({ status: 404, description: 'Account not found' })
   @ApiResponse({ status: 409, description: 'Account already banned' })
   async banAccount(
@@ -567,7 +575,10 @@ export class AccountsController {
   ): Promise<{ data: AccountResponseDto; message: string }> {
     const adminId = req.user.userId;
     const account = await this.accountsService.banAccount(id, banDto, adminId);
-    return { data: account, message: MESSAGES.successMessage.userBannedSuccess };
+    return {
+      data: account,
+      message: MESSAGES.successMessage.userBannedSuccess,
+    };
   }
 
   /**
