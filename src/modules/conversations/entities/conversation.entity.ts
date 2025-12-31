@@ -8,13 +8,13 @@ import {
 
 @Entity('conversations')
 export class Conversation {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  _id: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'title', nullable: true })
   title: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'description', type: 'text', nullable: true })
   description: string;
 
   @Column('uuid', { name: 'participants', array: true })
@@ -28,9 +28,9 @@ export class Conversation {
   })
   deletedBy: string[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

@@ -30,7 +30,7 @@ export class AddressRepository {
    */
   async findById(id: string): Promise<Address | null> {
     return this.repository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 
@@ -139,7 +139,7 @@ export class AddressRepository {
    * Check if address exists by ID
    */
   async existsById(id: string): Promise<boolean> {
-    const count = await this.repository.count({ where: { id } });
+    const count = await this.repository.count({ where: { _id: id } });
     return count > 0;
   }
 

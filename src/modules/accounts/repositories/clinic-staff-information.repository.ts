@@ -32,7 +32,7 @@ export class ClinicStaffInformationRepository {
    */
   async findById(id: string): Promise<ClinicStaffInformation | null> {
     return this.repository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 

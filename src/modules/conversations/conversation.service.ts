@@ -46,13 +46,13 @@ export class ConversationService {
 
         // Update the conversation
         await this.conversationRepository.updateConversation(
-          existingConversation.id,
+          existingConversation._id,
           { deletedBy: updatedDeletedBy },
         );
 
         // Return the updated conversation
         const updatedConversation = await this.findConversationEntityById(
-          existingConversation.id,
+          existingConversation._id,
         );
         return ConversationResponseDto.createWithParticipants(
           updatedConversation,

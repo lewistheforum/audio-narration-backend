@@ -18,8 +18,8 @@ import { BodySide } from '../enums';
  */
 @Entity('erm_ultrasounds')
 export class ERMUltrasound {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  _id: string;
 
   @Column({ name: 'erm_id', type: 'uuid' })
   ermId: string;

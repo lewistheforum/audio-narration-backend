@@ -17,8 +17,8 @@ import { ClinicShift } from './clinic-shift.entity';
  */
 @Entity('clinic_shift_hour')
 export class ClinicShiftHour {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'shift_id', type: 'uuid' })
   shiftId: string;

@@ -19,8 +19,8 @@ import { SubscriptionService } from './subscription-service.entity';
  */
 @Entity('clinic_subcriptions')
 export class ClinicSubscription {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'clinic_id', type: 'uuid', unique: true })
   clinicId: string;

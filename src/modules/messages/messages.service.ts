@@ -215,12 +215,12 @@ export class MessagesService {
     const updatedDeletedBy = [...(lastMessage.deletedBy || []), userId];
 
     await this.messageRepository.updateMessageDeletedBy(
-      lastMessage.id,
+      lastMessage._id,
       updatedDeletedBy,
     );
 
     // Return the updated message
-    const updatedMessage = await this.findMessageEntityById(lastMessage.id);
+    const updatedMessage = await this.findMessageEntityById(lastMessage._id);
     return new MessageResponseDto(updatedMessage);
   }
 

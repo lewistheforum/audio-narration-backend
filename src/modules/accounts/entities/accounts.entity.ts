@@ -26,8 +26,8 @@ import {
  */
 @Entity('accounts')
 export class Account {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   /**
    * Parent Account Reference

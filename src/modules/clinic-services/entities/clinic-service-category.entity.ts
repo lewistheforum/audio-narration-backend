@@ -15,8 +15,8 @@ import { ServiceCategoryType } from '../enums';
  */
 @Entity('clinic_service_category')
 export class ClinicServiceCategory {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'category_name', type: 'text' })
   categoryName: string;

@@ -18,8 +18,8 @@ import { ShiftType } from '../enums';
  */
 @Entity('clinic_shift')
 export class ClinicShift {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'clinic_id', type: 'uuid' })
   clinicId: string;

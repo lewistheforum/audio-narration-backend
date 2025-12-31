@@ -19,8 +19,8 @@ import { ERMRecordType, ERMStatus } from '../enums';
  */
 @Entity('erms')
 export class ERM {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'service_appointments_id', type: 'uuid' })
   serviceAppointmentsId: string;
@@ -47,8 +47,8 @@ export class ERM {
   })
   recordType: ERMRecordType;
 
-  @Column({ name: 'service_id', type: 'varchar', length: 50, nullable: true })
-  serviceId?: string;
+  @Column({ name: 'service_code', type: 'varchar', length: 50, nullable: true })
+  serviceCode?: string;
 
   @Column({
     name: 'status',

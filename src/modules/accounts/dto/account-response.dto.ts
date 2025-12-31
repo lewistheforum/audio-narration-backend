@@ -144,7 +144,7 @@ export class AccountResponseDto {
   deletedAt?: Date;
 
   constructor(account: Partial<Account>, generalAccount?: Partial<GeneralAccount>) {
-    this.id = account.id;
+    this.id = account._id;
     this.email = account.email;
     this.username = account.username;
     this.phone = account.phone;

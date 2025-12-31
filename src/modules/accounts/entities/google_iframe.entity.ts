@@ -17,8 +17,8 @@ import { Address } from './addresses.entity';
  */
 @Entity('google_iframe')
 export class GoogleIframe {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'address_id', type: 'uuid' })
   addressId: string;

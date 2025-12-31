@@ -282,7 +282,7 @@ export class AuthController {
     @Req() req: any,
     @Body() createClinicManagerDto: CreateClinicManagerDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const patientId = req.user.id;
+    const patientId = req.user._id;
     const manager = await this.AccountsService.createClinicManager(
       patientId,
       createClinicManagerDto,
@@ -333,7 +333,7 @@ export class AuthController {
     @Req() req: any,
     @Body() createStaffDto: CreateStaffByClinicManagerDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const managerId = req.user.id;
+    const managerId = req.user._id;
     const staff = await this.AccountsService.createStaffByClinicManager(
       managerId,
       createStaffDto,
@@ -384,7 +384,7 @@ export class AuthController {
     @Req() req: any,
     @Body() createDoctorDto: CreateDoctorByClinicManagerDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const managerId = req.user.id;
+    const managerId = req.user._id;
     const doctor = await this.AccountsService.createDoctorByClinicManager(
       managerId,
       createDoctorDto,

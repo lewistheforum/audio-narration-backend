@@ -106,7 +106,7 @@ export class SocketGatewayService
 
       // Store user data in socket
       client.data.user = {
-        userId: user.id,
+        userId: user._id,
         username: user.username || user.email,
         email: user.email,
       };
@@ -116,14 +116,14 @@ export class SocketGatewayService
       );
 
       const socketUser: SocketUser = {
-        userId: user.id,
+        userId: user._id,
         username: user.username || user.email,
         email: user.email,
         socketId: client.id,
       };
 
-      this.connectedUsers.set(user.id, socketUser);
-      this.userSockets.set(client.id, user.id);
+      this.connectedUsers.set(user._id, socketUser);
+      this.userSockets.set(client.id, user._id);
 
       // Send current online users to the newly connected socket
       client.emit('onlineUsers', {
@@ -132,7 +132,7 @@ export class SocketGatewayService
 
       // Notify others that user is online
       client.broadcast.emit('userOnline', {
-        userId: user.id,
+        userId: user._id,
         username: user.username || user.email,
         status: 'online',
       });
@@ -428,7 +428,7 @@ export class SocketGatewayService
       // Prepare the new message event
       const newMessageEvent: NewMessageEvent = {
         message: {
-          id: message.id,
+          id: message._id,
           conversationId: message.conversationId,
           senderId: message.senderId,
           receiverId: message.receiverId,
@@ -439,7 +439,7 @@ export class SocketGatewayService
           updatedAt: message.updatedAt,
         },
         sender: {
-          id: sender.id,
+          id: sender._id,
           username: sender.username || sender.email,
           email: sender.email,
         },
@@ -449,7 +449,7 @@ export class SocketGatewayService
       const conversationUpdateEvent: ConversationUpdateEvent = {
         conversationId: conversationId,
         lastMessage: {
-          id: message.id,
+          id: message._id,
           content: message.content,
           senderId: message.senderId,
           messageType: message.messageType,
@@ -475,7 +475,7 @@ export class SocketGatewayService
           if (participantSocket) {
             const messageNotificationEvent: MessageNotificationEvent = {
               conversationId: conversationId,
-              messageId: message.id,
+              messageId: message._id,
               senderId: message.senderId,
               receiverId: participant.id,
               content: message.content,
@@ -505,7 +505,7 @@ export class SocketGatewayService
       const conversationUpdateEvent: ConversationUpdateEvent = {
         conversationId: conversationId,
         lastMessage: {
-          id: lastMessage.id,
+          id: lastMessage._id,
           content: lastMessage.content,
           senderId: lastMessage.senderId,
           messageType: lastMessage.messageType,
@@ -536,7 +536,7 @@ export class SocketGatewayService
       if (userSocket) {
         const messageNotificationEvent: MessageNotificationEvent = {
           conversationId: conversationId,
-          messageId: message.id,
+          messageId: message._id,
           senderId: message.senderId,
           receiverId: userId,
           content: message.content,

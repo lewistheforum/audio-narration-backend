@@ -57,7 +57,7 @@ export class ConversationRepository {
    */
   async findConversationById(id: string): Promise<Conversation | null> {
     return this.conversationRepository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 

@@ -33,7 +33,7 @@ export class CodeVerificationRepository {
    */
   async findById(id: string): Promise<CodeVerification | null> {
     return this.repository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 

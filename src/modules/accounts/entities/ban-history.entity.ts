@@ -18,8 +18,8 @@ import { BanType } from '../enums';
  */
 @Entity('ban_history')
 export class BanHistory {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'account_id', type: 'uuid' })
   accountId: string;

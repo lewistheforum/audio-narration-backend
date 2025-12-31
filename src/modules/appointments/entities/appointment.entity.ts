@@ -19,8 +19,8 @@ import { AppointmentStatus } from '../enums';
  */
 @Entity('appointments')
 export class Appointment {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;

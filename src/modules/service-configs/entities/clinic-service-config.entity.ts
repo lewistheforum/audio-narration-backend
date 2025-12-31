@@ -18,8 +18,8 @@ import { ClinicService } from '../../clinic-services/entities/clinic-service.ent
  */
 @Entity('clinic_service_config')
 export class ClinicServiceConfig {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'service_id', type: 'uuid' })
   serviceId: string;

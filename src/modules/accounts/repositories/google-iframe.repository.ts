@@ -30,7 +30,7 @@ export class GoogleIframeRepository {
    */
   async findById(id: string): Promise<GoogleIframe | null> {
     return this.repository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 

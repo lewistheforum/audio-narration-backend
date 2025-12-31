@@ -80,8 +80,8 @@ export class MessageResponseDto {
   })
   deletedAt: Date | null;
 
-  constructor(message: Partial<MessageResponseDto>) {
-    this.id = message.id || '';
+  constructor(message: Partial<MessageResponseDto> | any) {
+    this.id = message._id || message.id || '';
     this.conversationId = message.conversationId || '';
     this.senderId = message.senderId || '';
     this.receiverId = message.receiverId || '';

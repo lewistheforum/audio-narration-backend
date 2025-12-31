@@ -18,8 +18,8 @@ import { BoneSite, WHOCategory } from '../enums';
  */
 @Entity('erm_bone_density')
 export class ERMBoneDensity {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  _id: string;
 
   @Column({ name: 'erm_id', type: 'uuid' })
   ermId: string;
@@ -39,6 +39,9 @@ export class ERMBoneDensity {
 
   @Column({ name: 'bmd_value', type: 'varchar', length: 50, nullable: true })
   bmdValue?: string;
+
+  @Column({ name: 'bmd_unit', type: 'varchar', length: 20, nullable: true })
+  bmdUnit?: string;
 
   @Column({ name: 't_score', type: 'numeric', precision: 3, scale: 1, nullable: true })
   tScore?: number;

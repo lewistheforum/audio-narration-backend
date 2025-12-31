@@ -19,8 +19,8 @@ import { Account } from './accounts.entity';
  */
 @Entity('general_accounts')
 export class GeneralAccount {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   /**
    * Reference to the main Account

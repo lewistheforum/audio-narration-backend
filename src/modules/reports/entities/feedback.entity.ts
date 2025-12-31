@@ -18,8 +18,8 @@ import { FeedbackType } from '../enums';
  */
 @Entity('feedbacks')
 export class Feedback {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'appointment_id', type: 'uuid' })
   appointmentId: string;

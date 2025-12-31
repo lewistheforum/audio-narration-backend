@@ -18,8 +18,8 @@ import { AppointmentPackage } from './appointment-package.entity';
  */
 @Entity('service_appointments')
 export class ServiceAppointment {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'clinic_service_id', type: 'uuid' })
   clinicServiceId: string;

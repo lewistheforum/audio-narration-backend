@@ -18,8 +18,8 @@ import { Gender } from '../enums';
  */
 @Entity('doctor_information')
 export class DoctorInformation {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'doctor_acc_id', type: 'uuid', unique: true })
   doctorAccId: string;

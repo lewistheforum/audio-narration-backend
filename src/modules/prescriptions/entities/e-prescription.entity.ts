@@ -18,8 +18,8 @@ import { Appointment } from '../../appointments/entities/appointment.entity';
  */
 @Entity('e_prescriptions')
 export class EPrescription {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'appointment_id', type: 'uuid', unique: true })
   appointmentId: string;

@@ -90,7 +90,7 @@ export class AccountRepository {
    */
   async findAccountById(id: string): Promise<Account | null> {
     return this.accountRepository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 
@@ -113,7 +113,7 @@ export class AccountRepository {
    */
   async findAccountByIdWithDeleted(id: string): Promise<Account | null> {
     return this.accountRepository.findOne({
-      where: { id },
+      where: { _id: id },
       withDeleted: true,
     });
   }
@@ -168,7 +168,7 @@ export class AccountRepository {
       return [];
     }
     return this.accountRepository.find({
-      where: { id: In(ids) },
+      where: { _id: In(ids) },
     });
   }
 

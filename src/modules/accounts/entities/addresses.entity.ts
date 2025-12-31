@@ -17,8 +17,8 @@ import { Account } from './accounts.entity';
  */
 @Entity('addresses')
 export class Address {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'account_id', type: 'uuid' })
   accountId: string;

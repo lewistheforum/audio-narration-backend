@@ -18,8 +18,8 @@ import { Transaction } from '../../transactions/entities/transaction.entity';
  */
 @Entity('appointment_package')
 export class AppointmentPackage {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'appointment_id', type: 'uuid' })
   appointmentId: string;

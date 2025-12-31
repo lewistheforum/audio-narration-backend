@@ -18,8 +18,8 @@ import { DoctorSchedule } from './doctor-schedule.entity';
  */
 @Entity('doctors_timekeeping')
 export class DoctorTimekeeping {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'doctor_id', type: 'uuid' })
   doctorId: string;

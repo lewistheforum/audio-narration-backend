@@ -17,8 +17,8 @@ import { TransactionType } from './transaction-type.entity';
  */
 @Entity('transactions')
 export class Transaction {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'subcription_id', type: 'uuid' })
   subscriptionId: string;

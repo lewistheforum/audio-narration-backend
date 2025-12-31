@@ -14,8 +14,8 @@ import {
  */
 @Entity('subcription_services')
 export class SubscriptionService {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'service_name', type: 'varchar', length: 150 })
   serviceName: string;

@@ -78,7 +78,7 @@ export class AdminSeederService implements OnModuleInit {
 
       // Create GeneralAccount entity
       const generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAdmin.id,
+        generalAccId: savedAdmin._id,
         fullName: this.DEFAULT_ADMIN.fullName,
       });
 

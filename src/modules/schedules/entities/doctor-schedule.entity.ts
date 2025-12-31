@@ -20,8 +20,8 @@ import { WeekDay } from '../enums';
  */
 @Entity('doctor_schedule')
 export class DoctorSchedule {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'doctor_id', type: 'uuid' })
   doctorId: string;

@@ -88,12 +88,12 @@ export class ConversationResponseDto {
   updatedAt: Date;
 
   constructor(
-    conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & {
+    conversation: (Omit<Partial<ConversationResponseDto>, 'participants'> & {
       participants?: string[] | AccountResponseDto[]
-    },
+    }) | any,
     AccountsService?: AccountsService
   ) {
-    this.id = conversation.id || '';
+    this.id = conversation._id || conversation.id || '';
     this.title = conversation.title || '';
     this.description = conversation.description || '';
     this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string')
@@ -107,7 +107,7 @@ export class ConversationResponseDto {
 
   // Static method to create with populated participants and last message
   static async createWithParticipants(
-    conversation: Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] },
+    conversation: (Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] }) | any,
     AccountsService: AccountsService,
     messagesService?: MessagesService,
   ): Promise<ConversationResponseDto> {
@@ -131,7 +131,7 @@ export class ConversationResponseDto {
     if (messagesService) {
       try {
         dto.lastMessage = await messagesService.findLastMessageByConversation(
-          conversation.id,
+          conversation._id || conversation.id,
         );
       } catch (error) {
         console.error('Error fetching last message:', error);

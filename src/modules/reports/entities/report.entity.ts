@@ -18,8 +18,8 @@ import { ReportType } from '../enums';
  */
 @Entity('reports')
 export class Report {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'account_id', type: 'uuid' })
   accountId: string;

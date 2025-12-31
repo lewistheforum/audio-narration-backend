@@ -139,7 +139,7 @@ export class AccountsService {
     for (const account of accounts) {
       const generalAccount =
         await this.generalAccountRepository.findGeneralAccountByUserId(
-          account.id,
+          account._id,
         );
       result.push(new AccountResponseDto(account, generalAccount));
     }
@@ -284,7 +284,7 @@ export class AccountsService {
       createAccountDto.profilePicture
     ) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAccount.id,
+        generalAccId: savedAccount._id,
         fullName: createAccountDto.fullName,
         gender: createAccountDto.gender,
         dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
@@ -374,7 +374,7 @@ export class AccountsService {
     let generalAccount: GeneralAccount | null = null;
     if (dto.fullName || dto.profilePicture) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAccount.id,
+        generalAccId: savedAccount._id,
         fullName: dto.fullName,
         profilePicture: dto.profilePicture,
       });
@@ -483,7 +483,7 @@ export class AccountsService {
       const existingAccountWithEmail = await this.findByEmail(
         updateAccountDto.email,
       );
-      if (existingAccountWithEmail && existingAccountWithEmail.id !== id) {
+      if (existingAccountWithEmail && existingAccountWithEmail._id !== id) {
         throw new ConflictException(MESSAGES.failMessage.emailAlreadyExists);
       }
 
@@ -1076,7 +1076,7 @@ export class AccountsService {
     // Find the verification code in the database
     const storedCode =
       await this.codeVerificationRepository.findValidByUserIdAndCode(
-        account.id,
+        account._id,
         code,
         VerificationType.VERIFY,
       );
@@ -1095,7 +1095,7 @@ export class AccountsService {
     }
 
     // Mark code as used (prevent reuse)
-    await this.codeVerificationRepository.markAsUsed(storedCode.id);
+    await this.codeVerificationRepository.markAsUsed(storedCode._id);
 
     // Mark email as verified and activate account
     account.isEmailVerified = true;
@@ -1103,7 +1103,7 @@ export class AccountsService {
     await this.accountRepository.saveAccount(account);
 
     // Get general account for firstName/lastName (split fullName)
-    const generalAccount = await this.findGeneralAccountByUserId(account.id);
+    const generalAccount = await this.findGeneralAccountByUserId(account._id);
     const names = generalAccount?.fullName?.split(' ') || [];
 
     return {
@@ -1164,7 +1164,7 @@ export class AccountsService {
     expiredAt.setMinutes(expiredAt.getMinutes() + 10);
 
     const verification = this.codeVerificationRepository.create({
-      userId: account.id,
+      userId: account._id,
       code,
       expiredAt,
       used: false,
@@ -1173,7 +1173,7 @@ export class AccountsService {
     await this.codeVerificationRepository.save(verification);
 
     // Get general account for firstName
-    const generalAccount = await this.findGeneralAccountByUserId(account.id);
+    const generalAccount = await this.findGeneralAccountByUserId(account._id);
     const names = generalAccount?.fullName?.split(' ') || [];
 
     return {
@@ -1246,7 +1246,7 @@ export class AccountsService {
     expiredAt.setMinutes(expiredAt.getMinutes() + 15);
 
     const verification = this.codeVerificationRepository.create({
-      userId: account.id,
+      userId: account._id,
       code,
       expiredAt,
       used: false,
@@ -1320,7 +1320,7 @@ export class AccountsService {
     // Find the reset code in the database
     const storedCode =
       await this.codeVerificationRepository.findValidByUserIdAndCode(
-        account.id,
+        account._id,
         code,
         VerificationType.RESET,
       );
@@ -1335,7 +1335,7 @@ export class AccountsService {
     }
 
     // Mark code as used
-    await this.codeVerificationRepository.markAsUsed(storedCode.id);
+    await this.codeVerificationRepository.markAsUsed(storedCode._id);
 
     // Hash and update password
     account.password = await bcrypt.hash(newPassword, this.BCRYPT_SALT_ROUNDS);
@@ -1458,7 +1458,7 @@ export class AccountsService {
       // Create GeneralAccount profile
       const generalAccount = this.generalAccountRepository.createGeneralAccount(
         {
-          generalAccId: savedAccount.id,
+          generalAccId: savedAccount._id,
           fullName: dto.fullName,
           gender: dto.gender,
           dob: dto.dob ? new Date(dto.dob) : undefined,
@@ -1568,12 +1568,12 @@ export class AccountsService {
 
       const savedAccount = await queryRunner.manager.save(account);
 
-      console.log('check account ID: ', savedAccount.id);
+      console.log('check account ID: ', savedAccount._id);
 
       // Step 4: Create GeneralAccount entity
       // const generalAccount = this.generalAccountRepository.createGeneralAccount(
       //   {
-      //     generalAccId: savedAccount.id,
+      //     generalAccId: savedAccount._id,
       //     fullName: dto.fullName,
       //   },
       // );
@@ -1582,7 +1582,7 @@ export class AccountsService {
 
       // Step 5: Create ClinicInformation entity
       const clinicInfo = this.clinicInfoRepository.create({
-        clinicId: savedAccount.id,
+        clinicId: savedAccount._id,
         clinicName: dto.clinicName,
         description: dto.description,
         specializedIn: dto.specializedIn,
@@ -1684,7 +1684,7 @@ export class AccountsService {
 
       // Step 5: Create ClinicStaffInformation entity with basic info
       const staffInfo = this.clinicStaffRepository.create({
-        clinicAccId: savedAccount.id,
+        clinicAccId: savedAccount._id,
         fullName: dto.fullName,
         gender: dto.gender,
         clinicRole: dto.clinicRole,
@@ -1781,7 +1781,7 @@ export class AccountsService {
 
       // Step 5: Create DoctorInformation entity with basic info
       const doctorInfo = this.doctorInfoRepository.create({
-        doctorAccId: savedAccount.id,
+        doctorAccId: savedAccount._id,
         fullName: dto.fullName,
         gender: dto.gender,
         academicDegree: dto.academicDegree,

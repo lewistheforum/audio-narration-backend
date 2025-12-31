@@ -17,8 +17,8 @@ import { ClinicServiceCategory } from './clinic-service-category.entity';
  */
 @Entity('clinic_services')
 export class ClinicService {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'category_id', type: 'uuid' })
   categoryId: string;

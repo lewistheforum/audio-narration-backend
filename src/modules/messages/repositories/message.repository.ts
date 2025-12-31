@@ -55,7 +55,7 @@ export class MessageRepository {
    */
   async findMessageById(id: string): Promise<Message | null> {
     return this.messageRepository.findOne({
-      where: { id },
+      where: { _id: id },
     });
   }
 

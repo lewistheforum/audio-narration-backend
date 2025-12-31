@@ -18,8 +18,8 @@ import { VisitType, Severity } from '../enums';
  */
 @Entity('erm_consultations')
 export class ERMConsultation {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  _id: string;
 
   @Column({ name: 'erm_id', type: 'uuid' })
   ermId: string;

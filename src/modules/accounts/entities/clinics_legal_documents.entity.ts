@@ -18,8 +18,8 @@ import { BankName } from '../enums';
  */
 @Entity('clinics_legal_documents')
 export class ClinicsLegalDocuments {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'account_id', type: 'uuid', unique: true })
   accountId: string;

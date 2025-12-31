@@ -18,8 +18,8 @@ import { VerificationType } from '../enums';
  */
 @Entity('code_verification')
 export class CodeVerification {
-  @PrimaryGeneratedColumn('uuid', { name: '_id' })
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  _id: string;
 
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;

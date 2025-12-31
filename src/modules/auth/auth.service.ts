@@ -57,18 +57,18 @@ export class AuthService {
     // Check if user account is banned or inactive
     this.AccountsService.validateAccountAccess(user);
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
-    this.socketGatewayService.markUserOnline(String(user.id));
+    const payload = { sub: user._id, email: user.email, role: user.role };
+    this.socketGatewayService.markUserOnline(String(user._id));
 
     // Get general account data for response
     const generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-      user.id,
+      user._id,
     );
 
     return {
       data: {
         accessToken: this.jwtService.sign(payload),
-        userId: user.id,
+        userId: user._id,
         user: new AccountResponseDto(user, generalAccount),
       },
     };
@@ -118,7 +118,7 @@ export class AuthService {
 
       // Update profilePicture in GeneralAccount if needed
       generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-        user.id,
+        user._id,
       );
       
       if (picture && generalAccount && generalAccount.profilePicture !== picture) {
@@ -130,7 +130,7 @@ export class AuthService {
         await this.AccountsService.updateGeneralAccountEntity(generalAccount);
       }
 
-      userId = user.id;
+      userId = user._id;
       userEmail = user.email;
     } else {
         // Create new patient account via Google OAuth
@@ -183,7 +183,7 @@ export class AuthService {
     const now = new Date();
 
     // Find latest unused code for this user
-    const userCodes = await this.codeVerificationRepository.findByUserId(user.id);
+    const userCodes = await this.codeVerificationRepository.findByUserId(user._id);
     const record = userCodes
       .filter(c => c.code === code && !c.used)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
@@ -196,7 +196,7 @@ export class AuthService {
       throw new BadRequestException('Verification code has expired');
     }
 
-    await this.codeVerificationRepository.markAsUsed(record.id);
+    await this.codeVerificationRepository.markAsUsed(record._id);
 
     return {
       message: 'Verification code validated successfully. You can now set a new password.',
