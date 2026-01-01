@@ -38,11 +38,11 @@ export class ClinicRoom {
     name: 'room_staff_assignments',
     joinColumn: {
       name: 'room_id',
-      referencedColumnName: 'id',
+      referencedColumnName: '_id',
     },
     inverseJoinColumn: {
       name: 'staff_id',
-      referencedColumnName: 'id',
+      referencedColumnName: '_id',
     },
   })
   assignedStaff?: Account[];
