@@ -8,7 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
+  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -20,6 +20,7 @@ import {
   ResendVerificationDto,
   VerifyResetPasswordDto,
 } from './dto';
+import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import {
   ApiOperation,
@@ -60,7 +61,8 @@ export class AuthController {
     private authService: AuthService,
     private AccountsService: AccountsService,
     private mailerService: MailerService,
-  ) {}
+    private configService: ConfigService,
+  ) { }
 
   /**
    * User Login
@@ -108,7 +110,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirects to Google login page' })
   @UseGuards(AuthGuard('google'))
-  async googleAuth(): Promise<void> {}
+  async googleAuth(): Promise<void> { }
 
   /**
    * Google OAuth Callback Handler
@@ -124,13 +126,17 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(
     @Req() req: any,
-  ): Promise<{ statusCode: number; message: string; data: any }> {
+    @Res() res: any,
+  ): Promise<void> {
     const tokenData = await this.authService.googleLogin(req.user);
-    return {
-      statusCode: MESSAGES.statusCode.success,
-      message: MESSAGES.successMessage.googleLoginSuccess,
-      data: tokenData,
-    };
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+
+    const redirectUrl = new URL(`${frontendUrl}/`);
+    redirectUrl.searchParams.set('token', tokenData.accessToken);
+    redirectUrl.searchParams.set('userId', tokenData.userId);
+
+    return res.redirect(redirectUrl.toString());
   }
 
   /**

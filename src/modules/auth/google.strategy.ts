@@ -41,7 +41,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     done: VerifyCallback,
   ): Promise<any> {
     const { id, name, emails, photos } = profile;
-    
+
     const user = {
       googleId: id,
       email: emails[0].value,
@@ -51,7 +51,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       accessToken,
       isEmailVerified: true, // Google OAuth users have verified emails
     };
-    
+
     done(null, user);
   }
 }
