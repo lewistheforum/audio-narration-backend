@@ -41,6 +41,12 @@ export class DoctorInformation {
   })
   gender?: Gender;
 
+  @Column({ name: 'dob', type: 'date', nullable: true })
+  dob?: Date;
+
+  @Column({ name: 'profile_picture', type: 'text', nullable: true })
+  profilePicture?: string;
+
   @Column({ name: 'academic_degree', type: 'text', nullable: true })
   academicDegree?: string;
 

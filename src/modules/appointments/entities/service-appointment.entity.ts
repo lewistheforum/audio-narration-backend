@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { ClinicServiceConfig } from '../../service-configs/entities/clinic-service-config.entity';
 import { AppointmentPackage } from './appointment-package.entity';
+import { ERM } from '../../prescriptions/entities/erm.entity';
 
 /**
  * ServiceAppointment Entity
@@ -38,6 +40,11 @@ export class ServiceAppointment {
   })
   @JoinColumn({ name: 'appointment_package_id' })
   appointmentPackage?: AppointmentPackage;
+
+  @OneToOne(() => ERM, (erm) => erm.serviceAppointment, {
+    nullable: true,
+  })
+  erm?: ERM;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

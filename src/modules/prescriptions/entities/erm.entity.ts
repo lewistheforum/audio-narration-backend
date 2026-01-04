@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { ServiceAppointment } from '../../appointments/entities/service-appointment.entity';
@@ -25,7 +26,7 @@ export class ERM {
   @Column({ name: 'service_appointments_id', type: 'uuid' })
   serviceAppointmentsId: string;
 
-  @ManyToOne(() => ServiceAppointment, {
+  @OneToOne(() => ServiceAppointment, (serviceAppointment) => serviceAppointment.erm, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'service_appointments_id' })

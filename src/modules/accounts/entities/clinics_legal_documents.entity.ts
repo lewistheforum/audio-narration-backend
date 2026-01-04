@@ -9,7 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
-import { BankName } from '../enums';
+import { BankName, LegalDocumentVerificationStatus } from '../enums';
 
 /**
  * ClinicsLegalDocuments Entity
@@ -50,8 +50,13 @@ export class ClinicsLegalDocuments {
   @Column({ name: 'is_sepay_verify', type: 'boolean', default: false })
   isSepayVerify: boolean;
 
-  @Column({ name: 'processing_step', type: 'integer', nullable: true })
-  processingStep?: number;
+  @Column({
+    name: 'verification_status',
+    type: 'enum',
+    enum: LegalDocumentVerificationStatus,
+    default: LegalDocumentVerificationStatus.NOT_SUBMITTED,
+  })
+  verificationStatus: LegalDocumentVerificationStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

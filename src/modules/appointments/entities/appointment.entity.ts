@@ -55,9 +55,6 @@ export class Appointment {
   @Column({ name: 'appointment_hour', type: 'timestamptz' })
   appointmentHour: Date;
 
-  @Column({ name: 'room', type: 'text', nullable: true })
-  room?: string;
-
   @Column({ name: 'total', type: 'numeric', precision: 10, scale: 2 })
   total: number;
 

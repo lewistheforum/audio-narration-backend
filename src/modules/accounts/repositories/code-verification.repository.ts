@@ -106,6 +106,20 @@ export class CodeVerificationRepository {
    * Create code verification entity (without saving)
    */
   create(data: DeepPartial<CodeVerification>): CodeVerification {
+    // Validate required fields to prevent NULL values in database
+    if (!data.code) {
+      throw new Error('CodeVerification: code field is required and cannot be empty');
+    }
+    if (!data.userId) {
+      throw new Error('CodeVerification: userId field is required');
+    }
+    if (!data.expiredAt) {
+      throw new Error('CodeVerification: expiredAt field is required');
+    }
+    if (!data.type) {
+      throw new Error('CodeVerification: type field is required');
+    }
+    
     return this.repository.create(data);
   }
 
@@ -123,6 +137,11 @@ export class CodeVerificationRepository {
     id: string,
     data: DeepPartial<CodeVerification>,
   ): Promise<CodeVerification | null> {
+    // Validate that if code is being updated, it's not empty
+    if ('code' in data && !data.code) {
+      throw new Error('CodeVerification: code field cannot be empty');
+    }
+    
     await this.repository.update(id, data);
     return this.findById(id);
   }

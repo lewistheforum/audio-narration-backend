@@ -29,8 +29,8 @@ export class ClinicShiftHour {
   @JoinColumn({ name: 'shift_id' })
   shift?: ClinicShift;
 
-  @Column({ name: 'star_hour', type: 'time' })
-  starHour: string;
+  @Column({ name: 'start_hour', type: 'time' })
+  startHour: string;
 
   @Column({ name: 'end_hour', type: 'time' })
   endHour: string;

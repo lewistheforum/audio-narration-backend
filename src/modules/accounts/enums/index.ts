@@ -5,3 +5,4 @@ export * from './verification-type.enum';
 export * from './clinic-role.enum';
 export * from './bank-name.enum';
 export * from './ban-type.enum';
+export * from './legal-document-verification-status.enum';
