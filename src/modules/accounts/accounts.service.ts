@@ -37,6 +37,7 @@ import {
 } from './repositories';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
 import { generateVerificationCode } from 'src/common/utils/util';
+import { MailerService } from '../mailer/mailer.service';
 
 /**
  * Accounts Service
@@ -103,6 +104,7 @@ export class AccountsService {
     private readonly clinicInfoRepository: ClinicInformationRepository,
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
     private readonly doctorInfoRepository: DoctorInformationRepository,
+    private readonly mailerService: MailerService,
   ) {}
 
   /**
@@ -1471,6 +1473,30 @@ export class AccountsService {
       );
 
       await queryRunner.commitTransaction();
+
+      // Generate new 6-digit code
+      const code = generateVerificationCode();
+
+      // Store code in database with expiration (15 minutes for password reset)
+      const expiredAt = new Date();
+      expiredAt.setMinutes(expiredAt.getMinutes() + 15);
+
+      const verification = this.codeVerificationRepository.create({
+        userId: savedAccount._id,
+        code,
+        expiredAt,
+        used: false,
+        type: VerificationType.VERIFY,
+      });
+
+      await this.codeVerificationRepository.save(verification);
+
+      // Send verification email
+      await this.mailerService.sendVerificationCode(
+        savedAccount.email,
+        code,
+        savedAccount.username,
+      );
 
       return new AccountResponseDto(savedAccount, savedGeneralAccount);
     } catch (error) {

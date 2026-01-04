@@ -76,7 +76,7 @@ export class MailerController {
     await this.mailerService.sendVerificationCode(
       user.email,
       code,
-      user.firstName,
+      user.username,
     );
 
     return {
