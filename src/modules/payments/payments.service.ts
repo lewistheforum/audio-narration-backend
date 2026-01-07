@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository } from 'typeorm';
 import { CreatePaymentDto, PaymentResponseDto, SeepayCallbackDto } from './dto';
+import { ClinicLegalDocument } from './entities/clinic-legal-document.entity';
 import {
 	PaymentDirection,
 	PaymentStatus,
@@ -24,6 +25,8 @@ export class PaymentsService {
 	constructor(
 		@InjectRepository(PaymentTransaction)
 		private readonly paymentRepository: Repository<PaymentTransaction>,
+		@InjectRepository(ClinicLegalDocument)
+		private readonly clinicRepo: Repository<ClinicLegalDocument>,
 		private readonly configService: ConfigService,
 	) {
 		this.qrBaseUrl =
@@ -45,10 +48,9 @@ export class PaymentsService {
 
 		const orderCode = this.generateOrderCode(dto.prescriptionId);
 		const expiresAt = this.computeExpireTime();
-		const qrCodeUrl = this.buildQrUrl(dto.amount, orderCode, dto.userId, dto.prescriptionId);
-		const qrPayload = this.buildQrPayload(dto.amount, orderCode, dto.userId, dto.prescriptionId);
+		const qrCodeUrl = this.buildQrUrl(dto.amount, dto.prescriptionId);
+		const qrPayload = this.buildQrPayload(dto.amount, dto.prescriptionId);
 
-		// Không lưu vào DB, chỉ trả về thông tin QR tạm thời
 		return new PaymentResponseDto({
 			id: null, // Chưa có ID vì chưa lưu DB
 			orderCode,
@@ -135,6 +137,10 @@ export class PaymentsService {
 		const savedTransaction = await this.paymentRepository.save(transaction);
 		console.log('✅ Transaction saved with ID:', savedTransaction.id);
 
+		if (status === PaymentStatus.SUCCESS && prescriptionId) {
+			await this.markClinicDocumentVerified(prescriptionId);
+		}
+
 		return new PaymentResponseDto({
 			id: transaction.id,
 			orderCode: transaction.orderCode,
@@ -147,7 +153,16 @@ export class PaymentsService {
 		});
 	}
 
-	private buildQrUrl(amount: number, orderCode: string, userId: string, prescriptionId: string): string {
+	private async markClinicDocumentVerified(documentId: string): Promise<void> {
+		const doc = await this.clinicRepo.findOne({ where: { id: documentId } });
+		if (!doc || doc.isSepayVerify) {
+			return;
+		}
+		doc.isSepayVerify = true;
+		await this.clinicRepo.save(doc);
+	}
+
+	private buildQrUrl(amount: number, prescriptionId: string): string {
 		const des = prescriptionId;
 		const params = new URLSearchParams({
 			acc: this.seepayAccount,
@@ -159,7 +174,7 @@ export class PaymentsService {
 		return `${this.qrBaseUrl}?${params.toString()}`;
 	}
 
-	buildQrPayload(amount: number, orderCode: string, userId: string, prescriptionId: string): string {
+	buildQrPayload(amount: number, prescriptionId: string): string {
 		const des = prescriptionId;
 		return JSON.stringify({
 			acc: this.seepayAccount,
@@ -195,7 +210,6 @@ export class PaymentsService {
 			return undefined;
 		}
 		// Content format: "QAFHMW1685 SEPAY7676 1 f91af8b4391e4a41a8c91f08b4b6a690"
-		// Tìm UUID 32 ký tự (không có dấu gạch ngang)
 		const uuidMatch = content.match(/([a-f0-9]{32})/i);
 		
 		if (!uuidMatch) {

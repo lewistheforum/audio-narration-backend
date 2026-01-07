@@ -9,6 +9,7 @@ import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.mod
 import { ConversationModule } from './modules/conversations/conversation.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ClinicLegalDocumentsModule } from './modules/clinic-legal-documents/clinic-legal-documents.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     ConversationModule,
     MessagesModule,
     PaymentsModule,
+    ClinicLegalDocumentsModule,
   ],
   controllers: [],
   providers: [],

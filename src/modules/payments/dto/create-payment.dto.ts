@@ -16,13 +16,6 @@ export class CreatePaymentDto {
   prescriptionId: string;
 
   @ApiProperty({
-    description: 'User identifier who makes the payment',
-    example: 'a1b2c3d4-5678-90ab-cdef-1234567890ab',
-  })
-  @IsUUID()
-  userId: string;
-
-  @ApiProperty({
     description: 'Amount that should be collected for the prescription (VND)',
     example: 2277000,
   })
