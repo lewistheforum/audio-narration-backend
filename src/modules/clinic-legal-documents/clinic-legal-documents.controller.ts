@@ -12,7 +12,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ClinicLegalDocumentsService } from './clinic-legal-documents.service';
 import { CreateClinicLegalDocumentDto } from './dto/create-clinic-legal-document.dto';
 import { GenerateVerificationQrDto } from './dto/generate-verification-qr.dto';
-import { PaymentResponseDto } from '../payments/dto/payment-response.dto';
+import { PaymentResponseDto } from '../transactions/dto/payment-response.dto';
 import { ClinicLegalDocument } from '../transactions/entities/clinic-legal-document.entity';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { MESSAGES } from 'src/common/message';
