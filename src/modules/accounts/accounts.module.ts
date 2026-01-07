@@ -85,6 +85,17 @@ import { MailerModule } from '../mailer/mailer.module';
     CodeVerificationRepository,
     AccountsService,
   ],
-  exports: [AccountsService, CodeVerificationRepository],
+  exports: [
+    AccountsService,
+    CodeVerificationRepository,
+    AccountRepository,
+    GeneralAccountRepository,
+    AddressRepository,
+    GoogleIframeRepository,
+    ClinicsLegalDocumentsRepository,
+    ClinicInformationRepository,
+    ClinicStaffInformationRepository,
+    DoctorInformationRepository,
+  ],
 })
 export class AccountsModule {}

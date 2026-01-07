@@ -457,4 +457,24 @@ export class AccountRepository {
 
     return queryBuilder.getManyAndCount();
   }
+
+  /**
+   * Count Accounts by Role
+   *
+   * Returns the number of accounts with a specific role.
+   *
+   * @param {AccountRole} role - Account role to count
+   * @returns {Promise<number>} Number of accounts with the specified role
+   *
+   * @example
+   * ```typescript
+   * const adminCount = await repository.countByRole(AccountRole.ADMIN);
+   * const patientCount = await repository.countByRole(AccountRole.PATIENT);
+   * ```
+   */
+  async countByRole(role: AccountRole): Promise<number> {
+    return this.accountRepository.count({
+      where: { role },
+    });
+  }
 }

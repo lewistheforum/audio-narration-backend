@@ -18,6 +18,7 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ClinicServicesModule } from './modules/clinic-services/clinic-services.module';
 import { ServiceConfigsModule } from './modules/service-configs/service-configs.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { SeedersModule } from './common/seeders/seeders.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
 
 @Module({
@@ -68,6 +69,7 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     ClinicServicesModule,
     ServiceConfigsModule,
     AppointmentsModule,
+    SeedersModule,
   ],
   controllers: [],
   providers: [],

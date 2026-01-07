@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { GeneralAccount } from '../../modules/accounts/entities/general_accounts.entity';
@@ -14,7 +14,7 @@ import { GeneralAccountRepository } from '../../modules/accounts/repositories/ge
  * - Admin account is immediately ACTIVE with verified email
  */
 @Injectable()
-export class AdminSeederService implements OnModuleInit {
+export class AdminSeederService {
   private readonly logger = new Logger(AdminSeederService.name);
   private readonly BCRYPT_SALT_ROUNDS = 10;
 
@@ -33,19 +33,14 @@ export class AdminSeederService implements OnModuleInit {
   ) {}
 
   /**
-   * Lifecycle hook - runs when module initializes
-   */
-  async onModuleInit(): Promise<void> {
-    await this.seedAdmin();
-  }
-
-  /**
    * Seed default admin account if it doesn't exist
-   * 
+   *
    * Creates both Account and GeneralAccount entities
    * Admin account is immediately ACTIVE with verified email
+   *
+   * This method is called by SeederOrchestratorService during application bootstrap.
    */
-  private async seedAdmin(): Promise<void> {
+  async seed(): Promise<void> {
     try {
       // Check if admin already exists by email
       const existingAdmin = await this.accountRepository.findAccountByEmail(

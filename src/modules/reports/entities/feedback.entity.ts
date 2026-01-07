@@ -31,10 +31,10 @@ export class Feedback {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'clinic_id' })
-  clinic?: Account;
+  clinic: Account;
 
-  @Column({ name: 'doctor_id', type: 'uuid' })
-  doctorId: string;
+  @Column({ name: 'doctor_id', type: 'uuid', nullable: true })
+  doctorId?: string;
 
   @ManyToOne(() => Account, {
     onDelete: 'CASCADE',

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Feedback, Report } from './entities';
+import { FeedbackRepository } from './repositories/feedback.repository';
 
 /**
  * Reports Module
@@ -10,7 +11,7 @@ import { Feedback, Report } from './entities';
 @Module({
   imports: [TypeOrmModule.forFeature([Feedback, Report])],
   controllers: [],
-  providers: [],
-  exports: [TypeOrmModule],
+  providers: [FeedbackRepository],
+  exports: [TypeOrmModule, FeedbackRepository],
 })
 export class ReportsModule {}
