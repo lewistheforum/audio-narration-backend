@@ -48,8 +48,14 @@ export class Feedback {
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
 
+  @Column({ name: 'description_label', type: 'text', nullable: true })
+  descriptionLabel?: string;
+
   @Column({ name: 'feedback_images', type: 'jsonb', nullable: true })
   feedbackImages?: any;
+
+  @Column({ name: 'feedback_images_label', type: 'jsonb', nullable: true })
+  feedbackImagesLabel?: any;
 
   @Column({
     name: 'type',
