@@ -19,6 +19,11 @@ lerna-debug.log*
 /coverage
 /.nyc_output
 
+# Testing documentation and flows
+/TestFlow
+/document
+/instructions
+
 # IDEs and editors
 /.idea
 .project
@@ -54,3 +59,6 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+#datasets
+/data

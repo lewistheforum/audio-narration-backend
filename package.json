@@ -49,6 +49,7 @@
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "date-fns": "^4.1.0",
     "fastify": "^4.29.1",
     "mongoose": "^8.15.0",
     "nodemailer": "^7.0.7",
@@ -73,11 +74,14 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.3",
     "jest": "^30.2.0",
     "nodemon": "^3.1.10",
     "ts-jest": "^29.4.4",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "xlsx": "^0.18.5"
   }
 }

@@ -4,26 +4,24 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { ArrayContains, In, Not, Repository } from 'typeorm';
 import {
   CreateConversationDto,
   UpdateConversationDto,
   ConversationResponseDto,
 } from './dto';
 import { Conversation } from './entities/conversation.entity';
-import { UserService } from '../user/user.service';
+import { ConversationRepository } from './repositories';
+import { AccountsService } from '../accounts/accounts.service';
 import { MessagesService } from '../messages/messages.service';
 
 @Injectable()
 export class ConversationService {
   constructor(
-    @InjectRepository(Conversation)
-    private conversationRepository: Repository<Conversation>,
-    private userService: UserService,
+    private readonly conversationRepository: ConversationRepository,
+    private AccountsService: AccountsService,
     @Inject(forwardRef(() => MessagesService))
     private messagesService: MessagesService,
-  ) {}
+  ) { }
 
   async create(
     createConversationDto: CreateConversationDto,
@@ -47,17 +45,18 @@ export class ConversationService {
         );
 
         // Update the conversation
-        await this.conversationRepository.update(existingConversation.id, {
-          deletedBy: updatedDeletedBy,
-        });
+        await this.conversationRepository.updateConversation(
+          existingConversation._id,
+          { deletedBy: updatedDeletedBy },
+        );
 
         // Return the updated conversation
         const updatedConversation = await this.findConversationEntityById(
-          existingConversation.id,
+          existingConversation._id,
         );
         return ConversationResponseDto.createWithParticipants(
           updatedConversation,
-          this.userService,
+          this.AccountsService,
           this.messagesService,
         );
       }
@@ -65,21 +64,18 @@ export class ConversationService {
       // If conversation exists but user is not in deletedBy, return existing conversation
       return ConversationResponseDto.createWithParticipants(
         existingConversation,
-        this.userService,
+        this.AccountsService,
         this.messagesService,
       );
     }
 
     // Create new conversation if none exists
-    const conversation = this.conversationRepository.create(
+    const savedConversation = await this.conversationRepository.createConversation(
       createConversationDto,
-    );
-    const savedConversation = await this.conversationRepository.save(
-      conversation,
     );
     return ConversationResponseDto.createWithParticipants(
       savedConversation,
-      this.userService,
+      this.AccountsService,
       this.messagesService,
     );
   }
@@ -90,11 +86,9 @@ export class ConversationService {
     // Sort participants to ensure consistent comparison
     const sortedParticipants = [...participants].sort();
 
-    const conversations = await this.conversationRepository.find({
-      where: {
-        participants: ArrayContains(sortedParticipants),
-      },
-    });
+    const conversations = await this.conversationRepository.findConversationsByParticipants(
+      sortedParticipants,
+    );
 
     // Find conversation with exact same participants (same length and same elements)
     return (
@@ -111,14 +105,12 @@ export class ConversationService {
   }
 
   async findAll(): Promise<ConversationResponseDto[]> {
-    const conversations = await this.conversationRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+    const conversations = await this.conversationRepository.findAllConversations();
     return Promise.all(
       conversations.map((conversation) =>
         ConversationResponseDto.createWithParticipants(
           conversation,
-          this.userService,
+          this.AccountsService,
           this.messagesService,
         ),
       ),
@@ -129,7 +121,7 @@ export class ConversationService {
     const conversation = await this.findConversationEntityById(id);
     return ConversationResponseDto.createWithParticipants(
       conversation,
-      this.userService,
+      this.AccountsService,
       this.messagesService,
     );
   }
@@ -137,17 +129,21 @@ export class ConversationService {
   async findByParticipants(
     participants: string[],
   ): Promise<ConversationResponseDto[]> {
-    const conversations = await this.conversationRepository.find({
-      where: {
-        participants: ArrayContains(participants),
-        deletedBy: Not(ArrayContains([...participants])),
-      },
+    // Get all conversations with these participants
+    const conversations = await this.conversationRepository.findConversationsByParticipants(
+      participants,
+    );
+    
+    // Filter out conversations where all participants are in deletedBy
+    const filteredConversations = conversations.filter((conv) => {
+      return !participants.every((p) => conv.deletedBy?.includes(p));
     });
+    
     return Promise.all(
-      conversations.map((conversation) =>
+      filteredConversations.map((conversation) =>
         ConversationResponseDto.createWithParticipants(
           conversation,
-          this.userService,
+          this.AccountsService,
           this.messagesService,
         ),
       ),
@@ -158,24 +154,19 @@ export class ConversationService {
     id: string,
     updateConversationDto: UpdateConversationDto,
   ): Promise<ConversationResponseDto> {
-    const conversation = await this.findConversationEntityById(id);
-
-    Object.assign(conversation, updateConversationDto);
-    const updatedConversation = await this.conversationRepository.save(
-      conversation,
+    const updatedConversation = await this.conversationRepository.updateConversation(
+      id,
+      updateConversationDto,
     );
 
     return ConversationResponseDto.createWithParticipants(
       updatedConversation,
-      this.userService,
+      this.AccountsService,
     );
   }
 
   async delete(conversationId: string, userId: string): Promise<void> {
-    const conversation = await this.findConversationEntityById(conversationId);
-    await this.conversationRepository.update(conversationId, {
-      deletedBy: [...(conversation.deletedBy || []), userId],
-    });
+    await this.conversationRepository.addUserToDeletedBy(conversationId, userId);
     await this.messagesService.updateLastMessageDeletedBy(
       conversationId,
       userId,
@@ -183,20 +174,15 @@ export class ConversationService {
   }
 
   async clearDeletedBy(conversationId: string): Promise<void> {
-    await this.conversationRepository.update(conversationId, {
-      deletedBy: [],
-    });
+    await this.conversationRepository.clearDeletedBy(conversationId);
   }
 
   async hasDeletedByValues(conversationId: string): Promise<boolean> {
-    const conversation = await this.findConversationEntityById(conversationId);
-    return conversation.deletedBy && conversation.deletedBy.length > 0;
+    return await this.conversationRepository.hasDeletedByValues(conversationId);
   }
 
   private async findConversationEntityById(id: string): Promise<Conversation> {
-    const conversation = await this.conversationRepository.findOne({
-      where: { id },
-    });
+    const conversation = await this.conversationRepository.findConversationById(id);
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
     }

@@ -8,13 +8,14 @@ import {
   JoinColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { Account } from '../../accounts/entities/accounts.entity';
 import { Conversation } from '../../conversations/entities/conversation.entity';
+import { MessageType } from '../enums';
 
 @Entity('messages')
 export class Message {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  _id: string;
 
   @Column({ name: 'conversation_id' })
   conversationId: string;
@@ -25,16 +26,21 @@ export class Message {
   @Column({ name: 'receiver_id' })
   receiverId: string;
 
-  @Column({ type: 'text' })
+  @Column({ name: 'content', type: 'text' })
   content: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'text' })
-  messageType: string;
+  @Column({
+    name: 'message_type',
+    type: 'enum',
+    enum: MessageType,
+    default: MessageType.TEXT,
+  })
+  messageType: MessageType;
 
-  @Column({ default: false })
+  @Column({ name: 'is_read', default: false })
   isRead: boolean;
 
-  @Column({ default: false })
+  @Column({ name: 'is_updated', default: false })
   isUpdated: boolean;
 
   @Column('uuid', {
@@ -49,23 +55,23 @@ export class Message {
   @JoinColumn({ name: 'conversation_id' })
   conversation: Conversation;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Account, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'sender_id' })
-  sender: User;
+  sender: Account;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Account, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'receiver_id' })
-  receiver: User;
+  receiver: Account;
 
   @CreateDateColumn({ name: 'validated_at' })
   validatedAt: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date;
 }

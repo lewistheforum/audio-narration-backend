@@ -5,7 +5,7 @@ import { AppModule } from './app.module';
 import { DatabaseHealthService } from './common/health/database-health.service';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
   // config CORS
@@ -14,12 +14,16 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // config global validation pipe
+  // Global validation pipe with enhanced settings
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
+      whitelist: true, // Strip properties that don't have decorators
+      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties exist
+      transform: true, // Auto-transform payloads to DTO instances
+      transformOptions: {
+        enableImplicitConversion: true, // Auto-convert primitive types
+      },
+      disableErrorMessages: false, // Show detailed validation messages
     }),
   );
 
@@ -28,16 +32,26 @@ async function bootstrap() {
 
   // config Swagger documentation
   const config = new DocumentBuilder()
-    .setTitle('Capstone API')
-    .setDescription('A platform for sharing and discovering doctor')
-    .setVersion('1.0')
-    .addTag('Authentication', 'Authentication endpoints')
-    .addTag('Users management', 'User management endpoints')
-    .addTag('Health', 'Health check endpoints')
-    .addTag('Mailer', 'Mail service endpoints')
-    .addTag('Payments', 'QR Seepay') 
-
-    // .addBearerAuth()
+    .setTitle('Medicare API')
+    .setDescription('A comprehensive healthcare platform API for patient management, clinic services, messaging, and doctor discovery')
+    .setVersion('1.0.0')
+    .addTag('Authentication', 'Authentication endpoints - Login, Google OAuth, and session management')
+    .addTag('Users management', 'User management endpoints - CRUD operations for patients, clinic staff, doctors, and admins')
+    .addTag('Conversations', 'Conversation management - Create and manage conversations between users')
+    .addTag('Messages', 'Message management - Send, receive, and manage messages within conversations')
+    .addTag('Health', 'Health check endpoints - Monitor application and database health status')
+    .addTag('Mailer', 'Mail service endpoints - Send emails and notifications')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
     .build();
 
   //config interceptors
@@ -58,7 +72,7 @@ async function bootstrap() {
     console.log(`🏥 Health Check: http://localhost:${PORT}/api/health`);
     console.log(`🔐 Auth Routes: http://localhost:${PORT}/api/auth/*`);
     console.log(`👥 User Routes: http://localhost:${PORT}/api/users/*`);
-    console.log(`💳 Payment Routes: http://localhost:${PORT}/payments/*`);
+    console.log(`💳 Transaction Routes: http://localhost:${PORT}/transactions/*`);
   });
 }
 

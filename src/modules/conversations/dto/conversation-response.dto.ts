@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MessageResponseDto } from 'src/modules/messages/dto/message-response.dto';
-import { UserResponseDto } from 'src/modules/user/dto';
-import { UserService } from 'src/modules/user/user.service';
+import { AccountResponseDto } from 'src/modules/accounts/dto';
+import { AccountsService } from 'src/modules/accounts/accounts.service';
 import { MessagesService } from 'src/modules/messages/messages.service';
 
 export class ConversationResponseDto {
@@ -27,7 +27,7 @@ export class ConversationResponseDto {
 
   @ApiProperty({
     description: 'List of participants in the conversation',
-    type: [UserResponseDto],
+    type: [AccountResponseDto],
     example: [
       {
         id: '123e4567-e89b-12d3-a456-426614174000',
@@ -45,7 +45,7 @@ export class ConversationResponseDto {
       },
     ],
   })
-  participants: UserResponseDto[];
+  participants: AccountResponseDto[];
 
   @ApiProperty({
     description: 'Last message in the conversation',
@@ -87,32 +87,39 @@ export class ConversationResponseDto {
   })
   updatedAt: Date;
 
-  constructor(conversation: any, userService?: UserService) {
-    this.id = conversation.id;
-    this.title = conversation.title;
-    this.description = conversation.description;
-    this.participants = conversation.participants || [];
+  constructor(
+    conversation: (Omit<Partial<ConversationResponseDto>, 'participants'> & {
+      participants?: string[] | AccountResponseDto[]
+    }) | any,
+    AccountsService?: AccountsService
+  ) {
+    this.id = conversation._id || conversation.id || '';
+    this.title = conversation.title || '';
+    this.description = conversation.description || '';
+    this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string')
+      ? []
+      : (conversation.participants as AccountResponseDto[] || []);
     this.lastMessage = conversation.lastMessage || null;
     this.deletedBy = conversation.deletedBy || [];
-    this.createdAt = conversation.createdAt;
-    this.updatedAt = conversation.updatedAt;
+    this.createdAt = conversation.createdAt || new Date();
+    this.updatedAt = conversation.updatedAt || new Date();
   }
 
   // Static method to create with populated participants and last message
   static async createWithParticipants(
-    conversation: any,
-    userService: UserService,
+    conversation: (Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] }) | any,
+    AccountsService: AccountsService,
     messagesService?: MessagesService,
   ): Promise<ConversationResponseDto> {
-    const dto = new ConversationResponseDto(conversation, userService);
+    const dto = new ConversationResponseDto(conversation, AccountsService);
 
     if (conversation.participants && conversation.participants.length > 0) {
       try {
-        const participantUsers = await userService.findUsersByIds(
+        const participantUsers = await AccountsService.findAccountsByIds(
           conversation.participants,
         );
         dto.participants = participantUsers.map(
-          (user) => new UserResponseDto(user),
+          (user) => new AccountResponseDto(user),
         );
       } catch (error) {
         console.error('Error fetching participant data:', error);
@@ -124,7 +131,7 @@ export class ConversationResponseDto {
     if (messagesService) {
       try {
         dto.lastMessage = await messagesService.findLastMessageByConversation(
-          conversation.id,
+          conversation._id || conversation.id,
         );
       } catch (error) {
         console.error('Error fetching last message:', error);
