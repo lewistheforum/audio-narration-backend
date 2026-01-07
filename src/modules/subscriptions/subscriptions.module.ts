@@ -5,6 +5,10 @@ import {
   ClinicSubscription,
   ClinicSubscriptionHistory,
 } from './entities';
+import {
+  ClinicSubscriptionRepository,
+  SubscriptionServiceRepository,
+} from './repositories';
 
 /**
  * Subscriptions Module
@@ -20,7 +24,14 @@ import {
     ]),
   ],
   controllers: [],
-  providers: [],
-  exports: [TypeOrmModule],
+  providers: [
+    ClinicSubscriptionRepository,
+    SubscriptionServiceRepository,
+  ],
+  exports: [
+    TypeOrmModule,
+    ClinicSubscriptionRepository,
+    SubscriptionServiceRepository,
+  ],
 })
 export class SubscriptionsModule {}

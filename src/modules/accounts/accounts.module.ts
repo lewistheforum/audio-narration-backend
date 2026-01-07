@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import {
   Account,
   GeneralAccount,
@@ -69,6 +70,7 @@ import { MailerModule } from '../mailer/mailer.module';
       CodeVerification,
     ]),
     forwardRef(() => MailerModule),
+    SubscriptionsModule,
   ],
   controllers: [AccountsController],
   providers: [

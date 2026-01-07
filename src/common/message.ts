@@ -33,8 +33,8 @@ const successMessage = {
   accountProfileCompleted: 'Profile created successfully. Please request verification code via POST /mailer/send-verification-code to activate your account.',
   // Clinic Manager
   clinicManagerCreated: 'Clinic manager account created successfully',
-  clinicStaffCreatedSuccess: 'Clinic staff account created successfully with INCOMPLETE status. Staff must complete profile before login.',
-  clinicDoctorCreatedSuccess: 'Doctor account created successfully with INCOMPLETE status. Doctor must complete profile before login.',
+  clinicStaffCreatedSuccess: 'Clinic staff account created successfully with PENDING status. Staff must complete profile before login.',
+  clinicDoctorCreatedSuccess: 'Doctor account created successfully with PENDING status. Doctor must complete profile before login.',
   // Email Verification
   emailVerifiedSuccess: 'Email verified successfully. Your account is now ACTIVE. Welcome to Medicare!',
   verificationCodeSentSuccess: 'Verification code sent to your email. Code expires in 10 minutes. Please check your inbox.',
@@ -44,7 +44,7 @@ const successMessage = {
   passwordUpdateSuccess: 'Password updated successfully',
   // Profile Update
   profileUpdatedSuccess: 'Profile updated successfully',
-  profileUpdatedWithEmailChange: 'Email updated successfully. Your account status is now PENDING_VERIFICATION. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
+  profileUpdatedWithEmailChange: 'Email updated successfully. Your account status is now PENDING. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
   // Legacy (Deprecated)
   accountCreatedSuccess: 'Account created successfully',
   clinicStaffCreated: 'Clinic staff created successfully',
@@ -73,7 +73,6 @@ const failMessage = {
   invalidCredentials: 'Invalid email or password',
   googleAccountNoEmail: 'Google account does not provide an email address',
   // Account Status Errors
-  accountIncomplete: 'Account registration is incomplete. Please complete your profile.',
   accountPendingVerification: 'Email verification required. Please verify your email to activate your account.',
   accountNotActive: 'Account is not active. Please contact support.',
   // Password Errors
@@ -86,6 +85,9 @@ const failMessage = {
   userNotBanned: 'User is not banned',
   userAccountBanned: 'Your account has been banned. Please contact support at support@medicare.com',
   userAccountInactive: 'Your account is suspended. Please contact support to reactivate',
+  userAccountDeleted: 'Your account has been deleted. Please contact support for assistance.',
+  userAccountExpired: 'Your subscription has expired. Please renew your subscription to continue.',
+  userAccountRefill: 'Your account needs a refill. Please refill your subscription to continue.',
   cannotBanAdmin: 'Cannot ban admin users',
   cannotDeleteSelf: 'Cannot delete your own account',
   cannotBanSelf: 'Cannot ban your own account',
@@ -109,8 +111,7 @@ const failMessage = {
   onlyManagerCanAddStaff: 'Only CLINIC_MANAGER can add staff and doctor accounts',
   insufficientPermissions: 'You do not have permission to perform this action',
   // 2-Step Registration Errors
-  accountAlreadyComplete: 'Account profile has already been completed',
-  accountNotIncomplete: 'Account is not in INCOMPLETE state',
+  accountNotIncomplete: 'Account is not in PENDING state',
   profileCreationFailed: 'Failed to create profile. Account has been deleted. Please register again.',
   // Conversation & Message Errors
   conversationNotFound: 'Conversation not found',

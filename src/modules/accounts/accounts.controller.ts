@@ -37,6 +37,8 @@ import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { AccountRole } from './enums';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
+import { ClinicListResponseDto } from './dto/clinic-list-response.dto';
+import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
 
 /**
  * Accounts Management Controller
@@ -67,7 +69,7 @@ import { UsernameEmailListDto } from './dto/username-email-list.dto';
  */
 @ApiTags('Accounts management')
 @Controller('accounts')
-@ApiExtraModels(AccountResponseDto)
+@ApiExtraModels(AccountResponseDto, ClinicListResponseDto, ClinicDetailResponseDto)
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
 
@@ -253,7 +255,7 @@ export class AccountsController {
    * Email Change Workflow (PATIENT only):
    * - Only PATIENT role can change their email
    * - Other roles (DOCTOR, CLINIC_STAFF, CLINIC_MANAGER, ADMIN) cannot change email
-   * - If email is changed: isEmailVerified = false, status = PENDING_VERIFICATION
+   * - If email is changed: isEmailVerified = false, status = PENDING
    * - User must manually request verification code via POST /mailer/send-verification-code
    * - User must verify new email to reactivate account
    *
@@ -311,7 +313,7 @@ export class AccountsController {
       return {
         data: user,
         message:
-          'Email updated successfully. Your account status is now PENDING_VERIFICATION. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
+          'Email updated successfully. Your account status is now PENDING. Please request verification code via POST /mailer/send-verification-code to verify your new email.',
       };
     }
 
@@ -459,7 +461,7 @@ export class AccountsController {
    * - deletedAt timestamp is cleared
    * - Account can log in again
    * - All historical data associations remain intact
-   * - Account status remains unchanged (e.g., BANNED stays BANNED)
+   * - Account status remains unchanged (e.g., BAN stays BAN)
    *
    * Requirements:
    * - Account must have been soft deleted (deletedAt is not null)
@@ -520,7 +522,7 @@ export class AccountsController {
    * - reason: Ban reason for audit trail (required)
    *
    * What Happens:
-   * - Account status set to BANNED
+   * - Account status set to BAN
    * - Ban count incremented
    * - Ban reason stored
    * - Active sessions should be invalidated (implement at auth layer)
@@ -591,13 +593,13 @@ export class AccountsController {
    * - id: Account UUID to unban
    *
    * What Happens:
-   * - Account status changed from BANNED to ACTIVE
+   * - Account status changed from BAN to ACTIVE
    * - Account can log in again
    * - Full system access restored
    * - Ban history preserved (banCounts, banDescription)
    *
    * Requirements:
-   * - Account must currently be BANNED
+   * - Account must currently be BAN
    * - If account is not banned, returns 400 Bad Request
    *
    * Access Control:
@@ -639,6 +641,142 @@ export class AccountsController {
     return {
       data: account,
       message: MESSAGES.successMessage.userUnbannedSuccess,
+    };
+  }
+
+  /**
+   * Get All Clinics (Public)
+   *
+   * Retrieves a paginated list of all active clinics.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Query Parameters:
+   * - page: Page number (default: 1)
+   * - limit: Items per page (default: 10)
+   *
+   * Response Format:
+   * - Returns ClinicListResponseDto with clinics array and pagination metadata
+   * - Combines data from accounts + clinic_information + addresses tables
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Clinic directory listing
+   * - Clinic search results
+   * - Clinic browsing
+   *
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @returns {Promise<{data: ClinicListResponseDto, message: string}>} Clinics with pagination
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved clinics
+   */
+  @Get('clinics')
+  @ApiOperation({ summary: 'Get all clinics with pagination, search and filters' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search keyword to match clinic name or description (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'province',
+    required: false,
+    type: String,
+    description: 'Filter clinics by province name or code',
+  })
+  @ApiQuery({
+    name: 'specialty',
+    required: false,
+    type: String,
+    description: 'Filter clinics by medical specialization',
+  })
+  @ApiResponseData({
+    type: ClinicListResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Clinics retrieved successfully',
+  })
+  async getAllClinics(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string,
+    @Query('province') province?: string,
+    @Query('specialty') specialty?: string,
+  ): Promise<{ data: ClinicListResponseDto; message: string }> {
+    const result = await this.accountsService.findAllClinics(
+      page,
+      limit,
+      search,
+      province,
+      specialty,
+    );
+    return {
+      data: result,
+      message: 'Clinics retrieved successfully',
+    };
+  }
+
+  /**
+   * Get Clinic Details by ID (Public)
+   *
+   * Retrieves detailed information for a specific clinic.
+   * Includes addresses, doctors, and subscription information.
+   *
+   * Path Parameters:
+   * - id: Clinic account UUID
+   *
+   * Response Format:
+   * - Returns ClinicDetailResponseDto with full clinic details
+   * - Includes addresses array with Google maps
+   * - Includes doctors array
+   * - Includes subscription information
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Clinic profile page
+   * - Clinic details view
+   * - Booking interface clinic information
+   *
+   * @param {string} id - Clinic account UUID
+   * @returns {Promise<{data: ClinicDetailResponseDto, message: string}>} Full clinic details
+   * @throws {NotFoundException} If clinic not found or not active
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved clinic details
+   * @response 404 - Clinic not found
+   */
+  @Get('clinics/:id')
+  @ApiOperation({ summary: 'Get clinic details by ID' })
+  @ApiResponseData({
+    type: ClinicDetailResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Clinic details retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic not found' })
+  async getClinicById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ data: ClinicDetailResponseDto; message: string }> {
+    const clinic = await this.accountsService.findClinicById(id);
+    return {
+      data: clinic,
+      message: 'Clinic details retrieved successfully',
     };
   }
 }

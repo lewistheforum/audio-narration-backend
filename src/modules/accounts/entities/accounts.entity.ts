@@ -1,4 +1,6 @@
 import { AccountRole, AccountStatus } from '../enums';
+import { ClinicInformation } from './clinic_information.entity';
+import { Address } from './addresses.entity';
 import {
   Entity,
   Column,
@@ -8,6 +10,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 
@@ -47,6 +50,27 @@ export class Account {
   @OneToMany(() => Account, (account) => account.parent)
   children?: Account[];
 
+  /**
+   * Clinic Information Relation
+   *
+   * One-to-one relation with clinic_information table for CLINIC_MANAGER accounts
+   */
+  @OneToOne(() => ClinicInformation, (clinicInfo) => clinicInfo.clinic, {
+    nullable: true,
+    cascade: true,
+  })
+  clinicInformation?: ClinicInformation;
+
+  /**
+   * Addresses Relation
+   *
+   * One-to-many relation with addresses table
+   */
+  @OneToMany(() => Address, (address) => address.account, {
+    cascade: true,
+  })
+  addresses?: Address[];
+
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;
 
@@ -77,7 +101,7 @@ export class Account {
     name: 'status',
     type: 'enum',
     enum: AccountStatus,
-    default: AccountStatus.PENDING_VERIFICATION,
+    default: AccountStatus.PENDING,
   })
   status: AccountStatus;
 

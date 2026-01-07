@@ -149,7 +149,7 @@ export class AccountResponseDto {
     this.username = account.username;
     this.phone = account.phone;
     this.role = account.role;
-    this.status = account.status ?? AccountStatus.PENDING_VERIFICATION;
+    this.status = account.status ?? AccountStatus.PENDING;
     this.isEmailVerified = account.isEmailVerified ?? false;
     this.isOAuthUser = account.isOAuthUser ?? false;
     this.parentId = account.parentId;

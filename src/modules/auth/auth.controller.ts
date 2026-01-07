@@ -145,13 +145,13 @@ export class AuthController {
    * Frontend can handle multi-step UI while backend processes everything in one call
    *
    * @param createAccountDto - Complete account data (credentials + profile)
-   * @returns Complete account with PENDING_VERIFICATION status
+   * @returns Complete account with PENDING status
    */
   @Post('register')
   @ApiOperation({
     summary: 'Register new account (PATIENT role)',
     description:
-      'Single-step registration. Creates account and profile in one transaction. Account status will be PENDING_VERIFICATION.',
+      'Single-step registration. Creates account and profile in one transaction. Account status will be PENDING.',
   })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
@@ -305,13 +305,13 @@ export class AuthController {
    * Requires authentication and CLINIC_MANAGER role
    *
    * 2-Step Registration Pattern:
-   * - Creates account with INCOMPLETE status
+   * - Creates account with PENDING status
    * - Staff must complete profile themselves via separate endpoint
    * - Account cannot login until profile is completed
    *
    * @param req - Request object containing authenticated user
    * @param createStaffDto - Staff registration data
-   * @returns Created staff account (INCOMPLETE status)
+   * @returns Created staff account (PENDING status)
    */
   @Post('clinic-manager/add-staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -319,15 +319,15 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary:
-      'Add clinic staff (CLINIC_MANAGER only) - Creates INCOMPLETE account',
+      'Add clinic staff (CLINIC_MANAGER only) - Creates PENDING account',
     description:
-      'Creates staff account with INCOMPLETE status. Staff must complete profile before login.',
+      'Creates staff account with PENDING status. Staff must complete profile before login.',
   })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
-    message: 'Staff account created (INCOMPLETE). Staff must complete profile.',
+    message: 'Staff account created (PENDING). Staff must complete profile.',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
@@ -356,29 +356,29 @@ export class AuthController {
    * Requires authentication and CLINIC_MANAGER role
    *
    * 2-Step Registration Pattern:
-   * - Creates account with INCOMPLETE status
+   * - Creates account with PENDING status
    * - Doctor must complete profile themselves via separate endpoint
    * - Account cannot login until profile is completed
    *
    * @param req - Request object containing authenticated user
    * @param createDoctorDto - Doctor registration data
-   * @returns Created doctor account (INCOMPLETE status)
+   * @returns Created doctor account (PENDING status)
    */
   @Post('clinic-manager/add-doctor')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: 'Add doctor (CLINIC_MANAGER only) - Creates INCOMPLETE account',
+    summary: 'Add doctor (CLINIC_MANAGER only) - Creates PENDING account',
     description:
-      'Creates doctor account with INCOMPLETE status. Doctor must complete profile before login.',
+      'Creates doctor account with PENDING status. Doctor must complete profile before login.',
   })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
     message:
-      'Doctor account created (INCOMPLETE). Doctor must complete profile.',
+      'Doctor account created (PENDING). Doctor must complete profile.',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({

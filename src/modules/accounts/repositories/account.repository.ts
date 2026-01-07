@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DeepPartial } from 'typeorm';
+import { Repository, In, DeepPartial, FindOptionsWhere } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
+import { AccountRole, AccountStatus } from '../enums';
 
 /**
  * Account Repository
@@ -294,5 +295,166 @@ export class AccountRepository {
    */
   async restoreAccount(id: string): Promise<void> {
     await this.accountRepository.restore(id);
+  }
+
+  /**
+   * Find Accounts by Role and Status with Pagination
+   *
+   * Retrieves accounts matching specific role and status with pagination support.
+   *
+   * @param {AccountRole} role - Account role to filter
+   * @param {AccountStatus} status - Account status to filter
+   * @param {number} skip - Number of records to skip
+   * @param {number} take - Number of records to return
+   * @returns {Promise<[Account[], number]>} Array of accounts and total count
+   *
+   * @example
+   * ```typescript
+   * const [clinics, total] = await repository.findByRoleAndStatus(
+   *   AccountRole.CLINIC_MANAGER,
+   *   AccountStatus.ACTIVE,
+   *   0,
+   *   10
+   * );
+   * ```
+   */
+  async findByRoleAndStatus(
+    role: AccountRole,
+    status: AccountStatus,
+    skip: number = 0,
+    take: number = 10,
+  ): Promise<[Account[], number]> {
+    return this.accountRepository.findAndCount({
+      where: { role, status },
+      skip,
+      take,
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find Accounts by Parent ID and Role
+   *
+   * Retrieves accounts with specific parent and role.
+   *
+   * @param {string} parentId - Parent account ID
+   * @param {AccountRole} role - Account role to filter
+   * @returns {Promise<Account[]>} Array of accounts
+   *
+   * @example
+   * ```typescript
+   * const doctors = await repository.findByParentIdAndRole(
+   *   'clinic-uuid',
+   *   AccountRole.DOCTOR
+   * );
+   * ```
+   */
+  async findByParentIdAndRole(
+    parentId: string,
+    role: AccountRole,
+  ): Promise<Account[]> {
+    return this.accountRepository.find({
+      where: { parentId, role },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find Clinics with Filters
+   *
+   * Retrieves clinic accounts with advanced filtering capabilities.
+   * Supports search by clinic name/description, filtering by province, and filtering by specialty.
+   *
+   * Filtering Logic:
+   * - search: Case-insensitive match (ILIKE) on clinic_information.clinicName AND clinic_information.description
+   * - province: Exact match on addresses.provinceName OR addresses.province
+   * - specialty: JSONB containment query (@>) on clinic_information.specializedIn
+   * - All filters work together with AND logic
+   *
+   * Note: This method uses QueryBuilder for complex joins and JSONB operations.
+   * The filtering is applied at the database level for performance.
+   *
+   * @param {AccountRole} role - Account role (typically CLINIC_MANAGER)
+   * @param {AccountStatus} status - Account status (typically ACTIVE)
+   * @param {number} skip - Number of records to skip (for pagination)
+   * @param {number} take - Number of records to return (for pagination)
+   * @param {string} [search] - Search keyword for clinic name or description
+   * @param {string} [province] - Filter by province name or code
+   * @param {string} [specialty] - Filter by medical specialization
+   * @returns {Promise<[Account[], number]>} Array of clinic accounts and total count
+   *
+   * @example
+   * ```typescript
+   * // Find all dental clinics in Hanoi
+   * const [clinics, total] = await repository.findClinicsWithFilters(
+   *   AccountRole.CLINIC_MANAGER,
+   *   AccountStatus.ACTIVE,
+   *   0,
+   *   10,
+   *   undefined,
+   *   'Hanoi',
+   *   'Dental'
+   * );
+   *
+   * // Find clinics with "Smile" in name
+   * const [clinics, total] = await repository.findClinicsWithFilters(
+   *   AccountRole.CLINIC_MANAGER,
+   *   AccountStatus.ACTIVE,
+   *   0,
+   *   10,
+   *   'Smile'
+   * );
+   * ```
+   */
+  async findClinicsWithFilters(
+    role: AccountRole,
+    status: AccountStatus,
+    skip: number = 0,
+    take: number = 10,
+    search?: string,
+    province?: string,
+    specialty?: string,
+  ): Promise<[Account[], number]> {
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect(
+        'account.clinicInformation',
+        'clinicInfo',
+      )
+      .leftJoinAndSelect('account.addresses', 'address')
+      .where('account.role = :role', { role })
+      .andWhere('account.status = :status', { status });
+
+    // Apply search filter (ILIKE on clinicName AND description)
+    if (search) {
+      queryBuilder.andWhere(
+        '(clinicInfo.clinicName ILIKE :search OR clinicInfo.description ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Apply province filter (exact match on provinceName OR province)
+    if (province) {
+      queryBuilder.andWhere(
+        '(address.provinceName = :province OR address.province = :province)',
+        { province },
+      );
+    }
+
+    // Apply specialty filter (JSONB containment query on specializedIn)
+    if (specialty) {
+      queryBuilder.andWhere(
+        'clinicInfo.specializedIn @> :specialty',
+        { specialty: JSON.stringify([specialty]) },
+      );
+    }
+
+    // Apply pagination and ordering
+    queryBuilder
+      .skip(skip)
+      .take(take)
+      .orderBy('account.createdAt', 'DESC');
+
+    return queryBuilder.getManyAndCount();
   }
 }

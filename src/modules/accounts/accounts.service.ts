@@ -15,6 +15,8 @@ import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicInformation } from './entities/clinic_information.entity';
 import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
 import { DoctorInformation } from './entities/doctor_information.entity';
+import { Address } from './entities/addresses.entity';
+import { GoogleIframe } from './entities/google_iframe.entity';
 import {
   CreateAccountDto,
   UpdatePasswordDto,
@@ -25,6 +27,19 @@ import {
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
 } from './dto';
+import {
+  ClinicListResponseDto,
+  ClinicItemDto,
+  ClinicInfoDto,
+  AddressDto,
+  PaginationDto,
+  ClinicDetailResponseDto,
+  ClinicInfoDetailDto,
+  AddressDetailDto,
+  GoogleMapDto,
+  DoctorSummaryDto,
+  SubscriptionDto,
+} from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
 import { AccountRepository } from './repositories/account.repository';
@@ -34,10 +49,18 @@ import {
   ClinicInformationRepository,
   ClinicStaffInformationRepository,
   DoctorInformationRepository,
+  AddressRepository,
+  GoogleIframeRepository,
 } from './repositories';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
 import { generateVerificationCode } from 'src/common/utils/util';
 import { MailerService } from '../mailer/mailer.service';
+import {
+  ClinicSubscriptionRepository,
+  SubscriptionServiceRepository,
+} from '../subscriptions/repositories';
+import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
+import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 
 /**
  * Accounts Service
@@ -104,6 +127,10 @@ export class AccountsService {
     private readonly clinicInfoRepository: ClinicInformationRepository,
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
     private readonly doctorInfoRepository: DoctorInformationRepository,
+    private readonly addressRepository: AddressRepository,
+    private readonly googleIframeRepository: GoogleIframeRepository,
+    private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
+    private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly mailerService: MailerService,
   ) {}
 
@@ -216,7 +243,7 @@ export class AccountsService {
    *
    * Business Rules:
    * - Role is automatically set to PATIENT
-   * - Status is set to PENDING_VERIFICATION (requires email verification)
+   * - Status is set to PENDING (requires email verification)
    * - Email must be unique across all accounts in the system
    * - Password is hashed with bcrypt (10 rounds) before storage
    * - Username must be unique and at least 3 characters
@@ -232,7 +259,7 @@ export class AccountsService {
    * Post-Registration Steps:
    * - System should send verification email
    * - Patient must verify email to activate account
-   * - Status changes from PENDING_VERIFICATION to ACTIVE upon verification
+   * - Status changes from PENDING to ACTIVE upon verification
    *
    * @param {CreateAccountDto} createAccountDto - Patient registration data including credentials and profile
    * @returns {Promise<{user: AccountResponseDto}>} Created patient account DTO with sensitive data excluded
@@ -272,7 +299,7 @@ export class AccountsService {
       password: hashedPassword,
       phone: createAccountDto.phone,
       role: AccountRole.PATIENT,
-      status: AccountStatus.PENDING_VERIFICATION,
+      status: AccountStatus.PENDING,
     });
 
     const savedAccount = await this.accountRepository.saveAccount(account);
@@ -491,7 +518,7 @@ export class AccountsService {
 
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
-      account.status = AccountStatus.PENDING_VERIFICATION; // Require re-verification
+      account.status = AccountStatus.PENDING; // Require re-verification
       emailChanged = true;
     }
 
@@ -652,7 +679,7 @@ export class AccountsService {
    * Restoration Scope:
    * - Account entity is restored
    * - GeneralAccount entity is restored
-   * - Account status remains unchanged (e.g., BANNED accounts stay BANNED)
+   * - Account status remains unchanged (e.g., BAN accounts stay BAN)
    *
    * Post-Restoration:
    * - Account can immediately log in (if status is ACTIVE)
@@ -739,14 +766,14 @@ export class AccountsService {
    * - Cannot ban ADMIN role accounts (system protection)
    * - Admin cannot ban themselves (prevents self-lockout)
    * - Cannot ban already banned accounts (prevents duplicate banning)
-   * - Status is set to BANNED
+   * - Status is set to BAN
    * - Ban count is incremented (tracking repeated violations)
    * - Ban reason is stored for audit and review
    *
    * Effects of Banning:
    * - Account cannot log in
    * - Active sessions should be invalidated (implement at auth layer)
-   * - Account status changes to BANNED
+   * - Account status changes to BAN
    * - Ban metadata is recorded (reason, count)
    *
    * @param {string} accountId - Account UUID to ban
@@ -784,12 +811,12 @@ export class AccountsService {
     }
 
     // Prevent duplicate banning
-    if (account.status === AccountStatus.BANNED) {
+    if (account.status === AccountStatus.BAN) {
       throw new ConflictException(MESSAGES.failMessage.userAlreadyBanned);
     }
 
     // Apply ban
-    account.status = AccountStatus.BANNED;
+    account.status = AccountStatus.BAN;
     account.banCounts = (account.banCounts || 0) + 1;
     account.banDescription = banDto.reason;
 
@@ -805,14 +832,14 @@ export class AccountsService {
    * This operation allows previously banned accounts to log in again.
    *
    * Business Rules:
-   * - Account must currently be BANNED
+   * - Account must currently be BAN
    * - Status is set to ACTIVE
    * - Ban count and ban description are preserved for audit purposes
    * - Admin-only operation (enforced at controller level)
    *
    * Effects of Unbanning:
    * - Account can log in again
-   * - Status changes from BANNED to ACTIVE
+   * - Status changes from BAN to ACTIVE
    * - Full access to system is restored
    * - Ban history is preserved (banCounts, banDescription)
    *
@@ -830,7 +857,7 @@ export class AccountsService {
   async unbanAccount(accountId: string): Promise<AccountResponseDto> {
     const account = await this.findAccountEntityById(accountId);
 
-    if (account.status !== AccountStatus.BANNED) {
+    if (account.status !== AccountStatus.BAN) {
       throw new BadRequestException(MESSAGES.failMessage.userNotBanned);
     }
 
@@ -847,11 +874,12 @@ export class AccountsService {
    * This method is called during authentication to enforce account status rules.
    *
    * Access Rules:
-   * - INCOMPLETE accounts cannot login (profile not completed)
-   * - PENDING_VERIFICATION accounts cannot login (email not verified)
-   * - BANNED accounts cannot access the system
-   * - SUSPENDED accounts cannot access the system
    * - ACTIVE accounts have full access
+   * - PENDING accounts cannot login (email verification required)
+   * - BAN accounts cannot access the system (403 Forbidden)
+   * - INACTIVE or DELETED accounts cannot access the system (401 Unauthorized)
+   * - EXPIRED accounts cannot login (subscription renewal required)
+   * - REFILL accounts cannot login (subscription refill required)
    *
    * Integration Points:
    * - Called by AuthService during login
@@ -860,7 +888,8 @@ export class AccountsService {
    *
    * @param {Account} account - Account entity to validate
    * @returns {void} No return value - throws exception on validation failure
-   * @throws {ForbiddenException} If account is not in ACTIVE status
+   * @throws {ForbiddenException} If account is BAN, EXPIRED, or REFILL
+   * @throws {UnauthorizedException} If account is PENDING, INACTIVE, or DELETED
    *
    * @example
    * ```typescript
@@ -870,25 +899,47 @@ export class AccountsService {
    * ```
    */
   validateAccountAccess(account: Account): void {
-    if (account.status === AccountStatus.INCOMPLETE) {
-      throw new ForbiddenException(
-        'Account registration is incomplete. Please complete your profile.',
-      );
+    // BAN: Throw 403 Forbidden
+    if (account.status === AccountStatus.BAN) {
+      throw new ForbiddenException('Your account has been banned.');
     }
 
-    if (account.status === AccountStatus.PENDING_VERIFICATION) {
-      throw new ForbiddenException(
+    // PENDING: Throw 401 Unauthorized - email verification required
+    if (account.status === AccountStatus.PENDING) {
+      throw new UnauthorizedException(
         'Email verification required. Please verify your email to activate your account.',
       );
     }
 
-    if (account.status === AccountStatus.BANNED) {
-      throw new ForbiddenException(MESSAGES.failMessage.userAccountBanned);
+    // INACTIVE: Throw 401 Unauthorized - account suspended
+    if (account.status === AccountStatus.INACTIVE) {
+      throw new UnauthorizedException(
+        'Your account is inactive. Please contact support for assistance.',
+      );
     }
 
-    if (account.status === AccountStatus.SUSPENDED) {
-      throw new ForbiddenException(MESSAGES.failMessage.userAccountInactive);
+    // DELETED: Throw 401 Unauthorized - account deleted
+    if (account.status === AccountStatus.DELETED) {
+      throw new UnauthorizedException(
+        'Your account has been deleted. Please contact support for assistance.',
+      );
     }
+
+    // EXPIRED: Throw 403 Forbidden - subscription expired
+    if (account.status === AccountStatus.EXPIRED) {
+      throw new ForbiddenException(
+        'Your subscription has expired. Please renew your subscription to continue.',
+      );
+    }
+
+    // REFILL: Throw 403 Forbidden - subscription refill required
+    if (account.status === AccountStatus.REFILL) {
+      throw new ForbiddenException(
+        'Your account needs a refill. Please refill your subscription to continue.',
+      );
+    }
+
+    // ACTIVE: Allow access (no exception thrown)
   }
 
   /**
@@ -1039,7 +1090,7 @@ export class AccountsService {
    * 4. Validate code hasn't expired (10 minutes TTL)
    * 5. Mark code as used (prevent reuse)
    * 6. Set isEmailVerified = true
-   * 7. Activate account (PENDING_VERIFICATION → ACTIVE)
+   * 7. Activate account (PENDING → ACTIVE)
    *
    * Security Features:
    * - Codes expire after 10 minutes
@@ -1392,14 +1443,14 @@ export class AccountsService {
    * This is the new unified registration method that combines account creation and profile setup.
    *
    * Transaction Behavior:
-   * - Creates Account entity with PENDING_VERIFICATION status
+   * - Creates Account entity with PENDING status
    * - Creates GeneralAccount profile data
    * - If any step fails, entire transaction is rolled back
    * - This ensures data integrity across both tables
    *
    * Business Rules:
    * - Role is automatically set to PATIENT
-   * - Status is set to PENDING_VERIFICATION
+   * - Status is set to PENDING
    * - Email must be unique across all accounts
    * - Password is hashed with bcrypt before storage
    * - fullName and gender are required for profile
@@ -1423,7 +1474,7 @@ export class AccountsService {
    *   fullName: 'John Doe',
    *   gender: Gender.MALE
    * });
-   * // Account is now PENDING_VERIFICATION, ready for email verification
+   * // Account is now PENDING, ready for email verification
    * ```
    */
   async createAccount(dto: CreateAccountDto): Promise<AccountResponseDto> {
@@ -1445,14 +1496,14 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
-      // Create Account entity with PENDING_VERIFICATION status
+      // Create Account entity with PENDING status
       const account = this.accountRepository.createAccount({
         username: dto.username,
         email: dto.email,
         password: hashedPassword,
         phone: dto.phone,
         role: AccountRole.PATIENT,
-        status: AccountStatus.PENDING_VERIFICATION,
+        status: AccountStatus.PENDING,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -1695,14 +1746,14 @@ export class AccountsService {
       );
 
       // Step 4: Create Account entity with CLINIC_STAFF role
-      // Following 2-step registration pattern: Create INCOMPLETE account first
+      // Following 2-step registration pattern: Create PENDING account first
       const account = this.accountRepository.createAccount({
         username: dto.email.split('@')[0],
         email: dto.email,
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.CLINIC_STAFF,
-        status: AccountStatus.INCOMPLETE, // 2-step pattern: Start with INCOMPLETE
+        status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
         isEmailVerified: false, // Staff must verify themselves
       });
 
@@ -1792,14 +1843,14 @@ export class AccountsService {
       );
 
       // Step 4: Create Account entity with DOCTOR role
-      // Following 2-step registration pattern: Create INCOMPLETE account first
+      // Following 2-step registration pattern: Create PENDING account first
       const account = this.accountRepository.createAccount({
         username: dto.email.split('@')[0],
         email: dto.email,
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.DOCTOR,
-        status: AccountStatus.INCOMPLETE, // 2-step pattern: Start with INCOMPLETE
+        status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
         isEmailVerified: false, // Doctor must verify themselves
       });
 
@@ -1827,5 +1878,171 @@ export class AccountsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Find All Clinics with Pagination, Search and Filters
+   *
+   * Retrieves clinic accounts with pagination support and optional search/filter capabilities.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Data Sources:
+   * - accounts table: Core account data
+   * - clinic_information table: Clinic details
+   * - addresses table: Address information
+   *
+   * Filtering Logic:
+   * - search: Case-insensitive match on clinicName AND description
+   * - province: Exact match on provinceName or province code
+   * - specialty: JSONB containment query on specializedIn array
+   * - All filters work together with AND logic
+   *
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   * @param {string} [search] - Search keyword for clinic name or description
+   * @param {string} [province] - Filter by province name or code
+   * @param {string} [specialty] - Filter by medical specialization
+   * @returns {Promise<ClinicListResponseDto>} Clinics with pagination
+   */
+  async findAllClinics(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    province?: string,
+    specialty?: string,
+  ): Promise<ClinicListResponseDto> {
+    // Get clinic manager accounts with ACTIVE status and filters
+    const [clinics, total] = await this.accountRepository.findClinicsWithFilters(
+      AccountRole.CLINIC_MANAGER,
+      AccountStatus.ACTIVE,
+      (page - 1) * limit,
+      limit,
+      search,
+      province,
+      specialty,
+    );
+
+    const clinicItems: ClinicItemDto[] = [];
+
+    for (const clinic of clinics) {
+      // Get clinic information
+      const clinicInfo =
+        await this.clinicInfoRepository.findByClinicId(clinic._id);
+
+      // Get primary address (first address)
+      const addresses = await this.addressRepository.findByAccountId(clinic._id);
+      const primaryAddress = addresses.length > 0 ? addresses[0] : null;
+
+      if (clinicInfo && primaryAddress) {
+        clinicItems.push(
+          new ClinicItemDto(clinic, clinicInfo, primaryAddress),
+        );
+      }
+    }
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      clinics: clinicItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  /**
+   * Find Clinic by ID with Full Details
+   *
+   * Retrieves detailed information for a specific clinic.
+   * Includes addresses, doctors, and subscription information.
+   *
+   * Data Sources:
+   * - accounts table: Core account data
+   * - clinic_information table: Clinic details
+   * - addresses table: All addresses (branches)
+   * - google_iframe table: Google map for each address
+   * - accounts table (doctors): Doctors linked to this clinic
+   * - doctor_information table: Doctor details
+   * - clinic_subcriptions table: Subscription info
+   * - subcription_services table: Service details
+   *
+   * @param {string} id - Clinic account UUID
+   * @returns {Promise<ClinicDetailResponseDto>} Full clinic details
+   * @throws {NotFoundException} If clinic not found or not active
+   */
+  async findClinicById(id: string): Promise<ClinicDetailResponseDto> {
+    // Get clinic account
+    const clinic = await this.accountRepository.findAccountById(id);
+    if (!clinic) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    // Validate role and status
+    if (clinic.role !== AccountRole.CLINIC_MANAGER) {
+      throw new NotFoundException('Clinic not found');
+    }
+    if (clinic.status !== AccountStatus.ACTIVE) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    // Get clinic information
+    const clinicInfo =
+      await this.clinicInfoRepository.findByClinicId(clinic._id);
+    if (!clinicInfo) {
+      throw new NotFoundException('Clinic information not found');
+    }
+
+    // Get all addresses with Google maps
+    const addresses = await this.addressRepository.findByAccountId(clinic._id);
+    const addressDetails: AddressDetailDto[] = [];
+
+    for (const address of addresses) {
+      const googleIframe =
+        await this.googleIframeRepository.findByAddressId(address._id);
+      addressDetails.push(new AddressDetailDto(address, googleIframe));
+    }
+
+    // Get doctors (accounts with parentId = clinic id and role = DOCTOR)
+    const doctorAccounts = await this.accountRepository.findByParentIdAndRole(
+      clinic._id,
+      AccountRole.DOCTOR,
+    );
+
+    const doctors: DoctorSummaryDto[] = [];
+    for (const doctor of doctorAccounts) {
+      const doctorInfo =
+        await this.doctorInfoRepository.findByDoctorAccountId(doctor._id);
+      doctors.push(new DoctorSummaryDto(doctor, doctorInfo));
+    }
+
+    // Get subscription information
+    const clinicSubscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinic._id);
+    let subscription: SubscriptionDto | undefined;
+
+    if (clinicSubscription) {
+      const subscriptionService =
+        await this.subscriptionServiceRepository.findById(
+          clinicSubscription.serviceId,
+        );
+      if (subscriptionService) {
+        subscription = new SubscriptionDto(
+          clinicSubscription,
+          subscriptionService,
+        );
+      }
+    }
+
+    return new ClinicDetailResponseDto(
+      clinic,
+      clinicInfo,
+      addressDetails,
+      doctors,
+      subscription,
+    );
   }
 }
