@@ -50,7 +50,7 @@ async function bootstrap(): Promise<void> {
         description: 'Enter JWT token',
         in: 'header',
       },
-      'JWT-auth', // This name will be used with @ApiBearerAuth()
+      'JWT-auth',
     )
     .build();
 
@@ -72,6 +72,7 @@ async function bootstrap(): Promise<void> {
     console.log(`🏥 Health Check: http://localhost:${PORT}/api/health`);
     console.log(`🔐 Auth Routes: http://localhost:${PORT}/api/auth/*`);
     console.log(`👥 User Routes: http://localhost:${PORT}/api/users/*`);
+    console.log(`💳 Transaction Routes: http://localhost:${PORT}/transactions/*`);
   });
 }
 

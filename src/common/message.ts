@@ -28,6 +28,8 @@ const successMessage = {
   // Authentication
   loginSuccess: 'User logged in successfully',
   googleLoginSuccess: 'Google login successful',
+  paymentCreateSuccess: 'Payment QR created successfully',
+  paymentUpdateSuccess: 'Payment status updated successfully',
   // 2-Step Registration
   accountBasicCreated: 'Account created successfully. Please complete your profile in Step 2.',
   accountProfileCompleted: 'Profile created successfully. Please request verification code via POST /mailer/send-verification-code to activate your account.',
