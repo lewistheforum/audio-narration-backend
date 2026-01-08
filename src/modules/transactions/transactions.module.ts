@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Transaction, TransactionType } from './entities';
+import { ClinicLegalDocument, Transaction, TransactionType } from './entities';
+import { TransactionsService } from './transactions.service';
+import { TransactionsController } from './transactions.controller';
 
 /**
  * Transactions Module
@@ -8,9 +10,15 @@ import { Transaction, TransactionType } from './entities';
  * Manages payment transactions for subscriptions
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Transaction, TransactionType])],
-  controllers: [],
-  providers: [],
-  exports: [TypeOrmModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      Transaction,
+      TransactionType,
+      ClinicLegalDocument,
+    ]),
+  ],
+  controllers: [TransactionsController],
+  providers: [TransactionsService],
+  exports: [TypeOrmModule, TransactionsService],
 })
 export class TransactionsModule {}

@@ -6,9 +6,22 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
 import { TransactionType } from './transaction-type.entity';
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum PaymentDirection {
+  IN = 'in',
+  OUT = 'out',
+}
 
 /**
  * Transaction Entity
@@ -17,11 +30,14 @@ import { TransactionType } from './transaction-type.entity';
  */
 @Entity('transactions')
 export class Transaction {
-  @PrimaryGeneratedColumn('uuid')
-  _id: string;
+  @PrimaryGeneratedColumn('uuid', { name: '_id' })
+  id: string;
 
-  @Column({ name: 'subcription_id', type: 'uuid' })
-  subscriptionId: string;
+  @Column({ name: 'prescription_id', type: 'uuid', nullable: true })
+  prescriptionId?: string;
+
+  @Column({ name: 'subcription_id', type: 'uuid', nullable: true })
+  subscriptionId?: string;
 
   @ManyToOne(() => ClinicSubscriptionHistory, {
     onDelete: 'CASCADE',
@@ -29,8 +45,8 @@ export class Transaction {
   @JoinColumn({ name: 'subcription_id' })
   subscription?: ClinicSubscriptionHistory;
 
-  @Column({ name: 'transaction_type_id', type: 'uuid' })
-  transactionTypeId: string;
+  @Column({ name: 'transaction_type_id', type: 'uuid', nullable: true })
+  transactionTypeId?: string;
 
   @ManyToOne(() => TransactionType, {
     onDelete: 'CASCADE',
@@ -38,11 +54,32 @@ export class Transaction {
   @JoinColumn({ name: 'transaction_type_id' })
   transactionType?: TransactionType;
 
+  @Column({ type: 'bigint' })
+  amount: number;
+
+  @Column({ length: 10, default: 'VND' })
+  currency: string;
+
+  @Column({ name: 'qr_code_url', type: 'text', nullable: true })
+  qrCodeUrl?: string;
+
+  @Column({ name: 'qr_payload', type: 'text', nullable: true })
+  qrPayload?: string;
+
+  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
+  status: PaymentStatus;
+
+  @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
+  expiresAt?: Date;
+
+  @Column({ name: 'seepay_transaction_id', type: 'bigint', nullable: true })
+  seepayTransactionId?: string;
+
   @Column({ name: 'gateway', type: 'text', nullable: true })
   gateway?: string;
 
-  @Column({ name: 'transaction_date', type: 'timestamptz' })
-  transactionDate: Date;
+  @Column({ name: 'transaction_date', type: 'timestamptz', nullable: true })
+  transactionDate?: Date;
 
   @Column({ name: 'account_number', type: 'text', nullable: true })
   accountNumber?: string;
@@ -50,20 +87,14 @@ export class Transaction {
   @Column({ name: 'code', type: 'text', nullable: true })
   code?: string;
 
-  @Column({ name: 'status', type: 'text', nullable: true })
-  status?: string;
-
   @Column({ name: 'content', type: 'text', nullable: true })
   content?: string;
 
-  @Column({ name: 'transfer_amount', type: 'bigint' })
-  transferAmount: number;
+  @Column({ name: 'transfer_amount', type: 'bigint', nullable: true })
+  transferAmount?: number;
 
-  @Column({ name: 'transfer_type', type: 'text', nullable: true })
-  transferType?: string;
-
-  @Column({ name: 'currency', type: 'text', nullable: true })
-  currency?: string;
+  @Column({ name: 'transfer_type', type: 'enum', enum: PaymentDirection, nullable: true })
+  transferType?: PaymentDirection;
 
   @Column({ name: 'accumulated', type: 'bigint', nullable: true })
   accumulated?: number;
@@ -80,9 +111,15 @@ export class Transaction {
   @Column({ name: 'signature', type: 'text', nullable: true })
   signature?: string;
 
-  @CreateDateColumn({ name: 'create_at', type: 'timestamptz' })
-  createAt: Date;
+  @Column({ name: 'metadata', type: 'jsonb', nullable: true })
+  metadata?: Record<string, unknown>;
 
-  @UpdateDateColumn({ name: 'update_at', type: 'timestamptz' })
-  updateAt: Date;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
+  deletedAt?: Date;
 }
