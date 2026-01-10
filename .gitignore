@@ -62,3 +62,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 #datasets
 /data
+
+# Sequence diagrams
+sequence_diagram/

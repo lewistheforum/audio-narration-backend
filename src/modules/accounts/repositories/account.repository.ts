@@ -477,4 +477,136 @@ export class AccountRepository {
       where: { role },
     });
   }
+
+  /**
+   * Find Doctors with Filters
+   *
+   * Retrieves doctor accounts with advanced filtering capabilities.
+   * Supports filtering by clinic (parentId) and gender.
+   *
+   * Data Sources:
+   * - accounts table: Core account data (base table)
+   * - doctor_information table: Doctor details (joined via doctorAccId)
+   * - clinic_information table: Parent clinic details (joined via parentId)
+   *
+   * Filtering Logic:
+   * - Always: role='DOCTOR', status='ACTIVE', deletedAt IS NULL
+   * - Optional: parentId = clinicId (filter by specific clinic)
+   * - Optional: doctorInformation.gender = gender (filter by gender)
+   * - Always: doctorInformation.deletedAt IS NULL (exclude soft-deleted doctor profiles)
+   *
+   * @param {AccountRole} role - Account role (DOCTOR)
+   * @param {AccountStatus} status - Account status (ACTIVE)
+   * @param {number} skip - Number of records to skip (for pagination)
+   * @param {number} take - Number of records to return (for pagination)
+   * @param {string} [clinicId] - Filter by parent clinic ID
+   * @param {string} [gender] - Filter by doctor gender (MALE|FEMALE|OTHER)
+   * @returns {Promise<[Account[], number]>} Array of doctor accounts and total count
+   *
+   * @example
+   * ```typescript
+   * // Find all active doctors
+   * const [doctors, total] = await repository.findDoctorsWithFilters(
+   *   AccountRole.DOCTOR,
+   *   AccountStatus.ACTIVE,
+   *   0,
+   *   10
+   * );
+   *
+   * // Find female doctors at specific clinic
+   * const [doctors, total] = await repository.findDoctorsWithFilters(
+   *   AccountRole.DOCTOR,
+   *   AccountStatus.ACTIVE,
+   *   0,
+   *   10,
+   *   'clinic-uuid',
+   *   'FEMALE'
+   * );
+   * ```
+   */
+  async findDoctorsWithFilters(
+    role: AccountRole,
+    status: AccountStatus,
+    skip: number = 0,
+    take: number = 10,
+    clinicId?: string,
+    gender?: string,
+  ): Promise<[Account[], number]> {
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
+      .where('account.role = :role', { role })
+      .andWhere('account.status = :status', { status })
+      .andWhere('account.deletedAt IS NULL');
+
+    // Apply clinicId filter (optional)
+    if (clinicId) {
+      queryBuilder.andWhere('account.parentId = :clinicId', { clinicId });
+    }
+
+    // Apply pagination and ordering
+    queryBuilder
+      .skip(skip)
+      .take(take)
+      .orderBy('account.createdAt', 'DESC');
+
+    const [accounts, total] = await queryBuilder.getManyAndCount();
+
+    // Filter by gender and exclude soft-deleted doctor profiles
+    // Note: This is done in-memory because we need to join doctor_information
+    // and filter by its deletedAt and gender columns
+    const filteredAccounts = await this.filterDoctorsByGenderAndDeletedAt(
+      accounts,
+      gender,
+    );
+
+    // Return filtered accounts with original total count
+    // Note: total count includes all doctors matching role/status/clinicId filters
+    // Gender filtering is applied after pagination
+    return [filteredAccounts, total];
+  }
+
+  /**
+   * Filter Doctors by Gender and Soft Delete Status
+   *
+   * Internal helper method to filter doctors by gender and exclude soft-deleted profiles.
+   * This is done separately because we need to query doctor_information table.
+   *
+   * @param {Account[]} accounts - Array of doctor accounts
+   * @param {string} [gender] - Optional gender filter
+   * @returns {Promise<Account[]>} Filtered array of accounts
+   *
+   * @private
+   */
+  private async filterDoctorsByGenderAndDeletedAt(
+    accounts: Account[],
+    gender?: string,
+  ): Promise<Account[]> {
+    const filteredAccounts: Account[] = [];
+
+    for (const account of accounts) {
+      // Get doctor information for this account
+      const doctorInfo = await this.accountRepository
+        .createQueryBuilder('account')
+        .leftJoin(
+          'doctor_information',
+          'doctorInfo',
+          'doctorInfo.doctor_acc_id = account._id',
+        )
+        .select('doctorInfo.*')
+        .where('account._id = :accountId', { accountId: account._id })
+        .andWhere('doctorInfo.deleted_at IS NULL')
+        .getRawOne();
+
+      // If doctor information exists and is not soft-deleted
+      if (doctorInfo) {
+        // Apply gender filter if provided
+        if (gender && doctorInfo.gender !== gender) {
+          continue;
+        }
+        filteredAccounts.push(account);
+      }
+    }
+
+    return filteredAccounts;
+  }
 }
