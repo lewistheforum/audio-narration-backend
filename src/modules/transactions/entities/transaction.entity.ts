@@ -10,6 +10,8 @@ import {
 } from 'typeorm';
 import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
 import { TransactionType } from './transaction-type.entity';
+import { Account } from '../../accounts/entities/accounts.entity';
+import { ClinicInformation } from '../../accounts/entities/clinic_information.entity';
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
@@ -32,6 +34,20 @@ export enum PaymentDirection {
 export class Transaction {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
+
+  @Column({ name: 'clinic_id', type: 'uuid', nullable: true })
+  clinicId?: string;
+
+  @ManyToOne(() => ClinicInformation, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'clinic_id' })
+  clinic?: ClinicInformation;
+
+  @Column({ name: 'sender_account_id', type: 'uuid', nullable: true })
+  senderAccountId?: string;
+
+  @ManyToOne(() => Account, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'sender_account_id' })
+  senderAccount?: Account;
 
   @Column({ name: 'prescription_id', type: 'uuid', nullable: true })
   prescriptionId?: string;

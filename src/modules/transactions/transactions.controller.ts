@@ -11,7 +11,13 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiExtraModels, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
-import { CreateTransactionDto, PaymentHistoryResponseDto, PaymentResponseDto, SeepayCallbackDto } from './dto';
+import {
+  CreateTransactionDto,
+  PaymentHistoryResponseDto,
+  PaymentResponseDto,
+  SeepayCallbackDto,
+  TransactionDetailDto,
+} from './dto';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 
 @ApiTags('Transactions')
@@ -90,6 +96,10 @@ export class TransactionsController {
   @ApiOperation({ summary: 'Lấy tất cả lịch sử giao dịch' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'clinicId', required: false, type: String })
+  @ApiQuery({ name: 'senderAccountId', required: false, type: String })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, description: 'ISO date filter from (transaction_date)'} )
+  @ApiQuery({ name: 'toDate', required: false, type: String, description: 'ISO date filter to (transaction_date)' })
   @ApiResponseData({
     type: PaymentHistoryResponseDto,
     status: HttpStatus.OK,
@@ -98,10 +108,15 @@ export class TransactionsController {
   async getAllPaymentHistory(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @Query('clinicId') clinicId?: string,
+    @Query('senderAccountId') senderAccountId?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
   ) {
     const { items, total } = await this.transactionsService.getAllPaymentHistory(
       Number(page),
       Number(limit),
+      { clinicId, senderAccountId, fromDate, toDate },
     );
 
     return {
@@ -115,6 +130,10 @@ export class TransactionsController {
           gateway: item.gateway,
           referenceCode: item.referenceCode,
           transactionDate: item.transactionDate,
+          clinicName: item.clinicName,
+          senderFullName: item.senderFullName,
+          senderGender: item.senderGender,
+          senderDob: item.senderDob,
           createdAt: item.createdAt,
         })),
         total,
@@ -122,6 +141,18 @@ export class TransactionsController {
         limit: Number(limit),
       },
       message: 'Payment history fetched successfully',
+    };
+  }
+
+  @Get(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xem chi tiết giao dịch' })
+  @ApiResponseData({ type: TransactionDetailDto, status: HttpStatus.OK, message: 'Transaction detail fetched successfully' })
+  async getTransactionDetail(@Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.transactionsService.getTransactionDetail(id);
+    return {
+      data,
+      message: 'Transaction detail fetched successfully',
     };
   }
 }

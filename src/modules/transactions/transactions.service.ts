@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
@@ -58,24 +58,10 @@ export class TransactionsService {
       throw new BadRequestException('Unable to detect prescription ID in callback');
     }
 
-    let transaction = await this.paymentRepository.findOne({ where: { prescriptionId } });
-
-    if (transaction) {
-      return new PaymentResponseDto({
-        id: transaction.id,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        status: transaction.status,
-        qrCodeUrl: transaction.qrCodeUrl,
-        qrPayload: transaction.qrPayload,
-        expiresAt: transaction.expiresAt,
-      });
-    }
-
     const isIncoming = payload.transferType === PaymentDirection.IN;
     const status = isIncoming ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
 
-    transaction = this.paymentRepository.create({
+    const transaction = this.paymentRepository.create({
       prescriptionId,
       amount: payload.transferAmount,
       currency: 'VND',
@@ -192,14 +178,156 @@ export class TransactionsService {
   async getAllPaymentHistory(
     page: number = 1,
     limit: number = 10,
-  ): Promise<{ items: Transaction[]; total: number }> {
-    const [items, total] = await this.paymentRepository.findAndCount({
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    filters?: {
+      clinicId?: string;
+      senderAccountId?: string;
+      fromDate?: string;
+      toDate?: string;
+    },
+  ): Promise<{
+    items: Array<{
+      id: string;
+      prescriptionId?: string;
+      amount: number;
+      currency: string;
+      status: string;
+      gateway?: string;
+      referenceCode?: string;
+      transactionDate?: Date;
+      createdAt: Date;
+      clinicName?: string;
+      senderFullName?: string;
+      senderGender?: string;
+      senderDob?: Date;
+    }>;
+    total: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = ['t.deleted_at IS NULL'];
+    const params: Array<string | number | Date> = [];
+
+    if (filters?.clinicId) {
+      params.push(filters.clinicId);
+      conditions.push(`t.clinic_id = $${params.length}`);
+    }
+
+    if (filters?.senderAccountId) {
+      params.push(filters.senderAccountId);
+      conditions.push(`t.sender_account_id = $${params.length}`);
+    }
+
+    if (filters?.fromDate) {
+      params.push(new Date(filters.fromDate));
+      conditions.push(`t.transaction_date >= $${params.length}`);
+    }
+
+    if (filters?.toDate) {
+      params.push(new Date(filters.toDate));
+      conditions.push(`t.transaction_date <= $${params.length}`);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const raw = await this.paymentRepository.query(
+      `SELECT t.*,
+              ci.clinic_name AS clinic_name,
+              ga.full_name  AS sender_full_name,
+              ga.gender     AS sender_gender,
+              ga.dob        AS sender_dob
+       FROM transactions t
+       LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+       LEFT JOIN general_accounts ga ON ga.general_acc_id = t.sender_account_id
+       WHERE ${whereClause}
+       ORDER BY t.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset],
+    );
+
+    const countResult = await this.paymentRepository.query(
+      `SELECT COUNT(*)::int AS cnt
+       FROM transactions t
+       WHERE ${whereClause}`,
+      params,
+    );
+    const total = Number(countResult?.[0]?.cnt || 0);
+
+    const items = raw.map((row: any) => ({
+      id: row._id,
+      prescriptionId: row.prescription_id,
+      amount: Number(row.amount),
+      currency: row.currency,
+      status: row.status,
+      gateway: row.gateway,
+      referenceCode: row.reference_code,
+      transactionDate: row.transaction_date,
+      createdAt: row.created_at,
+      clinicName: row.clinic_name,
+      senderFullName: row.sender_full_name,
+      senderGender: row.sender_gender,
+      senderDob: row.sender_dob,
+    }));
 
     return { items, total };
+  }
+
+  async getTransactionDetail(id: string): Promise<{
+    id: string;
+    prescriptionId?: string;
+    amount: number;
+    currency: string;
+    status: string;
+    gateway?: string;
+    referenceCode?: string;
+    transactionDate?: Date;
+    createdAt: Date;
+    clinicName?: string;
+    senderFullName?: string;
+    senderGender?: string;
+    senderDob?: Date;
+    content?: string;
+    accountNumber?: string;
+    transferType?: string;
+    transferAmount?: number;
+  }> {
+    const rows = await this.paymentRepository.query(
+      `SELECT t.*,
+              ci.clinic_name AS clinic_name,
+              ga.full_name  AS sender_full_name,
+              ga.gender     AS sender_gender,
+              ga.dob        AS sender_dob
+       FROM transactions t
+       LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+       LEFT JOIN general_accounts ga ON ga.general_acc_id = t.sender_account_id
+       WHERE t.deleted_at IS NULL AND t._id = $1
+       LIMIT 1`,
+      [id],
+    );
+
+    const row = rows?.[0];
+    if (!row) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      id: row._id,
+      prescriptionId: row.prescription_id,
+      amount: Number(row.amount),
+      currency: row.currency,
+      status: row.status,
+      gateway: row.gateway,
+      referenceCode: row.reference_code,
+      transactionDate: row.transaction_date,
+      createdAt: row.created_at,
+      clinicName: row.clinic_name,
+      senderFullName: row.sender_full_name,
+      senderGender: row.sender_gender,
+      senderDob: row.sender_dob,
+      content: row.content,
+      accountNumber: row.account_number,
+      transferType: row.transfer_type,
+      transferAmount: row.transfer_amount,
+    };
   }
 
   private async resolveClinicDocumentByReference(
