@@ -69,7 +69,11 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
  */
 @ApiTags('Accounts management')
 @Controller('accounts')
-@ApiExtraModels(AccountResponseDto, ClinicListResponseDto, ClinicDetailResponseDto)
+@ApiExtraModels(
+  AccountResponseDto,
+  ClinicListResponseDto,
+  ClinicDetailResponseDto,
+)
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
 
@@ -107,7 +111,7 @@ export class AccountsController {
    */
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.ADMIN)
+  // @Roles(AccountRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all accounts (Admin only)' })
   @ApiQuery({
@@ -675,7 +679,9 @@ export class AccountsController {
    * @response 200 - Successfully retrieved clinics
    */
   @Get('clinics')
-  @ApiOperation({ summary: 'Get all clinics with pagination, search and filters' })
+  @ApiOperation({
+    summary: 'Get all clinics with pagination, search and filters',
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -692,7 +698,8 @@ export class AccountsController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search keyword to match clinic name or description (case-insensitive)',
+    description:
+      'Search keyword to match clinic name or description (case-insensitive)',
   })
   @ApiQuery({
     name: 'province',

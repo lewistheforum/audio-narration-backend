@@ -67,7 +67,7 @@ export class FeedbackSeederService {
       this.logger.log('Starting to seed feedbacks...');
 
       // Check if feedbacks already exist
-      const existingFeedbacks = await this.feedbackRepository.findAllFeedbacks();
+      const existingFeedbacks = await this.feedbackRepository.findAll();
       if (existingFeedbacks.length > 0) {
         this.logger.log(
           `Feedbacks already exist (${existingFeedbacks.length} records). Skipping seeding.`,
@@ -82,7 +82,9 @@ export class FeedbackSeederService {
       );
 
       if (clinics.length === 0) {
-        this.logger.warn('No clinic manager accounts found. Skipping feedback seeding.');
+        this.logger.warn(
+          'No clinic manager accounts found. Skipping feedback seeding.',
+        );
         return;
       }
 
@@ -92,7 +94,9 @@ export class FeedbackSeederService {
       );
 
       if (patients.length === 0) {
-        this.logger.warn('No patient accounts found. Skipping feedback seeding.');
+        this.logger.warn(
+          'No patient accounts found. Skipping feedback seeding.',
+        );
         return;
       }
 
@@ -103,7 +107,9 @@ export class FeedbackSeederService {
       // Read CSV data
       const csvData = await this.readCsvFile();
       if (csvData.length === 0) {
-        this.logger.warn('No data found in test.csv. Skipping feedback seeding.');
+        this.logger.warn(
+          'No data found in test.csv. Skipping feedback seeding.',
+        );
         return;
       }
 
@@ -167,7 +173,8 @@ export class FeedbackSeederService {
       const hasImages = imageIndices.includes(i);
 
       // Randomly select a patient ID
-      const patientId = patientIds[Math.floor(Math.random() * patientIds.length)];
+      const patientId =
+        patientIds[Math.floor(Math.random() * patientIds.length)];
 
       // Prepare feedback data
       const feedbackData = {
