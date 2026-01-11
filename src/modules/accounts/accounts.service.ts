@@ -12,9 +12,10 @@ import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus, VerificationType } from './enums';
 import { GeneralAccount } from './entities/general_accounts.entity';
-import { ClinicInformation } from './entities/clinic_information.entity';
+import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
 import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
 import { DoctorInformation } from './entities/doctor_information.entity';
+import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
 import { Address } from './entities/addresses.entity';
 import { GoogleIframe } from './entities/google_iframe.entity';
 import {
@@ -26,6 +27,8 @@ import {
   CreateClinicManagerDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
+  CreateClinicAdminProfileDto,
+  UpdateClinicAdminProfileDto,
 } from './dto';
 import {
   ClinicListResponseDto,
@@ -53,9 +56,10 @@ import { AccountRepository } from './repositories/account.repository';
 import { GeneralAccountRepository } from './repositories/general-account.repository';
 import {
   CodeVerificationRepository,
-  ClinicInformationRepository,
+  ClinicManagerInformationRepository,
   ClinicStaffInformationRepository,
   DoctorInformationRepository,
+  ClinicAdminInformationRepository,
   AddressRepository,
   GoogleIframeRepository,
 } from './repositories';
@@ -122,7 +126,7 @@ export class AccountsService {
    * @param {AccountsRepository} accountsRepository - Repository for Account and GeneralAccount data access
    * @param {CodeVerificationRepository} codeVerificationRepository - Repository for verification code management
    * @param {DataSource} dataSource - TypeORM DataSource for transaction management
-   * @param {ClinicInformationRepository} clinicInfoRepository - Repository for clinic information
+   * @param {ClinicManagerInformationRepository} clinicManagerInfoRepository - Repository for clinic manager information
    * @param {ClinicStaffInformationRepository} clinicStaffRepository - Repository for clinic staff information
    * @param {DoctorInformationRepository} doctorInfoRepository - Repository for doctor information
    */
@@ -131,9 +135,10 @@ export class AccountsService {
     private readonly generalAccountRepository: GeneralAccountRepository,
     private readonly codeVerificationRepository: CodeVerificationRepository,
     private readonly dataSource: DataSource,
-    private readonly clinicInfoRepository: ClinicInformationRepository,
+    private readonly clinicManagerInfoRepository: ClinicManagerInformationRepository,
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
     private readonly doctorInfoRepository: DoctorInformationRepository,
+    private readonly clinicAdminInfoRepository: ClinicAdminInformationRepository,
     private readonly addressRepository: AddressRepository,
     private readonly googleIframeRepository: GoogleIframeRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
@@ -320,7 +325,7 @@ export class AccountsService {
       createAccountDto.profilePicture
     ) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAccount._id,
+        accountId: savedAccount._id,
         fullName: createAccountDto.fullName,
         gender: createAccountDto.gender,
         dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
@@ -410,7 +415,7 @@ export class AccountsService {
     let generalAccount: GeneralAccount | null = null;
     if (dto.fullName || dto.profilePicture) {
       generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAccount._id,
+        accountId: savedAccount._id,
         fullName: dto.fullName,
         profilePicture: dto.profilePicture,
       });
@@ -1074,7 +1079,7 @@ export class AccountsService {
     } else {
       // Create new
       generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: userId,
+        accountId: userId,
         fullName: data.fullName,
         gender: data.gender as any,
         dob: data.dob,
@@ -1224,7 +1229,7 @@ export class AccountsService {
     expiredAt.setMinutes(expiredAt.getMinutes() + 10);
 
     const verification = this.codeVerificationRepository.create({
-      userId: account._id,
+      accountId: account._id,
       code,
       expiredAt,
       used: false,
@@ -1306,7 +1311,7 @@ export class AccountsService {
     expiredAt.setMinutes(expiredAt.getMinutes() + 15);
 
     const verification = this.codeVerificationRepository.create({
-      userId: account._id,
+      accountId: account._id,
       code,
       expiredAt,
       used: false,
@@ -1400,6 +1405,37 @@ export class AccountsService {
     // Hash and update password
     account.password = await bcrypt.hash(newPassword, this.BCRYPT_SALT_ROUNDS);
     await this.accountRepository.saveAccount(account);
+  }
+
+  /**
+   * Validate Clinic Manager Role
+   *
+   * Validates that an account has the CLINIC_MANAGER role.
+   * This helper method ensures that only accounts with the correct role can have
+   * associated ClinicManagerInformation records.
+   *
+   * Use Cases:
+   * - Before creating ClinicManagerInformation records
+   * - Before updating ClinicManagerInformation records
+   * - Ensuring data integrity between Account role and ClinicManagerInformation
+   *
+   * @param {Account} account - Account entity to validate
+   * @throws {BadRequestException} If account does not have CLINIC_MANAGER role
+   *
+   * @example
+   * ```typescript
+   * const account = await this.findAccountEntityById(id);
+   * this.validateClinicManagerRole(account);
+   * // If no exception, account has CLINIC_MANAGER role
+   * ```
+   */
+  private validateClinicManagerRole(account: Account): void {
+    if (account.role !== AccountRole.CLINIC_MANAGER) {
+      throw new BadRequestException(
+        'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
+        `Current role: ${account.role}`,
+      );
+    }
   }
 
   /**
@@ -1518,7 +1554,7 @@ export class AccountsService {
       // Create GeneralAccount profile
       const generalAccount = this.generalAccountRepository.createGeneralAccount(
         {
-          generalAccId: savedAccount._id,
+          accountId: savedAccount._id,
           fullName: dto.fullName,
           gender: dto.gender,
           dob: dto.dob ? new Date(dto.dob) : undefined,
@@ -1540,7 +1576,7 @@ export class AccountsService {
       expiredAt.setMinutes(expiredAt.getMinutes() + 15);
 
       const verification = this.codeVerificationRepository.create({
-        userId: savedAccount._id,
+        accountId: savedAccount._id,
         code,
         expiredAt,
         used: false,
@@ -1578,21 +1614,29 @@ export class AccountsService {
    *
    * This method creates:
    * 1. Account entity with CLINIC_MANAGER role
-   * 2. GeneralAccount entity with manager's personal info
-   * 3. ClinicInformation entity with clinic details
+   * 2. ClinicManagerInformation entity with manager details
+   *
+   * Role Enforcement:
+   * - Only accounts with CLINIC_MANAGER role can have ClinicManagerInformation records
+   * - Before creating ClinicManagerInformation, the account's role is validated
+   * - Throws BadRequestException if the account does not have CLINIC_MANAGER role
    *
    * Transaction Behavior:
    * - If any step fails, all changes are rolled back
-   * - Ensures data integrity across all three tables
+   * - Ensures data integrity across both tables
    *
+   * @param {string} patientId - Patient account ID creating the clinic manager
    * @param {CreateClinicManagerDto} dto - Clinic manager registration data
    * @returns {Promise<AccountResponseDto>} Created clinic manager account with all related data
+   * @throws {NotFoundException} If patient account does not exist
+   * @throws {ForbiddenException} If patient account does not have PATIENT role
    * @throws {ConflictException} If email already exists
+   * @throws {BadRequestException} If account does not have CLINIC_MANAGER role (should not occur in normal flow)
    * @throws {Error} Any error will trigger rollback
    *
    * @example
    * ```typescript
-   * const manager = await accountsService.createClinicManager({
+   * const manager = await accountsService.createClinicManager(patientId, {
    *   username: 'clinicmanager',
    *   email: 'manager@clinic.com',
    *   password: 'ManagerPass123',
@@ -1630,13 +1674,13 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
-      // Step 2: Hash password
+      // Step 3: Hash password
       const hashedPassword = await bcrypt.hash(
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
 
-      // Step 3: Create Account entity with CLINIC_MANAGER role
+      // Step 4: Create Account entity with CLINIC_MANAGER role
       const account = this.accountRepository.createAccount({
         username: dto.username,
         email: dto.email,
@@ -1652,31 +1696,21 @@ export class AccountsService {
 
       const savedAccount = await queryRunner.manager.save(account);
 
-      console.log('check account ID: ', savedAccount._id);
+      // Step 5: Validate account has CLINIC_MANAGER role before creating ClinicManagerInformation
+      // This ensures data integrity - only CLINIC_MANAGER accounts can have clinic manager information
+      this.validateClinicManagerRole(savedAccount);
 
-      // Step 4: Create GeneralAccount entity
-      // const generalAccount = this.generalAccountRepository.createGeneralAccount(
-      //   {
-      //     generalAccId: savedAccount._id,
-      //     fullName: dto.fullName,
-      //   },
-      // );
-
-      // await queryRunner.manager.save(generalAccount);
-
-      // Step 5: Create ClinicInformation entity
-      const clinicInfo = this.clinicInfoRepository.create({
-        clinicId: savedAccount._id,
-        clinicName: dto.clinicName,
-        description: dto.description,
-        specializedIn: dto.specializedIn,
-        pros: dto.pros,
-        paraclinical: dto.paraclinical,
-        dob: dto.dob,
+      // Step 6: Create ClinicManagerInformation entity
+      const clinicManagerInfo = this.clinicManagerInfoRepository.create({
+        accountId: savedAccount._id,
+        clinicBranchName: dto.clinicName,
+        fullName: dto.clinicName, // Use clinicName as fullName
+        gender: 'OTHER' as any, // Default to OTHER
+        dob: dto.dob ? new Date(dto.dob) : undefined,
         profilePicture: dto.profilePicture,
       });
 
-      await queryRunner.manager.save(clinicInfo);
+      await queryRunner.manager.save(clinicManagerInfo);
 
       await queryRunner.commitTransaction();
 
@@ -1768,7 +1802,7 @@ export class AccountsService {
 
       // Step 5: Create ClinicStaffInformation entity with basic info
       const staffInfo = this.clinicStaffRepository.create({
-        clinicAccId: savedAccount._id,
+        accountId: savedAccount._id,
         fullName: dto.fullName,
         gender: dto.gender,
         clinicRole: dto.clinicRole,
@@ -1865,7 +1899,7 @@ export class AccountsService {
 
       // Step 5: Create DoctorInformation entity with basic info
       const doctorInfo = this.doctorInfoRepository.create({
-        doctorAccId: savedAccount._id,
+        accountId: savedAccount._id,
         fullName: dto.fullName,
         gender: dto.gender,
         academicDegree: dto.academicDegree,
@@ -1896,11 +1930,11 @@ export class AccountsService {
    *
    * Data Sources:
    * - accounts table: Core account data
-   * - clinic_information table: Clinic details
+   * - clinic_manager_information table: Clinic manager details
    * - addresses table: Address information
    *
    * Filtering Logic:
-   * - search: Case-insensitive match on clinicName AND description
+   * - search: Case-insensitive match on clinicBranchName AND description
    * - province: Exact match on provinceName or province code
    * - specialty: JSONB containment query on specializedIn array
    * - All filters work together with AND logic
@@ -1933,9 +1967,9 @@ export class AccountsService {
     const clinicItems: ClinicItemDto[] = [];
 
     for (const clinic of clinics) {
-      // Get clinic information
+      // Get clinic manager information
       const clinicInfo =
-        await this.clinicInfoRepository.findByClinicId(clinic._id);
+        await this.clinicManagerInfoRepository.findByAccountId(clinic._id);
 
       // Get primary address (first address)
       const addresses = await this.addressRepository.findByAccountId(clinic._id);
@@ -1969,7 +2003,7 @@ export class AccountsService {
    *
    * Data Sources:
    * - accounts table: Core account data
-   * - clinic_information table: Clinic details
+   * - clinic_manager_information table: Clinic manager details
    * - addresses table: All addresses (branches)
    * - google_iframe table: Google map for each address
    * - accounts table (doctors): Doctors linked to this clinic
@@ -1996,11 +2030,11 @@ export class AccountsService {
       throw new NotFoundException('Clinic not found');
     }
 
-    // Get clinic information
+    // Get clinic manager information
     const clinicInfo =
-      await this.clinicInfoRepository.findByClinicId(clinic._id);
+      await this.clinicManagerInfoRepository.findByAccountId(clinic._id);
     if (!clinicInfo) {
-      throw new NotFoundException('Clinic information not found');
+      throw new NotFoundException('Clinic manager information not found');
     }
 
     // Get all addresses with Google maps
@@ -2063,7 +2097,7 @@ export class AccountsService {
    * Data Sources:
    * - accounts table: Core account data (base table)
    * - doctor_information table: Doctor details
-   * - clinic_information table: Parent clinic details
+   * - clinic_manager_information table: Parent clinic details
    *
    * Filtering Logic:
    * - clinicId: Filter by parent clinic ID (accounts.parentId)
@@ -2099,10 +2133,10 @@ export class AccountsService {
       const doctorInfo =
         await this.doctorInfoRepository.findByDoctorAccountId(doctor._id);
 
-      // Get parent clinic information if exists
+      // Get parent clinic manager information if exists
       let clinicInfo = null;
       if (doctor.parentId) {
-        clinicInfo = await this.clinicInfoRepository.findByClinicId(
+        clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(
           doctor.parentId,
         );
       }
@@ -2130,7 +2164,7 @@ export class AccountsService {
    * Get Doctor by ID with Full Details
    *
    * Retrieves detailed information for a specific doctor.
-   * Includes doctor information and clinic information (parent clinic).
+   * Includes doctor information and clinic manager information (parent clinic).
    *
    * Business Rules:
    * - Only returns doctors with role='DOCTOR' and status='ACTIVE'
@@ -2141,12 +2175,12 @@ export class AccountsService {
    * - accounts table: Core account data
    * - doctor_information table: Doctor details (joined via doctor_acc_id)
    * - accounts table (clinic): Parent clinic account (via parentId)
-   * - clinic_information table: Clinic details
+   * - clinic_manager_information table: Clinic manager details
    *
    * Field Priority:
    * - profilePicture: doctor_information.profilePicture > accounts.profilePicture
    * - dob: doctor_information.dob > accounts.dob (though accounts.dob is not in Account entity)
-   * - clinic.phone: comes from clinic account, not clinic_information
+   * - clinic.phone: comes from clinic account, not clinic_manager_information
    *
    * @param {string} id - Doctor account UUID
    * @returns {Promise<DoctorDetailResponseDto>} Full doctor details
@@ -2179,16 +2213,16 @@ export class AccountsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get clinic information if exists (via parentId)
+    // Get clinic manager information if exists (via parentId)
     let clinicInfo = null;
     if (doctor.parentId) {
       const clinic = await this.accountRepository.findAccountById(doctor.parentId);
-      if (clinic && clinic.clinicInformation) {
-        // Combine clinic account and clinic information for ClinicInfo DTO
+      if (clinic && clinic.clinicManagerInformation) {
+        // Combine clinic account and clinic manager information for ClinicInfo DTO
         clinicInfo = {
-          _id: clinic.clinicInformation._id,
-          clinicName: clinic.clinicInformation.clinicName,
-          phone: clinic.phone, // Phone comes from clinic account, not clinic_information
+          _id: clinic.clinicManagerInformation._id,
+          clinicName: clinic.clinicManagerInformation.clinicBranchName,
+          phone: clinic.phone, // Phone comes from clinic account, not clinic_manager_information
         };
       }
     }
@@ -2210,5 +2244,212 @@ export class AccountsService {
     );
 
     return new DoctorDetailResponseDto(doctorDetailData);
+  }
+
+  /**
+   * Validate Clinic Admin Role
+   *
+   * Validates that an account has the CLINIC_ADMIN role.
+   * This helper method ensures that only accounts with the correct role can have
+   * associated ClinicAdminInformation records.
+   *
+   * Use Cases:
+   * - Before creating ClinicAdminInformation records
+   * - Before updating ClinicAdminInformation records
+   * - Ensuring data integrity between Account role and ClinicAdminInformation
+   *
+   * @param {Account} account - Account entity to validate
+   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
+   *
+   * @example
+   * ```typescript
+   * const account = await this.findAccountEntityById(id);
+   * this.validateClinicAdminRole(account);
+   * // If no exception, account has CLINIC_ADMIN role
+   * ```
+   */
+  private validateClinicAdminRole(account: Account): void {
+    if (account.role !== AccountRole.CLINIC_ADMIN) {
+      throw new BadRequestException(
+        'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
+          `Current role: ${account.role}`,
+      );
+    }
+  }
+
+  /**
+   * Find Clinic Admin Profile by Account ID
+   *
+   * Retrieves the clinic admin profile information for a specific account.
+   * Only accounts with CLINIC_ADMIN role can have clinic admin profiles.
+   *
+   * Business Rules:
+   * - Account must have CLINIC_ADMIN role
+   * - Only returns profile if account exists and has CLINIC_ADMIN role
+   * - Returns null if profile not found
+   *
+   * @param {string} accountId - Account UUID
+   * @returns {Promise<ClinicAdminInformation | null>} Clinic admin profile or null
+   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
+   *
+   * @example
+   * ```typescript
+   * const profile = await accountsService.findClinicAdminProfile('account-uuid');
+   * if (profile) {
+   *   console.log(profile.clinicName);
+   * }
+   * ```
+   */
+  async findClinicAdminProfile(
+    accountId: string,
+  ): Promise<ClinicAdminInformation | null> {
+    const account = await this.findAccountEntityById(accountId);
+    this.validateClinicAdminRole(account);
+
+    return this.clinicAdminInfoRepository.findByAccountId(accountId);
+  }
+
+  /**
+   * Create Clinic Admin Profile
+   *
+   * Creates a new clinic admin profile for an account.
+   * This method is used to create the profile after the account is created.
+   *
+   * Business Rules:
+   * - Account must have CLINIC_ADMIN role
+   * - Profile is created with provided data
+   * - All fields are optional except clinicName
+   *
+   * @param {string} accountId - Account UUID
+   * @param {CreateClinicAdminProfileDto} dto - Clinic admin profile data
+   * @returns {Promise<ClinicAdminInformation>} Created clinic admin profile
+   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
+   *
+   * @example
+   * ```typescript
+   * const profile = await accountsService.createClinicAdminProfile('account-uuid', {
+   *   clinicName: 'City Medical Clinic',
+   *   description: 'A modern healthcare facility'
+   * });
+   * ```
+   */
+  async createClinicAdminProfile(
+    accountId: string,
+    dto: CreateClinicAdminProfileDto,
+  ): Promise<ClinicAdminInformation> {
+    const account = await this.findAccountEntityById(accountId);
+    this.validateClinicAdminRole(account);
+
+    const profile = this.clinicAdminInfoRepository.create({
+      accountId,
+      clinicName: dto.clinicName,
+      description: dto.description,
+      specializedIn: dto.specializedIn,
+      pros: dto.pros,
+      paraclinical: dto.paraclinical,
+      dob: dto.dob ? new Date(dto.dob) : undefined,
+      profilePicture: dto.profilePicture,
+      bankName: dto.bankName,
+      bankNumber: dto.bankNumber ? Number(dto.bankNumber) : undefined,
+      bankBranch: dto.bankBranch,
+      sepayVa: dto.sepayVa,
+      isVerify: dto.isVerify ?? false,
+    });
+
+    return this.clinicAdminInfoRepository.save(profile);
+  }
+
+  /**
+   * Update Clinic Admin Profile
+   *
+   * Updates an existing clinic admin profile for an account.
+   * This method allows updating all or partial profile fields.
+   *
+   * Business Rules:
+   * - Account must have CLINIC_ADMIN role
+   * - Only provided fields are updated
+   * - If profile doesn't exist, creates new profile
+   *
+   * @param {string} accountId - Account UUID
+   * @param {UpdateClinicAdminProfileDto} dto - Clinic admin profile data to update
+   * @returns {Promise<ClinicAdminInformation>} Updated clinic admin profile
+   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
+   *
+   * @example
+   * ```typescript
+   * const profile = await accountsService.updateClinicAdminProfile('account-uuid', {
+   *   clinicName: 'Updated Clinic Name',
+   *   description: 'Updated description'
+   * });
+   * ```
+   */
+  async updateClinicAdminProfile(
+    accountId: string,
+    dto: UpdateClinicAdminProfileDto,
+  ): Promise<ClinicAdminInformation> {
+    const account = await this.findAccountEntityById(accountId);
+    this.validateClinicAdminRole(account);
+
+    let profile = await this.clinicAdminInfoRepository.findByAccountId(accountId);
+
+    if (profile) {
+      // Update existing profile
+      if (dto.clinicName !== undefined) {
+        profile.clinicName = dto.clinicName;
+      }
+      if (dto.description !== undefined) {
+        profile.description = dto.description;
+      }
+      if (dto.specializedIn !== undefined) {
+        profile.specializedIn = dto.specializedIn;
+      }
+      if (dto.pros !== undefined) {
+        profile.pros = dto.pros;
+      }
+      if (dto.paraclinical !== undefined) {
+        profile.paraclinical = dto.paraclinical;
+      }
+      if (dto.dob !== undefined) {
+        profile.dob = dto.dob ? new Date(dto.dob) : undefined;
+      }
+      if (dto.profilePicture !== undefined) {
+        profile.profilePicture = dto.profilePicture;
+      }
+      if (dto.bankName !== undefined) {
+        profile.bankName = dto.bankName;
+      }
+      if (dto.bankNumber !== undefined) {
+        profile.bankNumber = dto.bankNumber ? Number(dto.bankNumber) : undefined;
+      }
+      if (dto.bankBranch !== undefined) {
+        profile.bankBranch = dto.bankBranch;
+      }
+      if (dto.sepayVa !== undefined) {
+        profile.sepayVa = dto.sepayVa;
+      }
+      if (dto.isVerify !== undefined) {
+        profile.isVerify = dto.isVerify;
+      }
+      return this.clinicAdminInfoRepository.save(profile);
+    } else {
+      // Create new profile if doesn't exist
+      const profile = this.clinicAdminInfoRepository.create({
+        accountId,
+        clinicName: dto.clinicName,
+        description: dto.description,
+        specializedIn: dto.specializedIn,
+        pros: dto.pros,
+        paraclinical: dto.paraclinical,
+        dob: dto.dob ? new Date(dto.dob) : undefined,
+        profilePicture: dto.profilePicture,
+        bankName: dto.bankName,
+        bankNumber: dto.bankNumber ? Number(dto.bankNumber) : undefined,
+        bankBranch: dto.bankBranch,
+        sepayVa: dto.sepayVa,
+        isVerify: dto.isVerify ?? false,
+      });
+
+      return this.clinicAdminInfoRepository.save(profile);
+    }
   }
 }

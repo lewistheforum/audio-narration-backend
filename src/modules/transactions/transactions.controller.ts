@@ -55,13 +55,10 @@ export class TransactionsController {
     @Param('documentId', ParseUUIDPipe) documentId: string,
     @Body() body: Omit<CreateTransactionDto, 'prescriptionId'>,
   ) {
-    const payment = await this.transactionsService.createDynamicQr(
-      {
-        ...body,
-        prescriptionId,
-      },
-      documentId,
-    );
+    const payment = await this.transactionsService.createDynamicQr({
+      ...body,
+      prescriptionId,
+    });
     return {
       data: payment,
       message: 'Payment QR created successfully',

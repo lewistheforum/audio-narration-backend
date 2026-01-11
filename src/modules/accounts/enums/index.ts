@@ -6,3 +6,6 @@ export * from './clinic-role.enum';
 export * from './bank-name.enum';
 export * from './ban-type.enum';
 export * from './legal-document-verification-status.enum';
+export * from './contract-role.enum';
+export * from './contract-type.enum';
+export * from './salary-payment-method.enum';

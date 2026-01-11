@@ -14,23 +14,24 @@ import { ClinicShift } from './clinic-shift.entity';
 import { WeekDay } from '../enums';
 
 /**
- * DoctorSchedule Entity
+ * EmployeeSchedule Entity
  *
- * Stores doctor schedules for appointments
+ * Stores employee schedules for appointments and work assignments
+ * Note: Table name is 'employee_schedule' to support all employee types
  */
-@Entity('doctor_schedule')
-export class DoctorSchedule {
+@Entity('employee_schedule')
+export class EmployeeSchedule {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'doctor_id', type: 'uuid' })
-  doctorId: string;
+  @Column({ name: 'employee_id', type: 'uuid' })
+  employeeId: string;
 
   @ManyToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'doctor_id' })
-  doctor?: Account;
+  @JoinColumn({ name: 'employee_id', referencedColumnName: '_id' })
+  employee?: Account;
 
   @Column({ name: 'clinic_id', type: 'uuid' })
   clinicId: string;
@@ -38,7 +39,7 @@ export class DoctorSchedule {
   @ManyToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'clinic_id' })
+  @JoinColumn({ name: 'clinic_id', referencedColumnName: '_id' })
   clinic?: Account;
 
   @Column({ name: 'clinic_shift_id', type: 'uuid' })
@@ -47,7 +48,7 @@ export class DoctorSchedule {
   @ManyToOne(() => ClinicShift, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'clinic_shift_id' })
+  @JoinColumn({ name: 'clinic_shift_id', referencedColumnName: '_id' })
   clinicShift?: ClinicShift;
 
   @Column({ name: 'work_date', type: 'date' })
@@ -67,7 +68,7 @@ export class DoctorSchedule {
     nullable: true,
     onDelete: 'SET NULL',
   })
-  @JoinColumn({ name: 'room_id' })
+  @JoinColumn({ name: 'room_id', referencedColumnName: '_id' })
   room?: ClinicRoom;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

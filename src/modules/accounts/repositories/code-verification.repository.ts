@@ -45,7 +45,7 @@ export class CodeVerificationRepository {
     code: string,
   ): Promise<CodeVerification | null> {
     return this.repository.findOne({
-      where: { userId, code },
+      where: { accountId: userId, code },
     });
   }
 
@@ -58,7 +58,7 @@ export class CodeVerificationRepository {
     type: VerificationType,
   ): Promise<CodeVerification | null> {
     return this.repository.findOne({
-      where: { userId, code, type },
+      where: { accountId: userId, code, type },
     });
   }
 
@@ -72,7 +72,7 @@ export class CodeVerificationRepository {
   ): Promise<CodeVerification | null> {
     return this.repository.findOne({
       where: {
-        userId,
+        accountId: userId,
         code,
         type,
         used: false,
@@ -86,7 +86,7 @@ export class CodeVerificationRepository {
    */
   async findByUserId(userId: string): Promise<CodeVerification[]> {
     return this.repository.find({
-      where: { userId },
+      where: { accountId: userId },
     });
   }
 
@@ -98,7 +98,7 @@ export class CodeVerificationRepository {
     type: VerificationType,
   ): Promise<CodeVerification[]> {
     return this.repository.find({
-      where: { userId, type },
+      where: { accountId: userId, type },
     });
   }
 
@@ -110,8 +110,8 @@ export class CodeVerificationRepository {
     if (!data.code) {
       throw new Error('CodeVerification: code field is required and cannot be empty');
     }
-    if (!data.userId) {
-      throw new Error('CodeVerification: userId field is required');
+    if (!data.accountId) {
+      throw new Error('CodeVerification: accountId field is required');
     }
     if (!data.expiredAt) {
       throw new Error('CodeVerification: expiredAt field is required');
@@ -164,7 +164,7 @@ export class CodeVerificationRepository {
    * Soft delete all code verifications by user ID
    */
   async softDeleteByUserId(userId: string): Promise<void> {
-    await this.repository.softDelete({ userId });
+    await this.repository.softDelete({ accountId: userId });
   }
 
   /**
@@ -179,7 +179,7 @@ export class CodeVerificationRepository {
    * Hard delete all code verifications by user ID
    */
   async deleteByUserId(userId: string): Promise<number> {
-    const result = await this.repository.delete({ userId });
+    const result = await this.repository.delete({ accountId: userId });
     return result.affected || 0;
   }
 
@@ -209,7 +209,7 @@ export class CodeVerificationRepository {
   ): Promise<boolean> {
     const count = await this.repository.count({
       where: {
-        userId,
+        accountId: userId,
         type,
         used: false,
         expiredAt: MoreThan(new Date()),

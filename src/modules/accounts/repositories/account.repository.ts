@@ -366,9 +366,9 @@ export class AccountRepository {
    * Supports search by clinic name/description, filtering by province, and filtering by specialty.
    *
    * Filtering Logic:
-   * - search: Case-insensitive match (ILIKE) on clinic_information.clinicName AND clinic_information.description
+   * - search: Case-insensitive match (ILIKE) on clinic_manager_information.clinicBranchName AND clinic_manager_information.description
    * - province: Exact match on addresses.provinceName OR addresses.province
-   * - specialty: JSONB containment query (@>) on clinic_information.specializedIn
+   * - specialty: JSONB containment query (@>) on clinic_manager_information.specializedIn
    * - All filters work together with AND logic
    *
    * Note: This method uses QueryBuilder for complex joins and JSONB operations.
@@ -486,8 +486,8 @@ export class AccountRepository {
    *
    * Data Sources:
    * - accounts table: Core account data (base table)
-   * - doctor_information table: Doctor details (joined via doctorAccId)
-   * - clinic_information table: Parent clinic details (joined via parentId)
+   * - doctor_information table: Doctor details (joined via accountId)
+   * - clinic_manager_information table: Parent clinic details (joined via parentId)
    *
    * Filtering Logic:
    * - Always: role='DOCTOR', status='ACTIVE', deletedAt IS NULL
@@ -590,7 +590,7 @@ export class AccountRepository {
         .leftJoin(
           'doctor_information',
           'doctorInfo',
-          'doctorInfo.doctor_acc_id = account._id',
+          'doctorInfo.account_id = account._id',
         )
         .select('doctorInfo.*')
         .where('account._id = :accountId', { accountId: account._id })

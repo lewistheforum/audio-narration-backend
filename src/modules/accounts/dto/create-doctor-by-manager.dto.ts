@@ -8,6 +8,7 @@ import {
   Matches,
   IsEnum,
   IsNumber,
+  IsDateString,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -100,4 +101,66 @@ export class CreateDoctorByClinicManagerDto {
   @IsString({ message: 'Position must be a string' })
   @Transform(({ value }) => value?.trim())
   position?: string;
+
+  @ApiProperty({
+    description: 'Identity card number',
+    example: '001234567890',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Identity number must be a string' })
+  @Transform(({ value }) => value?.trim())
+  identityNumber?: string;
+
+  @ApiProperty({
+    description: 'Place of issue for identity card',
+    example: 'Hanoi',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Place of identity card must be a string' })
+  @Transform(({ value }) => value?.trim())
+  placeIdentityCard?: string;
+
+  @ApiProperty({
+    description: 'Identity card issue date (ISO date string)',
+    example: '2020-01-15',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString(
+    {},
+    { message: 'Identity date must be a valid date string (YYYY-MM-DD)' },
+  )
+  identityDate?: string;
+
+  @ApiProperty({
+    description: 'Bank account number',
+    example: '12345678901234567890',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Bank number must be a string' })
+  @Transform(({ value }) => value?.trim())
+  bankNumber?: string;
+
+  @ApiProperty({
+    description: 'Bank name',
+    example: 'Vietcombank',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Bank name must be a string' })
+  @Transform(({ value }) => value?.trim())
+  bankName?: string;
+
+  @ApiProperty({
+    description: 'Bank branch',
+    example: 'Hanoi Branch',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Bank branch must be a string' })
+  @Transform(({ value }) => value?.trim())
+  bankBranch?: string;
 }

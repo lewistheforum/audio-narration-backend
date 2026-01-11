@@ -73,7 +73,7 @@ export class AdminSeederService {
 
       // Create GeneralAccount entity
       const generalAccount = this.generalAccountRepository.createGeneralAccount({
-        generalAccId: savedAdmin._id,
+        accountId: savedAdmin._id,
         fullName: this.DEFAULT_ADMIN.fullName,
       });
 

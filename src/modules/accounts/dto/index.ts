@@ -2,6 +2,8 @@ export * from './create-account.dto';
 export * from './create-clinic-manager.dto';
 export * from './create-staff-by-manager.dto';
 export * from './create-doctor-by-manager.dto';
+export * from './create-clinic-admin-profile.dto';
+export * from './update-clinic-admin-profile.dto';
 export * from './update-account.dto';
 export * from './update-password.dto';
 export * from './account-response.dto';

@@ -9,10 +9,13 @@ import {
   Address,
   GoogleIframe,
   ClinicsLegalDocuments,
-  ClinicInformation,
+  ClinicManagerInformation,
   ClinicStaffInformation,
   DoctorInformation,
+  ClinicAdminInformation,
   CodeVerification,
+  ContractPackage,
+  ClinicContractInformation,
 } from './entities';
 import {
   AccountRepository,
@@ -20,9 +23,10 @@ import {
   AddressRepository,
   GoogleIframeRepository,
   ClinicsLegalDocumentsRepository,
-  ClinicInformationRepository,
+  ClinicManagerInformationRepository,
   ClinicStaffInformationRepository,
   DoctorInformationRepository,
+  ClinicAdminInformationRepository,
   CodeVerificationRepository,
 } from './repositories';
 import { MailerModule } from '../mailer/mailer.module';
@@ -44,7 +48,7 @@ import { MailerModule } from '../mailer/mailer.module';
  * - Address: Address information for accounts
  * - GoogleIframe: Google Map iframe information
  * - ClinicsLegalDocuments: Legal documents for clinics
- * - ClinicInformation: Detailed clinic information
+ * - ClinicManagerInformation: Detailed clinic manager information
  * - ClinicStaffInformation: Staff member information
  * - DoctorInformation: Detailed doctor information
  * - CodeVerification: Verification codes for email and password reset
@@ -64,10 +68,13 @@ import { MailerModule } from '../mailer/mailer.module';
       Address,
       GoogleIframe,
       ClinicsLegalDocuments,
-      ClinicInformation,
+      ClinicManagerInformation,
       ClinicStaffInformation,
       DoctorInformation,
+      ClinicAdminInformation,
       CodeVerification,
+      ContractPackage,
+      ClinicContractInformation,
     ]),
     forwardRef(() => MailerModule),
     SubscriptionsModule,
@@ -79,9 +86,10 @@ import { MailerModule } from '../mailer/mailer.module';
     AddressRepository,
     GoogleIframeRepository,
     ClinicsLegalDocumentsRepository,
-    ClinicInformationRepository,
+    ClinicManagerInformationRepository,
     ClinicStaffInformationRepository,
     DoctorInformationRepository,
+    ClinicAdminInformationRepository,
     CodeVerificationRepository,
     AccountsService,
   ],
@@ -93,9 +101,10 @@ import { MailerModule } from '../mailer/mailer.module';
     AddressRepository,
     GoogleIframeRepository,
     ClinicsLegalDocumentsRepository,
-    ClinicInformationRepository,
+    ClinicManagerInformationRepository,
     ClinicStaffInformationRepository,
     DoctorInformationRepository,
+    ClinicAdminInformationRepository,
   ],
 })
 export class AccountsModule {}
