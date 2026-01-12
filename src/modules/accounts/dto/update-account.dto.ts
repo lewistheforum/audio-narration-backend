@@ -8,6 +8,7 @@ import {
   MinLength,
   IsArray,
   IsObject,
+  IsNumber,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -106,22 +107,10 @@ export class UpdateAccountDto {
   @IsEnum(Gender, { message: 'Gender must be one of: MALE, FEMALE, OTHER' })
   gender?: Gender;
 
-  // ClinicStaffInformation specific fields
-  @ApiProperty({
-    description: 'Clinic role for staff members',
-    enum: ClinicRole,
-    example: ClinicRole.STAFF,
-    required: false,
-  })
-  @IsOptional()
-  @IsEnum(ClinicRole, {
-    message: 'Clinic role must be one of: MANAGER, STAFF, DOCTOR',
-  })
-  clinicRole?: ClinicRole;
+  // DoctorInformation fields
 
-  // DoctorInformation specific fields
   @ApiProperty({
-    description: 'Academic degree of the doctor',
+    description: 'Academic degree',
     example: 'MD, PhD',
     required: false,
   })
@@ -131,8 +120,8 @@ export class UpdateAccountDto {
   academicDegree?: string;
 
   @ApiProperty({
-    description: 'Years of experience or experience description',
-    example: '10 years in cardiology',
+    description: 'Years of experience',
+    example: '10 years of experience in cardiology',
     required: false,
   })
   @IsOptional()

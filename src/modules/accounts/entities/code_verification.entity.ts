@@ -21,14 +21,14 @@ export class CodeVerification {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
-  userId: string;
+  @Column({ name: 'account_id', type: 'uuid' })
+  accountId: string;
 
   @ManyToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'user_id' })
-  user?: Account;
+  @JoinColumn({ name: 'account_id' })
+  account?: Account;
 
   @Column({ name: 'code', type: 'varchar', length: 100 })
   code: string;

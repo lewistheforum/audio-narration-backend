@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ClinicLegalDocument, Transaction, TransactionType } from './entities';
+import { Transaction, TransactionType } from './entities';
 import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
 
@@ -14,7 +14,6 @@ import { TransactionsController } from './transactions.controller';
     TypeOrmModule.forFeature([
       Transaction,
       TransactionType,
-      ClinicLegalDocument,
     ]),
   ],
   controllers: [TransactionsController],

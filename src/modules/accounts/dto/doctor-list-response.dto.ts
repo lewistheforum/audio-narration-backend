@@ -70,6 +70,54 @@ export class DoctorInfoDto {
     nullable: true,
   })
   profilePicture?: string;
+
+  @ApiProperty({
+    description: 'Identity card number',
+    example: '001234567890',
+    required: false,
+    nullable: true,
+  })
+  identityNumber?: string;
+
+  @ApiProperty({
+    description: 'Place of issue for identity card',
+    example: 'Hanoi',
+    required: false,
+    nullable: true,
+  })
+  placeIdentityCard?: string;
+
+  @ApiProperty({
+    description: 'Identity card issue date',
+    example: '2020-01-15',
+    required: false,
+    nullable: true,
+  })
+  identityDate?: Date;
+
+  @ApiProperty({
+    description: 'Bank account number',
+    example: '12345678901234567890',
+    required: false,
+    nullable: true,
+  })
+  bankNumber?: number;
+
+  @ApiProperty({
+    description: 'Bank name',
+    example: 'Vietcombank',
+    required: false,
+    nullable: true,
+  })
+  bankName?: string;
+
+  @ApiProperty({
+    description: 'Bank branch',
+    example: 'Hanoi Branch',
+    required: false,
+    nullable: true,
+  })
+  bankBranch?: string;
 }
 
 /**
@@ -189,6 +237,12 @@ export class DoctorItemDto {
       introduction1: doctorInfo.introduction1,
       introductionImage: doctorInfo.introductionImage,
       profilePicture: doctorInfo.profilePicture,
+      identityNumber: doctorInfo.identityNumber,
+      placeIdentityCard: doctorInfo.placeIdentityCard,
+      identityDate: doctorInfo.identityDate,
+      bankNumber: doctorInfo.bankNumber,
+      bankName: doctorInfo.bankName,
+      bankBranch: doctorInfo.bankBranch,
     };
 
     if (clinicInfo) {

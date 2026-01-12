@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { GeneralAccount } from '../../modules/accounts/entities/general_accounts.entity';
-import { ClinicInformation } from '../../modules/accounts/entities/clinic_information.entity';
 import { ClinicsLegalDocuments } from '../../modules/accounts/entities/clinics_legal_documents.entity';
 import { AccountRole, AccountStatus } from '../../modules/accounts/enums';
 import { BankName } from '../../modules/accounts/enums/bank-name.enum';

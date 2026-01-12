@@ -13,7 +13,6 @@ export enum SubscriptionStatus {
 
   /**
    * After STEP 2: Legal documents submitted, waiting for payment gateway configuration
-   * Before STEP 3: User needs to configure Sepay (bankName, sepayVa)
    */
   PENDING_PAYMENT_CONFIG = 'PENDING_PAYMENT_CONFIG',
 

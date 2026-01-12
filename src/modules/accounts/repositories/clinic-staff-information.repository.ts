@@ -43,7 +43,7 @@ export class ClinicStaffInformationRepository {
     clinicAccId: string,
   ): Promise<ClinicStaffInformation | null> {
     return this.repository.findOne({
-      where: { clinicAccId },
+      where: { accountId: clinicAccId },
     });
   }
 
@@ -57,7 +57,7 @@ export class ClinicStaffInformationRepository {
       return [];
     }
     return this.repository.find({
-      where: { clinicAccId: In(clinicAccIds) },
+      where: { accountId: In(clinicAccIds) },
     });
   }
 
@@ -68,7 +68,7 @@ export class ClinicStaffInformationRepository {
     clinicAccId: string,
   ): Promise<ClinicStaffInformation | null> {
     return this.repository.findOne({
-      where: { clinicAccId },
+      where: { accountId: clinicAccId },
       withDeleted: true,
     });
   }
@@ -107,7 +107,7 @@ export class ClinicStaffInformationRepository {
     clinicAccId: string,
     data: DeepPartial<ClinicStaffInformation>,
   ): Promise<ClinicStaffInformation | null> {
-    await this.repository.update({ clinicAccId }, data);
+    await this.repository.update({ accountId: clinicAccId }, data);
     return this.findByClinicAccountId(clinicAccId);
   }
 
@@ -122,7 +122,7 @@ export class ClinicStaffInformationRepository {
    * Soft delete clinic staff information by clinic account ID
    */
   async softDeleteByClinicAccountId(clinicAccId: string): Promise<void> {
-    await this.repository.softDelete({ clinicAccId });
+    await this.repository.softDelete({ accountId: clinicAccId });
   }
 
   /**
@@ -137,7 +137,7 @@ export class ClinicStaffInformationRepository {
    * Hard delete clinic staff information by clinic account ID
    */
   async deleteByClinicAccountId(clinicAccId: string): Promise<number> {
-    const result = await this.repository.delete({ clinicAccId });
+    const result = await this.repository.delete({ accountId: clinicAccId });
     return result.affected || 0;
   }
 
@@ -152,7 +152,7 @@ export class ClinicStaffInformationRepository {
    * Restore soft-deleted clinic staff information by clinic account ID
    */
   async restoreByClinicAccountId(clinicAccId: string): Promise<void> {
-    await this.repository.restore({ clinicAccId });
+    await this.repository.restore({ accountId: clinicAccId });
   }
 
   /**
@@ -160,7 +160,7 @@ export class ClinicStaffInformationRepository {
    */
   async existsByClinicAccountId(clinicAccId: string): Promise<boolean> {
     const count = await this.repository.count({
-      where: { clinicAccId },
+      where: { accountId: clinicAccId },
     });
     return count > 0;
   }

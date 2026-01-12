@@ -9,12 +9,22 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
-import { BankName, LegalDocumentVerificationStatus } from '../enums';
+import { LegalDocumentVerificationStatus } from '../enums';
 
 /**
  * ClinicsLegalDocuments Entity
  *
  * Stores legal documents for clinics
+ *
+ * WARNING: Data Loss Risk
+ * This entity has had the following columns removed:
+ * - bank_name (bankName property)
+ * - sepay_va (sepayVa property)
+ * - is_sepay_verify (isSepayVerify property)
+ *
+ * Due to TypeORM synchronize: true, these columns will be automatically dropped
+ * from the database on application startup, resulting in permanent data loss
+ * for any existing data in these columns.
  */
 @Entity('clinics_legal_documents')
 export class ClinicsLegalDocuments {
@@ -35,20 +45,6 @@ export class ClinicsLegalDocuments {
 
   @Column({ name: 'business_license', type: 'text', nullable: true })
   businessLicense?: string;
-
-  @Column({
-    name: 'bank_name',
-    type: 'enum',
-    enum: BankName,
-    nullable: true,
-  })
-  bankName?: BankName;
-
-  @Column({ name: 'sepay_va', type: 'text', nullable: true })
-  sepayVa?: string;
-
-  @Column({ name: 'is_sepay_verify', type: 'boolean', default: false })
-  isSepayVerify: boolean;
 
   @Column({
     name: 'verification_status',

@@ -3,22 +3,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   ClinicShift,
   ClinicShiftHour,
-  DoctorSchedule,
-  DoctorTimekeeping,
+  EmployeeSchedule,
+  EmployeeTimekeeping,
 } from './entities';
 
 /**
  * Schedules Module
  *
- * Manages doctor schedules and timekeeping
+ * Manages employee schedules and timekeeping
  */
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       ClinicShift,
       ClinicShiftHour,
-      DoctorSchedule,
-      DoctorTimekeeping,
+      EmployeeSchedule,
+      EmployeeTimekeeping,
     ]),
   ],
   controllers: [],
