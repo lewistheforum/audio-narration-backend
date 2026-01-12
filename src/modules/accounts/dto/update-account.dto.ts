@@ -6,10 +6,12 @@ import {
   IsEnum,
   IsDateString,
   MinLength,
+  IsArray,
+  IsObject,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { Gender, AccountRole } from '../enums';
+import { Gender, AccountRole, ClinicRole } from '../enums';
 
 /**
  * Update Account DTO
@@ -103,4 +105,182 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsEnum(Gender, { message: 'Gender must be one of: MALE, FEMALE, OTHER' })
   gender?: Gender;
+
+  // ClinicStaffInformation specific fields
+  @ApiProperty({
+    description: 'Clinic role for staff members',
+    enum: ClinicRole,
+    example: ClinicRole.STAFF,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(ClinicRole, {
+    message: 'Clinic role must be one of: MANAGER, STAFF, DOCTOR',
+  })
+  clinicRole?: ClinicRole;
+
+  // DoctorInformation specific fields
+  @ApiProperty({
+    description: 'Academic degree of the doctor',
+    example: 'MD, PhD',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Academic degree must be a string' })
+  @MaxLength(255, { message: 'Academic degree must not exceed 255 characters' })
+  academicDegree?: string;
+
+  @ApiProperty({
+    description: 'Years of experience or experience description',
+    example: '10 years in cardiology',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Experience must be a string' })
+  experience?: string;
+
+  @ApiProperty({
+    description: 'Current position or title',
+    example: 'Chief Cardiologist',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Position must be a string' })
+  @MaxLength(255, { message: 'Position must not exceed 255 characters' })
+  position?: string;
+
+  @ApiProperty({
+    description: 'Introduction text about the doctor',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Introduction must be a string' })
+  introduction1?: string;
+
+  @ApiProperty({
+    description: 'Work process information',
+    required: false,
+  })
+  @IsOptional()
+  @IsObject({ message: 'Work process must be an object' })
+  workProcess2?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Study process information',
+    required: false,
+  })
+  @IsOptional()
+  @IsObject({ message: 'Study process must be an object' })
+  studyProcess3?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Members information',
+    required: false,
+  })
+  @IsOptional()
+  @IsObject({ message: 'Members must be an object' })
+  members4?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Scientific work information',
+    required: false,
+  })
+  @IsOptional()
+  @IsObject({ message: 'Scientific work must be an object' })
+  scientificWork5?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Papers information',
+    required: false,
+  })
+  @IsOptional()
+  @IsObject({ message: 'Papers must be an object' })
+  papers6?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Introduction image URL',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Introduction image must be a string' })
+  introductionImage?: string;
+
+  @ApiProperty({
+    description: 'Professional license document URL',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Professional license must be a string' })
+  professionalLicense?: string;
+
+  @ApiProperty({
+    description: 'Certificate of practical training URL',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Certificate of practical training must be a string' })
+  certificatePracticalTraining?: string;
+
+  @ApiProperty({
+    description: 'Medical license document URL',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Medical license must be a string' })
+  medicalLicense?: string;
+
+  // ClinicInformation specific fields
+  @ApiProperty({
+    description: 'Name of the clinic',
+    example: 'City Medical Center',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Clinic name must be a string' })
+  @MaxLength(255, { message: 'Clinic name must not exceed 255 characters' })
+  clinicName?: string;
+
+  @ApiProperty({
+    description: 'Description of the clinic',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Description must be a string' })
+  description?: string;
+
+  @ApiProperty({
+    description: 'Areas of specialization',
+    type: [String],
+    example: ['Cardiology', 'Neurology'],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: 'Specialized in must be an array' })
+  @IsString({ each: true, message: 'Each specialization must be a string' })
+  specializedIn?: string[];
+
+  @ApiProperty({
+    description: 'Clinic advantages or pros',
+    type: [String],
+    example: ['24/7 Emergency Care', 'Modern Equipment'],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: 'Pros must be an array' })
+  @IsString({ each: true, message: 'Each pro must be a string' })
+  pros?: string[];
+
+  @ApiProperty({
+    description: 'Paraclinical services available',
+    type: [String],
+    example: ['X-Ray', 'MRI', 'CT Scan'],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: 'Paraclinical must be an array' })
+  @IsString({
+    each: true,
+    message: 'Each paraclinical service must be a string',
+  })
+  paraclinical?: string[];
 }

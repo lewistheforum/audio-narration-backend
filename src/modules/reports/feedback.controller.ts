@@ -1,6 +1,6 @@
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FeedbackService } from './feedback.service';
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Post } from '@nestjs/common';
 import { FeedbackResponseDto } from './dto/response-feedback.dto';
 import { FeedbackAIResponseDto } from './dto/response-ai-feedback.dto';
 
@@ -44,5 +44,23 @@ export class FeedbackController {
   ): Promise<FeedbackAIResponseDto[]> {
     const feedbacks = await this.feedbackService.findAllFeedbacksById(id);
     return feedbacks.map((feedback) => new FeedbackAIResponseDto(feedback));
+  }
+
+  @Post('label/:id')
+  @ApiOperation({ summary: 'Label all feedbacks' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of feedbacks retrieved successfully',
+    type: [FeedbackResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Missing or invalid token',
+  })
+  async labelFeedbackById(
+    @Param('id') id: string,
+  ): Promise<FeedbackResponseDto> {
+    const feedback = await this.feedbackService.labelFeedbackById(id);
+    return new FeedbackResponseDto(feedback);
   }
 }

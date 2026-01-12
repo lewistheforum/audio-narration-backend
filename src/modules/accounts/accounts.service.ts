@@ -39,6 +39,13 @@ import {
   GoogleMapDto,
   DoctorSummaryDto,
   SubscriptionDto,
+  DoctorListResponseDto,
+  DoctorItemDto,
+  DoctorPaginationDto,
+  DoctorDetailResponseDto,
+  DoctorDetailData,
+  DoctorInfo,
+  ClinicInfo,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -1364,7 +1371,7 @@ export class AccountsService {
     }
 
     // OAuth users cannot reset password
-    if (account.isOAuthUser && !account.password) {
+    if (account.isOAuthUser) {
       throw new BadRequestException(
         MESSAGES.failMessage.oauthUserCannotResetPassword,
       );
@@ -2044,5 +2051,164 @@ export class AccountsService {
       doctors,
       subscription,
     );
+  }
+
+  /**
+   * Find All Doctors with Pagination and Filters
+   *
+   * Retrieves doctor accounts with pagination support and optional filtering.
+   * Only returns accounts with role: DOCTOR and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Data Sources:
+   * - accounts table: Core account data (base table)
+   * - doctor_information table: Doctor details
+   * - clinic_information table: Parent clinic details
+   *
+   * Filtering Logic:
+   * - clinicId: Filter by parent clinic ID (accounts.parentId)
+   * - gender: Filter by doctor gender (doctor_information.gender)
+   * - All filters work together with AND logic
+   *
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   * @param {string} [clinicId] - Filter by parent clinic ID
+   * @param {string} [gender] - Filter by doctor gender (MALE|FEMALE|OTHER)
+   * @returns {Promise<DoctorListResponseDto>} Doctors with pagination
+   */
+  async findAllDoctors(
+    page: number = 1,
+    limit: number = 10,
+    clinicId?: string,
+    gender?: string,
+  ): Promise<DoctorListResponseDto> {
+    // Get doctor accounts with filters
+    const [doctors, total] = await this.accountRepository.findDoctorsWithFilters(
+      AccountRole.DOCTOR,
+      AccountStatus.ACTIVE,
+      (page - 1) * limit,
+      limit,
+      clinicId,
+      gender,
+    );
+
+    const doctorItems: DoctorItemDto[] = [];
+
+    for (const doctor of doctors) {
+      // Get doctor information
+      const doctorInfo =
+        await this.doctorInfoRepository.findByDoctorAccountId(doctor._id);
+
+      // Get parent clinic information if exists
+      let clinicInfo = null;
+      if (doctor.parentId) {
+        clinicInfo = await this.clinicInfoRepository.findByClinicId(
+          doctor.parentId,
+        );
+      }
+
+      // Only include doctors with valid doctor information
+      if (doctorInfo) {
+        doctorItems.push(new DoctorItemDto(doctor, doctorInfo, clinicInfo));
+      }
+    }
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      doctors: doctorItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      } as DoctorPaginationDto,
+    };
+  }
+
+  /**
+   * Get Doctor by ID with Full Details
+   *
+   * Retrieves detailed information for a specific doctor.
+   * Includes doctor information and clinic information (parent clinic).
+   *
+   * Business Rules:
+   * - Only returns doctors with role='DOCTOR' and status='ACTIVE'
+   * - Excludes soft-deleted records (accounts.deletedAt IS NULL and doctor_information.deleted_at IS NULL)
+   * - Returns 404 Not Found if doctor not found or not eligible
+   *
+   * Data Sources:
+   * - accounts table: Core account data
+   * - doctor_information table: Doctor details (joined via doctor_acc_id)
+   * - accounts table (clinic): Parent clinic account (via parentId)
+   * - clinic_information table: Clinic details
+   *
+   * Field Priority:
+   * - profilePicture: doctor_information.profilePicture > accounts.profilePicture
+   * - dob: doctor_information.dob > accounts.dob (though accounts.dob is not in Account entity)
+   * - clinic.phone: comes from clinic account, not clinic_information
+   *
+   * @param {string} id - Doctor account UUID
+   * @returns {Promise<DoctorDetailResponseDto>} Full doctor details
+   * @throws {NotFoundException} If doctor not found or not eligible
+   */
+  async getDoctorById(id: string): Promise<DoctorDetailResponseDto> {
+    // Get doctor account
+    const doctor = await this.accountRepository.findAccountById(id);
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    // Validate role and status
+    if (doctor.role !== AccountRole.DOCTOR) {
+      throw new NotFoundException('Doctor not found');
+    }
+    if (doctor.status !== AccountStatus.ACTIVE) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    // Get doctor information
+    const doctorInfo =
+      await this.doctorInfoRepository.findByDoctorAccountId(id);
+    if (!doctorInfo) {
+      throw new NotFoundException('Doctor information not found');
+    }
+
+    // Check if doctor information is soft-deleted
+    if (doctorInfo.deletedAt) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    // Get clinic information if exists (via parentId)
+    let clinicInfo = null;
+    if (doctor.parentId) {
+      const clinic = await this.accountRepository.findAccountById(doctor.parentId);
+      if (clinic && clinic.clinicInformation) {
+        // Combine clinic account and clinic information for ClinicInfo DTO
+        clinicInfo = {
+          _id: clinic.clinicInformation._id,
+          clinicName: clinic.clinicInformation.clinicName,
+          phone: clinic.phone, // Phone comes from clinic account, not clinic_information
+        };
+      }
+    }
+
+    // Create modified account object with field priority handling
+    const modifiedAccount = {
+      ...doctor,
+      // profilePicture comes from doctor_information
+      profilePicture: doctorInfo.profilePicture,
+      // dob comes from doctor_information
+      dob: doctorInfo.dob,
+    };
+
+    // Create DoctorDetailData with modified account and doctor info
+    const doctorDetailData = new DoctorDetailData(
+      modifiedAccount,
+      doctorInfo,
+      clinicInfo,
+    );
+
+    return new DoctorDetailResponseDto(doctorDetailData);
   }
 }

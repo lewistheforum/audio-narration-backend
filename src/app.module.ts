@@ -15,9 +15,11 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { SchedulesModule } from './modules/schedules/schedules.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
+import { ClinicLegalDocumentsModule } from './modules/clinic-legal-documents/clinic-legal-documents.module';
 import { ClinicServicesModule } from './modules/clinic-services/clinic-services.module';
 import { ServiceConfigsModule } from './modules/service-configs/service-configs.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { AiModule } from './modules/ai/ai.module';
 import { SeedersModule } from './common/seeders/seeders.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
 
@@ -66,9 +68,11 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     SchedulesModule,
     ReportsModule,
     TransactionsModule,
+    ClinicLegalDocumentsModule,
     ClinicServicesModule,
     ServiceConfigsModule,
     AppointmentsModule,
+    AiModule,
     SeedersModule,
   ],
   controllers: [],

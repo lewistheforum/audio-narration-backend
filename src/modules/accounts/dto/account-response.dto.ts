@@ -1,7 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Account } from '../entities/accounts.entity';
 import { GeneralAccount } from '../entities/general_accounts.entity';
-import { Gender, AccountRole, AccountStatus } from '../enums';
+import { Gender, AccountRole, AccountStatus, ClinicRole } from '../enums';
+import {
+  ClinicInformation,
+  ClinicStaffInformation,
+  DoctorInformation,
+} from '../entities';
 
 /**
  * Account Response DTO
@@ -143,7 +148,161 @@ export class AccountResponseDto {
   })
   deletedAt?: Date;
 
-  constructor(account: Partial<Account>, generalAccount?: Partial<GeneralAccount>) {
+  // ClinicStaffInformation specific fields
+  @ApiProperty({
+    description: 'Clinic role for staff members',
+    enum: ClinicRole,
+    example: ClinicRole.STAFF,
+    required: false,
+    nullable: true,
+  })
+  clinicRole?: ClinicRole;
+
+  // DoctorInformation specific fields
+  @ApiProperty({
+    description: 'Academic degree of the doctor',
+    example: 'MD, PhD',
+    required: false,
+    nullable: true,
+  })
+  academicDegree?: string;
+
+  @ApiProperty({
+    description: 'Years of experience or experience description',
+    example: '10 years in cardiology',
+    required: false,
+    nullable: true,
+  })
+  experience?: string;
+
+  @ApiProperty({
+    description: 'Current position or title',
+    example: 'Chief Cardiologist',
+    required: false,
+    nullable: true,
+  })
+  position?: string;
+
+  @ApiProperty({
+    description: 'Introduction text about the doctor',
+    required: false,
+    nullable: true,
+  })
+  introduction1?: string;
+
+  @ApiProperty({
+    description: 'Work process information',
+    required: false,
+    nullable: true,
+  })
+  workProcess2?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Study process information',
+    required: false,
+    nullable: true,
+  })
+  studyProcess3?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Members information',
+    required: false,
+    nullable: true,
+  })
+  members4?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Scientific work information',
+    required: false,
+    nullable: true,
+  })
+  scientificWork5?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Papers information',
+    required: false,
+    nullable: true,
+  })
+  papers6?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Introduction image URL',
+    required: false,
+    nullable: true,
+  })
+  introductionImage?: string;
+
+  @ApiProperty({
+    description: 'Professional license document URL',
+    required: false,
+    nullable: true,
+  })
+  professionalLicense?: string;
+
+  @ApiProperty({
+    description: 'Certificate of practical training URL',
+    required: false,
+    nullable: true,
+  })
+  certificatePracticalTraining?: string;
+
+  @ApiProperty({
+    description: 'Medical license document URL',
+    required: false,
+    nullable: true,
+  })
+  medicalLicense?: string;
+
+  // ClinicInformation specific fields
+  @ApiProperty({
+    description: 'Name of the clinic',
+    example: 'City Medical Center',
+    required: false,
+    nullable: true,
+  })
+  clinicName?: string;
+
+  @ApiProperty({
+    description: 'Description of the clinic',
+    required: false,
+    nullable: true,
+  })
+  description?: string;
+
+  @ApiProperty({
+    description: 'Areas of specialization',
+    type: [String],
+    example: ['Cardiology', 'Neurology'],
+    required: false,
+    nullable: true,
+  })
+  specializedIn?: string[];
+
+  @ApiProperty({
+    description: 'Clinic advantages or pros',
+    type: [String],
+    example: ['24/7 Emergency Care', 'Modern Equipment'],
+    required: false,
+    nullable: true,
+  })
+  pros?: string[];
+
+  @ApiProperty({
+    description: 'Paraclinical services available',
+    type: [String],
+    example: ['X-Ray', 'MRI', 'CT Scan'],
+    required: false,
+    nullable: true,
+  })
+  paraclinical?: string[];
+
+  constructor(
+    account: Partial<Account>,
+    generalAccount?: Partial<GeneralAccount>,
+    staffAccount?: Partial<ClinicStaffInformation>,
+    doctorAccount?: Partial<DoctorInformation>,
+    clinicManagerAccount?: Partial<ClinicInformation>,
+  ) {
     this.id = account._id;
     this.email = account.email;
     this.username = account.username;
@@ -165,6 +324,48 @@ export class AccountResponseDto {
       this.gender = generalAccount.gender;
       this.dob = generalAccount.dob;
       this.profilePicture = generalAccount.profilePicture;
+    }
+
+    // ClinicStaffInformation data
+    if (staffAccount) {
+      this.fullName = staffAccount.fullName;
+      this.gender = staffAccount.gender;
+      this.dob = staffAccount.dob;
+      this.profilePicture = staffAccount.profilePicture;
+      this.clinicRole = staffAccount.clinicRole;
+    }
+
+    // DoctorInformation data
+    if (doctorAccount) {
+      this.fullName = doctorAccount.fullName;
+      this.gender = doctorAccount.gender;
+      this.dob = doctorAccount.dob;
+      this.profilePicture = doctorAccount.profilePicture;
+      this.academicDegree = doctorAccount.academicDegree;
+      this.experience = doctorAccount.experience;
+      this.position = doctorAccount.position;
+      this.introduction1 = doctorAccount.introduction1;
+      this.workProcess2 = doctorAccount.workProcess2;
+      this.studyProcess3 = doctorAccount.studyProcess3;
+      this.members4 = doctorAccount.members4;
+      this.scientificWork5 = doctorAccount.scientificWork5;
+      this.papers6 = doctorAccount.papers6;
+      this.introductionImage = doctorAccount.introductionImage;
+      this.professionalLicense = doctorAccount.professionalLicense;
+      this.certificatePracticalTraining =
+        doctorAccount.certificatePracticalTraining;
+      this.medicalLicense = doctorAccount.medicalLicense;
+    }
+
+    // ClinicInformation data
+    if (clinicManagerAccount) {
+      this.clinicName = clinicManagerAccount.clinicName;
+      this.dob = clinicManagerAccount.dob;
+      this.profilePicture = clinicManagerAccount.profilePicture;
+      this.description = clinicManagerAccount.description;
+      this.specializedIn = clinicManagerAccount.specializedIn;
+      this.pros = clinicManagerAccount.pros;
+      this.paraclinical = clinicManagerAccount.paraclinical;
     }
   }
 }

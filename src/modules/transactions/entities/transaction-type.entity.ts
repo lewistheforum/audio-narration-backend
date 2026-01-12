@@ -20,8 +20,9 @@ export class TransactionType {
   @Column({ name: 'name', type: 'text' })
   name: string;
 
-  @Column({ name: 'code', type: 'text' })
-  code: string;
+ @Column({ name: 'code', type: 'text', nullable: true })
+code?: string | null;
+
 
   @CreateDateColumn({ name: 'create_at', type: 'timestamptz' })
   createAt: Date;

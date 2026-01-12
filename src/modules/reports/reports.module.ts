@@ -15,6 +15,6 @@ import { FeedbackService } from './feedback.service';
   imports: [TypeOrmModule.forFeature([Feedback, Report])],
   controllers: [FeedbackController],
   providers: [FeedbackRepository, FeedbackService],
-  exports: [TypeOrmModule, FeedbackRepository],
+  exports: [TypeOrmModule, FeedbackRepository, FeedbackService],
 })
 export class ReportsModule {}
