@@ -30,6 +30,13 @@ export class ClinicShift {
   @JoinColumn({ name: 'clinic_id' })
   clinic?: Account;
 
+  @Column({ name: 'account_id', type: 'uuid', nullable: true })
+  accountId?: string;
+
+  @ManyToOne(() => Account)
+  @JoinColumn({ name: 'account_id' })
+  account?: Account;
+
   @Column({
     name: 'shift',
     type: 'enum',
