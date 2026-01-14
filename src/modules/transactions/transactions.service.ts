@@ -219,8 +219,8 @@ export class TransactionsService {
               ga.gender     AS sender_gender,
               ga.dob        AS sender_dob
        FROM transactions t
-       LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
-       LEFT JOIN general_accounts ga ON ga.general_acc_id = t.sender_account_id
+      LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+      LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
        WHERE ${whereClause}
        ORDER BY t.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -280,8 +280,8 @@ export class TransactionsService {
               ga.gender     AS sender_gender,
               ga.dob        AS sender_dob
        FROM transactions t
-       LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
-       LEFT JOIN general_accounts ga ON ga.general_acc_id = t.sender_account_id
+      LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+      LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
        WHERE t.deleted_at IS NULL AND t._id = $1
        LIMIT 1`,
       [id],

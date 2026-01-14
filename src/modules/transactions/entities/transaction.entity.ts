@@ -11,10 +11,7 @@ import {
 import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
 import { TransactionType } from './transaction-type.entity';
 import { Account } from '../../accounts/entities/accounts.entity';
-<<<<<<< HEAD
-import { ClinicInformation } from '../../accounts/entities/clinic_information.entity';
-=======
->>>>>>> eca69a8ad82c98132e5bc87b29142f07e2058771
+import { ClinicAdminInformation } from '../../accounts/entities/clinic-admin-information.entity';
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
@@ -41,9 +38,9 @@ export class Transaction {
   @Column({ name: 'clinic_id', type: 'uuid', nullable: true })
   clinicId?: string;
 
-  @ManyToOne(() => ClinicInformation, { onDelete: 'SET NULL' })
+  @ManyToOne(() => ClinicAdminInformation, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic?: ClinicInformation;
+  clinic?: ClinicAdminInformation;
 
   @Column({ name: 'sender_account_id', type: 'uuid', nullable: true })
   senderAccountId?: string;
@@ -63,14 +60,6 @@ export class Transaction {
   })
   @JoinColumn({ name: 'subcription_id' })
   subscription?: ClinicSubscriptionHistory;
-
-  @Column({ name: 'sender_account_id', type: 'uuid', nullable: true })
-  senderAccountId?: string;
-
-  @ManyToOne(() => Account)
-  @JoinColumn({ name: 'sender_account_id' })
-  senderAccount?: Account;
-
   @Column({ name: 'transaction_type_id', type: 'uuid', nullable: true })
   transactionTypeId?: string;
 
