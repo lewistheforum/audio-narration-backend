@@ -10,7 +10,14 @@
     "start": "nodemon",
     "start:dev": "nodemon",
     "start:prod": "node dist/main",
-    "build": "nest build"
+    "build": "nest build",
+    "script:schema-diff": "ts-node -r tsconfig-paths/register src/common/scripts/check-schema-diff.ts",
+    "script:sync-local-db": "ts-node -r tsconfig-paths/register src/common/scripts/sync-local-db.ts",
+    "script:analyze-excel": "ts-node -r tsconfig-paths/register src/common/scripts/analyze-excel.ts",
+    "script:bulk-import-medicines": "ts-node -r tsconfig-paths/register src/common/scripts/bulk-import-medicines.ts",
+    "script:convert-excel-to-csv": "ts-node -r tsconfig-paths/register src/common/scripts/convert-excel-to-csv.ts",
+    "script:generate-encryption-key": "ts-node -r tsconfig-paths/register src/common/scripts/generate-encryption-key.ts",
+    "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db"
   },
   "nodemonConfig": {
     "watch": [

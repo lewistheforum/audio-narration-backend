@@ -11,7 +11,10 @@ import {
 import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
 import { TransactionType } from './transaction-type.entity';
 import { Account } from '../../accounts/entities/accounts.entity';
+<<<<<<< HEAD
 import { ClinicInformation } from '../../accounts/entities/clinic_information.entity';
+=======
+>>>>>>> eca69a8ad82c98132e5bc87b29142f07e2058771
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
@@ -60,6 +63,13 @@ export class Transaction {
   })
   @JoinColumn({ name: 'subcription_id' })
   subscription?: ClinicSubscriptionHistory;
+
+  @Column({ name: 'sender_account_id', type: 'uuid', nullable: true })
+  senderAccountId?: string;
+
+  @ManyToOne(() => Account)
+  @JoinColumn({ name: 'sender_account_id' })
+  senderAccount?: Account;
 
   @Column({ name: 'transaction_type_id', type: 'uuid', nullable: true })
   transactionTypeId?: string;
