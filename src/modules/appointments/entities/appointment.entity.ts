@@ -65,6 +65,9 @@ export class Appointment {
   })
   status: AppointmentStatus;
 
+  @Column({ name: 'is_remider', type: 'boolean', default: false })
+  isRemider: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

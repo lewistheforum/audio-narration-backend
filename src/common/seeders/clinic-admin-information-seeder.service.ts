@@ -15,7 +15,9 @@ import { ClinicAdminInformationRepository } from '../../modules/accounts/reposit
  */
 @Injectable()
 export class ClinicAdminInformationSeederService {
-  private readonly logger = new Logger(ClinicAdminInformationSeederService.name);
+  private readonly logger = new Logger(
+    ClinicAdminInformationSeederService.name,
+  );
 
   // Orthopedics-focused Vietnamese clinic names
   private readonly CLINIC_NAMES = [
@@ -37,10 +39,19 @@ export class ClinicAdminInformationSeederService {
 
   // Clinic pros/advantages (orthopedics-focused)
   private readonly PROS = [
-    ['Đội ngũ bác sĩ chấn thương chỉnh hình chuyên môn cao', 'Thiết bị X-quang, MRI hiện đại'],
+    [
+      'Đội ngũ bác sĩ chấn thương chỉnh hình chuyên môn cao',
+      'Thiết bị X-quang, MRI hiện đại',
+    ],
     ['Phương pháp vật lý trị liệu tiên tiến', 'Đo loãng xương chuẩn quốc tế'],
-    ['Chuyên gia cột sống và khớp nhân tạo', 'Phẫu thuật nội soi tối thiểu xâm lấn'],
-    ['Chương trình phục hồi chức năng toàn diện', 'Điều trị chấn thương thể thao chuyên sâu'],
+    [
+      'Chuyên gia cột sống và khớp nhân tạo',
+      'Phẫu thuật nội soi tối thiểu xâm lấn',
+    ],
+    [
+      'Chương trình phục hồi chức năng toàn diện',
+      'Điều trị chấn thương thể thao chuyên sâu',
+    ],
     ['Cơ sở vật chất khang trang', 'Bảo hiểm y tế và chi phí hợp lý'],
   ];
 
@@ -69,7 +80,8 @@ export class ClinicAdminInformationSeederService {
       this.logger.log('Starting to seed ClinicAdminInformation...');
 
       // Get all CLINIC_ADMIN accounts
-      const clinicAdminAccounts = await this.accountRepository.findAllAccounts();
+      const clinicAdminAccounts =
+        await this.accountRepository.findAllAccounts();
       const clinicAdmins = clinicAdminAccounts.filter(
         (acc) => acc.role === AccountRole.CLINIC_ADMIN,
       );

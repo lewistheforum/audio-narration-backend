@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { buildTypeOrmOptions } from './config/typeorm.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { HealthModule } from './common/health/health.module';
@@ -32,22 +33,10 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     }),
 
     // PostgreSQL database configuration
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.POSTGRES_HOST || '',
-      port: parseInt(process.env.POSTGRES_PORT || ''),
-      username: process.env.POSTGRES_USERNAME || '',
-      password: process.env.POSTGRES_PASSWORD || '',
-      database: process.env.POSTGRES_DATABASE || '',
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // WARNING: Disable in production
-      logging: false,
-      ssl:
-        process.env.POSTGRES_SSL === 'true'
-          ? {
-              rejectUnauthorized: false,
-            }
-          : false,
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => buildTypeOrmOptions(config),
     }),
 
     // TypeORM feature for seeder access to Account repository

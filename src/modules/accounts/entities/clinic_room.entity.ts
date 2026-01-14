@@ -1,24 +1,7 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
-  ManyToOne,
-  ManyToMany,
-  JoinTable,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn, ManyToMany, JoinTable } from 'typeorm';
 import { Account } from './accounts.entity';
+import { EmployeeSchedule } from '../../schedules/entities/employee-schedule.entity';
 
-/**
- * ClinicRoom Entity
- *
- * Manages clinic rooms and their staff assignments
- * - One clinic can have many rooms
- * - One room can be assigned to many staff members
- */
 @Entity('clinic_room')
 export class ClinicRoom {
   @PrimaryGeneratedColumn('uuid')
@@ -27,25 +10,9 @@ export class ClinicRoom {
   @Column({ name: 'clinic_id', type: 'uuid' })
   clinicId: string;
 
-  @ManyToOne(() => Account, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'clinic_id' })
+  @ManyToOne(() => Account, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'clinic_id', referencedColumnName: '_id' })
   clinic?: Account;
-
-  @ManyToMany(() => Account)
-  @JoinTable({
-    name: 'room_staff_assignments',
-    joinColumn: {
-      name: 'room_id',
-      referencedColumnName: '_id',
-    },
-    inverseJoinColumn: {
-      name: 'staff_id',
-      referencedColumnName: '_id',
-    },
-  })
-  assignedStaff?: Account[];
 
   @Column({ name: 'room_name', type: 'text' })
   roomName: string;
@@ -56,6 +23,14 @@ export class ClinicRoom {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
-  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt?: Date;
+
+  @ManyToMany(() => EmployeeSchedule, (schedule) => schedule.rooms)
+  @JoinTable({
+    name: 'clinic_room_employee_schedule',
+    joinColumn: { name: 'clinic_room_id', referencedColumnName: '_id' },
+    inverseJoinColumn: { name: 'employee_schedule_id', referencedColumnName: '_id' },
+  })
+  employeeSchedules?: EmployeeSchedule[];
 }

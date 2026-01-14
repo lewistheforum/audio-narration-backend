@@ -63,14 +63,15 @@ export class ContractPackageSeederService {
       this.logger.log('Starting to seed contract packages...');
 
       // Get all CLINIC_STAFF and DOCTOR accounts
-      const staffAndDoctors = await this.accountRepository.findAllAccounts().then(
-        (accounts) =>
+      const staffAndDoctors = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
           accounts.filter(
             (acc) =>
               acc.role === AccountRole.CLINIC_STAFF ||
               acc.role === AccountRole.DOCTOR,
           ),
-      );
+        );
 
       if (staffAndDoctors.length === 0) {
         this.logger.warn(
@@ -94,7 +95,9 @@ export class ContractPackageSeederService {
         }
 
         // Verify that parent account exists
-        const parentAccount = await this.accountRepository.findAccountById(employee.parentId);
+        const parentAccount = await this.accountRepository.findAccountById(
+          employee.parentId,
+        );
         if (!parentAccount) {
           this.logger.warn(
             `Parent account not found for ${employee.username}. Skipping contract package creation.`,

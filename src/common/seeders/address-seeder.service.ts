@@ -23,26 +23,144 @@ export class AddressSeederService {
 
   // Vietnamese provinces and districts for realistic addresses
   private readonly PROVINCES = [
-    { code: '01', name: 'Thành phố Hà Nội', districts: ['Ba Đình', 'Cầu Giấy', 'Đống Đa', 'Hai Bà Trưng', 'Hoàn Kiếm', 'Hồ Tây', 'Long Biên', 'Tây Hồ', 'Thanh Xuân', 'Hoàng Mai'] },
-    { code: '79', name: 'Thành phố Hồ Chí Minh', districts: ['Quận 1', 'Quận 3', 'Quận 5', 'Quận 6', 'Quận 10', 'Quận 11', 'Quận 12', 'Bình Thạnh', 'Gò Vấp', 'Phú Nhuận', 'Tân Bình', 'Tân Phú'] },
-    { code: '48', name: 'Thành phố Đà Nẵng', districts: ['Hải Châu', 'Thanh Khê', 'Sơn Trà', 'Cẩm Lệ', 'Ngũ Hành Sơn', 'Liên Chiểu'] },
-    { code: '43', name: 'Thành phố Đà Nẵng', districts: ['Hải Châu', 'Thanh Khê', 'Sơn Trà', 'Cẩm Lệ', 'Ngũ Hành Sơn', 'Liên Chiểu'] },
-    { code: '31', name: 'Thành phố Hải Phòng', districts: ['Hồng Bàng', 'Ngô Quyền', 'Lê Chân', 'Kiến An', 'Đồ Sơn', 'An Dương', 'An Lão', 'Kien Thuy', 'Thủy Nguyên', 'Tiên Lãng', 'Vĩnh Bảo'] },
-    { code: '54', name: 'Thành phố Cần Thơ', districts: ['Ninh Kiều', 'Cái Răng', 'Bình Thủy', 'Ô Môn', 'Thốt Nốt'] },
+    {
+      code: '01',
+      name: 'Thành phố Hà Nội',
+      districts: [
+        'Ba Đình',
+        'Cầu Giấy',
+        'Đống Đa',
+        'Hai Bà Trưng',
+        'Hoàn Kiếm',
+        'Hồ Tây',
+        'Long Biên',
+        'Tây Hồ',
+        'Thanh Xuân',
+        'Hoàng Mai',
+      ],
+    },
+    {
+      code: '79',
+      name: 'Thành phố Hồ Chí Minh',
+      districts: [
+        'Quận 1',
+        'Quận 3',
+        'Quận 5',
+        'Quận 6',
+        'Quận 10',
+        'Quận 11',
+        'Quận 12',
+        'Bình Thạnh',
+        'Gò Vấp',
+        'Phú Nhuận',
+        'Tân Bình',
+        'Tân Phú',
+      ],
+    },
+    {
+      code: '48',
+      name: 'Thành phố Đà Nẵng',
+      districts: [
+        'Hải Châu',
+        'Thanh Khê',
+        'Sơn Trà',
+        'Cẩm Lệ',
+        'Ngũ Hành Sơn',
+        'Liên Chiểu',
+      ],
+    },
+    {
+      code: '43',
+      name: 'Thành phố Đà Nẵng',
+      districts: [
+        'Hải Châu',
+        'Thanh Khê',
+        'Sơn Trà',
+        'Cẩm Lệ',
+        'Ngũ Hành Sơn',
+        'Liên Chiểu',
+      ],
+    },
+    {
+      code: '31',
+      name: 'Thành phố Hải Phòng',
+      districts: [
+        'Hồng Bàng',
+        'Ngô Quyền',
+        'Lê Chân',
+        'Kiến An',
+        'Đồ Sơn',
+        'An Dương',
+        'An Lão',
+        'Kien Thuy',
+        'Thủy Nguyên',
+        'Tiên Lãng',
+        'Vĩnh Bảo',
+      ],
+    },
+    {
+      code: '54',
+      name: 'Thành phố Cần Thơ',
+      districts: ['Ninh Kiều', 'Cái Răng', 'Bình Thủy', 'Ô Môn', 'Thốt Nốt'],
+    },
   ];
 
   private readonly WARDS = [
-    'Phường 1', 'Phường 2', 'Phường 3', 'Phường 4', 'Phường 5',
-    'Phường 6', 'Phường 7', 'Phường 8', 'Phường 9', 'Phường 10',
-    'Phường 11', 'Phường 12', 'Phường 13', 'Phường 14', 'Phường 15',
-  'Phường 16', 'Phường 17', 'Phường 18', 'Phường 19', 'Phường 20',
-  'Phường An Lợi', 'Phường An Phú', 'Phường Bến Nghé', 'Phường Bình An', 'Phường Bình Thạnh',
-  'Phường Cầu Kho', 'Phường Cầu Ông Lãnh', 'Phường Đa Kao', 'Phường Hiệp Phú', 'Phường Hòa Bình',
-    'Phường Hòa Thạnh', 'Phường Long Bình', 'Phường Long Trường', 'Phường Long Thượng', 'Phường Long Uyên',
-    'Phường Phú Hữu', 'Phường Phú Mỹ', 'Phường Phú Thạnh', 'Phường Phú Thọ', 'Phường Phú Xuân',
-    'Phường Tân An', 'Phường Tân Bình', 'Phường Tân Dân', 'Phường Tân Định', 'Phường Tân Kiên',
-    'Phường Tân Phú', 'Phường Tân Thạnh', 'Phường Tân Thới', 'Phường Tân Thuận', 'Phường Thạnh Lộc',
-    'Phường Thạnh Mỹ Lợi', 'Phường Thới An', 'Phường Thới Dừa', 'Phường Trương Văn Thành', 'Phường Vĩnh Lộc',
+    'Phường 1',
+    'Phường 2',
+    'Phường 3',
+    'Phường 4',
+    'Phường 5',
+    'Phường 6',
+    'Phường 7',
+    'Phường 8',
+    'Phường 9',
+    'Phường 10',
+    'Phường 11',
+    'Phường 12',
+    'Phường 13',
+    'Phường 14',
+    'Phường 15',
+    'Phường 16',
+    'Phường 17',
+    'Phường 18',
+    'Phường 19',
+    'Phường 20',
+    'Phường An Lợi',
+    'Phường An Phú',
+    'Phường Bến Nghé',
+    'Phường Bình An',
+    'Phường Bình Thạnh',
+    'Phường Cầu Kho',
+    'Phường Cầu Ông Lãnh',
+    'Phường Đa Kao',
+    'Phường Hiệp Phú',
+    'Phường Hòa Bình',
+    'Phường Hòa Thạnh',
+    'Phường Long Bình',
+    'Phường Long Trường',
+    'Phường Long Thượng',
+    'Phường Long Uyên',
+    'Phường Phú Hữu',
+    'Phường Phú Mỹ',
+    'Phường Phú Thạnh',
+    'Phường Phú Thọ',
+    'Phường Phú Xuân',
+    'Phường Tân An',
+    'Phường Tân Bình',
+    'Phường Tân Dân',
+    'Phường Tân Định',
+    'Phường Tân Kiên',
+    'Phường Tân Phú',
+    'Phường Tân Thạnh',
+    'Phường Tân Thới',
+    'Phường Tân Thuận',
+    'Phường Thạnh Lộc',
+    'Phường Thạnh Mỹ Lợi',
+    'Phường Thới An',
+    'Phường Thới Dừa',
+    'Phường Trương Văn Thành',
+    'Phường Vĩnh Lộc',
   ];
 
   // Orthopedics clinic street names
@@ -82,10 +200,11 @@ export class AddressSeederService {
       this.logger.log('Starting to seed addresses...');
 
       // Get all CLINIC_MANAGER accounts
-      const clinicManagers = await this.accountRepository.findAllAccounts().then(
-        (accounts) =>
+      const clinicManagers = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
           accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER),
-      );
+        );
 
       if (clinicManagers.length === 0) {
         this.logger.warn('No CLINIC_MANAGER accounts found. Skipping seeding.');
@@ -97,13 +216,14 @@ export class AddressSeederService {
 
       for (const manager of clinicManagers) {
         // Check if address already exists for this manager
-        const existingAddresses =
-          await this.addressRepository.findByAccountId(manager._id);
+        const existingAddresses = await this.addressRepository.findByAccountId(
+          manager._id,
+        );
 
-        if (existingAddresses.length > 0) {
-          skippedCount++;
-          continue;
-        }
+        // if (existingAddresses.length > 0) {
+        //   skippedCount++;
+        //   continue;
+        // }
 
         // Create address with realistic Vietnamese clinic address
         const address = this.addressRepository.create({
@@ -134,9 +254,13 @@ export class AddressSeederService {
    * Generate realistic clinic address
    */
   private generateClinicAddress(): string {
-    const buildingType = this.BUILDING_TYPES[Math.floor(Math.random() * this.BUILDING_TYPES.length)];
+    const buildingType =
+      this.BUILDING_TYPES[
+        Math.floor(Math.random() * this.BUILDING_TYPES.length)
+      ];
     const buildingNumber = Math.floor(Math.random() * 500) + 1;
-    const streetName = this.STREET_NAMES[Math.floor(Math.random() * this.STREET_NAMES.length)];
+    const streetName =
+      this.STREET_NAMES[Math.floor(Math.random() * this.STREET_NAMES.length)];
     return `${buildingType} ${buildingNumber}, ${streetName}`;
   }
 
@@ -144,7 +268,8 @@ export class AddressSeederService {
    * Get random province code
    */
   private getRandomProvinceCode(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
     return province.code;
   }
 
@@ -152,7 +277,8 @@ export class AddressSeederService {
    * Get random province name
    */
   private getRandomProvinceName(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
     return province.name;
   }
 
@@ -160,7 +286,8 @@ export class AddressSeederService {
    * Get random district code (using first 2 chars of province code + district index)
    */
   private getRandomDistrictCode(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
     const districtIndex = Math.floor(Math.random() * province.districts.length);
     return `${province.code}${String(districtIndex + 1).padStart(2, '0')}`;
   }
@@ -169,8 +296,11 @@ export class AddressSeederService {
    * Get random district name
    */
   private getRandomDistrictName(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    return province.districts[Math.floor(Math.random() * province.districts.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    return province.districts[
+      Math.floor(Math.random() * province.districts.length)
+    ];
   }
 
   /**

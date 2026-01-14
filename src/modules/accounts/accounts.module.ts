@@ -28,6 +28,8 @@ import {
   DoctorInformationRepository,
   ClinicAdminInformationRepository,
   CodeVerificationRepository,
+  ContractPackageRepository,
+  ClinicContractInformationRepository,
 } from './repositories';
 import { MailerModule } from '../mailer/mailer.module';
 
@@ -91,6 +93,8 @@ import { MailerModule } from '../mailer/mailer.module';
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
     CodeVerificationRepository,
+    ContractPackageRepository,
+    ClinicContractInformationRepository,
     AccountsService,
   ],
   exports: [
@@ -105,6 +109,8 @@ import { MailerModule } from '../mailer/mailer.module';
     ClinicStaffInformationRepository,
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
+    ContractPackageRepository,
+    ClinicContractInformationRepository,
   ],
 })
 export class AccountsModule {}

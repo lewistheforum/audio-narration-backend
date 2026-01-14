@@ -23,7 +23,9 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
  */
 @Injectable()
 export class ClinicContractInformationSeederService {
-  private readonly logger = new Logger(ClinicContractInformationSeederService.name);
+  private readonly logger = new Logger(
+    ClinicContractInformationSeederService.name,
+  );
 
   // Orthopedics clinic-specific contract data
   private readonly DOCTOR_SPECIALTIES = [
@@ -34,7 +36,13 @@ export class ClinicContractInformationSeederService {
     'Chuyên khoa Trị liệu Cơ xương khớp',
   ];
 
-  private readonly NATIONALITIES = ['Việt Nam', 'Việt Kiều', 'Việt Hoa', 'Việt Mỹ', 'Việt Anh'];
+  private readonly NATIONALITIES = [
+    'Việt Nam',
+    'Việt Kiều',
+    'Việt Hoa',
+    'Việt Mỹ',
+    'Việt Anh',
+  ];
 
   private readonly CURRENT_LIVING = [
     'Thành phố Hà Nội',
@@ -118,14 +126,15 @@ export class ClinicContractInformationSeederService {
       this.logger.log('Starting to seed clinic contract information...');
 
       // Get all CLINIC_STAFF and DOCTOR accounts
-      const staffAndDoctors = await this.accountRepository.findAllAccounts().then(
-        (accounts) =>
+      const staffAndDoctors = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
           accounts.filter(
             (acc) =>
               acc.role === AccountRole.CLINIC_STAFF ||
               acc.role === AccountRole.DOCTOR,
           ),
-      );
+        );
 
       if (staffAndDoctors.length === 0) {
         this.logger.warn(
@@ -219,7 +228,10 @@ export class ClinicContractInformationSeederService {
         `✅ ClinicContractInformation seeding completed: ${createdCount} created, ${skippedCount} skipped, ${errorCount} errors`,
       );
     } catch (error) {
-      this.logger.error('Failed to seed clinic contract information', error.stack);
+      this.logger.error(
+        'Failed to seed clinic contract information',
+        error.stack,
+      );
       throw error;
     }
   }
@@ -340,8 +352,7 @@ export class ClinicContractInformationSeederService {
    * Get random base salary (10,000,000 - 50,000,000 VND)
    */
   private getRandomBaseSalary(): number {
-    const salary =
-      10000000 + Math.floor(Math.random() * 40000000); // 10M-50M VND
+    const salary = 10000000 + Math.floor(Math.random() * 40000000); // 10M-50M VND
     return salary;
   }
 
@@ -353,9 +364,7 @@ export class ClinicContractInformationSeederService {
     const numAllowances = 1 + Math.floor(Math.random() * 3); // 1-3 allowances
     for (let i = 0; i < numAllowances; i++) {
       allowances.push(
-        this.ALLOWANCES[
-          Math.floor(Math.random() * this.ALLOWANCES.length)
-        ],
+        this.ALLOWANCES[Math.floor(Math.random() * this.ALLOWANCES.length)],
       );
     }
     return allowances.join(', ');

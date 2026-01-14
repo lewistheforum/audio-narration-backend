@@ -57,7 +57,9 @@ export class GeneralAccountSeederService {
    */
   async seed(): Promise<void> {
     try {
-      this.logger.log('Starting to seed GeneralAccount for PATIENT accounts...');
+      this.logger.log(
+        'Starting to seed GeneralAccount for PATIENT accounts...',
+      );
 
       // Get all PATIENT accounts
       const patientAccounts = await this.accountRepository.findAllAccounts();
@@ -85,12 +87,13 @@ export class GeneralAccountSeederService {
         }
 
         const gender = this.getRandomGender();
-        const generalAccount = this.generalAccountRepository.createGeneralAccount({
-          _id: randomUUID(),
-          accountId: account._id,
-          fullName: this.getRandomName(gender),
-          gender,
-        });
+        const generalAccount =
+          this.generalAccountRepository.createGeneralAccount({
+            _id: randomUUID(),
+            accountId: account._id,
+            fullName: this.getRandomName(gender),
+            gender,
+          });
 
         await this.generalAccountRepository.saveGeneralAccount(generalAccount);
         createdCount++;

@@ -46,6 +46,14 @@ export class ClinicAdminInformation {
   clinicName: string;
 
   /**
+   * Clinic Phone
+   *
+   * Phone number of the clinic
+   */
+  @Column({ name: 'clinic_phone', type: 'text', nullable: true })
+  clinicPhone?: string;
+
+  /**
    * Description
    *
    * Description of the clinic

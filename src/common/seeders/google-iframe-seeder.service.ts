@@ -21,12 +21,7 @@ export class GoogleIframeSeederService {
   private readonly logger = new Logger(GoogleIframeSeederService.name);
 
   // Google Maps iframe templates for orthopedics clinics
-  private readonly MAP_STYLES = [
-    'standard',
-    'satellite',
-    'hybrid',
-    'terrain',
-  ];
+  private readonly MAP_STYLES = ['standard', 'satellite', 'hybrid', 'terrain'];
 
   private readonly ZOOM_LEVELS = [14, 15, 16, 17, 18];
 
@@ -39,27 +34,32 @@ export class GoogleIframeSeederService {
     {
       city: 'Hà Nội',
       center: '21.0285,105.8542',
-      placeholder: '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.8542!2d21.0285!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sHa+Noi!5e0!3m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      placeholder:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.8542!2d21.0285!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sHa+Noi!5e0!3m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
     },
     {
       city: 'Hồ Chí Minh',
       center: '10.8231,106.6297',
-      placeholder: '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d106.6297!2d10.8231!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      placeholder:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d106.6297!2d10.8231!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
     },
     {
       city: 'Đà Nẵng',
       center: '16.0544,108.2022',
-      placeholder: '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d108.2022!2d16.0544!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      placeholder:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d108.2022!2d16.0544!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
     },
     {
       city: 'Hải Phòng',
       center: '20.8449,106.6881',
-      placeholder: '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d106.6881!2d20.8449!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      placeholder:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d106.6881!2d20.8449!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
     },
     {
       city: 'Cần Thơ',
       center: '10.0452,105.7469',
-      placeholder: '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.7469!2d10.0452!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      placeholder:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.7469!2d10.0452!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
     },
   ];
 
@@ -90,8 +90,9 @@ export class GoogleIframeSeederService {
 
       for (const address of addresses) {
         // Check if Google iframe already exists for this address
-        const existing =
-          await this.googleIframeRepository.existsByAddressId(address._id);
+        const existing = await this.googleIframeRepository.existsByAddressId(
+          address._id,
+        );
 
         if (existing) {
           skippedCount++;
@@ -137,7 +138,10 @@ export class GoogleIframeSeederService {
     const provinceName = address.provinceName.toLowerCase();
 
     // Try to match city from province name
-    if (provinceName.includes('hà nội') || provinceName.includes('thành phố hà nội')) {
+    if (
+      provinceName.includes('hà nội') ||
+      provinceName.includes('thành phố hà nội')
+    ) {
       return this.MAP_IFRAME_TEMPLATES[0];
     }
     if (
@@ -146,13 +150,22 @@ export class GoogleIframeSeederService {
     ) {
       return this.MAP_IFRAME_TEMPLATES[1];
     }
-    if (provinceName.includes('đà nẵng') || provinceName.includes('thành phố đà nẵng')) {
+    if (
+      provinceName.includes('đà nẵng') ||
+      provinceName.includes('thành phố đà nẵng')
+    ) {
       return this.MAP_IFRAME_TEMPLATES[2];
     }
-    if (provinceName.includes('hải phòng') || provinceName.includes('thành phố hải phòng')) {
+    if (
+      provinceName.includes('hải phòng') ||
+      provinceName.includes('thành phố hải phòng')
+    ) {
       return this.MAP_IFRAME_TEMPLATES[3];
     }
-    if (provinceName.includes('cần thơ') || provinceName.includes('thành phố cần thơ')) {
+    if (
+      provinceName.includes('cần thơ') ||
+      provinceName.includes('thành phố cần thơ')
+    ) {
       return this.MAP_IFRAME_TEMPLATES[4];
     }
 
@@ -171,14 +184,18 @@ export class GoogleIframeSeederService {
    * Get random zoom level
    */
   private getRandomZoomLevel(): number {
-    return this.ZOOM_LEVELS[Math.floor(Math.random() * this.ZOOM_LEVELS.length)];
+    return this.ZOOM_LEVELS[
+      Math.floor(Math.random() * this.ZOOM_LEVELS.length)
+    ];
   }
 
   /**
    * Get random map height
    */
   private getRandomMapHeight(): number {
-    return this.MAP_HEIGHTS[Math.floor(Math.random() * this.MAP_HEIGHTS.length)];
+    return this.MAP_HEIGHTS[
+      Math.floor(Math.random() * this.MAP_HEIGHTS.length)
+    ];
   }
 
   /**

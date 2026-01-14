@@ -62,10 +62,11 @@ export class ClinicsLegalDocumentsSeederService {
       this.logger.log('Starting to seed clinics legal documents...');
 
       // Get all CLINIC_MANAGER accounts
-      const clinicManagers = await this.accountRepository.findAllAccounts().then(
-        (accounts) =>
+      const clinicManagers = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
           accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER),
-      );
+        );
 
       if (clinicManagers.length === 0) {
         this.logger.warn('No CLINIC_MANAGER accounts found. Skipping seeding.');

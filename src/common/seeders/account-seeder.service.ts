@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
-import { AccountRole, AccountStatus, Gender } from '../../modules/accounts/enums';
+import {
+  AccountRole,
+  AccountStatus,
+  Gender,
+} from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 
 /**
@@ -114,9 +118,11 @@ export class AccountSeederService {
       this.logger.log(
         `CLINIC_ADMIN accounts already exist (${existingCount}). Skipping seeding.`,
       );
-      return this.accountRepository.findAllAccounts().then((accounts) =>
-        accounts.filter((acc) => acc.role === AccountRole.CLINIC_ADMIN),
-      );
+      return this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
+          accounts.filter((acc) => acc.role === AccountRole.CLINIC_ADMIN),
+        );
     }
 
     this.logger.log(`Seeding ${CLINIC_ADMIN_COUNT} CLINIC_ADMIN accounts...`);
@@ -160,14 +166,18 @@ export class AccountSeederService {
    * Seed CLINIC_MANAGER accounts
    * Creates 1-3 CLINIC_MANAGER accounts per CLINIC_ADMIN
    */
-  private async seedClinicManagers(clinicAdmins: Account[]): Promise<Account[]> {
+  private async seedClinicManagers(
+    clinicAdmins: Account[],
+  ): Promise<Account[]> {
     const clinicManagers: Account[] = [];
 
     for (const clinicAdmin of clinicAdmins) {
       const count = this.getRandomInt(1, 3);
 
       for (let i = 1; i <= count; i++) {
-        const email = `clinic_manager_${clinicAdmins.indexOf(clinicAdmin) + 1}_${i}@medicare.test`;
+        const email = `clinic_manager_${
+          clinicAdmins.indexOf(clinicAdmin) + 1
+        }_${i}@medicare.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -181,7 +191,9 @@ export class AccountSeederService {
         );
 
         const account = this.accountRepository.createAccount({
-          username: `clinic_manager_${clinicAdmins.indexOf(clinicAdmin) + 1}_${i}`,
+          username: `clinic_manager_${
+            clinicAdmins.indexOf(clinicAdmin) + 1
+          }_${i}`,
           email,
           password: hashedPassword,
           phone: `+84${this.randomPhoneDigits()}`,
@@ -197,7 +209,9 @@ export class AccountSeederService {
       }
     }
 
-    this.logger.log(`✅ Created ${clinicManagers.length} CLINIC_MANAGER accounts`);
+    this.logger.log(
+      `✅ Created ${clinicManagers.length} CLINIC_MANAGER accounts`,
+    );
     return clinicManagers;
   }
 
@@ -212,7 +226,9 @@ export class AccountSeederService {
       const count = this.getRandomInt(5, 10);
 
       for (let i = 1; i <= count; i++) {
-        const email = `clinic_staff_${clinicManagers.indexOf(clinicManager) + 1}_${i}@medicare.test`;
+        const email = `clinic_staff_${
+          clinicManagers.indexOf(clinicManager) + 1
+        }_${i}@medicare.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -225,7 +241,9 @@ export class AccountSeederService {
         );
 
         const account = this.accountRepository.createAccount({
-          username: `clinic_staff_${clinicManagers.indexOf(clinicManager) + 1}_${i}`,
+          username: `clinic_staff_${
+            clinicManagers.indexOf(clinicManager) + 1
+          }_${i}`,
           email,
           password: hashedPassword,
           phone: `+84${this.randomPhoneDigits()}`,
@@ -255,7 +273,9 @@ export class AccountSeederService {
       const count = this.getRandomInt(5, 10);
 
       for (let i = 1; i <= count; i++) {
-        const email = `doctor_${clinicManagers.indexOf(clinicManager) + 1}_${i}@medicare.test`;
+        const email = `doctor_${
+          clinicManagers.indexOf(clinicManager) + 1
+        }_${i}@medicare.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
