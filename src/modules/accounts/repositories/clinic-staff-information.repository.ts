@@ -39,7 +39,7 @@ export class ClinicStaffInformationRepository {
   /**
    * Find clinic staff information by clinic account ID
    */
-  async findByClinicAccountId(
+  async findByAccountId(
     clinicAccId: string,
   ): Promise<ClinicStaffInformation | null> {
     return this.repository.findOne({
@@ -108,7 +108,7 @@ export class ClinicStaffInformationRepository {
     data: DeepPartial<ClinicStaffInformation>,
   ): Promise<ClinicStaffInformation | null> {
     await this.repository.update({ accountId: clinicAccId }, data);
-    return this.findByClinicAccountId(clinicAccId);
+    return this.findByAccountId(clinicAccId);
   }
 
   /**

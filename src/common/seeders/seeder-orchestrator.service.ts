@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AdminSeederService } from './admin-seeder.service';
+import { ClinicAdminSeederService } from './clinic-admin-seeder.service';
+import { AccountsSeederService } from './accounts-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
@@ -19,6 +21,8 @@ import { AccountRole } from '../../modules/accounts/enums';
  *
  * Execution Order:
  * 1. AdminSeederService - Seeds default admin account
+ * 2. ClinicAdminSeederService - Seeds clinic admin (owns organization)
+ * 3. AccountsSeederService - Seeds patients, managers, doctors, staff
  *
  * The orchestrator implements OnModuleInit and is the only seeder that runs automatically
  * during application startup. Individual seeder services expose public seed() methods
@@ -30,6 +34,8 @@ export class SeederOrchestratorService implements OnModuleInit {
 
   constructor(
     private readonly adminSeeder: AdminSeederService,
+    private readonly clinicAdminSeeder: ClinicAdminSeederService,
+    private readonly accountsSeeder: AccountsSeederService,
     private readonly accountRepository: AccountRepository,
   ) {}
 
@@ -44,11 +50,20 @@ export class SeederOrchestratorService implements OnModuleInit {
     const adminCount = await this.accountRepository.countByRole(
       AccountRole.ADMIN,
     );
+    const clinicAdminCount = await this.accountRepository.countByRole(
+      AccountRole.CLINIC_ADMIN,
+    );
+    const managerCount = await this.accountRepository.countByRole(
+      AccountRole.CLINIC_MANAGER,
+    );
 
     this.logger.log(`Current data counts:`);
     this.logger.log(`  - Admins: ${adminCount} (required: 1)`);
+    this.logger.log(`  - Clinic Admins: ${clinicAdminCount} (required: 1)`);
+    this.logger.log(`  - Managers: ${managerCount} (required: 3)`);
 
-    const allConditionsMet = adminCount >= 1;
+    const allConditionsMet =
+      adminCount >= 1 && clinicAdminCount >= 1 && managerCount >= 3;
 
     return allConditionsMet;
   }
@@ -80,6 +95,14 @@ export class SeederOrchestratorService implements OnModuleInit {
       // Step 1: Seed admin account
       await this.adminSeeder.seed();
       this.logger.log('✅ Admin seeding completed');
+
+      // Step 2: Seed clinic admin account
+      await this.clinicAdminSeeder.seed();
+      this.logger.log('✅ Clinic admin seeding completed');
+
+      // Step 3: Seed patients, managers, doctors, staff
+      await this.accountsSeeder.seed();
+      this.logger.log('✅ Accounts seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {

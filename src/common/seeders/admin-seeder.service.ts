@@ -5,6 +5,8 @@ import { GeneralAccount } from '../../modules/accounts/entities/general_accounts
 import { AccountRole, AccountStatus } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { GeneralAccountRepository } from '../../modules/accounts/repositories/general-account.repository';
+import { AddressRepository } from '../../modules/accounts/repositories/address.repository';
+import { AddressDataService } from './address-data.service';
 
 /**
  * Admin Seeder Service
@@ -30,6 +32,8 @@ export class AdminSeederService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly generalAccountRepository: GeneralAccountRepository,
+    private readonly addressRepository: AddressRepository,
+    private readonly addressDataService: AddressDataService,
   ) {}
 
   /**
@@ -72,12 +76,17 @@ export class AdminSeederService {
       const savedAdmin = await this.accountRepository.saveAccount(admin);
 
       // Create GeneralAccount entity
-      const generalAccount = this.generalAccountRepository.createGeneralAccount({
-        accountId: savedAdmin._id,
-        fullName: this.DEFAULT_ADMIN.fullName,
-      });
+      const generalAccount = this.generalAccountRepository.createGeneralAccount(
+        {
+          accountId: savedAdmin._id,
+          fullName: this.DEFAULT_ADMIN.fullName,
+        },
+      );
 
       await this.generalAccountRepository.saveGeneralAccount(generalAccount);
+
+      // Create address for admin (Ho Chi Minh City)
+      await this.createAddress(savedAdmin._id, 79);
 
       this.logger.log(
         `✅ Default admin account created successfully: ${this.DEFAULT_ADMIN.email}`,
@@ -87,6 +96,53 @@ export class AdminSeederService {
       );
     } catch (error) {
       this.logger.error('Failed to seed admin account', error.stack);
+    }
+  }
+
+  /**
+   * Create address for an account
+   */
+  private async createAddress(
+    accountId: string,
+    provinceCode?: number,
+  ): Promise<void> {
+    try {
+      // Check if address already exists
+      const existing = await this.addressRepository.findByAccountId(accountId);
+      // if (existing.length > 0) {
+      //   return;
+      // }
+
+      // Get address data
+      const addressData = provinceCode
+        ? await this.addressDataService.getAddressByProvince(provinceCode)
+        : await this.addressDataService.getRandomAddress();
+
+      if (!addressData) {
+        this.logger.warn(`Failed to get address data for account ${accountId}`);
+        return;
+      }
+
+      // Create address entity
+      const address = this.addressRepository.create({
+        accountId,
+        address: `${Math.floor(Math.random() * 999) + 1} ${
+          addressData.wardName
+        }`,
+        ward: addressData.wardCode.toString(),
+        district: addressData.districtCode.toString(),
+        province: addressData.provinceCode.toString(),
+        provinceName: addressData.provinceName,
+        districtName: addressData.districtName,
+        wardName: addressData.wardName,
+      });
+
+      await this.addressRepository.save(address);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to create address for account ${accountId}`,
+        error.message,
+      );
     }
   }
 }

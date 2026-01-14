@@ -108,7 +108,6 @@ export class UpdateAccountDto {
   gender?: Gender;
 
   // DoctorInformation fields
-
   @ApiProperty({
     description: 'Academic degree',
     example: 'MD, PhD',
@@ -272,4 +271,224 @@ export class UpdateAccountDto {
     message: 'Each paraclinical service must be a string',
   })
   paraclinical?: string[];
+
+  // Clinic Admin Banking fields
+  @ApiProperty({
+    description: 'Bank name for clinic admin',
+    example: 'Vietcombank',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Bank name must be a string' })
+  bankName?: string;
+
+  @ApiProperty({
+    description: 'Bank account number',
+    example: 1234567890,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Bank number must be a number' })
+  bankNumber?: number;
+
+  @ApiProperty({
+    description: 'Bank branch location',
+    example: 'Ho Chi Minh City Branch',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Bank branch must be a string' })
+  bankBranch?: string;
+
+  @ApiProperty({
+    description: 'SePay virtual account number',
+    example: 'SEPAY123456',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'SePay VA must be a string' })
+  sepayVa?: string;
+
+  // Clinic Manager fields
+  @ApiProperty({
+    description: 'Clinic branch name for managers',
+    example: 'Downtown Branch',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Clinic branch name must be a string' })
+  @MaxLength(255, {
+    message: 'Clinic branch name must not exceed 255 characters',
+  })
+  clinicBranchName?: string;
+
+  // Clinic Staff fields
+  @ApiProperty({
+    description: 'Clinic role for staff members',
+    enum: ClinicRole,
+    example: ClinicRole.STAFF,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(ClinicRole, { message: 'Invalid clinic role' })
+  clinicRole?: ClinicRole;
+
+  // Doctor Identity and Banking fields
+  @ApiProperty({
+    description: 'Identity card number',
+    example: '123456789012',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Identity number must be a string' })
+  identityNumber?: string;
+
+  @ApiProperty({
+    description: 'Place where identity card was issued',
+    example: 'Ho Chi Minh City',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Place identity card must be a string' })
+  placeIdentityCard?: string;
+
+  @ApiProperty({
+    description: 'Date when identity card was issued (ISO date string)',
+    example: '2020-01-15',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString(
+    {},
+    { message: 'Identity date must be a valid date string (YYYY-MM-DD)' },
+  )
+  identityDate?: string;
+
+  // Address fields
+  @ApiProperty({
+    description: 'Street address',
+    example: '123 Nguyen Hue Street',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Address must be a string' })
+  address?: string;
+
+  @ApiProperty({
+    description: 'Ward code',
+    example: '00001',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Ward must be a string' })
+  @MaxLength(100, { message: 'Ward must not exceed 100 characters' })
+  ward?: string;
+
+  @ApiProperty({
+    description: 'District code',
+    example: '001',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'District must be a string' })
+  @MaxLength(100, { message: 'District must not exceed 100 characters' })
+  district?: string;
+
+  @ApiProperty({
+    description: 'Province code',
+    example: '01',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Province must be a string' })
+  @MaxLength(100, { message: 'Province must not exceed 100 characters' })
+  province?: string;
+
+  @ApiProperty({
+    description: 'Province name',
+    example: 'Ho Chi Minh City',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Province name must be a string' })
+  provinceName?: string;
+
+  @ApiProperty({
+    description: 'District name',
+    example: 'District 1',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'District name must be a string' })
+  districtName?: string;
+
+  @ApiProperty({
+    description: 'Ward name',
+    example: 'Ben Nghe Ward',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Ward name must be a string' })
+  wardName?: string;
+
+  // Google Iframe fields
+  @ApiProperty({
+    description: 'Geographic location (point)',
+    example: '(10.762622, 106.660172)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Location must be a string' })
+  location?: string;
+
+  @ApiProperty({
+    description: 'Map style configuration',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Map style must be a string' })
+  mapStyle?: string;
+
+  @ApiProperty({
+    description: 'Zoom level for the map',
+    example: 15,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Zoom level must be a number' })
+  zoomLevel?: number;
+
+  @ApiProperty({
+    description: 'Map height in pixels',
+    example: 400,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Map height must be a number' })
+  mapHeight?: number;
+
+  @ApiProperty({
+    description: 'Map width in pixels',
+    example: 600,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Map width must be a number' })
+  mapWidth?: number;
+
+  @ApiProperty({
+    description: 'Whether the map is responsive',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  responsive?: boolean;
+
+  @ApiProperty({
+    description: 'Google Map iframe embed code',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Google Map iframe must be a string' })
+  googleMapIframe?: string;
 }

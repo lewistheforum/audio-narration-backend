@@ -37,7 +37,7 @@ export class DoctorInformationRepository {
   /**
    * Find doctor information by doctor account ID
    */
-  async findByDoctorAccountId(
+  async findByAccountId(
     doctorAccId: string,
   ): Promise<DoctorInformation | null> {
     return this.repository.findOne({
@@ -90,7 +90,7 @@ export class DoctorInformationRepository {
     data: DeepPartial<DoctorInformation>,
   ): Promise<DoctorInformation | null> {
     await this.repository.update({ accountId: doctorAccId }, data);
-    return this.findByDoctorAccountId(doctorAccId);
+    return this.findByAccountId(doctorAccId);
   }
 
   /**

@@ -3,9 +3,12 @@ import { Account } from '../entities/accounts.entity';
 import { GeneralAccount } from '../entities/general_accounts.entity';
 import { Gender, AccountRole, AccountStatus, ClinicRole } from '../enums';
 import {
-  ClinicInformation,
+  Address,
+  ClinicAdminInformation,
+  ClinicManagerInformation,
   ClinicStaffInformation,
   DoctorInformation,
+  GoogleIframe,
 } from '../entities';
 
 /**
@@ -296,12 +299,200 @@ export class AccountResponseDto {
   })
   paraclinical?: string[];
 
+  // Clinic Admin Banking fields
+  @ApiProperty({
+    description: 'Bank name for clinic admin',
+    example: 'Vietcombank',
+    required: false,
+    nullable: true,
+  })
+  bankName?: string;
+
+  @ApiProperty({
+    description: 'Bank account number',
+    example: 1234567890,
+    required: false,
+    nullable: true,
+  })
+  bankNumber?: number;
+
+  @ApiProperty({
+    description: 'Bank branch location',
+    example: 'Ho Chi Minh City Branch',
+    required: false,
+    nullable: true,
+  })
+  bankBranch?: string;
+
+  @ApiProperty({
+    description: 'SePay virtual account number',
+    example: 'SEPAY123456',
+    required: false,
+    nullable: true,
+  })
+  sepayVa?: string;
+
+  // Clinic Manager fields
+  @ApiProperty({
+    description: 'Clinic branch name for managers',
+    example: 'Downtown Branch',
+    required: false,
+    nullable: true,
+  })
+  clinicBranchName?: string;
+
+  // Doctor Identity and Banking fields
+  @ApiProperty({
+    description: 'Identity card number',
+    example: '123456789012',
+    required: false,
+    nullable: true,
+  })
+  identityNumber?: string;
+
+  @ApiProperty({
+    description: 'Place where identity card was issued',
+    example: 'Ho Chi Minh City',
+    required: false,
+    nullable: true,
+  })
+  placeIdentityCard?: string;
+
+  @ApiProperty({
+    description: 'Date when identity card was issued',
+    example: '2020-01-15',
+    required: false,
+    nullable: true,
+  })
+  identityDate?: Date;
+
+  // Address fields
+  @ApiProperty({
+    description: 'Street address',
+    example: '123 Nguyen Hue Street',
+    required: false,
+    nullable: true,
+  })
+  address?: string;
+
+  @ApiProperty({
+    description: 'Ward code',
+    example: '00001',
+    required: false,
+    nullable: true,
+  })
+  ward?: string;
+
+  @ApiProperty({
+    description: 'District code',
+    example: '001',
+    required: false,
+    nullable: true,
+  })
+  district?: string;
+
+  @ApiProperty({
+    description: 'Province code',
+    example: '01',
+    required: false,
+    nullable: true,
+  })
+  province?: string;
+
+  @ApiProperty({
+    description: 'Province name',
+    example: 'Ho Chi Minh City',
+    required: false,
+    nullable: true,
+  })
+  provinceName?: string;
+
+  @ApiProperty({
+    description: 'District name',
+    example: 'District 1',
+    required: false,
+    nullable: true,
+  })
+  districtName?: string;
+
+  @ApiProperty({
+    description: 'Ward name',
+    example: 'Ben Nghe Ward',
+    required: false,
+    nullable: true,
+  })
+  wardName?: string;
+
+  // Google Iframe fields
+  @ApiProperty({
+    description: 'Address ID for Google iframe',
+    required: false,
+    nullable: true,
+  })
+  addressId?: string;
+
+  @ApiProperty({
+    description: 'Geographic location (point)',
+    example: '(10.762622, 106.660172)',
+    required: false,
+    nullable: true,
+  })
+  location?: string;
+
+  @ApiProperty({
+    description: 'Map style configuration',
+    required: false,
+    nullable: true,
+  })
+  mapStyle?: string;
+
+  @ApiProperty({
+    description: 'Zoom level for the map',
+    example: 15,
+    required: false,
+    nullable: true,
+  })
+  zoomLevel?: number;
+
+  @ApiProperty({
+    description: 'Map height in pixels',
+    example: 400,
+    required: false,
+    nullable: true,
+  })
+  mapHeight?: number;
+
+  @ApiProperty({
+    description: 'Map width in pixels',
+    example: 600,
+    required: false,
+    nullable: true,
+  })
+  mapWidth?: number;
+
+  @ApiProperty({
+    description: 'Whether the map is responsive',
+    example: true,
+    required: false,
+  })
+  responsive?: boolean;
+
+  @ApiProperty({
+    description: 'Google Map iframe embed code',
+    required: false,
+    nullable: true,
+  })
+  googleMapIframe?: string;
+
   constructor(
     account: Partial<Account>,
     generalAccount?: Partial<GeneralAccount>,
     staffAccount?: Partial<ClinicStaffInformation>,
     doctorAccount?: Partial<DoctorInformation>,
-    clinicManagerAccount?: Partial<ClinicInformation>,
+    clinicManagerAccount?: Partial<ClinicManagerInformation>,
+    clinicAdminAccount?: Partial<ClinicAdminInformation>,
+    addressData?: Partial<Address>,
+    googleIframeData?: Partial<GoogleIframe>,
   ) {
     this.id = account._id;
     this.email = account.email;
@@ -355,17 +546,59 @@ export class AccountResponseDto {
       this.certificatePracticalTraining =
         doctorAccount.certificatePracticalTraining;
       this.medicalLicense = doctorAccount.medicalLicense;
+      this.identityNumber = doctorAccount.identityNumber;
+      this.placeIdentityCard = doctorAccount.placeIdentityCard;
+      this.identityDate = doctorAccount.identityDate;
+      this.bankNumber = doctorAccount.bankNumber;
+      this.bankName = doctorAccount.bankName;
+      this.bankBranch = doctorAccount.bankBranch;
     }
 
-    // ClinicInformation data
+    // ClinicManagerInformation data
     if (clinicManagerAccount) {
-      this.clinicName = clinicManagerAccount.clinicName;
+      this.clinicBranchName = clinicManagerAccount.clinicBranchName;
+      this.fullName = clinicManagerAccount.fullName;
+      this.gender = clinicManagerAccount.gender;
       this.dob = clinicManagerAccount.dob;
       this.profilePicture = clinicManagerAccount.profilePicture;
-      this.description = clinicManagerAccount.description;
-      this.specializedIn = clinicManagerAccount.specializedIn;
-      this.pros = clinicManagerAccount.pros;
-      this.paraclinical = clinicManagerAccount.paraclinical;
+    }
+
+    // ClinicAdminInformation data
+    if (clinicAdminAccount) {
+      this.clinicName = clinicAdminAccount.clinicName;
+      this.description = clinicAdminAccount.description;
+      this.specializedIn = clinicAdminAccount.specializedIn;
+      this.pros = clinicAdminAccount.pros;
+      this.paraclinical = clinicAdminAccount.paraclinical;
+      this.dob = clinicAdminAccount.dob;
+      this.profilePicture = clinicAdminAccount.profilePicture;
+      this.bankName = clinicAdminAccount.bankName;
+      this.bankNumber = clinicAdminAccount.bankNumber;
+      this.bankBranch = clinicAdminAccount.bankBranch;
+      this.sepayVa = clinicAdminAccount.sepayVa;
+    }
+
+    // Address data
+    if (addressData) {
+      this.address = addressData.address;
+      this.ward = addressData.ward;
+      this.district = addressData.district;
+      this.province = addressData.province;
+      this.provinceName = addressData.provinceName;
+      this.districtName = addressData.districtName;
+      this.wardName = addressData.wardName;
+    }
+
+    // Google Iframe data
+    if (googleIframeData) {
+      this.addressId = googleIframeData.addressId;
+      this.location = googleIframeData.location;
+      this.mapStyle = googleIframeData.mapStyle;
+      this.zoomLevel = googleIframeData.zoomLevel;
+      this.mapHeight = googleIframeData.mapHeight;
+      this.mapWidth = googleIframeData.mapWidth;
+      this.responsive = googleIframeData.responsive;
+      this.googleMapIframe = googleIframeData.googleMapIframe;
     }
   }
 }

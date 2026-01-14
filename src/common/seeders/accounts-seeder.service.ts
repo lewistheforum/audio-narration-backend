@@ -2,26 +2,39 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { GeneralAccount } from '../../modules/accounts/entities/general_accounts.entity';
-import { ClinicsLegalDocuments } from '../../modules/accounts/entities/clinics_legal_documents.entity';
-import { AccountRole, AccountStatus } from '../../modules/accounts/enums';
-import { BankName } from '../../modules/accounts/enums/bank-name.enum';
-import { LegalDocumentVerificationStatus } from '../../modules/accounts/enums/legal-document-verification-status.enum';
+
+import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
+import { ClinicStaffInformation } from '../../modules/accounts/entities/clinic_staff_information.entity';
+import {
+  AccountRole,
+  AccountStatus,
+  Gender,
+} from '../../modules/accounts/enums';
+
+import { ClinicRole } from '../../modules/accounts/enums/clinic-role.enum';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { GeneralAccountRepository } from '../../modules/accounts/repositories/general-account.repository';
-import { ClinicInformationRepository } from '../../modules/accounts/repositories/clinic-information.repository';
-import { ClinicsLegalDocumentsRepository } from '../../modules/accounts/repositories/clinics-legal-documents.repository';
+
+import { DoctorInformationRepository } from '../../modules/accounts/repositories/doctor-information.repository';
+import { ClinicStaffInformationRepository } from '../../modules/accounts/repositories/clinic-staff-information.repository';
+import { ClinicManagerInformationRepository } from '../../modules/accounts/repositories/clinic-manager-information.repository';
+import { AddressRepository } from '../../modules/accounts/repositories/address.repository';
+import { AddressDataService } from './address-data.service';
 
 /**
- * Patient, Manager, Doctor, and Staff Seeder Service
+ * Accounts Seeder Service
  * - Runs on application startup
  * - Seeds 3 PATIENT accounts with GeneralAccount records
- * - Seeds 3 MANAGER accounts with ClinicInformation and ClinicsLegalDocuments records
- * - Seeds 3 DOCTOR accounts and 3 STAFF accounts for each manager (9 doctors, 9 staff total)
+ * - Seeds 3 CLINIC_MANAGER accounts (branch managers) with ClinicManagerInformation
+ * - Seeds 6 DOCTOR accounts (2 per branch) with DoctorInformation
+ * - Seeds 6 CLINIC_STAFF accounts (2 per branch) with ClinicStaffInformation
+ * - All managers have parentId pointing to CLINIC_ADMIN
+ * - All doctors and staff have parentId pointing to their CLINIC_MANAGER
  * - All accounts are immediately ACTIVE with verified email
  */
 @Injectable()
-export class PatientManagerSeederService {
-  private readonly logger = new Logger(PatientManagerSeederService.name);
+export class AccountsSeederService {
+  private readonly logger = new Logger(AccountsSeederService.name);
   private readonly BCRYPT_SALT_ROUNDS = 10;
 
   // Default password for all seeded accounts
@@ -49,62 +62,37 @@ export class PatientManagerSeederService {
     },
   ];
 
-  // Manager data with clinic information
+  // Manager data - branch managers (each manages one clinic branch)
   private readonly MANAGERS = [
     {
       username: 'manager1',
-      email: 'phong.kham.anh@medicare.com',
-      fullName: 'Phòng Khám Bác Sĩ Anh',
+      email: 'manager.anh@medicare.com',
+      fullName: 'Nguyễn Văn Anh',
       phone: '0945678901',
-      clinicName: 'Phòng Khám Bác Sĩ Anh',
-      description:
-        'Phòng khám đa khoa với đội ngũ bác sĩ giàu kinh nghiệm, chuyên điều trị các bệnh lý nội khoa và ngoại khoa.',
-      specializedIn: ['Nội khoa', 'Ngoại khoa', 'Tai mũi họng'],
-      pros: ['Bác sĩ giỏi', 'Thiết bị hiện đại', 'Dịch vụ tận tâm'],
-      operatingLicense: 'GP-12345-HCM',
-      businessLicense: 'MB-1234567890',
-      bankName: BankName.VPBANK,
-      sepayVa: '001234567890',
+      gender: Gender.MALE,
+      clinicBranchName: 'Chi nhánh Quận 1',
     },
     {
       username: 'manager2',
-      email: 'phong.kham.hong@medicare.com',
-      fullName: 'Phòng Khám Hồng Phúc',
+      email: 'manager.hong@medicare.com',
+      fullName: 'Trần Thị Hồng',
       phone: '0956789012',
-      clinicName: 'Phòng Khám Hồng Phúc',
-      description:
-        'Chuyên khoa răng hàm mặt và thẩm mỹ nha khoa với công nghệ tiên tiến nhất.',
-      specializedIn: ['Răng hàm mặt', 'Thẩm mỹ nha khoa', 'Niềng răng'],
-      pros: ['Công nghệ cao', 'Chi phí hợp lý', 'Không gian hiện đại'],
-      operatingLicense: 'GP-23456-HCM',
-      businessLicense: 'MB-2345678901',
-      bankName: BankName.TPBANK,
-      sepayVa: '002345678901',
+      gender: Gender.FEMALE,
+      clinicBranchName: 'Chi nhánh Quận 7',
     },
     {
       username: 'manager3',
-      email: 'phong.kham.long@medicare.com',
-      fullName: 'Phòng Khám Long Châu',
+      email: 'manager.long@medicare.com',
+      fullName: 'Lê Văn Long',
       phone: '0967890123',
-      clinicName: 'Phòng Khám Long Châu',
-      description:
-        'Phòng khám chuyên khoa sản phụ khoa và chăm sóc sức khỏe mẹ bé toàn diện.',
-      specializedIn: ['Sản phụ khoa', 'Sơ sinh', 'Tiêm chủng'],
-      pros: [
-        'Đội ngũ chuyên môn cao',
-        'Cơ sở vật chất tốt',
-        'Chi phí minh bạch',
-      ],
-      operatingLicense: 'GP-34567-HCM',
-      businessLicense: 'MB-3456789012',
-      bankName: BankName.BIDV,
-      sepayVa: '003456789012',
+      gender: Gender.MALE,
+      clinicBranchName: 'Chi nhánh Thủ Đức',
     },
   ];
 
-  // Doctor data - 3 doctors for each manager
+  // Doctor data - 2 doctors for each manager (6 total)
   private readonly DOCTORS = [
-    // Doctors for manager1 (Phòng Khám Bác Sĩ Anh)
+    // Doctors for manager1 (Chi nhánh Quận 1)
     {
       username: 'doctor1_m1',
       email: 'bs.nguyen.van.khanh@medicare.com',
@@ -121,15 +109,7 @@ export class PatientManagerSeederService {
       managerUsername: 'manager1',
       specialization: 'Ngoại khoa',
     },
-    {
-      username: 'doctor3_m1',
-      email: 'bs.le.minh.tuan@medicare.com',
-      fullName: 'BS. Lê Minh Tuấn',
-      phone: '0990123456',
-      managerUsername: 'manager1',
-      specialization: 'Tai mũi họng',
-    },
-    // Doctors for manager2 (Phòng Khám Hồng Phúc)
+    // Doctors for manager2 (Chi nhánh Quận 7)
     {
       username: 'doctor1_m2',
       email: 'bs.pham.hoang.nam@medicare.com',
@@ -146,15 +126,7 @@ export class PatientManagerSeederService {
       managerUsername: 'manager2',
       specialization: 'Thẩm mỹ nha khoa',
     },
-    {
-      username: 'doctor3_m2',
-      email: 'bs.hoang.van.phuc@medicare.com',
-      fullName: 'BS. Hoàng Văn Phúc',
-      phone: '0923456701',
-      managerUsername: 'manager2',
-      specialization: 'Niềng răng',
-    },
-    // Doctors for manager3 (Phòng Khám Long Châu)
+    // Doctors for manager3 (Chi nhánh Thủ Đức)
     {
       username: 'doctor1_m3',
       email: 'bs.dang.thi.hoa@medicare.com',
@@ -171,19 +143,11 @@ export class PatientManagerSeederService {
       managerUsername: 'manager3',
       specialization: 'Sơ sinh',
     },
-    {
-      username: 'doctor3_m3',
-      email: 'bs.nguyen.thi.thao@medicare.com',
-      fullName: 'BS. Nguyễn Thị Thảo',
-      phone: '0956701234',
-      managerUsername: 'manager3',
-      specialization: 'Tiêm chủng',
-    },
   ];
 
-  // Staff data - 3 staff members for each manager
+  // Staff data - 2 staff members for each manager (6 total)
   private readonly STAFF = [
-    // Staff for manager1 (Phòng Khám Bác Sĩ Anh)
+    // Staff for manager1 (Chi nhánh Quận 1)
     {
       username: 'staff1_m1',
       email: 'nv.tran.van.binh@medicare.com',
@@ -200,15 +164,7 @@ export class PatientManagerSeederService {
       managerUsername: 'manager1',
       position: 'Y tá',
     },
-    {
-      username: 'staff3_m1',
-      email: 'nv.pham.van.dat@medicare.com',
-      fullName: 'Phạm Văn Đạt',
-      phone: '0981234567',
-      managerUsername: 'manager1',
-      position: 'Kế toán',
-    },
-    // Staff for manager2 (Phòng Khám Hồng Phúc)
+    // Staff for manager2 (Chi nhánh Quận 7)
     {
       username: 'staff1_m2',
       email: 'nv.nguyen.thi.em@medicare.com',
@@ -225,15 +181,7 @@ export class PatientManagerSeederService {
       managerUsername: 'manager2',
       position: 'Kỹ thuật viên',
     },
-    {
-      username: 'staff3_m2',
-      email: 'nv.hoang.thi.giang@medicare.com',
-      fullName: 'Hoàng Thị Giang',
-      phone: '0914567890',
-      managerUsername: 'manager2',
-      position: 'Y tá',
-    },
-    // Staff for manager3 (Phòng Khám Long Châu)
+    // Staff for manager3 (Chi nhánh Thủ Đức)
     {
       username: 'staff1_m3',
       email: 'nv.dang.van.hai@medicare.com',
@@ -250,27 +198,22 @@ export class PatientManagerSeederService {
       managerUsername: 'manager3',
       position: 'Y tá',
     },
-    {
-      username: 'staff3_m3',
-      email: 'nv.tran.van.kien@medicare.com',
-      fullName: 'Trần Văn Kiên',
-      phone: '0947890123',
-      managerUsername: 'manager3',
-      position: 'Dược sĩ',
-    },
   ];
 
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly generalAccountRepository: GeneralAccountRepository,
-    private readonly clinicInformationRepository: ClinicInformationRepository,
-    private readonly clinicsLegalDocumentsRepository: ClinicsLegalDocumentsRepository,
+    private readonly doctorInformationRepository: DoctorInformationRepository,
+    private readonly clinicStaffInformationRepository: ClinicStaffInformationRepository,
+    private readonly clinicManagerInformationRepository: ClinicManagerInformationRepository,
+    private readonly addressRepository: AddressRepository,
+    private readonly addressDataService: AddressDataService,
   ) {}
 
   /**
    * Seed patient, manager, doctor, and staff accounts
    *
-   * Creates both Account and GeneralAccount/ClinicInformation/ClinicsLegalDocuments entities
+   * Creates both Account and GeneralAccount/ClinicManagerInformation/ClinicsLegalDocuments entities
    * All accounts are immediately ACTIVE with verified email
    *
    * This method is called by SeederOrchestratorService during application bootstrap.
@@ -324,11 +267,14 @@ export class PatientManagerSeederService {
         // Create GeneralAccount entity
         const generalAccount =
           this.generalAccountRepository.createGeneralAccount({
-            generalAccId: savedPatient._id,
+            accountId: savedPatient._id,
             fullName: patientData.fullName,
           });
 
         await this.generalAccountRepository.saveGeneralAccount(generalAccount);
+
+        // Create address for patient (random location)
+        await this.createAddress(savedPatient._id);
 
         this.logger.log(
           `✅ Patient account created: ${patientData.email} (${patientData.fullName})`,
@@ -342,11 +288,27 @@ export class PatientManagerSeederService {
   }
 
   /**
-   * Seed 3 MANAGER accounts with ClinicInformation and ClinicsLegalDocuments records
+   * Seed 3 CLINIC_MANAGER accounts with ClinicManagerInformation
+   * All managers will have parentId pointing to the CLINIC_ADMIN
    */
   private async seedManagers(): Promise<void> {
     try {
       this.logger.log('Starting to seed manager accounts...');
+
+      // Find the clinic admin account first
+      const allAccounts = await this.accountRepository.findAllAccounts();
+      const clinicAdminAccount = allAccounts.filter(
+        (acc) => acc.role === AccountRole.CLINIC_ADMIN,
+      );
+
+      if (!clinicAdminAccount || clinicAdminAccount.length === 0) {
+        this.logger.warn(
+          'Clinic admin account not found. Skipping manager seeding.',
+        );
+        return;
+      }
+
+      const clinicAdmin = clinicAdminAccount[0];
 
       const hashedPassword = await bcrypt.hash(
         this.DEFAULT_PASSWORD,
@@ -366,7 +328,7 @@ export class PatientManagerSeederService {
           continue;
         }
 
-        // Create Account entity
+        // Create Account entity with parentId pointing to clinic admin
         const manager = this.accountRepository.createAccount({
           username: managerData.username,
           email: managerData.email,
@@ -376,37 +338,37 @@ export class PatientManagerSeederService {
           status: AccountStatus.ACTIVE,
           isEmailVerified: true,
           isOAuthUser: false,
+          parentId: clinicAdmin._id, // Link to clinic admin
         });
 
         const savedManager = await this.accountRepository.saveAccount(manager);
 
-        // Create ClinicInformation entity
-        const clinicInformation = this.clinicInformationRepository.create({
-          clinicId: savedManager._id,
-          clinicName: managerData.clinicName,
-          description: managerData.description,
-          specializedIn: managerData.specializedIn,
-          pros: managerData.pros,
-        });
-
-        await this.clinicInformationRepository.save(clinicInformation);
-
-        // Create ClinicsLegalDocuments entity
-        const clinicsLegalDocuments =
-          this.clinicsLegalDocumentsRepository.create({
+        // Create ClinicManagerInformation entity
+        const clinicManagerInformation =
+          this.clinicManagerInformationRepository.create({
             accountId: savedManager._id,
-            operatingLicense: managerData.operatingLicense,
-            businessLicense: managerData.businessLicense,
-            bankName: managerData.bankName,
-            sepayVa: managerData.sepayVa,
-            isSepayVerify: false,
-            verificationStatus: LegalDocumentVerificationStatus.NOT_SUBMITTED,
+            clinicBranchName: managerData.clinicBranchName,
+            fullName: managerData.fullName,
+            gender: managerData.gender,
           });
 
-        await this.clinicsLegalDocumentsRepository.save(clinicsLegalDocuments);
+        await this.clinicManagerInformationRepository.save(
+          clinicManagerInformation,
+        );
+
+        // Create address for manager (specific district based on branch)
+        // Manager 1 (Quận 1): District 1 (code 769), Manager 2 (Quận 7): District 7 (code 775)
+        // Manager 3 (Thủ Đức): Thu Duc City (code 769)
+        const districtCode =
+          managerData.username === 'manager1'
+            ? 769 // District 1
+            : managerData.username === 'manager2'
+            ? 775 // District 7
+            : 769; // Thu Duc (using District 1 as fallback)
+        await this.createAddress(savedManager._id, 79, districtCode);
 
         this.logger.log(
-          `✅ Manager account created: ${managerData.email} (${managerData.clinicName})`,
+          `✅ Manager account created: ${managerData.email} (${managerData.clinicBranchName}) - Parent: ${clinicAdmin.email}`,
         );
       }
 
@@ -417,7 +379,7 @@ export class PatientManagerSeederService {
   }
 
   /**
-   * Seed 9 DOCTOR accounts (3 for each manager) with GeneralAccount records
+   * Seed 6 DOCTOR accounts (2 for each manager) with DoctorInformation
    */
   private async seedDoctors(): Promise<void> {
     try {
@@ -477,14 +439,22 @@ export class PatientManagerSeederService {
 
         const savedDoctor = await this.accountRepository.saveAccount(doctor);
 
-        // Create GeneralAccount entity
-        const generalAccount =
-          this.generalAccountRepository.createGeneralAccount({
-            generalAccId: savedDoctor._id,
-            fullName: doctorData.fullName,
-          });
+        // Create DoctorInformation entity
+        const doctorInformation = this.doctorInformationRepository.create({
+          accountId: savedDoctor._id,
+          fullName: doctorData.fullName,
+        });
 
-        await this.generalAccountRepository.saveGeneralAccount(generalAccount);
+        await this.doctorInformationRepository.save(doctorInformation);
+
+        // Create address for doctor (same district as their manager)
+        const districtCode =
+          doctorData.managerUsername === 'manager1'
+            ? 769 // District 1
+            : doctorData.managerUsername === 'manager2'
+            ? 775 // District 7
+            : 769; // Thu Duc
+        await this.createAddress(savedDoctor._id, 79, districtCode);
 
         this.logger.log(
           `✅ Doctor account created: ${doctorData.email} (${doctorData.fullName}) - ${doctorData.specialization} - Clinic: ${doctorData.managerUsername}`,
@@ -558,14 +528,26 @@ export class PatientManagerSeederService {
 
         const savedStaff = await this.accountRepository.saveAccount(staff);
 
-        // Create GeneralAccount entity
-        const generalAccount =
-          this.generalAccountRepository.createGeneralAccount({
-            generalAccId: savedStaff._id,
+        // Create ClinicStaffInformation entity
+        const clinicStaffInformation =
+          this.clinicStaffInformationRepository.create({
+            accountId: savedStaff._id,
             fullName: staffData.fullName,
+            clinicRole: ClinicRole.STAFF,
           });
 
-        await this.generalAccountRepository.saveGeneralAccount(generalAccount);
+        await this.clinicStaffInformationRepository.save(
+          clinicStaffInformation,
+        );
+
+        // Create address for staff (same district as their manager)
+        const districtCode =
+          staffData.managerUsername === 'manager1'
+            ? 769 // District 1
+            : staffData.managerUsername === 'manager2'
+            ? 775 // District 7
+            : 769; // Thu Duc
+        await this.createAddress(savedStaff._id, 79, districtCode);
 
         this.logger.log(
           `✅ Staff account created: ${staffData.email} (${staffData.fullName}) - ${staffData.position} - Clinic: ${staffData.managerUsername}`,
@@ -575,6 +557,64 @@ export class PatientManagerSeederService {
       this.logger.log('Staff accounts seeding completed');
     } catch (error) {
       this.logger.error('Failed to seed staff accounts', error.stack);
+    }
+  }
+
+  /**
+   * Create address for an account
+   */
+  private async createAddress(
+    accountId: string,
+    provinceCode?: number,
+    districtCode?: number,
+  ): Promise<void> {
+    try {
+      // Check if address already exists
+      const existing = await this.addressRepository.findByAccountId(accountId);
+      // if (existing.length > 0) {
+      //   return;
+      // }
+
+      // Get address data
+      let addressData;
+      if (provinceCode && districtCode) {
+        addressData = await this.addressDataService.getAddressByDistrict(
+          provinceCode,
+          districtCode,
+        );
+      } else if (provinceCode) {
+        addressData = await this.addressDataService.getAddressByProvince(
+          provinceCode,
+        );
+      } else {
+        addressData = await this.addressDataService.getRandomAddress();
+      }
+
+      if (!addressData) {
+        this.logger.warn(`Failed to get address data for account ${accountId}`);
+        return;
+      }
+
+      // Create address entity
+      const address = this.addressRepository.create({
+        accountId,
+        address: `${Math.floor(Math.random() * 999) + 1} ${
+          addressData.wardName
+        }`,
+        ward: addressData.wardCode.toString(),
+        district: addressData.districtCode.toString(),
+        province: addressData.provinceCode.toString(),
+        provinceName: addressData.provinceName,
+        districtName: addressData.districtName,
+        wardName: addressData.wardName,
+      });
+
+      await this.addressRepository.save(address);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to create address for account ${accountId}`,
+        error.message,
+      );
     }
   }
 }

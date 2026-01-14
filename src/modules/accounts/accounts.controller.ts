@@ -578,65 +578,6 @@ export class AccountsController {
   }
 
   /**
-   * Update Clinic Admin Profile
-   *
-   * Updates an existing clinic admin profile for an account.
-   * This endpoint allows updating all or partial profile fields.
-   *
-   * Path Parameters:
-   * - id: Account UUID
-   *
-   * Request Body:
-   * - All fields are optional, only provided fields are updated
-   * - If profile doesn't exist, creates new profile
-   *
-   * Access Control:
-   * - Requires JWT authentication
-   * - Available to CLINIC_ADMIN role
-   *
-   * Use Cases:
-   * - Updating clinic admin profile information
-   * - Modifying clinic details
-   * - Updating bank information
-   *
-   * @param {string} id - Account UUID
-   * @param {UpdateClinicAdminProfileDto} dto - Clinic admin profile data to update
-   * @returns {Promise<{data: ClinicAdminInformation, message: string}>} Updated clinic admin profile
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 200 - Successfully updated clinic admin profile
-   * @response 401 - Unauthorized - Missing or invalid JWT token
-   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
-   * @response 404 - Account not found or doesn't have CLINIC_ADMIN role
-   */
-  @Put('clinic-admin/:id/profile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update clinic admin profile' })
-  @HttpCode(HttpStatus.OK)
-  @ApiResponseData({
-    type: Object,
-    status: MESSAGES.statusCode.success,
-    message: 'Clinic admin profile updated successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Account not found' })
-  async updateClinicAdminProfile(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateClinicAdminProfileDto,
-  ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.updateClinicAdminProfile(
-      id,
-      dto,
-    );
-    return {
-      data: profile,
-      message: 'Clinic admin profile updated successfully',
-    };
-  }
-
-  /**
    * Get Account by ID
    *
    * Retrieves detailed information for a specific account.
@@ -673,9 +614,11 @@ export class AccountsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     AccountRole.ADMIN,
+    AccountRole.PATIENT,
     AccountRole.DOCTOR,
     AccountRole.CLINIC_STAFF,
-    AccountRole.PATIENT,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
   )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get account by ID' })
@@ -688,7 +631,8 @@ export class AccountsController {
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const account = await this.accountsService.findOne(id);
+    const account = await this.accountsService.getAccountInformationByRole(id);
+
     return { data: account, message: MESSAGES.successMessage.userFetchSuccess };
   }
 
@@ -741,8 +685,10 @@ export class AccountsController {
   @Roles(
     AccountRole.ADMIN,
     AccountRole.PATIENT,
-    AccountRole.CLINIC_STAFF,
     AccountRole.DOCTOR,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
   )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update account profile' })
@@ -824,8 +770,10 @@ export class AccountsController {
   @Roles(
     AccountRole.ADMIN,
     AccountRole.PATIENT,
-    AccountRole.CLINIC_STAFF,
     AccountRole.DOCTOR,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
   )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update account password' })
