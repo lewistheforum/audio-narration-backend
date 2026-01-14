@@ -49,7 +49,7 @@ export class FeedbackRepository {
    * @param {boolean} includeDeleted - Whether to include soft-deleted feedbacks (default: false)
    * @returns {Promise<Feedback[]>} Array of all feedback entities
    */
-  async findAll(includeDeleted: boolean = false): Promise<Feedback[]> {
+  async findAllFeedbacks(includeDeleted: boolean = false): Promise<Feedback[]> {
     return this.feedbackRepository.find({
       withDeleted: includeDeleted,
     });
