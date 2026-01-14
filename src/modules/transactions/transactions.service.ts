@@ -21,13 +21,22 @@ export class TransactionsService {
     private readonly clinicAdminRepo: Repository<ClinicAdminInformation>,
     private readonly configService: ConfigService,
   ) {
-    this.qrBaseUrl =
-      this.configService.get<string>('SEEPAY_QR_BASE') || 'https://qr.sepay.vn/img';
+    this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
-    this.seepayBank = this.configService.get<string>('SEEPAY_BANK') || 'MBBank';
+    this.seepayBank = this.configService.get<string>('SEEPAY_BANK') || '';
     this.qrExpireMinutes = Number(
       this.configService.get<number>('SEEPAY_QR_EXPIRE_MINUTES') || 15,
     );
+
+    if (!this.qrBaseUrl) {
+      throw new Error('SEEPAY_QR_BASE is required');
+    }
+    if (!this.seepayAccount) {
+      throw new Error('SEEPAY_ACC is required');
+    }
+    if (!this.seepayBank) {
+      throw new Error('SEEPAY_BANK is required');
+    }
   }
 
   async createDynamicQr(
@@ -42,6 +51,24 @@ export class TransactionsService {
     return new PaymentResponseDto({
       id: null,
       amount: dto.amount,
+      currency: 'VND',
+      status: PaymentStatus.PENDING,
+      qrCodeUrl,
+      qrPayload,
+      expiresAt,
+    });
+  }
+
+  async createVerificationQr(clinicId: string): Promise<PaymentResponseDto> {
+    const { acc, bank } = await this.resolveSepayConfig(clinicId);
+    const amount = 10_000;
+    const expiresAt = this.computeExpireTime();
+    const qrCodeUrl = this.buildQrUrl(amount, clinicId, acc, bank);
+    const qrPayload = this.buildQrPayload(amount, clinicId, acc, bank);
+
+    return new PaymentResponseDto({
+      id: null,
+      amount,
       currency: 'VND',
       status: PaymentStatus.PENDING,
       qrCodeUrl,
@@ -84,6 +111,11 @@ export class TransactionsService {
     });
 
     const savedTransaction = await this.paymentRepository.save(transaction);
+
+    if (status === PaymentStatus.SUCCESS && payload.transferAmount === 10_000) {
+      // Verification payment: mark clinic verified by clinic-admin _id (stored in prescriptionId)
+      await this.clinicAdminRepo.update({ _id: prescriptionId }, { isVerify: true });
+    }
 
     return new PaymentResponseDto({
       id: savedTransaction.id,
@@ -140,13 +172,13 @@ export class TransactionsService {
   }
 
   private async resolveSepayConfig(
-    clinicId?: string,
+    clinicAdminId?: string,
   ): Promise<{ acc: string; bank: string }> {
-    if (!clinicId) {
+    if (!clinicAdminId) {
       throw new BadRequestException('Clinic id is required for QR');
     }
 
-    const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { _id: clinicId } });
+    const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { _id: clinicAdminId } });
 
     const acc = clinicAdmin?.sepayVa || this.seepayAccount;
     const bank = clinicAdmin?.bankName || this.seepayBank;
@@ -219,8 +251,8 @@ export class TransactionsService {
               ga.gender     AS sender_gender,
               ga.dob        AS sender_dob
        FROM transactions t
-       LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
-       LEFT JOIN general_accounts ga ON ga.general_acc_id = t.sender_account_id
+      LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+      LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
        WHERE ${whereClause}
        ORDER BY t.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -280,8 +312,8 @@ export class TransactionsService {
               ga.gender     AS sender_gender,
               ga.dob        AS sender_dob
        FROM transactions t
-       LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
-       LEFT JOIN general_accounts ga ON ga.general_acc_id = t.sender_account_id
+      LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+      LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
        WHERE t.deleted_at IS NULL AND t._id = $1
        LIMIT 1`,
       [id],

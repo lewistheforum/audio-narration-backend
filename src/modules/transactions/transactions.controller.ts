@@ -56,7 +56,7 @@ export class TransactionsController {
     status: HttpStatus.CREATED,
     message: 'Payment QR created successfully',
   })
-  async createQrWithDocument(
+  async createQrForPrescription(
     @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Body() body: Omit<CreateTransactionDto, 'prescriptionId' | 'clinicId'>,
@@ -69,6 +69,22 @@ export class TransactionsController {
     return {
       data: payment,
       message: 'Payment QR created successfully',
+    };
+  }
+
+  @Post('clinic/:clinicId/verification-qr')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tạo QR xác minh (10k) theo clinicId' })
+  @ApiResponseData({
+    type: PaymentResponseDto,
+    status: HttpStatus.CREATED,
+    message: 'Verification QR created successfully',
+  })
+  async createVerificationQr(@Param('clinicId', ParseUUIDPipe) clinicId: string) {
+    const payment = await this.transactionsService.createVerificationQr(clinicId);
+    return {
+      data: payment,
+      message: 'Verification QR created successfully',
     };
   }
 
