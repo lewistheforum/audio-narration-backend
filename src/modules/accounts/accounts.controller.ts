@@ -175,6 +175,16 @@ export class AccountsController {
    */
   @Get('username-email-list')
   @ApiOperation({ summary: 'Get full list of usernames and emails' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    AccountRole.ADMIN,
+    AccountRole.PATIENT,
+    AccountRole.DOCTOR,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
+  @ApiBearerAuth('JWT-auth')
   @ApiResponseData({
     type: UsernameEmailListDto,
     status: MESSAGES.statusCode.success,
@@ -708,6 +718,8 @@ export class AccountsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAccountDto: UpdateAccountDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
+    console.log('go to ');
+
     const { user, emailChanged } = await this.accountsService.update(
       id,
       updateAccountDto,

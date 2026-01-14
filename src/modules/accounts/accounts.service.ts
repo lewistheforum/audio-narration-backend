@@ -558,6 +558,8 @@ export class AccountsService {
     updateAccountDto: UpdateAccountDto,
   ): Promise<{ user: AccountResponseDto; emailChanged?: boolean }> {
     const account = await this.findAccountEntityById(id);
+    console.log('check: ', account);
+
     let emailChanged = false;
 
     // Validate email change permission - only PATIENT can change their own email
@@ -693,6 +695,9 @@ export class AccountsService {
         break;
     }
 
+    // Update Address and Google Iframe
+    await this.updateAddressAndGoogleIframe(id, updateAccountDto);
+
     // Retrieve updated information for response
     return {
       user: await this.getAccountInformationByRole(id),
@@ -791,6 +796,101 @@ export class AccountsService {
         profilePicture: data.profilePicture,
       });
       return this.generalAccountRepository.saveGeneralAccount(generalAccount);
+    }
+  }
+
+  /**
+   * Update Address and Google Iframe Information
+   *
+   * @param {string} accountId - The ID of the account
+   * @param {UpdateAccountDto} dto - Data transfer object containing address and google iframe info
+   * @private
+   */
+  private async updateAddressAndGoogleIframe(
+    accountId: string,
+    dto: UpdateAccountDto,
+  ): Promise<void> {
+    // 1. Update Address
+    if (
+      dto.address !== undefined ||
+      dto.ward !== undefined ||
+      dto.district !== undefined ||
+      dto.province !== undefined ||
+      dto.provinceName !== undefined ||
+      dto.districtName !== undefined ||
+      dto.wardName !== undefined
+    ) {
+      let address = await this.addressRepository.findByAccountId(accountId);
+      if (address) {
+        // Update existing address
+        if (dto.address !== undefined) address.address = dto.address;
+        if (dto.ward !== undefined) address.ward = dto.ward;
+        if (dto.district !== undefined) address.district = dto.district;
+        if (dto.province !== undefined) address.province = dto.province;
+        if (dto.provinceName !== undefined)
+          address.provinceName = dto.provinceName;
+        if (dto.districtName !== undefined)
+          address.districtName = dto.districtName;
+        if (dto.wardName !== undefined) address.wardName = dto.wardName;
+        await this.addressRepository.save(address);
+      } else {
+        // Create new address
+        address = this.addressRepository.create({
+          accountId,
+          address: dto.address,
+          ward: dto.ward,
+          district: dto.district,
+          province: dto.province,
+          provinceName: dto.provinceName,
+          districtName: dto.districtName,
+          wardName: dto.wardName,
+        });
+        await this.addressRepository.save(address);
+      }
+
+      // 2. Update Google Iframe (Only if address exists or was created)
+      if (
+        address &&
+        (dto.location !== undefined ||
+          dto.mapStyle !== undefined ||
+          dto.zoomLevel !== undefined ||
+          dto.mapHeight !== undefined ||
+          dto.mapWidth !== undefined ||
+          dto.responsive !== undefined ||
+          dto.googleMapIframe !== undefined)
+      ) {
+        let googleIframe = await this.googleIframeRepository.findByAddressId(
+          address._id,
+        );
+        if (googleIframe) {
+          // Update existing iframe
+          if (dto.location !== undefined) googleIframe.location = dto.location;
+          if (dto.mapStyle !== undefined) googleIframe.mapStyle = dto.mapStyle;
+          if (dto.zoomLevel !== undefined)
+            googleIframe.zoomLevel = dto.zoomLevel;
+          if (dto.mapHeight !== undefined)
+            googleIframe.mapHeight = dto.mapHeight;
+          if (dto.mapWidth !== undefined) googleIframe.mapWidth = dto.mapWidth;
+          if (dto.responsive !== undefined)
+            googleIframe.responsive = dto.responsive;
+          if (dto.googleMapIframe !== undefined)
+            googleIframe.googleMapIframe = dto.googleMapIframe;
+          await this.googleIframeRepository.save(googleIframe);
+        } else {
+          // Create new iframe
+          googleIframe = this.googleIframeRepository.create({
+            addressId: address._id,
+            location: dto.location,
+            mapStyle: dto.mapStyle,
+            zoomLevel: dto.zoomLevel,
+            mapHeight: dto.mapHeight,
+            mapWidth: dto.mapWidth,
+            responsive: dto.responsive !== undefined ? dto.responsive : true,
+            googleMapIframe: dto.googleMapIframe,
+          });
+          await this.googleIframeRepository.save(googleIframe);
+        }
+      }
     }
   }
 
