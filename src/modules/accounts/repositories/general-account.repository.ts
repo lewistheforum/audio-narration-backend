@@ -57,7 +57,7 @@ export class GeneralAccountRepository {
    * - Not all accounts have a GeneralAccount (optional relationship)
    * - Accounts created before GeneralAccount feature may return null
    *
-   * @param {string} userId - Account UUID (matches generalAccId in GeneralAccount)
+   * @param {string} userId - Account UUID (matches accountId in GeneralAccount)
    * @returns {Promise<GeneralAccount | null>} GeneralAccount entity or null if not found
    *
    * @example
@@ -72,7 +72,7 @@ export class GeneralAccountRepository {
     userId: string,
   ): Promise<GeneralAccount | null> {
     return this.generalAccountRepository.findOne({
-      where: { generalAccId: userId },
+      where: { accountId: userId },
     });
   }
 
@@ -93,7 +93,7 @@ export class GeneralAccountRepository {
    * @example
    * ```typescript
    * const generalAccount = repository.createGeneralAccount({
-   *   generalAccId: 'account-uuid',
+   *   accountId: 'account-uuid',
    *   fullName: 'John Doe',
    *   gender: Gender.MALE
    * });
@@ -113,7 +113,7 @@ export class GeneralAccountRepository {
    * Behavior:
    * - Updates timestamps (createdAt, updatedAt)
    * - Returns the saved entity with updated fields
-   * - generalAccId must match an existing Account.id (foreign key)
+   * - accountId must match an existing Account.id (foreign key)
    *
    * @param {GeneralAccount} generalAccount - GeneralAccount entity to save
    * @returns {Promise<GeneralAccount>} Saved GeneralAccount entity
@@ -141,7 +141,7 @@ export class GeneralAccountRepository {
    * - GeneralAccount excluded from default queries
    * - Can be recovered with restoreGeneralAccount()
    *
-   * @param {string} userId - Account UUID (generalAccId)
+   * @param {string} userId - Account UUID (accountId)
    * @returns {Promise<void>} No return value
    *
    * @example
@@ -150,7 +150,7 @@ export class GeneralAccountRepository {
    * ```
    */
   async softDeleteGeneralAccount(userId: string): Promise<void> {
-    await this.generalAccountRepository.softDelete({ generalAccId: userId });
+    await this.generalAccountRepository.softDelete({ accountId: userId });
   }
 
   /**
@@ -163,7 +163,7 @@ export class GeneralAccountRepository {
    * - Call this BEFORE deleting the parent Account (foreign key constraint)
    * - Use soft delete for most cases
    *
-   * @param {string} userId - Account UUID (generalAccId)
+   * @param {string} userId - Account UUID (accountId)
    * @returns {Promise<void>} No return value
    *
    * @example
@@ -174,7 +174,7 @@ export class GeneralAccountRepository {
    * ```
    */
   async deleteGeneralAccount(userId: string): Promise<void> {
-    await this.generalAccountRepository.delete({ generalAccId: userId });
+    await this.generalAccountRepository.delete({ accountId: userId });
   }
 
   /**
@@ -186,7 +186,7 @@ export class GeneralAccountRepository {
    * Requirements:
    * - GeneralAccount must have been soft-deleted (deletedAt IS NOT NULL)
    *
-   * @param {string} userId - Account UUID (generalAccId)
+   * @param {string} userId - Account UUID (accountId)
    * @returns {Promise<void>} No return value
    *
    * @example
@@ -197,6 +197,6 @@ export class GeneralAccountRepository {
    * ```
    */
   async restoreGeneralAccount(userId: string): Promise<void> {
-    await this.generalAccountRepository.restore({ generalAccId: userId });
+    await this.generalAccountRepository.restore({ accountId: userId });
   }
 }

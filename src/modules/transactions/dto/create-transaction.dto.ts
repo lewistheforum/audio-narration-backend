@@ -3,6 +3,13 @@ import { IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-valida
 
 export class CreateTransactionDto {
   @ApiProperty({
+    description: 'Clinic identifier to select VA account',
+    example: 'f91af8b4-391e-4a41-a8c9-1f08b4b6a690',
+  })
+  @IsUUID()
+  clinicId: string;
+
+  @ApiProperty({
     description: 'Prescription identifier the payment belongs to',
     example: 'f91af8b4-391e-4a41-a8c9-1f08b4b6a690',
   })

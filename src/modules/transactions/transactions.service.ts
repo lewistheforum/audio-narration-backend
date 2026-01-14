@@ -3,7 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository } from 'typeorm';
-import { ClinicLegalDocument, PaymentDirection, PaymentStatus, Transaction } from './entities';
+import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
+import { PaymentDirection, PaymentStatus,Transaction } from './entities';
 import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto } from './dto';
 
 @Injectable()
@@ -16,8 +17,8 @@ export class TransactionsService {
   constructor(
     @InjectRepository(Transaction)
     private readonly paymentRepository: Repository<Transaction>,
-    @InjectRepository(ClinicLegalDocument)
-    private readonly clinicRepo: Repository<ClinicLegalDocument>,
+    @InjectRepository(ClinicAdminInformation)
+    private readonly clinicAdminRepo: Repository<ClinicAdminInformation>,
     private readonly configService: ConfigService,
   ) {
     this.qrBaseUrl =
@@ -31,9 +32,8 @@ export class TransactionsService {
 
   async createDynamicQr(
     dto: CreateTransactionDto,
-    clinicDocumentId?: string,
   ): Promise<PaymentResponseDto> {
-    const { acc, bank } = await this.resolveSepayConfig(dto.prescriptionId, clinicDocumentId);
+    const { acc, bank } = await this.resolveSepayConfig(dto.clinicId);
 
     const expiresAt = this.computeExpireTime();
     const qrCodeUrl = this.buildQrUrl(dto.amount, dto.prescriptionId, acc, bank);
@@ -85,10 +85,6 @@ export class TransactionsService {
 
     const savedTransaction = await this.paymentRepository.save(transaction);
 
-    if (status === PaymentStatus.SUCCESS && prescriptionId) {
-      await this.markClinicDocumentVerified(undefined, prescriptionId);
-    }
-
     return new PaymentResponseDto({
       id: savedTransaction.id,
       amount: savedTransaction.amount,
@@ -98,18 +94,6 @@ export class TransactionsService {
       qrPayload: savedTransaction.qrPayload,
       expiresAt: savedTransaction.expiresAt,
     });
-  }
-
-  private async markClinicDocumentVerified(
-    clinicDocumentId: string | undefined,
-    prescriptionId: string,
-  ): Promise<void> {
-    const doc = await this.resolveClinicDocumentByReference(prescriptionId, clinicDocumentId);
-    if (!doc || doc.isSepayVerify) {
-      return;
-    }
-    doc.isSepayVerify = true;
-    await this.clinicRepo.save(doc);
   }
 
   private buildQrUrl(amount: number, prescriptionId: string, acc: string, bank: string): string {
@@ -156,17 +140,16 @@ export class TransactionsService {
   }
 
   private async resolveSepayConfig(
-    prescriptionId: string,
-    clinicDocumentId?: string,
+    clinicId?: string,
   ): Promise<{ acc: string; bank: string }> {
-    if (!prescriptionId) {
-      throw new BadRequestException('Prescription/invoice id is required for QR');
+    if (!clinicId) {
+      throw new BadRequestException('Clinic id is required for QR');
     }
 
-    const doc = await this.resolveClinicDocumentByReference(prescriptionId, clinicDocumentId);
+    const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { _id: clinicId } });
 
-    const acc = doc?.sepayVa || this.seepayAccount;
-    const bank = doc?.bankName || this.seepayBank;
+    const acc = clinicAdmin?.sepayVa || this.seepayAccount;
+    const bank = clinicAdmin?.bankName || this.seepayBank;
 
     if (!acc) {
       throw new BadRequestException('Seepay VA is not configured for this clinic');
@@ -330,23 +313,4 @@ export class TransactionsService {
     };
   }
 
-  private async resolveClinicDocumentByReference(
-    prescriptionId: string,
-    clinicDocumentId?: string,
-  ): Promise<ClinicLegalDocument | null> {
-    if (clinicDocumentId) {
-      const doc = await this.clinicRepo.findOne({ where: { id: clinicDocumentId } });
-      if (doc) {
-        return doc;
-      }
-    }
-
-    // Legacy: treat prescriptionId as document id
-    const docById = await this.clinicRepo.findOne({ where: { id: prescriptionId } });
-    if (docById) {
-      return docById;
-    }
-
-    return null;
-  }
 }

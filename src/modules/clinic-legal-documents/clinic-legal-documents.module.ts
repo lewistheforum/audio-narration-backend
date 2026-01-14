@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionsModule } from '../transactions/transactions.module';
-import { ClinicLegalDocument } from '../transactions/entities/clinic-legal-document.entity';
+import { ClinicsLegalDocuments } from '../accounts/entities/clinics_legal_documents.entity';
 import { ClinicLegalDocumentsController } from './clinic-legal-documents.controller';
 import { ClinicLegalDocumentsService } from './clinic-legal-documents.service';
 
 @Module({
-	imports: [TypeOrmModule.forFeature([ClinicLegalDocument]), TransactionsModule],
+	imports: [TypeOrmModule.forFeature([ClinicsLegalDocuments]), TransactionsModule],
 	controllers: [ClinicLegalDocumentsController],
 	providers: [ClinicLegalDocumentsService],
 })

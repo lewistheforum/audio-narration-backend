@@ -21,14 +21,14 @@ export class ClinicStaffInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'clinic_acc_id', type: 'uuid', unique: true })
-  clinicAccId: string;
+  @Column({ name: 'account_id', type: 'uuid', unique: true })
+  accountId: string;
 
   @OneToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'clinic_acc_id' })
-  clinicAccount?: Account;
+  @JoinColumn({ name: 'account_id' })
+  account?: Account;
 
   @Column({ name: 'full_name', type: 'text' })
   fullName: string;

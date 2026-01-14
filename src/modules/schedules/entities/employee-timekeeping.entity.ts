@@ -9,26 +9,26 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
-import { DoctorSchedule } from './doctor-schedule.entity';
+import { EmployeeSchedule } from './employee-schedule.entity';
 
 /**
- * DoctorTimekeeping Entity
+ * EmployeeTimekeeping Entity
  *
- * Stores check-in and check-out records for doctors
+ * Stores check-in and check-out records for employees
  */
-@Entity('doctors_timekeeping')
-export class DoctorTimekeeping {
+@Entity('employee_timekeeping')
+export class EmployeeTimekeeping {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'doctor_id', type: 'uuid' })
-  doctorId: string;
+  @Column({ name: 'employee_id', type: 'uuid' })
+  employeeId: string;
 
   @ManyToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'doctor_id' })
-  doctor?: Account;
+  @JoinColumn({ name: 'employee_id' })
+  employee?: Account;
 
   @Column({ name: 'clinic_id', type: 'uuid' })
   clinicId: string;
@@ -42,11 +42,11 @@ export class DoctorTimekeeping {
   @Column({ name: 'schedule_id', type: 'uuid' })
   scheduleId: string;
 
-  @ManyToOne(() => DoctorSchedule, {
+  @ManyToOne(() => EmployeeSchedule, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'schedule_id' })
-  schedule?: DoctorSchedule;
+  schedule?: EmployeeSchedule;
 
   @Column({ name: 'check_in', type: 'timestamptz', nullable: true })
   checkIn?: Date;

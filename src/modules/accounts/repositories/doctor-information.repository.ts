@@ -41,7 +41,7 @@ export class DoctorInformationRepository {
     doctorAccId: string,
   ): Promise<DoctorInformation | null> {
     return this.repository.findOne({
-      where: { doctorAccId },
+      where: { accountId: doctorAccId },
     });
   }
 
@@ -52,7 +52,7 @@ export class DoctorInformationRepository {
     doctorAccId: string,
   ): Promise<DoctorInformation | null> {
     return this.repository.findOne({
-      where: { doctorAccId },
+      where: { accountId: doctorAccId },
       withDeleted: true,
     });
   }
@@ -89,7 +89,7 @@ export class DoctorInformationRepository {
     doctorAccId: string,
     data: DeepPartial<DoctorInformation>,
   ): Promise<DoctorInformation | null> {
-    await this.repository.update({ doctorAccId }, data);
+    await this.repository.update({ accountId: doctorAccId }, data);
     return this.findByDoctorAccountId(doctorAccId);
   }
 
@@ -104,7 +104,7 @@ export class DoctorInformationRepository {
    * Soft delete doctor information by doctor account ID
    */
   async softDeleteByDoctorAccountId(doctorAccId: string): Promise<void> {
-    await this.repository.softDelete({ doctorAccId });
+    await this.repository.softDelete({ accountId: doctorAccId });
   }
 
   /**
@@ -119,7 +119,7 @@ export class DoctorInformationRepository {
    * Hard delete doctor information by doctor account ID
    */
   async deleteByDoctorAccountId(doctorAccId: string): Promise<number> {
-    const result = await this.repository.delete({ doctorAccId });
+    const result = await this.repository.delete({ accountId: doctorAccId });
     return result.affected || 0;
   }
 
@@ -134,7 +134,7 @@ export class DoctorInformationRepository {
    * Restore soft-deleted doctor information by doctor account ID
    */
   async restoreByDoctorAccountId(doctorAccId: string): Promise<void> {
-    await this.repository.restore({ doctorAccId });
+    await this.repository.restore({ accountId: doctorAccId });
   }
 
   /**
@@ -142,7 +142,7 @@ export class DoctorInformationRepository {
    */
   async existsByDoctorAccountId(doctorAccId: string): Promise<boolean> {
     const count = await this.repository.count({
-      where: { doctorAccId },
+      where: { accountId: doctorAccId },
     });
     return count > 0;
   }

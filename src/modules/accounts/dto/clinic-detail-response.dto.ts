@@ -4,7 +4,7 @@ import { AccountRole, AccountStatus } from '../enums';
 /**
  * Clinic Info Detail DTO
  *
- * Clinic information from clinic_information table
+ * Clinic manager information from clinic_manager_information table
  */
 export class ClinicInfoDetailDto {
   @ApiProperty({
@@ -14,42 +14,39 @@ export class ClinicInfoDetailDto {
   id: string;
 
   @ApiProperty({
-    description: 'Clinic name',
+    description: 'Clinic branch name',
     example: 'City Medical Clinic',
   })
-  clinicName: string;
+  clinicBranchName: string;
 
   @ApiProperty({
-    description: 'Clinic description',
-    example: 'A modern healthcare facility',
+    description: 'Clinic manager full name',
+    example: 'Dr. John Smith',
+  })
+  fullName: string;
+
+  @ApiProperty({
+    description: 'Gender of clinic manager',
+    enum: ['MALE', 'FEMALE', 'OTHER'],
+    example: 'OTHER',
+  })
+  gender: string;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/clinic-avatar.jpg',
     required: false,
     nullable: true,
   })
-  description?: string;
+  profilePicture?: string;
 
   @ApiProperty({
-    description: 'Specializations (JSONB array)',
-    example: ['Cardiology', 'Dermatology'],
+    description: 'Date of birth',
+    example: '1980-05-15',
     required: false,
     nullable: true,
   })
-  specializedIn?: string[];
-
-  @ApiProperty({
-    description: 'Procedures (JSONB array)',
-    example: ['ECG', 'X-Ray'],
-    required: false,
-    nullable: true,
-  })
-  pros?: string[];
-
-  @ApiProperty({
-    description: 'Paraclinical services (JSONB array)',
-    example: ['Blood Test', 'MRI'],
-    required: false,
-    nullable: true,
-  })
-  paraclinical?: string[];
+  dob?: Date;
 }
 
 /**
@@ -443,11 +440,11 @@ export class ClinicDetailResponseDto {
 
     this.clinicInfo = {
       id: clinicInfo._id,
-      clinicName: clinicInfo.clinicName,
-      description: clinicInfo.description,
-      specializedIn: clinicInfo.specializedIn,
-      pros: clinicInfo.pros,
-      paraclinical: clinicInfo.paraclinical,
+      clinicBranchName: clinicInfo.clinicBranchName,
+      fullName: clinicInfo.fullName,
+      gender: clinicInfo.gender,
+      profilePicture: clinicInfo.profilePicture,
+      dob: clinicInfo.dob,
     };
 
     this.addresses = addresses;

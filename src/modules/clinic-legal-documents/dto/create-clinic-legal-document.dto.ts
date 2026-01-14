@@ -15,19 +15,4 @@ export class CreateClinicLegalDocumentDto {
   @IsOptional()
   @IsString()
   businessLicense?: string;
-
-  @ApiProperty({ description: 'Bank name used for Seepay receiving', required: false })
-  @IsOptional()
-  @IsString()
-  bankName?: string;
-
-  @ApiProperty({ description: 'Seepay virtual account number', required: false })
-  @IsOptional()
-  @IsString()
-  sepayVa?: string;
-
-  @ApiProperty({ description: 'Mark as verified with Seepay', required: false, default: false })
-  @IsOptional()
-  @IsBoolean()
-  isSepayVerify?: boolean;
-}
+ }

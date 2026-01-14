@@ -48,9 +48,9 @@ export class TransactionsController {
 //     };
 //   }
 
-  @Post(':prescriptionId/va/:documentId/qr')
+  @Post(':prescriptionId/clinic/:clinicId/qr')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán, truyền thêm ID hồ sơ pháp lý' })
+  @ApiOperation({ summary: 'Tạo QR thanh toán, truy vấn VA theo clinicId' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -58,16 +58,14 @@ export class TransactionsController {
   })
   async createQrWithDocument(
     @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
-    @Param('documentId', ParseUUIDPipe) documentId: string,
-    @Body() body: Omit<CreateTransactionDto, 'prescriptionId'>,
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Body() body: Omit<CreateTransactionDto, 'prescriptionId' | 'clinicId'>,
   ) {
-    const payment = await this.transactionsService.createDynamicQr(
-      {
-        ...body,
-        prescriptionId,
-      },
-      documentId,
-    );
+    const payment = await this.transactionsService.createDynamicQr({
+      ...body,
+      clinicId,
+      prescriptionId,
+    });
     return {
       data: payment,
       message: 'Payment QR created successfully',

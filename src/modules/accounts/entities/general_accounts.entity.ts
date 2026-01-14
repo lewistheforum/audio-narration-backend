@@ -15,7 +15,7 @@ import { Account } from './accounts.entity';
  * GeneralAccount Entity
  *
  * Stores general account information for patients and admins
- * Linked to the main Account entity via general_acc_id
+ * Linked to the main Account entity via account_id
  */
 @Entity('general_accounts')
 export class GeneralAccount {
@@ -25,14 +25,14 @@ export class GeneralAccount {
   /**
    * Reference to the main Account
    */
-  @Column({ name: 'general_acc_id', type: 'uuid', unique: true })
-  generalAccId: string;
+  @Column({ name: 'account_id', type: 'uuid', unique: true })
+  accountId: string;
 
   @OneToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'general_acc_id' })
-  generalAccount?: Account;
+  @JoinColumn({ name: 'account_id' })
+  account?: Account;
 
   @Column({ name: 'full_name', type: 'text', nullable: true })
   fullName?: string;

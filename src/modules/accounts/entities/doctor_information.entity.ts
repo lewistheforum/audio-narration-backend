@@ -21,14 +21,14 @@ export class DoctorInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'doctor_acc_id', type: 'uuid', unique: true })
-  doctorAccId: string;
+  @Column({ name: 'account_id', type: 'uuid', unique: true })
+  accountId: string;
 
   @OneToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'doctor_acc_id' })
-  doctorAccount?: Account;
+  @JoinColumn({ name: 'account_id' })
+  account?: Account;
 
   @Column({ name: 'full_name', type: 'text' })
   fullName: string;
@@ -85,6 +85,30 @@ export class DoctorInformation {
 
   @Column({ name: 'medical_license', type: 'text', nullable: true })
   medicalLicense?: string;
+
+  @Column({ name: 'identity_number', type: 'text', nullable: true })
+  identityNumber?: string;
+
+  @Column({ name: 'place_identity_card', type: 'text', nullable: true })
+  placeIdentityCard?: string;
+
+  @Column({ name: 'identity_date', type: 'date', nullable: true })
+  identityDate?: Date;
+
+  @Column({
+    name: 'bank_number',
+    type: 'decimal',
+    precision: 20,
+    scale: 0,
+    nullable: true,
+  })
+  bankNumber?: number;
+
+  @Column({ name: 'bank_name', type: 'text', nullable: true })
+  bankName?: string;
+
+  @Column({ name: 'bank_branch', type: 'text', nullable: true })
+  bankBranch?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
