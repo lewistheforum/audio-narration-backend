@@ -4,6 +4,14 @@ import { DoctorInformation } from '../../modules/accounts/entities/doctor_inform
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { DoctorInformationRepository } from '../../modules/accounts/repositories/doctor-information.repository';
+import { ENGLISH_NAMES } from '../constants/names';
+import {
+  ACADEMIC_DEGREES,
+  MEDICAL_SPECIALIZATIONS,
+  POSITIONS,
+  INTRODUCTIONS,
+  EXPERIENCE_YEARS,
+} from '../constants/medical-terms';
 
 /**
  * DoctorInformation Seeder Service
@@ -17,79 +25,12 @@ import { DoctorInformationRepository } from '../../modules/accounts/repositories
 export class DoctorInformationSeederService {
   private readonly logger = new Logger(DoctorInformationSeederService.name);
 
-  // Vietnamese doctor names
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-      'Ngô Văn Nam',
-      'Đinh Văn Phúc',
-      'Bùi Văn Quân',
-      'Dương Văn Sáng',
-      'Trương Văn Tùng',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-      'Ngô Thị Yến',
-      'Đinh Thị Ánh',
-      'Bùi Thị Chi',
-      'Dương Thị Dung',
-      'Trương Thị Hương',
-    ],
-  };
-
-  // Academic degrees (orthopedics-relevant)
-  private readonly ACADEMIC_DEGREES = [
-    'Thạc sĩ Y khoa',
-    'Tiến sĩ Y khoa',
-    'Bác sĩ Chuyên khoa II Cơ Xương Khớp',
-    'Bác sĩ Chuyên khoa I Chấn Thương Chỉnh Hình',
-    'Bác sĩ Chuyên khoa I Vật Lý Trị Liệu',
-  ];
-
-  // Orthopedics-only medical specializations
-  private readonly SPECIALIZATIONS = [
-    'Cơ xương khớp',
-    'Chấn thương chỉnh hình',
-    'Vật lý trị liệu',
-    'Phục hồi chức năng',
-    'Thể thao y khoa',
-    'Chấn thương thể thao',
-    'Cột sống',
-    'Đau lưng mạn tính',
-    'Đầu gối',
-    'Vai',
-    'Gãy xương',
-    'Viêm xương khớp',
-    'Loãng xương',
-    'Thoái hóa khớp',
-  ];
-
-  // Orthopedics-focused positions
-  private readonly POSITIONS = [
-    'Trưởng khoa Cơ Xương Khớp',
-    'Phó trưởng khoa Chấn Thương Chỉnh Hình',
-    'Bác sĩ chuyên khoa Cơ Xương Khớp',
-    'Bác sĩ vật lý trị liệu',
-    'Bác sĩ phục hồi chức năng',
-  ];
+  // English doctor names
+  private readonly NAMES = ENGLISH_NAMES;
+  private readonly ACADEMIC_DEGREES_TEMPLATES = ACADEMIC_DEGREES;
+  private readonly SPECIALIZATIONS_TEMPLATES = MEDICAL_SPECIALIZATIONS;
+  private readonly POSITIONS_TEMPLATES = POSITIONS;
+  private readonly INTRODUCTIONS_TEMPLATES = INTRODUCTIONS;
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -161,13 +102,13 @@ export class DoctorInformationSeederService {
   }
 
   /**
-   * Get random Vietnamese name based on gender
+   * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
       gender === Gender.MALE
-        ? this.VIETNAMESE_NAMES.male
-        : this.VIETNAMESE_NAMES.female;
+        ? this.NAMES.male
+        : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 
@@ -175,8 +116,8 @@ export class DoctorInformationSeederService {
    * Get random academic degree
    */
   private getRandomAcademicDegree(): string {
-    return this.ACADEMIC_DEGREES[
-      Math.floor(Math.random() * this.ACADEMIC_DEGREES.length)
+    return this.ACADEMIC_DEGREES_TEMPLATES[
+      Math.floor(Math.random() * this.ACADEMIC_DEGREES_TEMPLATES.length)
     ];
   }
 
@@ -185,28 +126,21 @@ export class DoctorInformationSeederService {
    */
   private getRandomExperience(): string {
     const years = this.getRandomInt(1, 20);
-    return `${years} năm kinh nghiệm`;
+    return EXPERIENCE_YEARS(years);
   }
 
   /**
    * Get random position
    */
   private getRandomPosition(): string {
-    return this.POSITIONS[Math.floor(Math.random() * this.POSITIONS.length)];
+    return this.POSITIONS_TEMPLATES[Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)];
   }
 
   /**
    * Get random introduction (orthopedics-focused)
    */
   private getRandomIntroduction(): string {
-    const introductions = [
-      'Bác sĩ chuyên khoa cơ xương khớp với nhiều năm kinh nghiệm trong chẩn đoán và điều trị các bệnh lý về xương, khớp, cột sống.',
-      'Chuyên gia trong lĩnh vực chấn thương chỉnh hình và phẫu thuật nội soi khớp, cam kết mang lại kết quả điều trị tốt nhất cho người bệnh.',
-      'Bác sĩ vật lý trị liệu và phục hồi chức năng, có chuyên môn cao trong điều trị các chấn thương thể thao và phục hồi sau phẫu thuật.',
-      'Đội ngũ bác sĩ cơ xương khớp tận tâm, luôn cập nhật các phương pháp điều trị tiên tiến nhất như phẫu thuật nội soi và vật lý trị liệu.',
-      'Chuyên gia về cột sống và đau lưng mạn tính, với kinh nghiệm lâu năm trong điều trị thoái hóa khớp và loãng xương.',
-    ];
-    return introductions[Math.floor(Math.random() * introductions.length)];
+    return this.INTRODUCTIONS_TEMPLATES[Math.floor(Math.random() * this.INTRODUCTIONS_TEMPLATES.length)];
   }
 
   /**

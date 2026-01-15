@@ -10,7 +10,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
-import { ClinicRoom } from '../../accounts/entities/clinic_room.entity';
+import { ClinicRoom } from './clinic_room.entity';
 import { ClinicShift } from './clinic-shift.entity';
 import { WeekDay } from '../enums';
 

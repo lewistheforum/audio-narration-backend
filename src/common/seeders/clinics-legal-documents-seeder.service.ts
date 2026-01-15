@@ -5,6 +5,11 @@ import { LegalDocumentVerificationStatus } from '../../modules/accounts/enums/le
 import { ClinicsLegalDocuments } from '../../modules/accounts/entities/clinics_legal_documents.entity';
 import { ClinicsLegalDocumentsRepository } from '../../modules/accounts/repositories/clinics-legal-documents.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import {
+  OPERATING_LICENSES,
+  BUSINESS_LICENSES,
+  COMPLIANCE_DOCS,
+} from '../constants/medical-terms';
 
 /**
  * ClinicsLegalDocuments Seeder Service
@@ -23,29 +28,9 @@ export class ClinicsLegalDocumentsSeederService {
   private readonly logger = new Logger(ClinicsLegalDocumentsSeederService.name);
 
   // Orthopedics clinic-specific license placeholders
-  private readonly OPERATING_LICENSES = [
-    'Giấy phép hoạt động phòng khám cơ xương khớp số {number}',
-    'Giấy phép hoạt động phòng khám chỉnh hình số {number}',
-    'Giấy phép hoạt động phòng khám cơ xương khớp và chỉnh hình số {number}',
-    'Giấy phép hoạt động phòng khám chấn thương chỉnh hình số {number}',
-    'Giấy phép hoạt động phòng khám trị liệu cơ xương khớp số {number}',
-  ];
-
-  private readonly BUSINESS_LICENSES = [
-    'Giấy chứng nhận đăng ký kinh doanh phòng khám cơ xương khớp',
-    'Giấy chứng nhận đăng ký kinh doanh phòng khám chỉnh hình',
-    'Giấy chứng nhận đăng ký kinh doanh phòng khám cơ xương khớp và chỉnh hình',
-    'Giấy chứng nhận đăng ký kinh doanh phòng khám chấn thương chỉnh hình',
-    'Giấy chứng nhận đăng ký kinh doanh phòng khám trị liệu cơ xương khớp',
-  ];
-
-  private readonly COMPLIANCE_DOCS = [
-    'Giấy chứng nhận cơ sở y tế đạt chuẩn',
-    'Giấy chứng nhận phòng khám đạt chuẩn GMP',
-    'Giấy chứng nhận an toàn vệ sinh thực phẩm',
-    'Giấy chứng nhận phòng cháy chữa cháy',
-    'Giấy chứng nhận môi trường',
-  ];
+  private readonly OPERATING_LICENSES_TEMPLATES = OPERATING_LICENSES;
+  private readonly BUSINESS_LICENSES_TEMPLATES = BUSINESS_LICENSES;
+  private readonly COMPLIANCE_DOCS_TEMPLATES = COMPLIANCE_DOCS;
 
   constructor(
     private readonly clinicsLegalDocumentsRepository: ClinicsLegalDocumentsRepository,
@@ -112,8 +97,8 @@ export class ClinicsLegalDocumentsSeederService {
    */
   private getRandomOperatingLicense(): string {
     const template =
-      this.OPERATING_LICENSES[
-        Math.floor(Math.random() * this.OPERATING_LICENSES.length)
+      this.OPERATING_LICENSES_TEMPLATES[
+        Math.floor(Math.random() * this.OPERATING_LICENSES_TEMPLATES.length)
       ];
     const licenseNumber = this.generateLicenseNumber();
     return template.replace('{number}', licenseNumber);
@@ -123,8 +108,8 @@ export class ClinicsLegalDocumentsSeederService {
    * Get random business license
    */
   private getRandomBusinessLicense(): string {
-    return this.BUSINESS_LICENSES[
-      Math.floor(Math.random() * this.BUSINESS_LICENSES.length)
+    return this.BUSINESS_LICENSES_TEMPLATES[
+      Math.floor(Math.random() * this.BUSINESS_LICENSES_TEMPLATES.length)
     ];
   }
 

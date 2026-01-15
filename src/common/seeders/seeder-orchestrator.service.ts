@@ -7,6 +7,9 @@ import { ClinicStaffInformationSeederService } from './clinic-staff-information-
 import { DoctorInformationSeederService } from './doctor-information-seeder.service';
 import { GeneralAccountSeederService } from './general-account-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
+import { BlogSeederService } from './blog-seeder.service';
+import { SubscriptionServiceSeederService } from './subscription-service-seeder.service';
+import { SubscriptionsSeederService } from './subscriptions-seeder.service';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 import { ClinicsLegalDocumentsSeederService } from './clinics-legal-documents-seeder.service';
@@ -14,6 +17,9 @@ import { AddressSeederService } from './address-seeder.service';
 import { GoogleIframeSeederService } from './google-iframe-seeder.service';
 import { ContractPackageSeederService } from './contract-package-seeder.service';
 import { ClinicContractInformationSeederService } from './clinic-contract-information-seeder.service';
+import { ClinicServiceCategorySeederService } from './clinic-service-category-seeder.service';
+import { ClinicServiceSeederService } from './clinic-service-seeder.service';
+import { ClinicServiceConfigSeederService } from './clinic-service-config-seeder.service';
 
 /**
  * Seeder Orchestrator Service
@@ -35,10 +41,21 @@ import { ClinicContractInformationSeederService } from './clinic-contract-inform
  * 2. AccountSeederService - Seeds all account roles (CLINIC_ADMIN, CLINIC_MANAGER, CLINIC_STAFF, DOCTOR, PATIENT)
  * 3. ClinicAdminInformationSeederService - Seeds ClinicAdminInformation records
  * 4. ClinicManagerInformationSeederService - Seeds ClinicManagerInformation records
- * 5. ClinicStaffInformationSeederService - Seeds ClinicStaffInformation records
- * 6. DoctorInformationSeederService - Seeds DoctorInformation records
- * 7. GeneralAccountSeederService - Seeds GeneralAccount records for PATIENT accounts
- * 8. FeedbackSeederService - Seeds feedback records
+ * 5. ClinicsLegalDocumentsSeederService - Seeds ClinicsLegalDocuments records
+ * 6. AddressSeederService - Seeds Address records
+ * 7. GoogleIframeSeederService - Seeds GoogleIframe records
+ * 8. ContractPackageSeederService - Seeds ContractPackage records
+ * 9. ClinicContractInformationSeederService - Seeds ClinicContractInformation records
+ * 10. ClinicStaffInformationSeederService - Seeds ClinicStaffInformation records
+ * 11. DoctorInformationSeederService - Seeds DoctorInformation records
+ * 12. GeneralAccountSeederService - Seeds GeneralAccount records for PATIENT accounts
+ * 13. FeedbackSeederService - Seeds feedback records
+ * 14. BlogSeederService - Seeds blog records
+ * 15. SubscriptionServiceSeederService - Seeds SubscriptionService records
+ * 16. SubscriptionsSeederService - Seeds ClinicSubscription and ClinicSubscriptionHistory records
+ * 17. ClinicServiceCategorySeederService - Seeds ClinicServiceCategory records
+ * 18. ClinicServiceSeederService - Seeds ClinicService records
+ * 19. ClinicServiceConfigSeederService - Seeds ClinicServiceConfig records
  *
  * The orchestrator implements OnModuleInit and is the only seeder that runs automatically
  * during application startup. Individual seeder services expose public seed() methods
@@ -62,6 +79,12 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly doctorInfoSeeder: DoctorInformationSeederService,
     private readonly generalAccountSeeder: GeneralAccountSeederService,
     private readonly feedbackSeeder: FeedbackSeederService,
+    private readonly blogSeeder: BlogSeederService,
+    private readonly subscriptionServiceSeeder: SubscriptionServiceSeederService,
+    private readonly subscriptionsSeeder: SubscriptionsSeederService,
+    private readonly clinicServiceCategorySeeder: ClinicServiceCategorySeederService,
+    private readonly clinicServiceSeeder: ClinicServiceSeederService,
+    private readonly clinicServiceConfigSeeder: ClinicServiceConfigSeederService,
     private readonly accountRepository: AccountRepository,
   ) {}
 
@@ -162,13 +185,37 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.doctorInfoSeeder.seed();
       this.logger.log('✅ DoctorInformation seeding completed');
 
-      // Step 7: Seed GeneralAccount for PATIENT accounts
+      // Step 12: Seed GeneralAccount for PATIENT accounts
       await this.generalAccountSeeder.seed();
       this.logger.log('✅ GeneralAccount seeding completed');
 
-      // Step 8: Seed feedback records
+      // Step 13: Seed feedback records
       await this.feedbackSeeder.seed();
       this.logger.log('✅ Feedback seeding completed');
+
+      // Step 14: Seed blog records
+      await this.blogSeeder.seed();
+      this.logger.log('✅ Blog seeding completed');
+
+      // Step 15: Seed subscription services
+      await this.subscriptionServiceSeeder.seed();
+      this.logger.log('✅ SubscriptionService seeding completed');
+
+      // Step 16: Seed clinic subscriptions and subscription history
+      await this.subscriptionsSeeder.seed();
+      this.logger.log('✅ Clinic subscriptions seeding completed');
+
+      // Step 17: Seed clinic service categories
+      await this.clinicServiceCategorySeeder.seed();
+      this.logger.log('✅ ClinicServiceCategory seeding completed');
+
+      // Step 18: Seed clinic services
+      await this.clinicServiceSeeder.seed();
+      this.logger.log('✅ ClinicService seeding completed');
+
+      // Step 19: Seed clinic service configs
+      await this.clinicServiceConfigSeeder.seed();
+      this.logger.log('✅ ClinicServiceConfig seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {

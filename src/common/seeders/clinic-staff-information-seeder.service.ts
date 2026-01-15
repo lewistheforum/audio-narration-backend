@@ -4,6 +4,7 @@ import { ClinicStaffInformation } from '../../modules/accounts/entities/clinic_s
 import { AccountRole, Gender, ClinicRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicStaffInformationRepository } from '../../modules/accounts/repositories/clinic-staff-information.repository';
+import { ENGLISH_NAMES } from '../constants/names';
 
 /**
  * ClinicStaffInformation Seeder Service
@@ -17,43 +18,8 @@ import { ClinicStaffInformationRepository } from '../../modules/accounts/reposit
 export class ClinicStaffInformationSeederService {
   private readonly logger = new Logger(ClinicStaffInformationSeederService.name);
 
-  // Vietnamese names
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-      'Ngô Văn Nam',
-      'Đinh Văn Phúc',
-      'Bùi Văn Quân',
-      'Dương Văn Sáng',
-      'Trương Văn Tùng',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-      'Ngô Thị Yến',
-      'Đinh Thị Ánh',
-      'Bùi Thị Chi',
-      'Dương Thị Dung',
-      'Trương Thị Hương',
-    ],
-  };
+  // English names
+  private readonly NAMES = ENGLISH_NAMES;
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -124,13 +90,13 @@ export class ClinicStaffInformationSeederService {
   }
 
   /**
-   * Get random Vietnamese name based on gender
+   * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
       gender === Gender.MALE
-        ? this.VIETNAMESE_NAMES.male
-        : this.VIETNAMESE_NAMES.female;
+        ? this.NAMES.male
+        : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 

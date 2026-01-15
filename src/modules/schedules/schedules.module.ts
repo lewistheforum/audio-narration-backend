@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
+  ClinicRoom,
   ClinicShift,
   ClinicShiftHour,
   EmployeeSchedule,
@@ -15,6 +16,7 @@ import {
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      ClinicRoom,
       ClinicShift,
       ClinicShiftHour,
       EmployeeSchedule,

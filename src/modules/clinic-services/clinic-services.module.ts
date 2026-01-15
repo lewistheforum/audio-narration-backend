@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClinicServiceCategory, ClinicService } from './entities';
+import {
+  ClinicServiceCategoryRepository,
+  ClinicServiceRepository,
+} from './repositories';
 
 /**
  * Clinic Services Module
@@ -10,7 +14,14 @@ import { ClinicServiceCategory, ClinicService } from './entities';
 @Module({
   imports: [TypeOrmModule.forFeature([ClinicServiceCategory, ClinicService])],
   controllers: [],
-  providers: [],
-  exports: [TypeOrmModule],
+  providers: [
+    ClinicServiceCategoryRepository,
+    ClinicServiceRepository,
+  ],
+  exports: [
+    TypeOrmModule,
+    ClinicServiceCategoryRepository,
+    ClinicServiceRepository,
+  ],
 })
 export class ClinicServicesModule {}
