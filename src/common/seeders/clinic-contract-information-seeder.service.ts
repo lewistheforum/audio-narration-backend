@@ -7,6 +7,20 @@ import { ClinicContractInformation } from '../../modules/accounts/entities/clini
 import { ClinicContractInformationRepository } from '../../modules/accounts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/accounts/repositories/contract-package.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import {
+  DOCTOR_SPECIALTIES,
+  NATIONALITIES,
+  WORK_SPECIALTIES,
+  JOB_DESCRIPTIONS,
+  REST_POLICIES,
+  LEAVE_POLICIES,
+  ALLOWANCES,
+  PERFORMANCE_BONUSES,
+  SALARY_PAYMENT_CYCLES,
+  PARTY_A_SIGNERS,
+  PARTY_B_SIGNERS,
+} from '../constants/medical-terms';
+import { PROVINCES } from '../constants/locations';
 
 /**
  * ClinicContractInformation Seeder Service
@@ -26,81 +40,18 @@ export class ClinicContractInformationSeederService {
   private readonly logger = new Logger(ClinicContractInformationSeederService.name);
 
   // Orthopedics clinic-specific contract data
-  private readonly DOCTOR_SPECIALTIES = [
-    'Chuyên khoa Cơ xương khớp',
-    'Chuyên khoa Chỉnh hình',
-    'Chuyên khoa Cơ xương khớp và Chỉnh hình',
-    'Chuyên khoa Chấn thương Chỉnh hình',
-    'Chuyên khoa Trị liệu Cơ xương khớp',
-  ];
-
-  private readonly NATIONALITIES = ['Việt Nam', 'Việt Kiều', 'Việt Hoa', 'Việt Mỹ', 'Việt Anh'];
-
-  private readonly CURRENT_LIVING = [
-    'Thành phố Hà Nội',
-    'Thành phố Hồ Chí Minh',
-    'Thành phố Đà Nẵng',
-    'Thành phố Hải Phòng',
-    'Thành phố Cần Thơ',
-  ];
-
-  private readonly WORK_SPECIALTY_AT_CLINIC = [
-    'Bác sĩ điều trị cơ xương khớp',
-    'Bác sĩ phẫu thuật chỉnh hình',
-    'Bác sĩ trị liệu cơ xương khớp',
-    'Bác sĩ chuyên khoa chấn thương chỉnh hình',
-  ];
-
-  private readonly JOB_DESCRIPTIONS = [
-    'Thực hiện khám và điều trị các bệnh lý về cơ xương khớp cho bệnh nhân',
-    'Phẫu thuật chỉnh hình các dị tật bẩm sinh và chấn thương',
-    'Tư vấn và điều trị phục hồi chức năng sau phẫu thuật',
-    'Thực hiện các xét nghiệm và chẩn đoán hình ảnh cơ xương khớp',
-  ];
-
-  private readonly REST_POLICIES = [
-    'Nghỉ 1 ngày mỗi tuần, nghỉ 2 ngày mỗi tháng, nghỉ 12 ngày mỗi năm',
-    'Nghỉ 2 ngày mỗi tuần, nghỉ 3 ngày mỗi tháng, nghỉ 14 ngày mỗi năm',
-    'Nghỉ 1 ngày mỗi tuần, nghỉ 2 ngày mỗi tháng, nghỉ 12 ngày mỗi năm, cộng ngày nghỉ lễ tết',
-  ];
-
-  private readonly LEAVE_POLICIES = [
-    'Nghỉ ốm: Có chế độ bảo hiểm xã hội, nghỉ ốm có hưởng lương',
-    'Nghỉ thai sản: 6 tháng, hưởng 100% lương',
-    'Nghỉ thai sản: 4 tháng, hưởng 75% lương',
-  ];
-
-  private readonly ALLOWANCES = [
-    'Phụ cấp: 500,000 VND/tháng',
-    'Đi lại: 300,000 VND/tháng',
-    'Ăn trưa: 1,000,000 VND/tháng',
-    'Điện thoại: 200,000 VND/tháng',
-  ];
-
-  private readonly PERFORMANCE_BONUSES = [
-    'Thưởng đạt chỉ tiêu khám bệnh: 10% lương cơ bản',
-    'Thưởng đánh giá 5S: 5% lương cơ bản',
-    'Thưởng không nghỉ việc: 3% lương cơ bản',
-    'Thưởng chuyên môn: 8% lương cơ bản',
-  ];
-
-  private readonly SALARY_PAYMENT_CYCLES = [
-    'Thanh toán lương vào ngày 10 hàng tháng',
-    'Thanh toán lương vào ngày 25 hàng tháng',
-    'Thanh toán lương vào ngày cuối tháng',
-  ];
-
-  private readonly PARTY_A_SIGNERS = [
-    'Bác sĩ Nguyễn Văn An - Giám đốc Phòng khám',
-    'Bác sĩ Trần Thị Mai - Quản lý Phòng khám',
-    'Bác sĩ Lê Văn Cường - Trưởng phòng Cơ xương khớp',
-  ];
-
-  private readonly PARTY_B_SIGNERS = [
-    'Nguyễn Văn Bình - Bác sĩ',
-    'Trần Thị Lan - Y tá',
-    'Lê Văn Đức - Bác sĩ',
-  ];
+  private readonly DOCTOR_SPECIALTIES = DOCTOR_SPECIALTIES;
+  private readonly NATIONALITIES = NATIONALITIES;
+  private readonly CURRENT_LIVING = PROVINCES.map(p => p.name);
+  private readonly WORK_SPECIALTY_AT_CLINIC = WORK_SPECIALTIES;
+  private readonly JOB_DESCRIPTIONS = JOB_DESCRIPTIONS;
+  private readonly REST_POLICIES = REST_POLICIES;
+  private readonly LEAVE_POLICIES = LEAVE_POLICIES;
+  private readonly ALLOWANCES = ALLOWANCES;
+  private readonly PERFORMANCE_BONUSES = PERFORMANCE_BONUSES;
+  private readonly SALARY_PAYMENT_CYCLES = SALARY_PAYMENT_CYCLES;
+  private readonly PARTY_A_SIGNERS = PARTY_A_SIGNERS;
+  private readonly PARTY_B_SIGNERS = PARTY_B_SIGNERS;
 
   constructor(
     private readonly clinicContractInformationRepository: ClinicContractInformationRepository,

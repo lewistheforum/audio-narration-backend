@@ -4,6 +4,7 @@ import { GeneralAccount } from '../../modules/accounts/entities/general_accounts
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { GeneralAccountRepository } from '../../modules/accounts/repositories/general-account.repository';
+import { ENGLISH_NAMES } from '../constants/names';
 
 /**
  * GeneralAccount Seeder Service
@@ -17,33 +18,8 @@ import { GeneralAccountRepository } from '../../modules/accounts/repositories/ge
 export class GeneralAccountSeederService {
   private readonly logger = new Logger(GeneralAccountSeederService.name);
 
-  // Vietnamese names
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-    ],
-  };
+  // English names
+  private readonly NAMES = ENGLISH_NAMES;
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -112,13 +88,13 @@ export class GeneralAccountSeederService {
   }
 
   /**
-   * Get random Vietnamese name based on gender
+   * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
       gender === Gender.MALE
-        ? this.VIETNAMESE_NAMES.male
-        : this.VIETNAMESE_NAMES.female;
+        ? this.NAMES.male
+        : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 }

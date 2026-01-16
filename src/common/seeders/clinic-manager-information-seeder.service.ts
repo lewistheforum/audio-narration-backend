@@ -4,6 +4,7 @@ import { ClinicManagerInformation } from '../../modules/accounts/entities/clinic
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicManagerInformationRepository } from '../../modules/accounts/repositories/clinic-manager-information.repository';
+import { ENGLISH_NAMES, BRANCH_NAMES } from '../constants/names';
 
 /**
  * ClinicManagerInformation Seeder Service
@@ -19,52 +20,11 @@ export class ClinicManagerInformationSeederService {
     ClinicManagerInformationSeederService.name,
   );
 
-  // Vietnamese clinic branch names
-  private readonly CLINIC_BRANCH_NAMES = [
-    'Chi nhánh Quận 1',
-    'Chi nhánh Quận 3',
-    'Chi nhánh Quận 5',
-    'Chi nhánh Quận 7',
-    'Chi nhánh Quận 10',
-    'Chi nhánh Quận Tân Bình',
-    'Chi nhánh Quận Bình Thạnh',
-    'Chi nhánh Quận Gò Vấp',
-    'Chi nhánh Quận Phú Nhuận',
-    'Chi nhánh Quận Thủ Đức',
-    'Chi nhánh Quận Ba Đình',
-    'Chi nhánh Quận Hoàn Kiếm',
-    'Chi nhánh Quận Hai Bà Trưng',
-    'Chi nhánh Quận Đống Đa',
-    'Chi nhánh Quận Cầu Giấy',
-  ];
+  // English clinic branch names
+  private readonly CLINIC_BRANCH_NAMES = BRANCH_NAMES;
 
-  // Vietnamese names
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-    ],
-  };
+  // English names
+  private readonly NAMES = ENGLISH_NAMES;
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -146,13 +106,13 @@ export class ClinicManagerInformationSeederService {
   }
 
   /**
-   * Get random Vietnamese name based on gender
+   * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
       gender === Gender.MALE
-        ? this.VIETNAMESE_NAMES.male
-        : this.VIETNAMESE_NAMES.female;
+        ? this.NAMES.male
+        : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 }

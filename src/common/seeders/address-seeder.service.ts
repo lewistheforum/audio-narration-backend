@@ -4,6 +4,7 @@ import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { Address } from '../../modules/accounts/entities/addresses.entity';
 import { AddressRepository } from '../../modules/accounts/repositories/address.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { PROVINCES, WARDS, STREET_NAMES, BUILDING_TYPES } from '../constants/locations';
 
 /**
  * Address Seeder Service
@@ -13,7 +14,7 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
  * Seeding Rules:
  * - For each CLINIC_MANAGER account, create exactly 1 Address record.
  * - Must be idempotent (re-run safe).
- * - Seed realistic Vietnamese-style clinic address.
+ * - Seed realistic English-style clinic address.
  *
  * Idempotent: Uses check-then-insert pattern by accountId
  */
@@ -21,51 +22,11 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
 export class AddressSeederService {
   private readonly logger = new Logger(AddressSeederService.name);
 
-  // Vietnamese provinces and districts for realistic addresses
-  private readonly PROVINCES = [
-    { code: '01', name: 'Thành phố Hà Nội', districts: ['Ba Đình', 'Cầu Giấy', 'Đống Đa', 'Hai Bà Trưng', 'Hoàn Kiếm', 'Hồ Tây', 'Long Biên', 'Tây Hồ', 'Thanh Xuân', 'Hoàng Mai'] },
-    { code: '79', name: 'Thành phố Hồ Chí Minh', districts: ['Quận 1', 'Quận 3', 'Quận 5', 'Quận 6', 'Quận 10', 'Quận 11', 'Quận 12', 'Bình Thạnh', 'Gò Vấp', 'Phú Nhuận', 'Tân Bình', 'Tân Phú'] },
-    { code: '48', name: 'Thành phố Đà Nẵng', districts: ['Hải Châu', 'Thanh Khê', 'Sơn Trà', 'Cẩm Lệ', 'Ngũ Hành Sơn', 'Liên Chiểu'] },
-    { code: '43', name: 'Thành phố Đà Nẵng', districts: ['Hải Châu', 'Thanh Khê', 'Sơn Trà', 'Cẩm Lệ', 'Ngũ Hành Sơn', 'Liên Chiểu'] },
-    { code: '31', name: 'Thành phố Hải Phòng', districts: ['Hồng Bàng', 'Ngô Quyền', 'Lê Chân', 'Kiến An', 'Đồ Sơn', 'An Dương', 'An Lão', 'Kien Thuy', 'Thủy Nguyên', 'Tiên Lãng', 'Vĩnh Bảo'] },
-    { code: '54', name: 'Thành phố Cần Thơ', districts: ['Ninh Kiều', 'Cái Răng', 'Bình Thủy', 'Ô Môn', 'Thốt Nốt'] },
-  ];
-
-  private readonly WARDS = [
-    'Phường 1', 'Phường 2', 'Phường 3', 'Phường 4', 'Phường 5',
-    'Phường 6', 'Phường 7', 'Phường 8', 'Phường 9', 'Phường 10',
-    'Phường 11', 'Phường 12', 'Phường 13', 'Phường 14', 'Phường 15',
-  'Phường 16', 'Phường 17', 'Phường 18', 'Phường 19', 'Phường 20',
-  'Phường An Lợi', 'Phường An Phú', 'Phường Bến Nghé', 'Phường Bình An', 'Phường Bình Thạnh',
-  'Phường Cầu Kho', 'Phường Cầu Ông Lãnh', 'Phường Đa Kao', 'Phường Hiệp Phú', 'Phường Hòa Bình',
-    'Phường Hòa Thạnh', 'Phường Long Bình', 'Phường Long Trường', 'Phường Long Thượng', 'Phường Long Uyên',
-    'Phường Phú Hữu', 'Phường Phú Mỹ', 'Phường Phú Thạnh', 'Phường Phú Thọ', 'Phường Phú Xuân',
-    'Phường Tân An', 'Phường Tân Bình', 'Phường Tân Dân', 'Phường Tân Định', 'Phường Tân Kiên',
-    'Phường Tân Phú', 'Phường Tân Thạnh', 'Phường Tân Thới', 'Phường Tân Thuận', 'Phường Thạnh Lộc',
-    'Phường Thạnh Mỹ Lợi', 'Phường Thới An', 'Phường Thới Dừa', 'Phường Trương Văn Thành', 'Phường Vĩnh Lộc',
-  ];
-
-  // Orthopedics clinic street names
-  private readonly STREET_NAMES = [
-    'Đường Nguyễn Văn Linh',
-    'Đường Lê Văn Lương',
-    'Đường Nguyễn Thị Định',
-    'Đường Phạm Văn Đồng',
-    'Đường Huỳnh Tấn Phát',
-    'Đường Lê Đức Thọ',
-    'Đường Điện Biên Phủ',
-    'Đường Nguyễn Văn Trỗi',
-    'Đường Hoàng Văn Thụ',
-    'Đường Lý Thường Kiệt',
-    'Đường Lê Duẩn',
-    'Đường Nguyễn Bỉnh Khiêm',
-    'Đường Phạm Ngọc Thạch',
-    'Đường Võ Văn Tần',
-    'Đường Đặng Thùy Trâm',
-    'Đường Ung Văn Khiêm',
-  ];
-
-  private readonly BUILDING_TYPES = ['Tầng', 'Lầu', 'Số nhà'];
+  // English provinces and districts for realistic addresses
+  private readonly PROVINCES = PROVINCES;
+  private readonly WARDS = WARDS;
+  private readonly STREET_NAMES = STREET_NAMES;
+  private readonly BUILDING_TYPES = BUILDING_TYPES;
 
   constructor(
     private readonly addressRepository: AddressRepository,

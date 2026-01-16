@@ -4,6 +4,14 @@ import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-a
 import { AccountRole, BankName } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicAdminInformationRepository } from '../../modules/accounts/repositories/clinic-admin-information.repository';
+import {
+  CLINIC_NAMES,
+  SPECIALIZATIONS,
+  PROS,
+  PARACLINICAL,
+  BANK_BRANCHES,
+  DESCRIPTIONS,
+} from '../constants/medical-terms';
 
 /**
  * ClinicAdminInformation Seeder Service
@@ -17,42 +25,20 @@ import { ClinicAdminInformationRepository } from '../../modules/accounts/reposit
 export class ClinicAdminInformationSeederService {
   private readonly logger = new Logger(ClinicAdminInformationSeederService.name);
 
-  // Orthopedics-focused Vietnamese clinic names
-  private readonly CLINIC_NAMES = [
-    'Phòng Khám Cơ Xương Khớp Bonix Hà Nội',
-    'Phòng Khám Chấn Thương Chỉnh Hình Bonix TP.HCM',
-    'Phòng Khám Vật Lý Trị Liệu Bonix Đà Nẵng',
-    'Phòng Khám Thể Thao Y Khoa Bonix Cần Thơ',
-    'Phòng Khám Cột Sống Bonix Hải Phòng',
-  ];
+  // Orthopedics-focused English clinic names
+  private readonly CLINIC_NAMES = CLINIC_NAMES;
 
   // Orthopedics-only clinic specializations
-  private readonly SPECIALIZATIONS = [
-    ['Cơ xương khớp', 'Chấn thương chỉnh hình'],
-    ['Vật lý trị liệu', 'Phục hồi chức năng'],
-    ['Thể thao y khoa', 'Chấn thương thể thao'],
-    ['Cột sống', 'Đau lưng mạn tính'],
-    ['Đầu gối/Vai', 'Gãy xương'],
-  ];
+  private readonly SPECIALIZATIONS = SPECIALIZATIONS;
 
   // Clinic pros/advantages (orthopedics-focused)
-  private readonly PROS = [
-    ['Đội ngũ bác sĩ chấn thương chỉnh hình chuyên môn cao', 'Thiết bị X-quang, MRI hiện đại'],
-    ['Phương pháp vật lý trị liệu tiên tiến', 'Đo loãng xương chuẩn quốc tế'],
-    ['Chuyên gia cột sống và khớp nhân tạo', 'Phẫu thuật nội soi tối thiểu xâm lấn'],
-    ['Chương trình phục hồi chức năng toàn diện', 'Điều trị chấn thương thể thao chuyên sâu'],
-    ['Cơ sở vật chất khang trang', 'Bảo hiểm y tế và chi phí hợp lý'],
-  ];
+  private readonly PROS = PROS;
 
   // Orthopedics-focused paraclinical services
-  private readonly PARACLINICAL = [
-    ['X-quang khớp', 'Siêu âm cơ xương khớp'],
-    ['MRI cột sống', 'CT Scanner xương'],
-    ['Đo mật độ xương', 'Điện cơ đồ EMG'],
-    ['Siêu âm cơ bắp', 'X-quang chức năng khớp'],
-  ];
+  private readonly PARACLINICAL = PARACLINICAL;
 
   private readonly BANK_NAMES = Object.values(BankName);
+  private readonly BANK_BRANCHES = BANK_BRANCHES;
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -134,14 +120,7 @@ export class ClinicAdminInformationSeederService {
    * Get random description (orthopedics-focused)
    */
   private getRandomDescription(): string {
-    const descriptions = [
-      'Phòng khám chuyên sâu về cơ xương khớp và chấn thương chỉnh hình với đội ngũ bác sĩ chuyên môn cao.',
-      'Cung cấp dịch vụ chẩn đoán và điều trị các bệnh lý về xương, khớp, cột sống với trang thiết bị hiện đại.',
-      'Chuyên gia trong điều trị chấn thương thể thao và phục hồi chức năng toàn diện cho người bệnh.',
-      'Phòng khám đạt chuẩn quốc tế về vật lý trị liệu và phục hồi chức năng cơ xương khớp.',
-      'Đội ngũ bác sĩ giàu kinh nghiệm trong phẫu thuật nội soi khớp và cột sống, cam kết mang lại hiệu quả điều trị tốt nhất.',
-    ];
-    return descriptions[Math.floor(Math.random() * descriptions.length)];
+    return DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
   }
 
   /**
@@ -192,14 +171,7 @@ export class ClinicAdminInformationSeederService {
    * Get random bank branch
    */
   private getRandomBankBranch(): string {
-    const branches = [
-      'Chi nhánh Hà Nội',
-      'Chi nhánh TP.HCM',
-      'Chi nhánh Đà Nẵng',
-      'Chi nhánh Cần Thơ',
-      'Chi nhánh Hải Phòng',
-    ];
-    return branches[Math.floor(Math.random() * branches.length)];
+    return this.BANK_BRANCHES[Math.floor(Math.random() * this.BANK_BRANCHES.length)];
   }
 
   /**

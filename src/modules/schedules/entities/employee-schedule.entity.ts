@@ -6,10 +6,11 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  ManyToMany,
   JoinColumn,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
-import { ClinicRoom } from '../../accounts/entities/clinic_room.entity';
+import { ClinicRoom } from './clinic_room.entity';
 import { ClinicShift } from './clinic-shift.entity';
 import { WeekDay } from '../enums';
 
@@ -61,15 +62,8 @@ export class EmployeeSchedule {
   })
   weekDay: WeekDay;
 
-  @Column({ name: 'room_id', type: 'uuid', nullable: true })
-  roomId?: string;
-
-  @ManyToOne(() => ClinicRoom, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  @JoinColumn({ name: 'room_id', referencedColumnName: '_id' })
-  room?: ClinicRoom;
+  @ManyToMany(() => ClinicRoom, (room) => room.employeeSchedules)
+  rooms?: ClinicRoom[];
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

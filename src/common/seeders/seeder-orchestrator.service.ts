@@ -7,6 +7,9 @@ import { ClinicStaffInformationSeederService } from './clinic-staff-information-
 import { DoctorInformationSeederService } from './doctor-information-seeder.service';
 import { GeneralAccountSeederService } from './general-account-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
+import { BlogSeederService } from './blog-seeder.service';
+import { SubscriptionServiceSeederService } from './subscription-service-seeder.service';
+import { SubscriptionsSeederService } from './subscriptions-seeder.service';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 import { ClinicsLegalDocumentsSeederService } from './clinics-legal-documents-seeder.service';
@@ -14,6 +17,12 @@ import { AddressSeederService } from './address-seeder.service';
 import { GoogleIframeSeederService } from './google-iframe-seeder.service';
 import { ContractPackageSeederService } from './contract-package-seeder.service';
 import { ClinicContractInformationSeederService } from './clinic-contract-information-seeder.service';
+import { ClinicServiceCategorySeederService } from './clinic-service-category-seeder.service';
+import { ClinicServiceSeederService } from './clinic-service-seeder.service';
+import { ClinicServiceConfigSeederService } from './clinic-service-config-seeder.service';
+import { SubscriptionServiceRepository } from '../../modules/subscriptions/repositories/subscription-service.repository';
+import { ClinicServiceCategoryRepository } from '../../modules/clinic-services/repositories/clinic-service-category.repository';
+import { ClinicServiceRepository } from '../../modules/clinic-services/repositories/clinic-service.repository';
 
 /**
  * Seeder Orchestrator Service
@@ -23,10 +32,25 @@ import { ClinicContractInformationSeederService } from './clinic-contract-inform
  *
  * Idempotent Seeding Logic:
  * Before running any seeders, the orchestrator checks if the required data already exists.
- * Seeding is skipped only if the following condition is met:
+ * Seeding is skipped only if the following conditions are met for deterministic seeders:
  * - Admin: 1 Admin account exists
  * - CLINIC_ADMIN: 5 CLINIC_ADMIN accounts exist
  * - PATIENT: 10 PATIENT accounts exist
+ * - SubscriptionService: 4 SubscriptionService records exist (BASIC, STANDARD, PREMIUM, ENTERPRISE)
+ * - ClinicServiceCategory: 6 ClinicServiceCategory records exist (1 per ServiceCategoryType)
+ * - ClinicService: 12 ClinicService records exist (2 CONSULTATION, 2 ULTRASOUND, 2 XRAY, 2 LAB, 1 BONE_DENSITY, 3 PROCEDURE)
+ *
+ * Note: Variable/random seeders are NOT included in the idempotency check:
+ * - CLINIC_MANAGER, CLINIC_STAFF, DOCTOR accounts (random counts)
+ * - ClinicManagerInformation, ClinicStaffInformation, DoctorInformation
+ * - ClinicsLegalDocuments, Address, GoogleIframe
+ * - ContractPackage, ClinicContractInformation
+ * - ClinicSubscriptionHistory (0-2 per clinic)
+ * - Feedback (random per clinic)
+ * - Blog (3-5 per clinic)
+ * - ClinicServiceConfig (8 per clinic)
+ *
+ * The check only validates deterministic seeders with fixed data counts.
  *
  * If the count is insufficient, the orchestrator runs the seeders to fill the missing data.
  *
@@ -35,10 +59,21 @@ import { ClinicContractInformationSeederService } from './clinic-contract-inform
  * 2. AccountSeederService - Seeds all account roles (CLINIC_ADMIN, CLINIC_MANAGER, CLINIC_STAFF, DOCTOR, PATIENT)
  * 3. ClinicAdminInformationSeederService - Seeds ClinicAdminInformation records
  * 4. ClinicManagerInformationSeederService - Seeds ClinicManagerInformation records
- * 5. ClinicStaffInformationSeederService - Seeds ClinicStaffInformation records
- * 6. DoctorInformationSeederService - Seeds DoctorInformation records
- * 7. GeneralAccountSeederService - Seeds GeneralAccount records for PATIENT accounts
- * 8. FeedbackSeederService - Seeds feedback records
+ * 5. ClinicsLegalDocumentsSeederService - Seeds ClinicsLegalDocuments records
+ * 6. AddressSeederService - Seeds Address records
+ * 7. GoogleIframeSeederService - Seeds GoogleIframe records
+ * 8. ContractPackageSeederService - Seeds ContractPackage records
+ * 9. ClinicContractInformationSeederService - Seeds ClinicContractInformation records
+ * 10. ClinicStaffInformationSeederService - Seeds ClinicStaffInformation records
+ * 11. DoctorInformationSeederService - Seeds DoctorInformation records
+ * 12. GeneralAccountSeederService - Seeds GeneralAccount records for PATIENT accounts
+ * 13. FeedbackSeederService - Seeds random feedback records (not part of idempotency check)
+ * 14. BlogSeederService - Seeds blog records (not part of idempotency check)
+ * 15. SubscriptionServiceSeederService - Seeds SubscriptionService records
+ * 16. SubscriptionsSeederService - Seeds ClinicSubscription and ClinicSubscriptionHistory records
+ * 17. ClinicServiceCategorySeederService - Seeds ClinicServiceCategory records
+ * 18. ClinicServiceSeederService - Seeds ClinicService records
+ * 19. ClinicServiceConfigSeederService - Seeds ClinicServiceConfig records (not part of idempotency check)
  *
  * The orchestrator implements OnModuleInit and is the only seeder that runs automatically
  * during application startup. Individual seeder services expose public seed() methods
@@ -62,13 +97,41 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly doctorInfoSeeder: DoctorInformationSeederService,
     private readonly generalAccountSeeder: GeneralAccountSeederService,
     private readonly feedbackSeeder: FeedbackSeederService,
+    private readonly blogSeeder: BlogSeederService,
+    private readonly subscriptionServiceSeeder: SubscriptionServiceSeederService,
+    private readonly subscriptionsSeeder: SubscriptionsSeederService,
+    private readonly clinicServiceCategorySeeder: ClinicServiceCategorySeederService,
+    private readonly clinicServiceSeeder: ClinicServiceSeederService,
+    private readonly clinicServiceConfigSeeder: ClinicServiceConfigSeederService,
     private readonly accountRepository: AccountRepository,
+    private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
+    private readonly clinicServiceCategoryRepository: ClinicServiceCategoryRepository,
+    private readonly clinicServiceRepository: ClinicServiceRepository,
   ) {}
 
   /**
    * Check if seed data already exists
    *
-   * Verifies that all required data counts meet the minimum requirements.
+   * Verifies that all required data counts meet the minimum requirements for
+   * deterministic seeders. Only checks for:
+   * - Admin accounts (≥1)
+   * - CLINIC_ADMIN accounts (≥5)
+   * - PATIENT accounts (≥10)
+   * - SubscriptionService records (≥4 - BASIC, STANDARD, PREMIUM, ENTERPRISE)
+   * - ClinicServiceCategory records (≥6 - 1 per ServiceCategoryType)
+   * - ClinicService records (≥12 - 2 CONSULTATION, 2 ULTRASOUND, 2 XRAY, 2 LAB, 1 BONE_DENSITY, 3 PROCEDURE)
+   *
+   * Note: Variable/random seeders are NOT validated in this check:
+   * - CLINIC_MANAGER, CLINIC_STAFF, DOCTOR accounts (random counts)
+   * - ClinicManagerInformation, ClinicStaffInformation, DoctorInformation
+   * - ClinicsLegalDocuments, Address, GoogleIframe
+   * - ContractPackage, ClinicContractInformation
+   * - ClinicSubscriptionHistory (0-2 per clinic)
+   * - Feedback (random per clinic)
+   * - Blog (3-5 per clinic)
+   * - ClinicServiceConfig (8 per clinic)
+   *
+   * The idempotency check only applies to seeders with deterministic data.
    *
    * @returns {Promise<boolean>} True if all conditions are met, false otherwise
    */
@@ -82,14 +145,33 @@ export class SeederOrchestratorService implements OnModuleInit {
     const patientCount = await this.accountRepository.countByRole(
       AccountRole.PATIENT,
     );
+    const subscriptionServiceCount =
+      await this.subscriptionServiceRepository.count();
+    const clinicServiceCategoryCount =
+      await this.clinicServiceCategoryRepository.count();
+    const clinicServiceCount = await this.clinicServiceRepository.count();
 
     this.logger.log(`Current data counts:`);
     this.logger.log(`  - Admins: ${adminCount} (required: 1)`);
     this.logger.log(`  - Clinic Admins: ${clinicAdminCount} (required: 5)`);
     this.logger.log(`  - Patients: ${patientCount} (required: 10)`);
+    this.logger.log(
+      `  - Subscription Services: ${subscriptionServiceCount} (required: 4)`,
+    );
+    this.logger.log(
+      `  - Clinic Service Categories: ${clinicServiceCategoryCount} (required: 6)`,
+    );
+    this.logger.log(
+      `  - Clinic Services: ${clinicServiceCount} (required: 12)`,
+    );
 
     const allConditionsMet =
-      adminCount >= 1 && clinicAdminCount >= 5 && patientCount >= 10;
+      adminCount >= 1 &&
+      clinicAdminCount >= 5 &&
+      patientCount >= 10 &&
+      subscriptionServiceCount >= 4 &&
+      clinicServiceCategoryCount >= 6 &&
+      clinicServiceCount >= 12;
 
     return allConditionsMet;
   }
@@ -162,13 +244,37 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.doctorInfoSeeder.seed();
       this.logger.log('✅ DoctorInformation seeding completed');
 
-      // Step 7: Seed GeneralAccount for PATIENT accounts
+      // Step 12: Seed GeneralAccount for PATIENT accounts
       await this.generalAccountSeeder.seed();
       this.logger.log('✅ GeneralAccount seeding completed');
 
-      // Step 8: Seed feedback records
+      // Step 13: Seed feedback records
       await this.feedbackSeeder.seed();
       this.logger.log('✅ Feedback seeding completed');
+
+      // Step 14: Seed blog records
+      await this.blogSeeder.seed();
+      this.logger.log('✅ Blog seeding completed');
+
+      // Step 15: Seed subscription services
+      await this.subscriptionServiceSeeder.seed();
+      this.logger.log('✅ SubscriptionService seeding completed');
+
+      // Step 16: Seed clinic subscriptions and subscription history
+      await this.subscriptionsSeeder.seed();
+      this.logger.log('✅ Clinic subscriptions seeding completed');
+
+      // Step 17: Seed clinic service categories
+      await this.clinicServiceCategorySeeder.seed();
+      this.logger.log('✅ ClinicServiceCategory seeding completed');
+
+      // Step 18: Seed clinic services
+      await this.clinicServiceSeeder.seed();
+      this.logger.log('✅ ClinicService seeding completed');
+
+      // Step 19: Seed clinic service configs
+      await this.clinicServiceConfigSeeder.seed();
+      this.logger.log('✅ ClinicServiceConfig seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {
