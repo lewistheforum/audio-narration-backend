@@ -27,6 +27,18 @@ export class PaymentHistoryItemDto {
 
   @ApiProperty({ example: '2023-03-25T14:02:37.000Z' })
   createdAt: Date;
+
+  @ApiProperty({ example: 'Phòng khám ABC', required: false })
+  clinicName?: string;
+
+  @ApiProperty({ example: 'Nguyễn Văn A', required: false })
+  senderFullName?: string;
+
+  @ApiProperty({ enum: ['MALE', 'FEMALE', 'OTHER'], required: false })
+  senderGender?: string;
+
+  @ApiProperty({ example: '1990-01-01', required: false })
+  senderDob?: Date;
 }
 
 export class PaymentHistoryResponseDto {

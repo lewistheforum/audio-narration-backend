@@ -8,6 +8,10 @@ import {
   EmployeeTimekeeping,
 } from './entities';
 
+import { SchedulesController } from './schedules.controller';
+import { SchedulesService } from './schedules.service';
+import { Account } from '../accounts/entities/accounts.entity';
+
 /**
  * Schedules Module
  *
@@ -21,10 +25,11 @@ import {
       ClinicShiftHour,
       EmployeeSchedule,
       EmployeeTimekeeping,
+      Account,
     ]),
   ],
-  controllers: [],
-  providers: [],
-  exports: [TypeOrmModule],
+  controllers: [SchedulesController],
+  providers: [SchedulesService],
+  exports: [TypeOrmModule, SchedulesService],
 })
-export class SchedulesModule {}
+export class SchedulesModule { }
