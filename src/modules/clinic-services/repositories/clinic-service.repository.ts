@@ -17,7 +17,7 @@ export class ClinicServiceRepository {
   constructor(
     @InjectRepository(ClinicService)
     private readonly clinicServiceRepository: Repository<ClinicService>,
-  ) {}
+  ) { }
 
   /**
    * Find All Clinic Services
@@ -41,6 +41,20 @@ export class ClinicServiceRepository {
   async findByServiceCode(serviceCode: string): Promise<ClinicService | null> {
     return this.clinicServiceRepository.findOne({
       where: { serviceCode },
+    });
+  }
+
+  /**
+   * Find Clinic Service by ID
+   *
+   * Retrieves a single service by its ID.
+   *
+   * @param {string} id - Service ID
+   * @returns {Promise<ClinicService | null>} Service entity or null if not found
+   */
+  async findById(id: string): Promise<ClinicService | null> {
+    return this.clinicServiceRepository.findOne({
+      where: { _id: id },
     });
   }
 
