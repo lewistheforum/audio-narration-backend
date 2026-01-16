@@ -100,4 +100,15 @@ export class SubscriptionServiceRepository {
     });
     return count > 0;
   }
+
+  /**
+   * Count All Subscription Services
+   *
+   * Returns the total number of subscription services.
+   *
+   * @returns {Promise<number>} Number of subscription services
+   */
+  async count(): Promise<number> {
+    return this.repository.count();
+  }
 }
