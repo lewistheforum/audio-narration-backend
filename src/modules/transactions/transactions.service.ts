@@ -27,16 +27,6 @@ export class TransactionsService {
     this.qrExpireMinutes = Number(
       this.configService.get<number>('SEEPAY_QR_EXPIRE_MINUTES') || 15,
     );
-
-    if (!this.qrBaseUrl) {
-      throw new Error('SEEPAY_QR_BASE is required');
-    }
-    if (!this.seepayAccount) {
-      throw new Error('SEEPAY_ACC is required');
-    }
-    if (!this.seepayBank) {
-      throw new Error('SEEPAY_BANK is required');
-    }
   }
 
   async createDynamicQr(
