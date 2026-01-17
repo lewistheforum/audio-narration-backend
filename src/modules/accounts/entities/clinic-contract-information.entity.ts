@@ -11,6 +11,7 @@ import {
 import { ContractPackage } from './contract-package.entity';
 import { ContractType } from '../enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
+import { ContractStatus } from '../enums/contract-status.enum';
 
 @Entity('clinic_contract_information')
 export class ClinicContractInformation {
@@ -98,6 +99,15 @@ export class ClinicContractInformation {
 
   @Column({ name: 'party_b_signer_name', type: 'text' })
   partyBSignerName: string;
+
+  @Column({
+    name: 'contract_status',
+    type: 'enum',
+    enum: ContractStatus,
+    enumName: 'clinic_contract_contract_status_enum',
+    default: ContractStatus.CURRENT,
+  })
+  contractStatus: ContractStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
