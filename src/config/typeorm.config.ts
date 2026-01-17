@@ -18,8 +18,8 @@ export const buildTypeOrmOptions = (
   ssl:
     config.get('POSTGRES_SSL') === 'true'
       ? {
-          rejectUnauthorized: false,
-        }
+        rejectUnauthorized: false,
+      }
       : false,
 });
 
@@ -34,4 +34,10 @@ export const AppDataSource = new DataSource({
   migrations: [join(__dirname, '../database/migrations/*{.ts,.js}')],
   synchronize: true,
   logging: process.env.NODE_ENV === 'development',
+  // ssl:
+  //   process.env.POSTGRES_SSL === 'true'
+  //     ? {
+  //       rejectUnauthorized: false,
+  //     }
+  //     : false,
 });
