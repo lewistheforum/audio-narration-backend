@@ -17,7 +17,7 @@ export class ClinicServiceCategoryRepository {
   constructor(
     @InjectRepository(ClinicServiceCategory)
     private readonly clinicServiceCategoryRepository: Repository<ClinicServiceCategory>,
-  ) {}
+  ) { }
 
   /**
    * Find All Clinic Service Categories
@@ -41,6 +41,20 @@ export class ClinicServiceCategoryRepository {
   async findByType(type: string): Promise<ClinicServiceCategory | null> {
     return this.clinicServiceCategoryRepository.findOne({
       where: { type: type as any },
+    });
+  }
+
+  /**
+   * Find Clinic Service Category by ID
+   *
+   * Retrieves a single category by its ID.
+   *
+   * @param {string} id - Category ID
+   * @returns {Promise<ClinicServiceCategory | null>} Category entity or null if not found
+   */
+  async findById(id: string): Promise<ClinicServiceCategory | null> {
+    return this.clinicServiceCategoryRepository.findOne({
+      where: { _id: id },
     });
   }
 
