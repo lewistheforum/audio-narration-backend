@@ -40,6 +40,15 @@ export class ClinicAdminInformationSeederService {
   private readonly BANK_NAMES = Object.values(BankName);
   private readonly BANK_BRANCHES = BANK_BRANCHES;
 
+  // Profile picture URLs for clinic admins
+  private readonly PROFILE_PICTURE_URLS = [
+    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
+  ];
+
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly clinicAdminInfoRepository: ClinicAdminInformationRepository,
@@ -78,6 +87,7 @@ export class ClinicAdminInformationSeederService {
           continue;
         }
 
+        const adminIndex = clinicAdmins.indexOf(account);
         const clinicAdminInfo = this.clinicAdminInfoRepository.create({
           _id: randomUUID(),
           accountId: account._id,
@@ -87,6 +97,8 @@ export class ClinicAdminInformationSeederService {
           specializedIn: this.getRandomSpecializations(),
           pros: this.getRandomPros(),
           paraclinical: this.getRandomParaclinical(),
+          dob: this.generateDob(adminIndex),
+          profilePicture: this.getRandomProfilePicture(adminIndex),
           bankName: this.getRandomBankName(),
           bankNumber: this.randomBankNumber(),
           bankBranch: this.getRandomBankBranch(),
@@ -197,6 +209,25 @@ export class ClinicAdminInformationSeederService {
       digits += Math.floor(Math.random() * 10);
     }
     return digits;
+  }
+
+  /**
+   * Generate date of birth (deterministic based on index)
+   * Clinic admins are typically 35-65 years old
+   */
+  private generateDob(index: number): Date {
+    const age = 35 + (index % 31); // 35-65 years old
+    const year = new Date().getFullYear() - age;
+    const month = 1 + (index % 12);
+    const day = 1 + (index % 28);
+    return new Date(year, month, day);
+  }
+
+  /**
+   * Get random profile picture URL (deterministic based on index)
+   */
+  private getRandomProfilePicture(index: number): string {
+    return this.PROFILE_PICTURE_URLS[index % this.PROFILE_PICTURE_URLS.length];
   }
 
   /**

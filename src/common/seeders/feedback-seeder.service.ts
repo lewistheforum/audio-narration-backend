@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Feedback } from '../../modules/reports/entities/feedback.entity';
@@ -7,6 +7,7 @@ import { FeedbackType } from '../../modules/reports/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 import { FeedbackRepository } from '../../modules/reports/repositories/feedback.repository';
+import { DOCTOR_NAMES } from '../constants/names';
 
 /**
  * Interface for CSV row data
@@ -162,6 +163,12 @@ export class FeedbackSeederService {
       numWithImages,
     );
 
+    // Get available doctor IDs for this clinic (for doctor-level feedbacks)
+    const allAccounts = await this.accountRepository.findAllAccounts();
+    const doctors = allAccounts.filter(
+      (acc) => acc.role === AccountRole.DOCTOR,
+    );
+
     for (let i = 0; i < selectedRows.length; i++) {
       const row = selectedRows[i];
       const hasImages = imageIndices.includes(i);
@@ -169,17 +176,25 @@ export class FeedbackSeederService {
       // Randomly select a patient ID
       const patientId = patientIds[Math.floor(Math.random() * patientIds.length)];
 
+      // Deterministically select feedback type (clinic or doctor)
+      const isDoctorFeedback = i % 3 === 0; // Every 3rd feedback is for a doctor
+
+      // Generate deterministic appointment ID based on clinic ID and index
+      const appointmentId = this.generateDeterministicAppointmentId(clinicId, i);
+
       // Prepare feedback data
       const feedbackData = {
-        appointmentId: randomUUID(), // Generate random UUID to bypass NOT NULL constraint
+        appointmentId: appointmentId, // Use deterministic appointment ID
         clinicId: clinicId,
-        doctorId: null, // Must be NULL for clinic-level reviews
+        doctorId: isDoctorFeedback && doctors.length > 0
+          ? doctors[i % doctors.length]._id
+          : null,
         rating: parseInt(row.rating, 10),
         description: row.review_text,
         descriptionLabel: null,
         feedbackImages: hasImages ? this.getRandomImages() : null,
         feedbackImagesLabel: null,
-        type: FeedbackType.CLINIC,
+        type: isDoctorFeedback ? FeedbackType.DOCTOR : FeedbackType.CLINIC,
       };
 
       const feedback = this.feedbackRepository.createFeedback(feedbackData);
@@ -187,6 +202,23 @@ export class FeedbackSeederService {
     }
 
     return feedbacks;
+  }
+
+  /**
+   * Generate a deterministic appointment ID based on clinic ID and index
+   * This ensures repeatable seeding while providing meaningful appointment references
+   *
+   * @param {string} clinicId - Clinic UUID
+   * @param {number} index - Feedback index
+   * @returns {string} Deterministic UUID for appointment
+   */
+  private generateDeterministicAppointmentId(clinicId: string, index: number): string {
+    const hash = createHash('sha256');
+    hash.update(`${clinicId}-${index}-appointment`);
+    const hashValue = hash.digest('hex');
+    // Use first 32 hex characters to form a UUID-like string
+    const uuidLike = `${hashValue.substring(0, 8)}-${hashValue.substring(8, 12)}-${hashValue.substring(12, 16)}-${hashValue.substring(16, 20)}-${hashValue.substring(20, 32)}`;
+    return uuidLike;
   }
 
   /**
