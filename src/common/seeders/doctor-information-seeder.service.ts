@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
-import { AccountRole, Gender, BankName } from '../../modules/accounts/enums';
+import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { DoctorInformationRepository } from '../../modules/accounts/repositories/doctor-information.repository';
-import { ENGLISH_NAMES } from '../constants/names';
+import { VIETNAMESE_NAMES } from '../constants/names';
 import {
   ACADEMIC_DEGREES,
   MEDICAL_SPECIALIZATIONS,
@@ -28,13 +28,22 @@ import {
 export class DoctorInformationSeederService {
   private readonly logger = new Logger(DoctorInformationSeederService.name);
 
-  // English doctor names
-  private readonly NAMES = ENGLISH_NAMES;
+  // Vietnamese doctor names without diacritics (per system context)
+  private readonly NAMES = VIETNAMESE_NAMES;
   private readonly ACADEMIC_DEGREES_TEMPLATES = ACADEMIC_DEGREES;
   private readonly SPECIALIZATIONS_TEMPLATES = MEDICAL_SPECIALIZATIONS;
   private readonly POSITIONS_TEMPLATES = POSITIONS;
   private readonly INTRODUCTIONS_TEMPLATES = INTRODUCTIONS;
-  private readonly BANK_NAMES = Object.values(BankName);
+  private readonly BANK_NAMES = [
+    'VPBank',
+    'TPBank',
+    'VietinBank',
+    'BIDV',
+    'MBBank',
+    'OCB',
+    'KienLongBank',
+    'MSB',
+  ];
   private readonly BANK_BRANCHES = BANK_BRANCHES;
   private readonly NATIONALITIES = NATIONALITIES;
   private readonly WORK_SPECIALTIES = WORK_SPECIALTIES;
@@ -136,7 +145,7 @@ export class DoctorInformationSeederService {
   }
 
   /**
-   * Get random English name based on gender
+   * Get random Vietnamese name without diacritics based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
@@ -356,16 +365,16 @@ export class DoctorInformationSeederService {
   /**
    * Generate bank account number (deterministic based on index)
    */
-  private generateBankNumber(index: number): number {
+  private generateBankNumber(index: number): string {
     const prefix = [1234, 5678, 9012, 3456, 7890];
     const suffix = String(100000000 + index).slice(1);
-    return parseInt(`${prefix[index % prefix.length]}${suffix}`, 10);
+    return `${prefix[index % prefix.length]}${suffix}`;
   }
 
   /**
    * Get random bank name
    */
-  private getRandomBankName(): BankName {
+  private getRandomBankName(): string {
     return this.BANK_NAMES[Math.floor(Math.random() * this.BANK_NAMES.length)];
   }
 

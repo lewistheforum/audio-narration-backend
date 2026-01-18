@@ -3,6 +3,7 @@ import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/accounts/enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../../modules/accounts/enums/salary-payment-method.enum';
+import { ContractStatus } from '../../modules/accounts/enums/contract-status.enum';
 import { ClinicContractInformation } from '../../modules/accounts/entities/clinic-contract-information.entity';
 import { ClinicContractInformationRepository } from '../../modules/accounts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/accounts/repositories/contract-package.repository';
@@ -160,6 +161,8 @@ export class ClinicContractInformationSeederService {
           effectiveTo: this.getRandomEffectiveTo(),
           partyASignerName: this.getRandomPartyASignerName(),
           partyBSignerName: this.getRandomPartyBSignerName(),
+          contractFile: this.getRandomContractFile(),
+          contractStatus: this.getRandomContractStatus(),
         });
 
         await this.clinicContractInformationRepository.save(contractInfo);
@@ -368,5 +371,28 @@ export class ClinicContractInformationSeederService {
     return this.PARTY_B_SIGNERS[
       Math.floor(Math.random() * this.PARTY_B_SIGNERS.length)
     ];
+  }
+
+  /**
+   * Get random contract file path or URL (nullable)
+   */
+  private getRandomContractFile(): string | null {
+    const contractFiles = [
+      '/contracts/contract_' + Math.floor(Math.random() * 10000) + '.pdf',
+      '/contracts/employment_agreement_' + Math.floor(Math.random() * 10000) + '.pdf',
+      'https://storage.medicare.vn/contracts/contract_' + Math.floor(Math.random() * 10000) + '.pdf',
+      'https://s3.medicare.vn/contracts/employment_' + Math.floor(Math.random() * 10000) + '.pdf',
+      null, // 20% chance of no contract file
+      null,
+    ];
+    return contractFiles[Math.floor(Math.random() * contractFiles.length)];
+  }
+
+  /**
+   * Get random contract status
+   */
+  private getRandomContractStatus(): ContractStatus {
+    const statuses = [ContractStatus.CURRENT, ContractStatus.OLD];
+    return statuses[Math.floor(Math.random() * statuses.length)];
   }
 }

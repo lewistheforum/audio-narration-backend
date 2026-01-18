@@ -9,7 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
-import { BankName } from '../enums/bank-name.enum';
+import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
 
 /**
  * ClinicAdminInformation Entity
@@ -110,29 +110,24 @@ export class ClinicAdminInformation {
     name: 'bank_name',
     type: 'text',
     nullable: true,
+    transformer: encryptionTransformer,
   })
-  bankName?: BankName | string;
+  bankName?: string;
 
   /**
    * Bank Account Number
    *
    * Bank account number for receiving payments
    */
-  @Column({
-    name: 'bank_number',
-    type: 'decimal',
-    precision: 20,
-    scale: 0,
-    nullable: true,
-  })
-  bankNumber?: number;
+  @Column({ name: 'bank_number', type: 'text', nullable: true, transformer: encryptionTransformer })
+  bankNumber?: string;
 
   /**
    * Bank Branch
    *
    * Branch location of the bank
    */
-  @Column({ name: 'bank_branch', type: 'text', nullable: true })
+  @Column({ name: 'bank_branch', type: 'text', nullable: true, transformer: encryptionTransformer })
   bankBranch?: string;
 
   /**

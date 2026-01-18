@@ -233,15 +233,15 @@ export const SALARY_PAYMENT_CYCLES = [
 ];
 
 export const PARTY_A_SIGNERS = [
-  'Dr. John Smith - Clinic Director',
-  'Dr. Mary Johnson - Clinic Manager',
-  'Dr. Michael Williams - Head of Orthopedics',
+  'Dr. Nguyen Van A - Clinic Director',
+  'Dr. Tran Thi B - Clinic Manager',
+  'Dr. Le Van C - Head of Orthopedics',
 ];
 
 export const PARTY_B_SIGNERS = [
-  'John Smith - Doctor',
-  'Mary Johnson - Nurse',
-  'Michael Williams - Doctor',
+  'Nguyen Van D - Doctor',
+  'Tran Thi E - Nurse',
+  'Le Van F - Doctor',
 ];
 
 export const OPERATING_LICENSES = [

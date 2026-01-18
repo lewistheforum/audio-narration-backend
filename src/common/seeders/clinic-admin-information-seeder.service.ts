@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
-import { AccountRole, BankName } from '../../modules/accounts/enums';
+import { AccountRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicAdminInformationRepository } from '../../modules/accounts/repositories/clinic-admin-information.repository';
 import {
@@ -37,7 +37,16 @@ export class ClinicAdminInformationSeederService {
   // Orthopedics-focused paraclinical services
   private readonly PARACLINICAL = PARACLINICAL;
 
-  private readonly BANK_NAMES = Object.values(BankName);
+  private readonly BANK_NAMES = [
+    'VPBank',
+    'TPBank',
+    'VietinBank',
+    'BIDV',
+    'MBBank',
+    'OCB',
+    'KienLongBank',
+    'MSB',
+  ];
   private readonly BANK_BRANCHES = BANK_BRANCHES;
 
   // Profile picture URLs for clinic admins
@@ -163,20 +172,20 @@ export class ClinicAdminInformationSeederService {
   /**
    * Get random bank name
    */
-  private getRandomBankName(): BankName {
+  private getRandomBankName(): string {
     return this.BANK_NAMES[Math.floor(Math.random() * this.BANK_NAMES.length)];
   }
 
   /**
    * Generate random bank number (10-15 digits)
    */
-  private randomBankNumber(): number {
+  private randomBankNumber(): string {
     const length = this.getRandomInt(10, 15);
     let number = '';
     for (let i = 0; i < length; i++) {
       number += Math.floor(Math.random() * 10);
     }
-    return parseInt(number, 10);
+    return number;
   }
 
   /**

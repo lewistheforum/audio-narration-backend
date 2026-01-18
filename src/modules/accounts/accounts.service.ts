@@ -2350,7 +2350,7 @@ export class AccountsService {
       dob: dto.dob ? new Date(dto.dob) : undefined,
       profilePicture: dto.profilePicture,
       bankName: dto.bankName,
-      bankNumber: dto.bankNumber ? Number(dto.bankNumber) : undefined,
+      bankNumber: dto.bankNumber,
       bankBranch: dto.bankBranch,
       sepayVa: dto.sepayVa,
       isVerify: dto.isVerify ?? false,
@@ -2419,7 +2419,7 @@ export class AccountsService {
         profile.bankName = dto.bankName;
       }
       if (dto.bankNumber !== undefined) {
-        profile.bankNumber = dto.bankNumber ? Number(dto.bankNumber) : undefined;
+        profile.bankNumber = dto.bankNumber;
       }
       if (dto.bankBranch !== undefined) {
         profile.bankBranch = dto.bankBranch;
@@ -2443,7 +2443,7 @@ export class AccountsService {
         dob: dto.dob ? new Date(dto.dob) : undefined,
         profilePicture: dto.profilePicture,
         bankName: dto.bankName,
-        bankNumber: dto.bankNumber ? Number(dto.bankNumber) : undefined,
+        bankNumber: dto.bankNumber,
         bankBranch: dto.bankBranch,
         sepayVa: dto.sepayVa,
         isVerify: dto.isVerify ?? false,

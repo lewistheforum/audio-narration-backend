@@ -29,7 +29,7 @@ export class GoogleIframe {
   @JoinColumn({ name: 'address_id' })
   address?: Address;
 
-  @Column({ name: 'location', type: 'point', nullable: true })
+  @Column({ name: 'location', type: 'text', nullable: true })
   location?: string;
 
   @Column({ name: 'map_style', type: 'text', nullable: true })
