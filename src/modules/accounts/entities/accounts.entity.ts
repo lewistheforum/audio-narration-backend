@@ -1,5 +1,6 @@
 import { AccountRole, AccountStatus } from '../enums';
 import { ClinicManagerInformation } from './clinic_manager_information.entity';
+import { ClinicAdminInformation } from './clinic-admin-information.entity';
 import { Address } from './addresses.entity';
 import {
   Entity,
@@ -55,11 +56,22 @@ export class Account {
    *
    * One-to-one relation with clinic_manager_information table for CLINIC_MANAGER accounts
    */
-  @OneToOne(() => ClinicManagerInformation, {
+  @OneToOne(() => ClinicManagerInformation, (clinicManager) => clinicManager.account, {
     nullable: true,
     cascade: true,
   })
   clinicManagerInformation?: ClinicManagerInformation;
+
+  /**
+   * Clinic Admin Information Relation
+   *
+   * One-to-one relation with clinic_admin_information table for CLINIC_ADMIN accounts
+   */
+  @OneToOne(() => ClinicAdminInformation, (clinicAdmin) => clinicAdmin.account, {
+    nullable: true,
+    cascade: true,
+  })
+  clinicAdminInformation?: ClinicAdminInformation;
 
   /**
    * Addresses Relation
