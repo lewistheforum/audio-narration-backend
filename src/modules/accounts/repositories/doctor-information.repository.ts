@@ -146,4 +146,60 @@ export class DoctorInformationRepository {
     });
     return count > 0;
   }
+
+  /**
+   * Find public doctor information by doctor account ID
+   *
+   * Returns doctor information with security controls on encrypted fields.
+   * Uses allowlist approach to prevent sensitive data leakage.
+   *
+   * Allowed encrypted fields (using addSelect):
+   * - professional_license
+   * - certificate_practical_training
+   * - medical_license
+   *
+   * Excluded encrypted fields (NOT selected):
+   * - identity_number
+   * - place_identity_card
+   * - identity_date
+   * - bank_number
+   * - bank_name
+   * - bank_branch
+   *
+   * @param {string} doctorAccId - Doctor account UUID
+   * @returns {Promise<DoctorInformation | null>} Doctor information with allowed fields only
+   */
+  async findPublicByDoctorAccountId(
+    doctorAccId: string,
+  ): Promise<DoctorInformation | null> {
+    return this.repository
+      .createQueryBuilder('doctor_info')
+      .select([
+        'doctor_info._id',
+        'doctor_info.account_id',
+        'doctor_info.full_name',
+        'doctor_info.gender',
+        'doctor_info.dob',
+        'doctor_info.profile_picture',
+        'doctor_info.academic_degree',
+        'doctor_info.experience',
+        'doctor_info.position',
+        'doctor_info.introduction_1',
+        'doctor_info.work_process_2',
+        'doctor_info.study_process_3',
+        'doctor_info.members_4',
+        'doctor_info.scientific_work_5',
+        'doctor_info.papers_6',
+        'doctor_info.introduction_image',
+        'doctor_info.created_at',
+        'doctor_info.updated_at',
+      ])
+      .addSelect([
+        'doctor_info.professional_license',
+        'doctor_info.certificate_practical_training',
+        'doctor_info.medical_license',
+      ])
+      .where('doctor_info.account_id = :accountId', { accountId: doctorAccId })
+      .getOne();
+  }
 }

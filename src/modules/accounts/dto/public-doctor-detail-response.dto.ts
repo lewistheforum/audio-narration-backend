@@ -3,11 +3,13 @@ import { AccountRole, AccountStatus } from '../enums';
 import { Gender } from '../enums/gender.enum';
 
 /**
- * Doctor Info DTO
+ * Public Doctor Info DTO
  *
- * Detailed doctor information from doctor_information table
+ * Doctor information for public view with security controls.
+ * Uses allowlist approach to prevent sensitive data leakage.
+ * Only includes non-encrypted fields and permitted encrypted fields.
  */
-export class DoctorInfo {
+export class PublicDoctorInfo {
   @ApiProperty({
     description: 'Doctor information ID',
     example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
@@ -110,76 +112,28 @@ export class DoctorInfo {
   introductionImage?: string;
 
   @ApiProperty({
-    description: 'Professional license number',
-    example: 'PL-12345',
+    description: 'Professional license (encrypted)',
+    example: { number: 'PL-12345', issuedBy: 'Ministry of Health' },
     required: false,
     nullable: true,
   })
-  professionalLicense?: string;
+  professionalLicense?: Record<string, any>;
 
   @ApiProperty({
-    description: 'Certificate of practical training',
-    example: 'CPT-67890',
+    description: 'Certificate of practical training (encrypted)',
+    example: { number: 'CPT-67890', issuedBy: 'Training Center' },
     required: false,
     nullable: true,
   })
-  certificatePracticalTraining?: string;
+  certificatePracticalTraining?: Record<string, any>;
 
   @ApiProperty({
-    description: 'Medical license number',
-    example: 'ML-54321',
+    description: 'Medical license (encrypted)',
+    example: { number: 'ML-54321', issuedBy: 'Medical Council' },
     required: false,
     nullable: true,
   })
-  medicalLicense?: string;
-
-  @ApiProperty({
-    description: 'Identity card number',
-    example: '001234567890',
-    required: false,
-    nullable: true,
-  })
-  identityNumber?: string;
-
-  @ApiProperty({
-    description: 'Place of issue for identity card',
-    example: 'Hanoi',
-    required: false,
-    nullable: true,
-  })
-  placeIdentityCard?: string;
-
-  @ApiProperty({
-    description: 'Identity card issue date',
-    example: '2020-01-15',
-    required: false,
-    nullable: true,
-  })
-  identityDate?: Date;
-
-  @ApiProperty({
-    description: 'Bank account number',
-    example: '12345678901234567890',
-    required: false,
-    nullable: true,
-  })
-  bankNumber?: number;
-
-  @ApiProperty({
-    description: 'Bank name',
-    example: 'Vietcombank',
-    required: false,
-    nullable: true,
-  })
-  bankName?: string;
-
-  @ApiProperty({
-    description: 'Bank branch',
-    example: 'Hanoi Branch',
-    required: false,
-    nullable: true,
-  })
-  bankBranch?: string;
+  medicalLicense?: Record<string, any>;
 
   constructor(doctorInfo: any) {
     this.id = doctorInfo._id;
@@ -198,21 +152,15 @@ export class DoctorInfo {
     this.professionalLicense = doctorInfo.professionalLicense;
     this.certificatePracticalTraining = doctorInfo.certificatePracticalTraining;
     this.medicalLicense = doctorInfo.medicalLicense;
-    this.identityNumber = doctorInfo.identityNumber;
-    this.placeIdentityCard = doctorInfo.placeIdentityCard;
-    this.identityDate = doctorInfo.identityDate;
-    this.bankNumber = doctorInfo.bankNumber;
-    this.bankName = doctorInfo.bankName;
-    this.bankBranch = doctorInfo.bankBranch;
   }
 }
 
 /**
- * Clinic Info DTO
+ * Public Clinic Info DTO
  *
- * Clinic information for doctor details
+ * Clinic information for doctor details (public view)
  */
-export class ClinicInfo {
+export class PublicClinicInfo {
   @ApiProperty({
     description: 'Clinic account ID',
     example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
@@ -241,11 +189,12 @@ export class ClinicInfo {
 }
 
 /**
- * Doctor Detail Data DTO
+ * Public Doctor Detail Data DTO
  *
- * Main data object for doctor details response
+ * Main data object for public doctor details response.
+ * Excludes sensitive encrypted fields (identity, bank info).
  */
-export class DoctorDetailData {
+export class PublicDoctorDetailData {
   @ApiProperty({
     description: 'Doctor account ID',
     example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
@@ -315,18 +264,18 @@ export class DoctorDetailData {
   createdAt: Date;
 
   @ApiProperty({
-    description: 'Doctor detailed information',
-    type: DoctorInfo,
+    description: 'Doctor detailed information (public view)',
+    type: PublicDoctorInfo,
   })
-  doctorInfo: DoctorInfo;
+  doctorInfo: PublicDoctorInfo;
 
   @ApiProperty({
     description: 'Clinic information (parent clinic)',
-    type: ClinicInfo,
+    type: PublicClinicInfo,
     required: false,
     nullable: true,
   })
-  clinic?: ClinicInfo;
+  clinic?: PublicClinicInfo;
 
   constructor(
     account: any,
@@ -344,20 +293,21 @@ export class DoctorDetailData {
     this.parentId = account.parentId;
     this.createdAt = account.createdAt;
 
-    this.doctorInfo = new DoctorInfo(doctorInfo);
+    this.doctorInfo = new PublicDoctorInfo(doctorInfo);
 
     if (clinicInfo) {
-      this.clinic = new ClinicInfo(clinicInfo);
+      this.clinic = new PublicClinicInfo(clinicInfo);
     }
   }
 }
 
 /**
- * Doctor Detail Response DTO
+ * Public Doctor Detail Response DTO
  *
- * Response wrapper for doctor details
+ * Response wrapper for public doctor details.
+ * Uses allowlist approach to prevent sensitive data leakage.
  */
-export class DoctorDetailResponseDto {
+export class PublicDoctorDetailResponseDto {
   @ApiProperty({
     description: 'Response message',
     example: 'Doctor details retrieved successfully',
@@ -365,12 +315,12 @@ export class DoctorDetailResponseDto {
   message: string;
 
   @ApiProperty({
-    description: 'Doctor details data',
-    type: DoctorDetailData,
+    description: 'Doctor details data (public view)',
+    type: PublicDoctorDetailData,
   })
-  data: DoctorDetailData;
+  data: PublicDoctorDetailData;
 
-  constructor(data: DoctorDetailData) {
+  constructor(data: PublicDoctorDetailData) {
     this.message = 'Doctor details retrieved successfully';
     this.data = data;
   }

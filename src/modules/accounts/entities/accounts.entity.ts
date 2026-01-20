@@ -2,6 +2,7 @@ import { AccountRole, AccountStatus } from '../enums';
 import { ClinicManagerInformation } from './clinic_manager_information.entity';
 import { ClinicAdminInformation } from './clinic-admin-information.entity';
 import { Address } from './addresses.entity';
+import { Blog } from '../../blogs/entities/blog.entity';
 import {
   Entity,
   Column,
@@ -82,6 +83,16 @@ export class Account {
     cascade: true,
   })
   addresses?: Address[];
+
+  /**
+   * Blogs Relation
+   *
+   * One-to-many relation with blogs table for clinic accounts
+   */
+  @OneToMany(() => Blog, (blog) => blog.clinic, {
+    cascade: true,
+  })
+  blogs?: Blog[];
 
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;
