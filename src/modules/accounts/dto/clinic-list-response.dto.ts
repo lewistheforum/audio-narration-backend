@@ -170,10 +170,27 @@ export class ClinicItemDto {
   })
   address: AddressDto;
 
+  @ApiProperty({
+    description: 'Clinic admin name from clinic_admin_information',
+    example: 'City Medical Group',
+    required: false,
+    nullable: true,
+  })
+  clinicAdminName?: string;
+
+  @ApiProperty({
+    description: 'Final clinic name combining clinic admin name and branch name',
+    example: 'City Medical Group Branch 1',
+    required: false,
+    nullable: true,
+  })
+  finalClinicName?: string;
+
   constructor(
     account: any,
     clinicInfo: any,
     address: any,
+    clinicAdminInfo?: any,
   ) {
     this.id = account._id;
     this.username = account.username;
@@ -202,6 +219,29 @@ export class ClinicItemDto {
       province: address.province,
       provinceName: address.provinceName,
     };
+
+    // Handle clinic admin information and compute final clinic name
+    if (clinicAdminInfo) {
+      this.clinicAdminName = clinicAdminInfo.clinicName || null;
+
+      // Compute final clinic name: clinic_admin_name + " " + clinic_branch_name
+      // Handle null/empty values safely
+      const adminName = (clinicAdminInfo.clinicName || '').trim();
+      const branchName = (clinicInfo.clinicBranchName || '').trim();
+
+      if (adminName && branchName) {
+        this.finalClinicName = `${adminName} ${branchName}`;
+      } else if (adminName) {
+        this.finalClinicName = adminName;
+      } else if (branchName) {
+        this.finalClinicName = branchName;
+      } else {
+        this.finalClinicName = null;
+      }
+    } else {
+      this.clinicAdminName = null;
+      this.finalClinicName = null;
+    }
   }
 }
 

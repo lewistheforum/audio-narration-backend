@@ -1964,6 +1964,8 @@ export class AccountsService {
    * - accounts table: Core account data
    * - clinic_manager_information table: Clinic manager details
    * - addresses table: Address information
+   * - accounts table (parent): CLINIC_ADMIN account linked via parentId
+   * - clinic_admin_information table: Clinic admin details
    *
    * Filtering Logic:
    * - search: Case-insensitive match on clinicBranchName AND description
@@ -1986,6 +1988,7 @@ export class AccountsService {
     specialty?: string,
   ): Promise<ClinicListResponseDto> {
     // Get clinic manager accounts with ACTIVE status and filters
+    // The query now includes parent account (CLINIC_ADMIN) and clinic_admin_information
     const [clinics, total] = await this.accountRepository.findClinicsWithFilters(
       AccountRole.CLINIC_MANAGER,
       AccountStatus.ACTIVE,
@@ -2007,9 +2010,15 @@ export class AccountsService {
       const addresses = await this.addressRepository.findByAccountId(clinic._id);
       const primaryAddress = addresses.length > 0 ? addresses[0] : null;
 
+      // Get clinic admin information from parent account
+      let clinicAdminInfo = null;
+      if (clinic.parent && clinic.parent.clinicAdminInformation) {
+        clinicAdminInfo = clinic.parent.clinicAdminInformation;
+      }
+
       if (clinicInfo && primaryAddress) {
         clinicItems.push(
-          new ClinicItemDto(clinic, clinicInfo, primaryAddress),
+          new ClinicItemDto(clinic, clinicInfo, primaryAddress, clinicAdminInfo),
         );
       }
     }
@@ -2110,12 +2119,45 @@ export class AccountsService {
       }
     }
 
+    // Fetch parent CLINIC_ADMIN account and information
+    let clinicAdmin = null;
+    let clinicAdminInfo = null;
+    let finalClinicName: string | null = null;
+
+    if (clinic.parentId) {
+      clinicAdmin = await this.accountRepository.findAccountById(clinic.parentId);
+      if (clinicAdmin) {
+        clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(
+          clinicAdmin._id,
+        );
+
+        // Compute final clinic name using same logic as ClinicItemDto
+        if (clinicAdminInfo) {
+          const adminName = (clinicAdminInfo.clinicName || '').trim();
+          const branchName = (clinicInfo.clinicBranchName || '').trim();
+
+          if (adminName && branchName) {
+            finalClinicName = `${adminName} ${branchName}`;
+          } else if (adminName) {
+            finalClinicName = adminName;
+          } else if (branchName) {
+            finalClinicName = branchName;
+          } else {
+            finalClinicName = null;
+          }
+        }
+      }
+    }
+
     return new ClinicDetailResponseDto(
       clinic,
       clinicInfo,
       addressDetails,
       doctors,
       subscription,
+      clinicAdmin,
+      clinicAdminInfo,
+      finalClinicName,
     );
   }
 
