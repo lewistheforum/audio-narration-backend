@@ -13,6 +13,8 @@ import {
   UseGuards,
   Request,
   Query,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,6 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { AccountsService } from './accounts.service';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
+
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import {
@@ -82,7 +85,22 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   UpdateClinicAdminProfileDto,
 )
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+  constructor(private readonly accountsService: AccountsService) { }
+
+  @Post(':id/keys/generate')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(AccountRole.ADMIN, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR) // Restrict who can generate keys if needed, or keep public if for dev
+  // @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Generate digital signature keys for an account' })
+  @ApiResponse({ status: 201, description: 'Keys generated successfully' })
+  async generateKeys(@Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.accountsService.generateUserKeys(id);
+    return {
+      message: 'Digital signature keys generated successfully',
+      data
+    };
+  }
+
 
   /**
    * Get All Accounts (Admin Only)

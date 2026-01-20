@@ -1,4 +1,8 @@
 export enum ContractStatus {
   OLD = 'OLD',
   CURRENT = 'CURRENT',
+  DRAFT = 'DRAFT',
+  PENDING_SIGNATURE = 'PENDING_SIGNATURE',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }

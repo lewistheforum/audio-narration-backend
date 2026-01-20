@@ -8,7 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { Account } from './accounts.entity';
+import { Account } from '../../accounts/entities/accounts.entity';
 import { ContractRole } from '../enums/contract-role.enum';
 
 @Entity('contract_package')
@@ -52,6 +52,12 @@ export class ContractPackage {
 
   @Column({ name: 'position', type: 'text' })
   position: string;
+
+  @Column({ name: 'manager_signature', type: 'text', nullable: true })
+  managerSignature?: string;
+
+  @Column({ name: 'employee_signature', type: 'text', nullable: true })
+  employeeSignature?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

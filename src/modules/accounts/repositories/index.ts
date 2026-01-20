@@ -8,5 +8,4 @@ export { CodeVerificationRepository } from './code-verification.repository';
 export { DoctorInformationRepository } from './doctor-information.repository';
 export { ClinicAdminInformationRepository } from './clinic-admin-information.repository';
 export { GoogleIframeRepository } from './google-iframe.repository';
-export { ContractPackageRepository } from './contract-package.repository';
-export { ClinicContractInformationRepository } from './clinic-contract-information.repository';
+

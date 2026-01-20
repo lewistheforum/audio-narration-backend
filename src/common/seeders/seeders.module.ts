@@ -5,6 +5,7 @@ import { BlogsModule } from '../../modules/blogs/blogs.module';
 import { SubscriptionsModule } from '../../modules/subscriptions/subscriptions.module';
 import { ClinicServicesModule } from '../../modules/clinic-services/clinic-services.module';
 import { ServiceConfigsModule } from '../../modules/service-configs/service-configs.module';
+import { ContractsModule } from '../../modules/contracts/contracts.module';
 import { AdminSeederService } from './admin-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
 import { AccountSeederService } from './account-seeder.service';
@@ -65,6 +66,7 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
     SubscriptionsModule,
     ClinicServicesModule,
     ServiceConfigsModule,
+    ContractsModule,
   ],
   providers: [
     AdminSeederService,
@@ -111,4 +113,4 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
     SeederOrchestratorService,
   ],
 })
-export class SeedersModule {}
+export class SeedersModule { }

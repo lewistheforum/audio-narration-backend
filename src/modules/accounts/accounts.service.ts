@@ -11,6 +11,7 @@ import {
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus, VerificationType } from './enums';
+import * as crypto from 'crypto';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
 import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
@@ -144,7 +145,32 @@ export class AccountsService {
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly mailerService: MailerService,
-  ) {}
+  ) { }
+
+  private generateKeyPair(): { publicKey: string; encryptedPrivateKey: string } {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    });
+
+    return { publicKey, encryptedPrivateKey: privateKey };
+  }
+
+  async generateUserKeys(userId: string): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
+    const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+    const account = await this.findAccountEntityById(userId);
+    account.publicKey = publicKey;
+    account.encryptedPrivateKey = encryptedPrivateKey;
+    await this.accountRepository.saveAccount(account);
+    return { publicKey, encryptedPrivateKey };
+  }
 
   /**
    * Find All Accounts
@@ -1694,6 +1720,8 @@ export class AccountsService {
         banDescription: '',
       });
 
+
+
       const savedAccount = await queryRunner.manager.save(account);
 
       // Step 5: Validate account has CLINIC_MANAGER role before creating ClinicManagerInformation
@@ -1798,6 +1826,8 @@ export class AccountsService {
         isEmailVerified: false, // Staff must verify themselves
       });
 
+
+
       const savedAccount = await queryRunner.manager.save(account);
 
       // Step 5: Create ClinicStaffInformation entity with basic info
@@ -1894,6 +1924,8 @@ export class AccountsService {
         status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
         isEmailVerified: false, // Doctor must verify themselves
       });
+
+
 
       const savedAccount = await queryRunner.manager.save(account);
 
@@ -2272,7 +2304,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_ADMIN) {
       throw new BadRequestException(
         'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }

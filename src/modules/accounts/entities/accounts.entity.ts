@@ -1,4 +1,5 @@
 import { AccountRole, AccountStatus } from '../enums';
+import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
 import { ClinicManagerInformation } from './clinic_manager_information.entity';
 import { Address } from './addresses.entity';
 import {
@@ -115,6 +116,17 @@ export class Account {
     nullable: true,
   })
   banDescription?: string;
+
+  @Column({ name: 'public_key', type: 'text', nullable: true })
+  publicKey?: string;
+
+  @Column({
+    name: 'encrypted_private_key',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
+  encryptedPrivateKey?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

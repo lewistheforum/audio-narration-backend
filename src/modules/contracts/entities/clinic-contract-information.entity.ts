@@ -11,8 +11,7 @@ import {
 import { ContractPackage } from './contract-package.entity';
 import { ContractType } from '../enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
-import { ContractStatus } from '../enums/contract-status.enum';
-import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
+import { ContractStatus } from '../../accounts/enums/contract-status.enum';
 
 @Entity('clinic_contract_information')
 export class ClinicContractInformation {
@@ -95,20 +94,19 @@ export class ClinicContractInformation {
   @Column({ name: 'effective_to', type: 'timestamptz' })
   effectiveTo: Date;
 
-  @Column({ name: 'party_a_signer_name', type: 'text', transformer: encryptionTransformer })
+  @Column({ name: 'party_a_signer_name', type: 'text' })
   partyASignerName: string;
 
-  @Column({ name: 'party_b_signer_name', type: 'text', transformer: encryptionTransformer })
+  @Column({ name: 'party_b_signer_name', type: 'text' })
   partyBSignerName: string;
 
-  @Column({ name: 'contract_file', type: 'text', nullable: true, transformer: encryptionTransformer })
-  contractFile: string;
+  @Column({ name: 'contract_file', type: 'text', nullable: true })
+  contractFile?: string;
 
   @Column({
     name: 'contract_status',
     type: 'enum',
     enum: ContractStatus,
-    enumName: 'clinic_contract_contract_status_enum',
     default: ContractStatus.CURRENT,
   })
   contractStatus: ContractStatus;
