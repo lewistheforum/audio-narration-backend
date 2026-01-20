@@ -159,9 +159,8 @@ export class AccountsService {
   async findAll(
     includeDeleted: boolean = false,
   ): Promise<AccountResponseDto[]> {
-    const accounts = await this.accountRepository.findAllAccounts(
-      includeDeleted,
-    );
+    const accounts =
+      await this.accountRepository.findAllAccounts(includeDeleted);
 
     const result: AccountResponseDto[] = [];
     for (const account of accounts) {
@@ -236,8 +235,9 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
 
     const address = await this.addressRepository.findByAccountId(id);
+
     const googleIframe = await this.googleIframeRepository.findByAddressId(
-      address._id,
+      address?._id,
     );
 
     switch (account.role) {
@@ -558,7 +558,6 @@ export class AccountsService {
     updateAccountDto: UpdateAccountDto,
   ): Promise<{ user: AccountResponseDto; emailChanged?: boolean }> {
     const account = await this.findAccountEntityById(id);
-    console.log('check: ', account);
 
     let emailChanged = false;
 
@@ -703,6 +702,78 @@ export class AccountsService {
       user: await this.getAccountInformationByRole(id),
       emailChanged,
     };
+  }
+
+  /**
+   * Encrypt Bank Account Information
+   *
+   * Manually triggers encryption for bank-related fields.
+   * Useful for migrating existing plain-text data to encrypted format.
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<any>} Updated profile
+   */
+  async encryptBankAccount(id: string): Promise<any> {
+    const account = await this.findAccountEntityById(id);
+
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      const profile = await this.clinicAdminInfoRepository.findByAccountId(id);
+      if (!profile) return;
+
+      // Saving the entity triggers the encryption transformer
+      await this.clinicAdminInfoRepository.save(profile);
+      return profile;
+    } else if (account.role === AccountRole.DOCTOR) {
+      const profile = await this.doctorInfoRepository.findByAccountId(id);
+      if (!profile) return;
+
+      // Saving the entity triggers the encryption transformer
+      await this.doctorInfoRepository.save(profile);
+      return profile;
+    }
+
+    throw new BadRequestException(
+      'Account role does not support bank information',
+    );
+  }
+
+  /**
+   * Get Decrypted Bank Information
+   *
+   * Retrieves bank information for an account.
+   * Since the entity columns use the encryptionTransformer,
+   * fetching the entity automatically decrypts the data.
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<any>} Object containing decrypted bank details
+   */
+  async getDecryptedBankInfo(id: string): Promise<any> {
+    const account = await this.findAccountEntityById(id);
+
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      const profile = await this.clinicAdminInfoRepository.findByAccountId(id);
+      if (!profile) return null;
+
+      return {
+        bankName: profile.bankName,
+        bankNumber: profile.bankNumber,
+        bankBranch: profile.bankBranch,
+        sepayVa: profile.sepayVa,
+      };
+    } else if (account.role === AccountRole.DOCTOR) {
+      const profile = await this.doctorInfoRepository.findByAccountId(id);
+      if (!profile) return null;
+
+      return {
+        bankName: profile.bankName,
+        bankNumber: profile.bankNumber,
+        bankBranch: profile.bankBranch,
+      };
+    }
+
+    throw new BadRequestException(
+      'Account role does not support bank information',
+    );
   }
 
   /**
@@ -924,15 +995,14 @@ export class AccountsService {
       dob?: Date;
       profilePicture?: string;
       bankName?: string;
-      bankNumber?: number;
+      bankNumber?: string;
       bankBranch?: string;
       sepayVa?: string;
       isVerify?: boolean;
     },
   ): Promise<ClinicAdminInformation> {
-    let clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(
-      accountId,
-    );
+    let clinicAdminInfo =
+      await this.clinicAdminInfoRepository.findByAccountId(accountId);
 
     if (clinicAdminInfo) {
       // Update existing
@@ -1012,9 +1082,8 @@ export class AccountsService {
       dob?: Date;
     },
   ): Promise<ClinicManagerInformation> {
-    let managerInfo = await this.clinicManagerInfoRepository.findByAccountId(
-      accountId,
-    );
+    let managerInfo =
+      await this.clinicManagerInfoRepository.findByAccountId(accountId);
 
     if (managerInfo) {
       // Update existing
@@ -1148,13 +1217,13 @@ export class AccountsService {
       scientificWork5?: Record<string, any>;
       papers6?: Record<string, any>;
       introductionImage?: string;
-      professionalLicense?: string;
-      certificatePracticalTraining?: string;
-      medicalLicense?: string;
+      professionalLicense?: Record<string, any>;
+      certificatePracticalTraining?: Record<string, any>;
+      medicalLicense?: Record<string, any>;
       identityNumber?: string;
       placeIdentityCard?: string;
       identityDate?: Date;
-      bankNumber?: number;
+      bankNumber?: string;
       bankName?: string;
       bankBranch?: string;
     },
@@ -1906,6 +1975,12 @@ export class AccountsService {
       );
     }
 
+    // Invalidate all previous verification codes for this user
+    await this.codeVerificationRepository.invalidateAllUserCodes(
+      account._id,
+      VerificationType.RESET,
+    );
+
     // Generate new 6-digit code
     const code = generateVerificationCode();
 
@@ -2165,9 +2240,8 @@ export class AccountsService {
         },
       );
 
-      const savedGeneralAccount = await queryRunner.manager.save(
-        generalAccount,
-      );
+      const savedGeneralAccount =
+        await queryRunner.manager.save(generalAccount);
 
       await queryRunner.commitTransaction();
 
@@ -2956,7 +3030,7 @@ export class AccountsService {
       dob: dto.dob ? new Date(dto.dob) : undefined,
       profilePicture: dto.profilePicture,
       bankName: dto.bankName,
-      bankNumber: dto.bankNumber ? Number(dto.bankNumber) : undefined,
+      bankNumber: dto.bankNumber,
       bankBranch: dto.bankBranch,
       sepayVa: dto.sepayVa,
       isVerify: dto.isVerify ?? false,
@@ -2996,9 +3070,8 @@ export class AccountsService {
     const account = await this.findAccountEntityById(accountId);
     this.validateClinicAdminRole(account);
 
-    let profile = await this.clinicAdminInfoRepository.findByAccountId(
-      accountId,
-    );
+    let profile =
+      await this.clinicAdminInfoRepository.findByAccountId(accountId);
 
     if (profile) {
       // Update existing profile
@@ -3027,9 +3100,7 @@ export class AccountsService {
         profile.bankName = dto.bankName;
       }
       if (dto.bankNumber !== undefined) {
-        profile.bankNumber = dto.bankNumber
-          ? Number(dto.bankNumber)
-          : undefined;
+        profile.bankNumber = dto.bankNumber;
       }
       if (dto.bankBranch !== undefined) {
         profile.bankBranch = dto.bankBranch;
@@ -3053,7 +3124,7 @@ export class AccountsService {
         dob: dto.dob ? new Date(dto.dob) : undefined,
         profilePicture: dto.profilePicture,
         bankName: dto.bankName,
-        bankNumber: dto.bankNumber ? Number(dto.bankNumber) : undefined,
+        bankNumber: dto.bankNumber ? String(dto.bankNumber) : undefined,
         bankBranch: dto.bankBranch,
         sepayVa: dto.sepayVa,
         isVerify: dto.isVerify ?? false,

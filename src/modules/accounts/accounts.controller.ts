@@ -718,8 +718,6 @@ export class AccountsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAccountDto: UpdateAccountDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    console.log('go to ');
-
     const { user, emailChanged } = await this.accountsService.update(
       id,
       updateAccountDto,
@@ -804,6 +802,72 @@ export class AccountsController {
     @Body() updatePasswordDto: UpdatePasswordDto,
   ): Promise<void> {
     await this.accountsService.updatePassword(id, updatePasswordDto);
+  }
+
+  /**
+   * Encrypt Bank Information
+   *
+   * Triggers encryption for bank-related fields of an account.
+   * Used to migrate existing plain-text data to encrypted format.
+   *
+   * Path Parameters:
+   * - id: Account UUID
+   *
+   * Access Control:
+   * - Requires JWT authentication
+   * - Users can encrypt their own data
+   * - Admins can encrypt any data
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<{message: string}>} Success message
+   */
+  @Post(':id/encrypt-bank')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_ADMIN, AccountRole.DOCTOR)
+  // @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Encrypt bank information' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank information encrypted successfully',
+  })
+  async encryptBank(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ message: string }> {
+    await this.accountsService.encryptBankAccount(id);
+    return {
+      message: 'Bank information encrypted successfully',
+    };
+  }
+
+  /**
+   * Get Decrypted Bank Information
+   *
+   * Retrieves the decrypted bank information for an account.
+   *
+   * Path Parameters:
+   * - id: Account UUID
+   *
+   * Access Control:
+   * - Requires JWT authentication
+   * - Users can view their own data
+   * - Admins can view any data
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<any>} Decrypted bank information
+   */
+  @Get(':id/decrypted-bank')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_ADMIN, AccountRole.DOCTOR)
+  // @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get decrypted bank information' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank information retrieved successfully',
+  })
+  async getDecryptedBankInfo(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<any> {
+    return this.accountsService.getDecryptedBankInfo(id);
   }
 
   /**

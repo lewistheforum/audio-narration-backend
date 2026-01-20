@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { Gender } from '../enums';
+import { encryptionTransformer } from 'src/common/transformers/encryption.transformer';
 
 /**
  * DoctorInformation Entity
@@ -77,14 +78,18 @@ export class DoctorInformation {
   @Column({ name: 'introduction_image', type: 'text', nullable: true })
   introductionImage?: string;
 
-  @Column({ name: 'professional_license', type: 'text', nullable: true })
-  professionalLicense?: string;
+  @Column({ name: 'professional_license', type: 'jsonb', nullable: true })
+  professionalLicense?: Record<string, any>;
 
-  @Column({ name: 'certificate_practical_training', type: 'text', nullable: true })
-  certificatePracticalTraining?: string;
+  @Column({
+    name: 'certificate_practical_training',
+    type: 'jsonb',
+    nullable: true,
+  })
+  certificatePracticalTraining?: Record<string, any>;
 
-  @Column({ name: 'medical_license', type: 'text', nullable: true })
-  medicalLicense?: string;
+  @Column({ name: 'medical_license', type: 'jsonb', nullable: true })
+  medicalLicense?: Record<string, any>;
 
   @Column({ name: 'identity_number', type: 'text', nullable: true })
   identityNumber?: string;
@@ -97,17 +102,26 @@ export class DoctorInformation {
 
   @Column({
     name: 'bank_number',
-    type: 'decimal',
-    precision: 20,
-    scale: 0,
+    type: 'text',
     nullable: true,
+    transformer: encryptionTransformer,
   })
-  bankNumber?: number;
+  bankNumber?: string;
 
-  @Column({ name: 'bank_name', type: 'text', nullable: true })
+  @Column({
+    name: 'bank_name',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankName?: string;
 
-  @Column({ name: 'bank_branch', type: 'text', nullable: true })
+  @Column({
+    name: 'bank_branch',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankBranch?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

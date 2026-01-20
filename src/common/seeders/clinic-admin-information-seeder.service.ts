@@ -191,13 +191,13 @@ export class ClinicAdminInformationSeederService {
   /**
    * Generate random bank number (10-15 digits)
    */
-  private randomBankNumber(): number {
+  private randomBankNumber(): string {
     const length = this.getRandomInt(10, 15);
     let number = '';
     for (let i = 0; i < length; i++) {
       number += Math.floor(Math.random() * 10);
     }
-    return parseInt(number, 10);
+    return number;
   }
 
   /**

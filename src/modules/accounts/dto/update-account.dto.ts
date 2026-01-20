@@ -198,24 +198,24 @@ export class UpdateAccountDto {
     required: false,
   })
   @IsOptional()
-  @IsString({ message: 'Professional license must be a string' })
-  professionalLicense?: string;
+  @IsObject({ message: 'Professional license must be an object' })
+  professionalLicense?: Record<string, any>;
 
   @ApiProperty({
     description: 'Certificate of practical training URL',
     required: false,
   })
   @IsOptional()
-  @IsString({ message: 'Certificate of practical training must be a string' })
-  certificatePracticalTraining?: string;
+  @IsObject({ message: 'Certificate of practical training must be an object' })
+  certificatePracticalTraining?: Record<string, any>;
 
   @ApiProperty({
     description: 'Medical license document URL',
     required: false,
   })
   @IsOptional()
-  @IsString({ message: 'Medical license must be a string' })
-  medicalLicense?: string;
+  @IsObject({ message: 'Medical license must be an object' })
+  medicalLicense?: Record<string, any>;
 
   // ClinicInformation specific fields
   @ApiProperty({
@@ -288,8 +288,8 @@ export class UpdateAccountDto {
     required: false,
   })
   @IsOptional()
-  @IsNumber({}, { message: 'Bank number must be a number' })
-  bankNumber?: number;
+  @IsString({ message: 'Bank number must be a string' })
+  bankNumber?: string;
 
   @ApiProperty({
     description: 'Bank branch location',

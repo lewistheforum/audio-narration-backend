@@ -29,7 +29,7 @@ export class FeedbackController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Label all feedbacks' })
+  @ApiOperation({ summary: 'Get feedbacks by id' })
   @ApiResponse({
     status: 200,
     description: 'List of feedbacks retrieved successfully',

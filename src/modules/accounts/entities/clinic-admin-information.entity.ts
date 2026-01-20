@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { BankName } from '../enums/bank-name.enum';
+import { encryptionTransformer } from 'src/common/transformers/encryption.transformer';
 
 /**
  * ClinicAdminInformation Entity
@@ -110,6 +111,7 @@ export class ClinicAdminInformation {
     name: 'bank_name',
     type: 'text',
     nullable: true,
+    transformer: encryptionTransformer,
   })
   bankName?: BankName | string;
 
@@ -120,19 +122,23 @@ export class ClinicAdminInformation {
    */
   @Column({
     name: 'bank_number',
-    type: 'decimal',
-    precision: 20,
-    scale: 0,
+    type: 'text',
     nullable: true,
+    transformer: encryptionTransformer,
   })
-  bankNumber?: number;
+  bankNumber?: string;
 
   /**
    * Bank Branch
    *
    * Branch location of the bank
    */
-  @Column({ name: 'bank_branch', type: 'text', nullable: true })
+  @Column({
+    name: 'bank_branch',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankBranch?: string;
 
   /**
@@ -140,7 +146,12 @@ export class ClinicAdminInformation {
    *
    * SePay virtual account number for payment processing
    */
-  @Column({ name: 'sepay_va', type: 'text', nullable: true })
+  @Column({
+    name: 'sepay_va',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   sepayVa?: string;
 
   /**
@@ -148,7 +159,12 @@ export class ClinicAdminInformation {
    *
    * Indicates whether the clinic administrator is verified
    */
-  @Column({ name: 'is_verify', type: 'boolean', default: false, nullable: true })
+  @Column({
+    name: 'is_verify',
+    type: 'boolean',
+    default: false,
+    nullable: true,
+  })
   isVerify?: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

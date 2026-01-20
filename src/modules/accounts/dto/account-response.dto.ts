@@ -240,21 +240,21 @@ export class AccountResponseDto {
     required: false,
     nullable: true,
   })
-  professionalLicense?: string;
+  professionalLicense?: Record<string, any>;
 
   @ApiProperty({
     description: 'Certificate of practical training URL',
     required: false,
     nullable: true,
   })
-  certificatePracticalTraining?: string;
+  certificatePracticalTraining?: Record<string, any>;
 
   @ApiProperty({
     description: 'Medical license document URL',
     required: false,
     nullable: true,
   })
-  medicalLicense?: string;
+  medicalLicense?: Record<string, any>;
 
   // ClinicInformation specific fields
   @ApiProperty({
@@ -314,7 +314,7 @@ export class AccountResponseDto {
     required: false,
     nullable: true,
   })
-  bankNumber?: number;
+  bankNumber?: string;
 
   @ApiProperty({
     description: 'Bank branch location',

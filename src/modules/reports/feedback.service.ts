@@ -7,7 +7,7 @@ export class FeedbackService {
   constructor(private readonly feedbackRepository: FeedbackRepository) {}
 
   async labelFeedbacks() {
-    const feedbacks = await this.feedbackRepository.findAll();
+    const feedbacks = await this.feedbackRepository.findAllFeedbacks();
 
     for (const feedback of feedbacks) {
       // Label Description
@@ -96,7 +96,7 @@ export class FeedbackService {
   }
 
   async findAllFeedbacks() {
-    return this.feedbackRepository.findAll();
+    return this.feedbackRepository.findAllFeedbacks();
   }
 
   async findAllFeedbacksById(id: string) {

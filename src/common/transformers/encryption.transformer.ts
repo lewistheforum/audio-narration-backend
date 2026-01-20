@@ -3,19 +3,19 @@ import { encrypt, decrypt } from '../utils/encryption.util';
 
 /**
  * TypeORM Encryption Transformer
- * 
+ *
  * Automatically encrypts data before saving to database
  * and decrypts data when reading from database
- * 
+ *
  * Usage:
  * ```typescript
- * @Column({ 
+ * @Column({
  *   unique: true,
- *   transformer: encryptionTransformer 
+ *   transformer: encryptionTransformer
  * })
  * email: string;
  * ```
- * 
+ *
  * Features:
  * - Transparent encryption/decryption
  * - Works with TypeORM column decorators
@@ -25,7 +25,7 @@ import { encrypt, decrypt } from '../utils/encryption.util';
 export const encryptionTransformer: ValueTransformer = {
   /**
    * Transform data before saving to database (encrypt)
-   * 
+   *
    * @param value - Plain text value from entity
    * @returns {string} Encrypted value to store in database
    */
@@ -38,7 +38,7 @@ export const encryptionTransformer: ValueTransformer = {
 
   /**
    * Transform data when reading from database (decrypt)
-   * 
+   *
    * @param value - Encrypted value from database
    * @returns {string} Decrypted plain text value
    */
@@ -46,6 +46,12 @@ export const encryptionTransformer: ValueTransformer = {
     if (value === null || value === undefined || value === '') {
       return value;
     }
-    return decrypt(value);
+
+    // Try to decrypt; if it fails (not encrypted or different format), return original
+    try {
+      return decrypt(value);
+    } catch {
+      return value; // Assume it was plain text or legacy data
+    }
   },
 };
