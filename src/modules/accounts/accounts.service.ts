@@ -36,8 +36,8 @@ import {
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
-  DoctorDetailResponseDto,
-  DoctorDetailData,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -2609,6 +2609,8 @@ export class AccountsService {
    * - accounts table: Core account data
    * - clinic_manager_information table: Clinic manager details
    * - addresses table: Address information
+   * - accounts table (parent): CLINIC_ADMIN account linked via parentId
+   * - clinic_admin_information table: Clinic admin details
    *
    * Filtering Logic:
    * - search: Case-insensitive match on clinicBranchName AND description
@@ -2631,6 +2633,7 @@ export class AccountsService {
     specialty?: string,
   ): Promise<ClinicListResponseDto> {
     // Get clinic manager accounts with ACTIVE status and filters
+    // The query now includes parent account (CLINIC_ADMIN) and clinic_admin_information
     const [clinics, total] =
       await this.accountRepository.findClinicsWithFilters(
         AccountRole.CLINIC_MANAGER,
@@ -2653,8 +2656,16 @@ export class AccountsService {
       // Get primary address (first address)
       const address = await this.addressRepository.findByAccountId(clinic._id);
 
+      // Get clinic admin information from parent account
+      let clinicAdminInfo = null;
+      if (clinic.parent && clinic.parent.clinicAdminInformation) {
+        clinicAdminInfo = clinic.parent.clinicAdminInformation;
+      }
+
       if (clinicInfo && address) {
-        clinicItems.push(new ClinicItemDto(clinic, clinicInfo, address));
+        clinicItems.push(
+          new ClinicItemDto(clinic, clinicInfo, address, clinicAdminInfo),
+        );
       }
     }
 
@@ -2755,17 +2766,52 @@ export class AccountsService {
       }
     }
 
+    // Fetch parent CLINIC_ADMIN account and information
+    let clinicAdmin = null;
+    let clinicAdminInfo = null;
+    let finalClinicName: string | null = null;
+
+    if (clinic.parentId) {
+      clinicAdmin = await this.accountRepository.findAccountById(
+        clinic.parentId,
+      );
+      if (clinicAdmin) {
+        clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(
+          clinicAdmin._id,
+        );
+
+        // Compute final clinic name using same logic as ClinicItemDto
+        if (clinicAdminInfo) {
+          const adminName = (clinicAdminInfo.clinicName || '').trim();
+          const branchName = (clinicInfo.clinicBranchName || '').trim();
+
+          if (adminName && branchName) {
+            finalClinicName = `${adminName} ${branchName}`;
+          } else if (adminName) {
+            finalClinicName = adminName;
+          } else if (branchName) {
+            finalClinicName = branchName;
+          } else {
+            finalClinicName = null;
+          }
+        }
+      }
+    }
+
     return new ClinicDetailResponseDto(
       clinic,
       clinicInfo,
       addressDetails,
       doctors,
       subscription,
+      clinicAdmin,
+      clinicAdminInfo,
+      finalClinicName,
     );
   }
 
   /**
-   * Find All Doctors with Pagination and Filters
+   * Get Doctor by ID (Public View with Security Controls)
    *
    * Retrieves doctor accounts with pagination support and optional filtering.
    * Only returns accounts with role: DOCTOR and status: ACTIVE
@@ -2850,9 +2896,14 @@ export class AccountsService {
    * - Excludes soft-deleted records (accounts.deletedAt IS NULL and doctor_information.deleted_at IS NULL)
    * - Returns 404 Not Found if doctor not found or not eligible
    *
+   * Security Controls:
+   * - Uses findPublicByDoctorAccountId repository method with explicit select
+   * - Only includes permitted encrypted fields (professional_license, certificate_practical_training, medical_license)
+   * - Excludes sensitive encrypted fields (identity_number, place_identity_card, identity_date, bank_number, bank_name, bank_branch)
+   *
    * Data Sources:
    * - accounts table: Core account data
-   * - doctor_information table: Doctor details (joined via doctor_acc_id)
+   * - doctor_information table: Doctor details (public view only)
    * - accounts table (clinic): Parent clinic account (via parentId)
    * - clinic_manager_information table: Clinic manager details
    *
@@ -2862,10 +2913,10 @@ export class AccountsService {
    * - clinic.phone: comes from clinic account, not clinic_manager_information
    *
    * @param {string} id - Doctor account UUID
-   * @returns {Promise<DoctorDetailResponseDto>} Full doctor details
+   * @returns {Promise<PublicDoctorDetailData>} Public doctor details data with security controls
    * @throws {NotFoundException} If doctor not found or not eligible
    */
-  async getDoctorById(id: string): Promise<DoctorDetailResponseDto> {
+  async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
     // Get doctor account
     const doctor = await this.accountRepository.findAccountById(id);
     if (!doctor) {
@@ -2880,8 +2931,9 @@ export class AccountsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get doctor information
-    const doctorInfo = await this.doctorInfoRepository.findByAccountId(id);
+    // Get doctor information with security controls (allowlist approach)
+    const doctorInfo =
+      await this.doctorInfoRepository.findPublicByDoctorAccountId(id);
     if (!doctorInfo) {
       throw new NotFoundException('Doctor information not found');
     }
@@ -2916,14 +2968,14 @@ export class AccountsService {
       dob: doctorInfo.dob,
     };
 
-    // Create DoctorDetailData with modified account and doctor info
-    const doctorDetailData = new DoctorDetailData(
+    // Create PublicDoctorDetailData with modified account and doctor info
+    const publicDoctorDetailData = new PublicDoctorDetailData(
       modifiedAccount,
       doctorInfo,
       clinicInfo,
     );
 
-    return new DoctorDetailResponseDto(doctorDetailData);
+    return publicDoctorDetailData;
   }
 
   /**
@@ -3124,7 +3176,7 @@ export class AccountsService {
         dob: dto.dob ? new Date(dto.dob) : undefined,
         profilePicture: dto.profilePicture,
         bankName: dto.bankName,
-        bankNumber: dto.bankNumber ? String(dto.bankNumber) : undefined,
+        bankNumber: dto.bankNumber,
         bankBranch: dto.bankBranch,
         sepayVa: dto.sepayVa,
         isVerify: dto.isVerify ?? false,

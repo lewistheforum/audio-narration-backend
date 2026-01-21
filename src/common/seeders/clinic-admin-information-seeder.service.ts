@@ -1,9 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
-import { AccountRole, BankName } from '../../modules/accounts/enums';
+import { AccountRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicAdminInformationRepository } from '../../modules/accounts/repositories/clinic-admin-information.repository';
+import {
+  CLINIC_NAMES,
+  SPECIALIZATIONS,
+  PROS,
+  PARACLINICAL,
+  BANK_BRANCHES,
+  DESCRIPTIONS,
+} from '../constants/medical-terms';
 
 /**
  * ClinicAdminInformation Seeder Service
@@ -19,51 +27,38 @@ export class ClinicAdminInformationSeederService {
     ClinicAdminInformationSeederService.name,
   );
 
-  // Orthopedics-focused Vietnamese clinic names
-  private readonly CLINIC_NAMES = [
-    'Phòng Khám Cơ Xương Khớp Bonix Hà Nội',
-    'Phòng Khám Chấn Thương Chỉnh Hình Bonix TP.HCM',
-    'Phòng Khám Vật Lý Trị Liệu Bonix Đà Nẵng',
-    'Phòng Khám Thể Thao Y Khoa Bonix Cần Thơ',
-    'Phòng Khám Cột Sống Bonix Hải Phòng',
-  ];
+  // Orthopedics-focused English clinic names
+  private readonly CLINIC_NAMES = CLINIC_NAMES;
 
   // Orthopedics-only clinic specializations
-  private readonly SPECIALIZATIONS = [
-    ['Cơ xương khớp', 'Chấn thương chỉnh hình'],
-    ['Vật lý trị liệu', 'Phục hồi chức năng'],
-    ['Thể thao y khoa', 'Chấn thương thể thao'],
-    ['Cột sống', 'Đau lưng mạn tính'],
-    ['Đầu gối/Vai', 'Gãy xương'],
-  ];
+  private readonly SPECIALIZATIONS = SPECIALIZATIONS;
 
   // Clinic pros/advantages (orthopedics-focused)
-  private readonly PROS = [
-    [
-      'Đội ngũ bác sĩ chấn thương chỉnh hình chuyên môn cao',
-      'Thiết bị X-quang, MRI hiện đại',
-    ],
-    ['Phương pháp vật lý trị liệu tiên tiến', 'Đo loãng xương chuẩn quốc tế'],
-    [
-      'Chuyên gia cột sống và khớp nhân tạo',
-      'Phẫu thuật nội soi tối thiểu xâm lấn',
-    ],
-    [
-      'Chương trình phục hồi chức năng toàn diện',
-      'Điều trị chấn thương thể thao chuyên sâu',
-    ],
-    ['Cơ sở vật chất khang trang', 'Bảo hiểm y tế và chi phí hợp lý'],
-  ];
+  private readonly PROS = PROS;
 
   // Orthopedics-focused paraclinical services
-  private readonly PARACLINICAL = [
-    ['X-quang khớp', 'Siêu âm cơ xương khớp'],
-    ['MRI cột sống', 'CT Scanner xương'],
-    ['Đo mật độ xương', 'Điện cơ đồ EMG'],
-    ['Siêu âm cơ bắp', 'X-quang chức năng khớp'],
-  ];
+  private readonly PARACLINICAL = PARACLINICAL;
 
-  private readonly BANK_NAMES = Object.values(BankName);
+  private readonly BANK_NAMES = [
+    'VPBank',
+    'TPBank',
+    'VietinBank',
+    'BIDV',
+    'MBBank',
+    'OCB',
+    'KienLongBank',
+    'MSB',
+  ];
+  private readonly BANK_BRANCHES = BANK_BRANCHES;
+
+  // Profile picture URLs for clinic admins
+  private readonly PROFILE_PICTURE_URLS = [
+    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
+  ];
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -104,6 +99,7 @@ export class ClinicAdminInformationSeederService {
           continue;
         }
 
+        const adminIndex = clinicAdmins.indexOf(account);
         const clinicAdminInfo = this.clinicAdminInfoRepository.create({
           _id: randomUUID(),
           accountId: account._id,
@@ -113,6 +109,8 @@ export class ClinicAdminInformationSeederService {
           specializedIn: this.getRandomSpecializations(),
           pros: this.getRandomPros(),
           paraclinical: this.getRandomParaclinical(),
+          dob: this.generateDob(adminIndex),
+          profilePicture: this.getRandomProfilePicture(adminIndex),
           bankName: this.getRandomBankName(),
           bankNumber: this.randomBankNumber(),
           bankBranch: this.getRandomBankBranch(),
@@ -146,14 +144,7 @@ export class ClinicAdminInformationSeederService {
    * Get random description (orthopedics-focused)
    */
   private getRandomDescription(): string {
-    const descriptions = [
-      'Phòng khám chuyên sâu về cơ xương khớp và chấn thương chỉnh hình với đội ngũ bác sĩ chuyên môn cao.',
-      'Cung cấp dịch vụ chẩn đoán và điều trị các bệnh lý về xương, khớp, cột sống với trang thiết bị hiện đại.',
-      'Chuyên gia trong điều trị chấn thương thể thao và phục hồi chức năng toàn diện cho người bệnh.',
-      'Phòng khám đạt chuẩn quốc tế về vật lý trị liệu và phục hồi chức năng cơ xương khớp.',
-      'Đội ngũ bác sĩ giàu kinh nghiệm trong phẫu thuật nội soi khớp và cột sống, cam kết mang lại hiệu quả điều trị tốt nhất.',
-    ];
-    return descriptions[Math.floor(Math.random() * descriptions.length)];
+    return DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
   }
 
   /**
@@ -184,7 +175,7 @@ export class ClinicAdminInformationSeederService {
   /**
    * Get random bank name
    */
-  private getRandomBankName(): BankName {
+  private getRandomBankName(): string {
     return this.BANK_NAMES[Math.floor(Math.random() * this.BANK_NAMES.length)];
   }
 
@@ -204,14 +195,9 @@ export class ClinicAdminInformationSeederService {
    * Get random bank branch
    */
   private getRandomBankBranch(): string {
-    const branches = [
-      'Chi nhánh Hà Nội',
-      'Chi nhánh TP.HCM',
-      'Chi nhánh Đà Nẵng',
-      'Chi nhánh Cần Thơ',
-      'Chi nhánh Hải Phòng',
+    return this.BANK_BRANCHES[
+      Math.floor(Math.random() * this.BANK_BRANCHES.length)
     ];
-    return branches[Math.floor(Math.random() * branches.length)];
   }
 
   /**
@@ -237,6 +223,25 @@ export class ClinicAdminInformationSeederService {
       digits += Math.floor(Math.random() * 10);
     }
     return digits;
+  }
+
+  /**
+   * Generate date of birth (deterministic based on index)
+   * Clinic admins are typically 35-65 years old
+   */
+  private generateDob(index: number): Date {
+    const age = 35 + (index % 31); // 35-65 years old
+    const year = new Date().getFullYear() - age;
+    const month = 1 + (index % 12);
+    const day = 1 + (index % 28);
+    return new Date(year, month, day);
+  }
+
+  /**
+   * Get random profile picture URL (deterministic based on index)
+   */
+  private getRandomProfilePicture(index: number): string {
+    return this.PROFILE_PICTURE_URLS[index % this.PROFILE_PICTURE_URLS.length];
   }
 
   /**

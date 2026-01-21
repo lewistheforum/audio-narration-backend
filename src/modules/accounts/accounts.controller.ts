@@ -32,10 +32,12 @@ import {
   UpdatePasswordDto,
   BanAccountDto,
   CreateClinicManagerDto,
-  DoctorListResponseDto,
-  DoctorDetailResponseDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
+  PublicDoctorInfo,
+  PublicClinicInfo,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -77,9 +79,12 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   AccountResponseDto,
   ClinicListResponseDto,
   ClinicDetailResponseDto,
-  DoctorDetailResponseDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
+  PublicDoctorInfo,
+  PublicClinicInfo,
 )
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
@@ -338,101 +343,29 @@ export class AccountsController {
   }
 
   /**
-   * Get All Doctors (Public)
-   *
-   * Retrieves a paginated list of all active doctors.
-   * Only returns accounts with role: DOCTOR and status: ACTIVE
-   * Excludes soft-deleted records (deletedAt is null)
-   *
-   * Query Parameters:
-   * - clinicId: Filter by parent clinic ID (optional)
-   * - gender: Filter by doctor gender - MALE | FEMALE | OTHER (optional)
-   * - page: Page number (default: 1)
-   * - limit: Items per page (default: 10)
-   *
-   * Response Format:
-   * - Returns DoctorListResponseDto with doctors array and pagination metadata
-   * - Combines data from accounts + doctor_information + clinic_manager_information tables
-   *
-   * Access Control:
-   * - Public endpoint (no authentication required)
-   *
-   * Use Cases:
-   * - Doctor directory listing
-   * - Doctor search results
-   * - Doctor browsing
-   *
-   * @param {number} page - Page number
-   * @param {number} limit - Items per page
-   * @param {string} [clinicId] - Filter by parent clinic ID
-   * @param {string} [gender] - Filter by doctor gender
-   * @returns {Promise<{data: DoctorListResponseDto, message: string}>} Doctors with pagination
-   *
-   * @swagger
-   * @response 200 - Successfully retrieved doctors
-   */
-  @Get('doctors')
-  @ApiOperation({ summary: 'Get all doctors with pagination and filters' })
-  @ApiQuery({
-    name: 'clinicId',
-    required: false,
-    type: String,
-    description: 'Filter by parent clinic ID',
-  })
-  @ApiQuery({
-    name: 'gender',
-    required: false,
-    type: String,
-    description: 'Filter by doctor gender (MALE | FEMALE | OTHER)',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page (default: 10)',
-  })
-  @ApiResponseData({
-    type: DoctorListResponseDto,
-    status: MESSAGES.statusCode.success,
-    message: 'Doctors list retrieved successfully',
-  })
-  async getAllDoctors(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('clinicId') clinicId?: string,
-    @Query('gender') gender?: string,
-  ): Promise<{ data: DoctorListResponseDto; message: string }> {
-    const result = await this.accountsService.findAllDoctors(
-      page,
-      limit,
-      clinicId,
-      gender,
-    );
-    return {
-      data: result,
-      message: 'Doctors list retrieved successfully',
-    };
-  }
-
-  /**
    * Get Doctor Details by ID (Public)
    *
    * Retrieves detailed information for a specific doctor.
-   * Includes doctor information and clinic information (parent clinic).
+   * Includes account info, doctor profile, and clinic information.
+   *
+   * Security Controls:
+   * - Only returns doctors with role='DOCTOR' and status='ACTIVE'
+   * - Excludes soft-deleted records
+   * - Uses allowlist approach for encrypted fields:
+   *   - professional_license (allowed)
+   *   - certificate_practical_training (allowed)
+   *   - medical_license (allowed)
+   * - identity_number, place_identity_card, identity_date (excluded)
+   * - bank_number, bank_name, bank_branch (excluded)
    *
    * Path Parameters:
    * - id: Doctor account UUID
    *
    * Response Format:
-   * - Returns DoctorDetailResponseDto with full doctor details
-   * - Includes doctor information (profile, specialization, etc.)
-   * - Includes clinic information if doctor belongs to a clinic
+   * - Returns PublicDoctorDetailResponseDto with full doctor details
+   * - Includes account information (username, email, phone, etc.)
+   * - Includes doctor profile (experience, education, etc.)
+   * - Includes clinic information (parent clinic)
    *
    * Access Control:
    * - Public endpoint (no authentication required)
@@ -443,8 +376,8 @@ export class AccountsController {
    * - Booking interface doctor information
    *
    * @param {string} id - Doctor account UUID
-   * @returns {Promise<{data: DoctorDetailResponseDto, message: string}>} Full doctor details
-   * @throws {NotFoundException} If doctor not found or not active
+   * @returns {Promise<PublicDoctorDetailResponseDto>} Full doctor details with security controls
+   * @throws {NotFoundException} If doctor not found or not eligible
    *
    * @swagger
    * @response 200 - Successfully retrieved doctor details
@@ -453,19 +386,15 @@ export class AccountsController {
   @Get('doctors/:id')
   @ApiOperation({ summary: 'Get doctor details by ID' })
   @ApiResponseData({
-    type: DoctorDetailResponseDto,
+    type: PublicDoctorDetailData,
     status: MESSAGES.statusCode.success,
     message: 'Doctor details retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
   async getDoctorById(
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{ data: DoctorDetailResponseDto; message: string }> {
-    const doctor = await this.accountsService.getDoctorById(id);
-    return {
-      data: doctor,
-      message: 'Doctor details retrieved successfully',
-    };
+  ): Promise<PublicDoctorDetailData> {
+    return this.accountsService.getPublicDoctorById(id);
   }
 
   /**

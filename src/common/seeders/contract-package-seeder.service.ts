@@ -5,6 +5,9 @@ import { ContractRole } from '../../modules/accounts/enums/contract-role.enum';
 import { ContractPackage } from '../../modules/accounts/entities/contract-package.entity';
 import { ContractPackageRepository } from '../../modules/accounts/repositories/contract-package.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { CLINIC_REPRESENTATIVES } from '../constants/names';
+import { CLINIC_POSITIONS } from '../constants/medical-terms';
+import { HEADER_ADDRESSES } from '../constants/locations';
 
 /**
  * ContractPackage Seeder Service
@@ -24,29 +27,9 @@ export class ContractPackageSeederService {
   private readonly logger = new Logger(ContractPackageSeederService.name);
 
   // Orthopedics clinic-specific contract header data
-  private readonly CLINIC_REPRESENTATIVES = [
-    'Bác sĩ Nguyễn Văn An',
-    'Bác sĩ Trần Thị Mai',
-    'Bác sĩ Lê Văn Cường',
-    'Bác sĩ Phạm Thị Oanh',
-    'Bác sĩ Hoàng Văn Em',
-  ];
-
-  private readonly POSITIONS = [
-    'Giám đốc Phòng khám Cơ xương khớp',
-    'Giám đốc Phòng khám Chỉnh hình',
-    'Giám đốc Phòng khám Cơ xương khớp và Chỉnh hình',
-    'Giám đốc Phòng khám Chấn thương Chỉnh hình',
-    'Quản lý Phòng khám Cơ xương khớp',
-  ];
-
-  private readonly HEADER_ADDRESSES = [
-    'Tầng 5, Tòa nhà Sunrise, Đường Nguyễn Văn Linh, Quận 7, TP. Hồ Chí Minh',
-    'Tầng 3, Tòa nhà Vincom, Đường Lê Duẩn, Quận 1, TP. Hồ Chí Minh',
-    'Số 123, Đường Điện Biên Phủ, Quận Ba Đình, TP. Hà Nội',
-    'Tầng 2, Tòa nhà Techcombank, Đường Nguyễn Văn Trỗi, Quận Cầu Giấy, TP. Hà Nội',
-    'Số 456, Đường Võ Văn Tần, Quận Tân Bình, TP. Hồ Chí Minh',
-  ];
+  private readonly CLINIC_REPRESENTATIVES_TEMPLATES = CLINIC_REPRESENTATIVES;
+  private readonly POSITIONS_TEMPLATES = CLINIC_POSITIONS;
+  private readonly HEADER_ADDRESSES_TEMPLATES = HEADER_ADDRESSES;
 
   constructor(
     private readonly contractPackageRepository: ContractPackageRepository,
@@ -152,8 +135,8 @@ export class ContractPackageSeederService {
    * Get random header address
    */
   private getRandomHeaderAddress(): string {
-    return this.HEADER_ADDRESSES[
-      Math.floor(Math.random() * this.HEADER_ADDRESSES.length)
+    return this.HEADER_ADDRESSES_TEMPLATES[
+      Math.floor(Math.random() * this.HEADER_ADDRESSES_TEMPLATES.length)
     ];
   }
 
@@ -177,8 +160,8 @@ export class ContractPackageSeederService {
    * Get random clinic representative
    */
   private getRandomClinicRepresentative(): string {
-    return this.CLINIC_REPRESENTATIVES[
-      Math.floor(Math.random() * this.CLINIC_REPRESENTATIVES.length)
+    return this.CLINIC_REPRESENTATIVES_TEMPLATES[
+      Math.floor(Math.random() * this.CLINIC_REPRESENTATIVES_TEMPLATES.length)
     ];
   }
 
@@ -186,6 +169,6 @@ export class ContractPackageSeederService {
    * Get random position
    */
   private getRandomPosition(): string {
-    return this.POSITIONS[Math.floor(Math.random() * this.POSITIONS.length)];
+    return this.POSITIONS_TEMPLATES[Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)];
   }
 }

@@ -40,20 +40,34 @@ export class Appointment {
   @JoinColumn({ name: 'clinic_id' })
   clinic?: Account;
 
-  @Column({ name: 'doctor_shift_hour_id', type: 'uuid' })
-  doctorShiftHourId: string;
+  @Column({ name: 'doctor_id', type: 'uuid', nullable: true })
+  doctorId: string | null;
+
+  @ManyToOne(() => Account, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'doctor_id' })
+  doctor?: Account | null;
+
+  @Column({ name: 'doctor_shift_hour_id', type: 'uuid', nullable: true })
+  doctorShiftHourId: string | null;
 
   @ManyToOne(() => ClinicShiftHour, {
     onDelete: 'CASCADE',
+    nullable: true,
   })
   @JoinColumn({ name: 'doctor_shift_hour_id' })
-  doctorShiftHour?: ClinicShiftHour;
+  doctorShiftHour?: ClinicShiftHour | null;
 
   @Column({ name: 'appointment_date', type: 'date' })
   appointmentDate: Date;
 
   @Column({ name: 'appointment_hour', type: 'timestamptz' })
   appointmentHour: Date;
+
+  @Column({ name: 'extra_hour', type: 'timestamptz', nullable: true })
+  extraHour?: Date | null;
 
   @Column({ name: 'total', type: 'numeric', precision: 10, scale: 2 })
   total: number;
@@ -67,6 +81,12 @@ export class Appointment {
 
   @Column({ name: 'is_remider', type: 'boolean', default: false })
   isRemider: boolean;
+
+  @Column({ name: 'patient_note', type: 'text', nullable: true })
+  patientNote?: string | null;
+
+  @Column({ name: 'reject_reason', type: 'text', nullable: true })
+  rejectReason?: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

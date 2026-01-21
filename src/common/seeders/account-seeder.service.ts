@@ -7,6 +7,7 @@ import {
   Gender,
 } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { ENGLISH_NAMES } from '../constants/names';
 
 /**
  * Account Seeder Service
@@ -33,43 +34,8 @@ export class AccountSeederService {
   private readonly BCRYPT_SALT_ROUNDS = 10;
   private readonly DEFAULT_PASSWORD = 'Test@123456';
 
-  // Vietnamese names for realistic data
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-      'Ngô Văn Nam',
-      'Đinh Văn Phúc',
-      'Bùi Văn Quân',
-      'Dương Văn Sáng',
-      'Trương Văn Tùng',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-      'Ngô Thị Yến',
-      'Đinh Thị Ánh',
-      'Bùi Thị Chi',
-      'Dương Thị Dung',
-      'Trương Thị Hương',
-    ],
-  };
+  // English names for realistic data
+  private readonly NAMES = ENGLISH_NAMES;
 
   constructor(private readonly accountRepository: AccountRepository) {}
 

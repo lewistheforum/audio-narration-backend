@@ -17,6 +17,7 @@
     "script:bulk-import-medicines": "ts-node -r tsconfig-paths/register src/common/scripts/bulk-import-medicines.ts",
     "script:convert-excel-to-csv": "ts-node -r tsconfig-paths/register src/common/scripts/convert-excel-to-csv.ts",
     "script:generate-encryption-key": "ts-node -r tsconfig-paths/register src/common/scripts/generate-encryption-key.ts",
+    "script:check-seeders": "ts-node -r tsconfig-paths/register src/common/scripts/check-seeders.ts",
     "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db"
   },
   "nodemonConfig": {

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AccountRole, AccountStatus } from '../enums';
-import { Gender } from '../enums/gender.enum';
+import { AccountRole, AccountStatus, Gender } from '../enums';
+import { AddressDto } from './clinic-list-response.dto';
 
 /**
  * Doctor Info DTO
@@ -8,6 +8,12 @@ import { Gender } from '../enums/gender.enum';
  * Doctor information from doctor_information table
  */
 export class DoctorInfoDto {
+  @ApiProperty({
+    description: 'Doctor information ID',
+    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+  })
+  id: string;
+
   @ApiProperty({
     description: 'Doctor full name',
     example: 'Dr. John Smith',
@@ -24,47 +30,7 @@ export class DoctorInfoDto {
   gender?: Gender;
 
   @ApiProperty({
-    description: 'Doctor academic degree',
-    example: 'MD, PhD',
-    required: false,
-    nullable: true,
-  })
-  academicDegree?: string;
-
-  @ApiProperty({
-    description: 'Doctor work process / experience',
-    example: '10 years of experience in cardiology',
-    required: false,
-    nullable: true,
-  })
-  experience?: string;
-
-  @ApiProperty({
-    description: 'Doctor position',
-    example: 'Senior Cardiologist',
-    required: false,
-    nullable: true,
-  })
-  position?: string;
-
-  @ApiProperty({
-    description: 'Doctor introduction',
-    example: 'Specialized in treating heart diseases with modern techniques',
-    required: false,
-    nullable: true,
-  })
-  introduction1?: string;
-
-  @ApiProperty({
-    description: 'Doctor introduction image URL',
-    example: 'https://example.com/doctor-intro.jpg',
-    required: false,
-    nullable: true,
-  })
-  introductionImage?: string;
-
-  @ApiProperty({
-    description: 'Doctor profile picture URL (preferred for list UI)',
+    description: 'Profile picture URL',
     example: 'https://example.com/doctor-avatar.jpg',
     required: false,
     nullable: true,
@@ -72,79 +38,44 @@ export class DoctorInfoDto {
   profilePicture?: string;
 
   @ApiProperty({
-    description: 'Identity card number',
-    example: '001234567890',
+    description: 'Date of birth',
+    example: '1980-05-15',
     required: false,
     nullable: true,
   })
-  identityNumber?: string;
+  dob?: Date;
 
   @ApiProperty({
-    description: 'Place of issue for identity card',
-    example: 'Hanoi',
+    description: 'Academic Degree',
+    example: 'MD, PhD',
     required: false,
     nullable: true,
   })
-  placeIdentityCard?: string;
+  academicDegree?: string;
 
   @ApiProperty({
-    description: 'Identity card issue date',
-    example: '2020-01-15',
+    description: 'Experience',
+    example: '10 years',
     required: false,
     nullable: true,
   })
-  identityDate?: Date;
+  experience?: string;
 
   @ApiProperty({
-    description: 'Bank account number',
-    example: '12345678901234567890',
+    description: 'Position',
+    example: 'Head of Department',
     required: false,
     nullable: true,
   })
-  bankNumber?: number;
+  position?: string;
 
   @ApiProperty({
-    description: 'Bank name',
-    example: 'Vietcombank',
+    description: 'Introduction',
+    example: 'Experienced cardiologist...',
     required: false,
     nullable: true,
   })
-  bankName?: string;
-
-  @ApiProperty({
-    description: 'Bank branch',
-    example: 'Hanoi Branch',
-    required: false,
-    nullable: true,
-  })
-  bankBranch?: string;
-}
-
-/**
- * Clinic Info Summary DTO
- *
- * Brief clinic information for doctor listing
- */
-export class ClinicInfoSummaryDto {
-  @ApiProperty({
-    description: 'Clinic account ID',
-    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-  })
-  id: string;
-
-  @ApiProperty({
-    description: 'Clinic name',
-    example: 'City Medical Clinic',
-  })
-  clinicName: string;
-
-  @ApiProperty({
-    description: 'Clinic profile picture URL',
-    example: 'https://example.com/clinic-avatar.jpg',
-    required: false,
-    nullable: true,
-  })
-  profilePicture?: string;
+  introduction1?: string;
 }
 
 /**
@@ -154,38 +85,30 @@ export class ClinicInfoSummaryDto {
  */
 export class DoctorItemDto {
   @ApiProperty({
-    description: 'Doctor account ID',
+    description: 'Account ID',
     example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
   })
   id: string;
 
   @ApiProperty({
-    description: 'Doctor username',
-    example: 'drjohnsmith',
+    description: 'Username',
+    example: 'drjohn',
   })
   username: string;
 
   @ApiProperty({
-    description: 'Doctor email',
-    example: 'doctor@clinic.com',
+    description: 'Email',
+    example: 'drjohn@example.com',
   })
   email: string;
 
   @ApiProperty({
-    description: 'Doctor phone number',
+    description: 'Phone number',
     example: '+84987654321',
     required: false,
     nullable: true,
   })
   phone?: string;
-
-  @ApiProperty({
-    description: 'Profile picture URL from accounts table',
-    example: 'https://example.com/doctor-avatar.jpg',
-    required: false,
-    nullable: true,
-  })
-  profilePicture?: string;
 
   @ApiProperty({
     description: 'Account role',
@@ -208,48 +131,41 @@ export class DoctorItemDto {
   doctorInfo: DoctorInfoDto;
 
   @ApiProperty({
-    description: 'Clinic information (parent clinic)',
-    type: ClinicInfoSummaryDto,
-    required: false,
-    nullable: true,
+    description: 'Address',
+    type: AddressDto,
   })
-  clinic?: ClinicInfoSummaryDto;
+  address: AddressDto;
 
-  constructor(
-    account: any,
-    doctorInfo: any,
-    clinicInfo?: any,
-  ) {
+  constructor(account: any, doctorInfo: any, address: any) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;
     this.phone = account.phone;
-    this.profilePicture = account.profilePicture;
     this.role = account.role;
     this.status = account.status;
 
     this.doctorInfo = {
+      id: doctorInfo._id,
       fullName: doctorInfo.fullName,
       gender: doctorInfo.gender,
+      profilePicture: doctorInfo.profilePicture,
+      dob: doctorInfo.dob,
       academicDegree: doctorInfo.academicDegree,
       experience: doctorInfo.experience,
       position: doctorInfo.position,
       introduction1: doctorInfo.introduction1,
-      introductionImage: doctorInfo.introductionImage,
-      profilePicture: doctorInfo.profilePicture,
-      identityNumber: doctorInfo.identityNumber,
-      placeIdentityCard: doctorInfo.placeIdentityCard,
-      identityDate: doctorInfo.identityDate,
-      bankNumber: doctorInfo.bankNumber,
-      bankName: doctorInfo.bankName,
-      bankBranch: doctorInfo.bankBranch,
     };
 
-    if (clinicInfo) {
-      this.clinic = {
-        id: clinicInfo._id,
-        clinicName: clinicInfo.clinicName,
-        profilePicture: clinicInfo.profilePicture,
+    if (address) {
+      this.address = {
+        id: address._id,
+        address: address.address,
+        ward: address.ward,
+        wardName: address.wardName,
+        district: address.district,
+        districtName: address.districtName,
+        province: address.province,
+        provinceName: address.provinceName,
       };
     }
   }
@@ -257,8 +173,6 @@ export class DoctorItemDto {
 
 /**
  * Doctor Pagination DTO
- *
- * Pagination metadata for doctors list
  */
 export class DoctorPaginationDto {
   @ApiProperty({
@@ -288,8 +202,6 @@ export class DoctorPaginationDto {
 
 /**
  * Doctor List Response DTO
- *
- * Response wrapper for doctor list with pagination
  */
 export class DoctorListResponseDto {
   @ApiProperty({

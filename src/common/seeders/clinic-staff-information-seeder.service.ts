@@ -4,6 +4,7 @@ import { ClinicStaffInformation } from '../../modules/accounts/entities/clinic_s
 import { AccountRole, Gender, ClinicRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicStaffInformationRepository } from '../../modules/accounts/repositories/clinic-staff-information.repository';
+import { ENGLISH_NAMES } from '../constants/names';
 
 /**
  * ClinicStaffInformation Seeder Service
@@ -19,43 +20,17 @@ export class ClinicStaffInformationSeederService {
     ClinicStaffInformationSeederService.name,
   );
 
-  // Vietnamese names
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-      'Ngô Văn Nam',
-      'Đinh Văn Phúc',
-      'Bùi Văn Quân',
-      'Dương Văn Sáng',
-      'Trương Văn Tùng',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-      'Ngô Thị Yến',
-      'Đinh Thị Ánh',
-      'Bùi Thị Chi',
-      'Dương Thị Dung',
-      'Trương Thị Hương',
-    ],
-  };
+  // English names
+  private readonly NAMES = ENGLISH_NAMES;
+
+  // Profile picture URLs for clinic staff
+  private readonly PROFILE_PICTURE_URLS = [
+    'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
+  ];
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -97,11 +72,14 @@ export class ClinicStaffInformationSeederService {
         }
 
         const gender = this.getRandomGender();
+        const staffIndex = clinicStaff.indexOf(account);
         const clinicStaffInfo = this.clinicStaffInfoRepository.create({
           _id: randomUUID(),
           accountId: account._id,
           fullName: this.getRandomName(gender),
           gender,
+          dob: this.generateDob(staffIndex),
+          profilePicture: this.getRandomProfilePicture(staffIndex),
           clinicRole: this.getRandomClinicRole(),
         });
 
@@ -127,13 +105,13 @@ export class ClinicStaffInformationSeederService {
   }
 
   /**
-   * Get random Vietnamese name based on gender
+   * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
       gender === Gender.MALE
-        ? this.VIETNAMESE_NAMES.male
-        : this.VIETNAMESE_NAMES.female;
+        ? this.NAMES.male
+        : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 
@@ -143,5 +121,24 @@ export class ClinicStaffInformationSeederService {
   private getRandomClinicRole(): ClinicRole {
     const roles = Object.values(ClinicRole);
     return roles[Math.floor(Math.random() * roles.length)];
+  }
+
+  /**
+   * Generate date of birth (deterministic based on index)
+   * Clinic staff are typically 22-50 years old
+   */
+  private generateDob(index: number): Date {
+    const age = 22 + (index % 29); // 22-50 years old
+    const year = new Date().getFullYear() - age;
+    const month = 1 + (index % 12);
+    const day = 1 + (index % 28);
+    return new Date(year, month, day);
+  }
+
+  /**
+   * Get random profile picture URL (deterministic based on index)
+   */
+  private getRandomProfilePicture(index: number): string {
+    return this.PROFILE_PICTURE_URLS[index % this.PROFILE_PICTURE_URLS.length];
   }
 }

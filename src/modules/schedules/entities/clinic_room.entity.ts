@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn, ManyToMany, JoinTable } from 'typeorm';
-import { Account } from './accounts.entity';
-import { EmployeeSchedule } from '../../schedules/entities/employee-schedule.entity';
+import { Account } from '../../accounts/entities/accounts.entity';
+import { EmployeeSchedule } from './employee-schedule.entity';
 
 @Entity('clinic_room')
 export class ClinicRoom {

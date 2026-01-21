@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository } from 'typeorm';
-import { PaymentDirection, PaymentStatus, Transaction } from './entities';
+import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
+import { PaymentDirection, PaymentStatus,Transaction } from './entities';
 import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto } from './dto';
 
 @Injectable()
@@ -16,12 +17,13 @@ export class TransactionsService {
   constructor(
     @InjectRepository(Transaction)
     private readonly paymentRepository: Repository<Transaction>,
+    @InjectRepository(ClinicAdminInformation)
+    private readonly clinicAdminRepo: Repository<ClinicAdminInformation>,
     private readonly configService: ConfigService,
   ) {
-    this.qrBaseUrl =
-      this.configService.get<string>('SEEPAY_QR_BASE') || 'https://qr.sepay.vn/img';
+    this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
-    this.seepayBank = this.configService.get<string>('SEEPAY_BANK') || 'MBBank';
+    this.seepayBank = this.configService.get<string>('SEEPAY_BANK') || '';
     this.qrExpireMinutes = Number(
       this.configService.get<number>('SEEPAY_QR_EXPIRE_MINUTES') || 15,
     );
@@ -30,7 +32,7 @@ export class TransactionsService {
   async createDynamicQr(
     dto: CreateTransactionDto,
   ): Promise<PaymentResponseDto> {
-    const { acc, bank } = await this.resolveSepayConfig(dto.prescriptionId);
+    const { acc, bank } = await this.resolveSepayConfig(dto.clinicId);
 
     const expiresAt = this.computeExpireTime();
     const qrCodeUrl = this.buildQrUrl(dto.amount, dto.prescriptionId, acc, bank);
@@ -47,6 +49,24 @@ export class TransactionsService {
     });
   }
 
+  async createVerificationQr(clinicId: string): Promise<PaymentResponseDto> {
+    const { acc, bank } = await this.resolveSepayConfig(clinicId);
+    const amount = 10_000;
+    const expiresAt = this.computeExpireTime();
+    const qrCodeUrl = this.buildQrUrl(amount, clinicId, acc, bank);
+    const qrPayload = this.buildQrPayload(amount, clinicId, acc, bank);
+
+    return new PaymentResponseDto({
+      id: null,
+      amount,
+      currency: 'VND',
+      status: PaymentStatus.PENDING,
+      qrCodeUrl,
+      qrPayload,
+      expiresAt,
+    });
+  }
+
   async handleCallback(payload: SeepayCallbackDto): Promise<PaymentResponseDto> {
     const prescriptionId =
       payload.prescriptionId || this.extractPrescriptionIdFromContent(payload.content);
@@ -55,24 +75,10 @@ export class TransactionsService {
       throw new BadRequestException('Unable to detect prescription ID in callback');
     }
 
-    let transaction = await this.paymentRepository.findOne({ where: { prescriptionId } });
-
-    if (transaction) {
-      return new PaymentResponseDto({
-        id: transaction.id,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        status: transaction.status,
-        qrCodeUrl: transaction.qrCodeUrl,
-        qrPayload: transaction.qrPayload,
-        expiresAt: transaction.expiresAt,
-      });
-    }
-
     const isIncoming = payload.transferType === PaymentDirection.IN;
     const status = isIncoming ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
 
-    transaction = this.paymentRepository.create({
+    const transaction = this.paymentRepository.create({
       prescriptionId,
       amount: payload.transferAmount,
       currency: 'VND',
@@ -95,6 +101,11 @@ export class TransactionsService {
     });
 
     const savedTransaction = await this.paymentRepository.save(transaction);
+
+    if (status === PaymentStatus.SUCCESS && payload.transferAmount === 10_000) {
+      // Verification payment: mark clinic verified by clinic-admin _id (stored in prescriptionId)
+      await this.clinicAdminRepo.update({ _id: prescriptionId }, { isVerify: true });
+    }
 
     return new PaymentResponseDto({
       id: savedTransaction.id,
@@ -151,30 +162,177 @@ export class TransactionsService {
   }
 
   private async resolveSepayConfig(
-    prescriptionId: string,
+    clinicAdminId?: string,
   ): Promise<{ acc: string; bank: string }> {
-    if (!prescriptionId) {
-      throw new BadRequestException('Prescription/invoice id is required for QR');
+    if (!clinicAdminId) {
+      throw new BadRequestException('Clinic id is required for QR');
     }
 
-    if (!this.seepayAccount) {
-      throw new BadRequestException('Seepay VA is not configured');
+    const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { _id: clinicAdminId } });
+
+    const acc = clinicAdmin?.sepayVa || this.seepayAccount;
+    const bank = clinicAdmin?.bankName || this.seepayBank;
+
+    if (!acc) {
+      throw new BadRequestException('Seepay VA is not configured for this clinic');
     }
 
-    return { acc: this.seepayAccount, bank: this.seepayBank };
+    return { acc, bank };
   }
 
   async getAllPaymentHistory(
     page: number = 1,
     limit: number = 10,
-  ): Promise<{ items: Transaction[]; total: number }> {
-    const [items, total] = await this.paymentRepository.findAndCount({
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    filters?: {
+      clinicId?: string;
+      senderAccountId?: string;
+      fromDate?: string;
+      toDate?: string;
+    },
+  ): Promise<{
+    items: Array<{
+      id: string;
+      prescriptionId?: string;
+      amount: number;
+      currency: string;
+      status: string;
+      gateway?: string;
+      referenceCode?: string;
+      transactionDate?: Date;
+      createdAt: Date;
+      clinicName?: string;
+      senderFullName?: string;
+      senderGender?: string;
+      senderDob?: Date;
+    }>;
+    total: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = ['t.deleted_at IS NULL'];
+    const params: Array<string | number | Date> = [];
+
+    if (filters?.clinicId) {
+      params.push(filters.clinicId);
+      conditions.push(`t.clinic_id = $${params.length}`);
+    }
+
+    if (filters?.senderAccountId) {
+      params.push(filters.senderAccountId);
+      conditions.push(`t.sender_account_id = $${params.length}`);
+    }
+
+    if (filters?.fromDate) {
+      params.push(new Date(filters.fromDate));
+      conditions.push(`t.transaction_date >= $${params.length}`);
+    }
+
+    if (filters?.toDate) {
+      params.push(new Date(filters.toDate));
+      conditions.push(`t.transaction_date <= $${params.length}`);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const raw = await this.paymentRepository.query(
+      `SELECT t.*,
+              ci.clinic_name AS clinic_name,
+              ga.full_name  AS sender_full_name,
+              ga.gender     AS sender_gender,
+              ga.dob        AS sender_dob
+       FROM transactions t
+      LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+      LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
+       WHERE ${whereClause}
+       ORDER BY t.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset],
+    );
+
+    const countResult = await this.paymentRepository.query(
+      `SELECT COUNT(*)::int AS cnt
+       FROM transactions t
+       WHERE ${whereClause}`,
+      params,
+    );
+    const total = Number(countResult?.[0]?.cnt || 0);
+
+    const items = raw.map((row: any) => ({
+      id: row._id,
+      prescriptionId: row.prescription_id,
+      amount: Number(row.amount),
+      currency: row.currency,
+      status: row.status,
+      gateway: row.gateway,
+      referenceCode: row.reference_code,
+      transactionDate: row.transaction_date,
+      createdAt: row.created_at,
+      clinicName: row.clinic_name,
+      senderFullName: row.sender_full_name,
+      senderGender: row.sender_gender,
+      senderDob: row.sender_dob,
+    }));
 
     return { items, total };
+  }
+
+  async getTransactionDetail(id: string): Promise<{
+    id: string;
+    prescriptionId?: string;
+    amount: number;
+    currency: string;
+    status: string;
+    gateway?: string;
+    referenceCode?: string;
+    transactionDate?: Date;
+    createdAt: Date;
+    clinicName?: string;
+    senderFullName?: string;
+    senderGender?: string;
+    senderDob?: Date;
+    content?: string;
+    accountNumber?: string;
+    transferType?: string;
+    transferAmount?: number;
+  }> {
+    const rows = await this.paymentRepository.query(
+      `SELECT t.*,
+              ci.clinic_name AS clinic_name,
+              ga.full_name  AS sender_full_name,
+              ga.gender     AS sender_gender,
+              ga.dob        AS sender_dob
+       FROM transactions t
+      LEFT JOIN clinic_information ci ON ci._id = t.clinic_id
+      LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
+       WHERE t.deleted_at IS NULL AND t._id = $1
+       LIMIT 1`,
+      [id],
+    );
+
+    const row = rows?.[0];
+    if (!row) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      id: row._id,
+      prescriptionId: row.prescription_id,
+      amount: Number(row.amount),
+      currency: row.currency,
+      status: row.status,
+      gateway: row.gateway,
+      referenceCode: row.reference_code,
+      transactionDate: row.transaction_date,
+      createdAt: row.created_at,
+      clinicName: row.clinic_name,
+      senderFullName: row.sender_full_name,
+      senderGender: row.sender_gender,
+      senderDob: row.sender_dob,
+      content: row.content,
+      accountNumber: row.account_number,
+      transferType: row.transfer_type,
+      transferAmount: row.transfer_amount,
+    };
   }
 
 }

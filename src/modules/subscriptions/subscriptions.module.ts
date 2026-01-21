@@ -9,6 +9,8 @@ import {
   ClinicSubscriptionRepository,
   SubscriptionServiceRepository,
 } from './repositories';
+import { SubscriptionServicesController } from './subscription-services.controller';
+import { SubscriptionServicesService } from './subscription-services.service';
 
 /**
  * Subscriptions Module
@@ -23,10 +25,11 @@ import {
       ClinicSubscriptionHistory,
     ]),
   ],
-  controllers: [],
+  controllers: [SubscriptionServicesController],
   providers: [
     ClinicSubscriptionRepository,
     SubscriptionServiceRepository,
+    SubscriptionServicesService,
   ],
   exports: [
     TypeOrmModule,

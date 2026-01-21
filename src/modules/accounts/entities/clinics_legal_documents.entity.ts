@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { LegalDocumentVerificationStatus } from '../enums';
+import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
 
 /**
  * ClinicsLegalDocuments Entity
@@ -40,10 +41,10 @@ export class ClinicsLegalDocuments {
   @JoinColumn({ name: 'account_id' })
   account?: Account;
 
-  @Column({ name: 'operating_license', type: 'text', nullable: true })
+  @Column({ name: 'operating_license', type: 'text', nullable: true, transformer: encryptionTransformer })
   operatingLicense?: string;
 
-  @Column({ name: 'business_license', type: 'text', nullable: true })
+  @Column({ name: 'business_license', type: 'text', nullable: true, transformer: encryptionTransformer })
   businessLicense?: string;
 
   @Column({

@@ -418,17 +418,20 @@ export class AccountRepository {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect(
-        'account.clinicInformation',
-        'clinicInfo',
+        'account.clinicManagerInformation',
+        'clinicManagerInfo',
       )
       .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('account.parent', 'parentAccount')
+      .leftJoinAndSelect('parentAccount.clinicAdminInformation', 'clinicAdminInfo')
       .where('account.role = :role', { role })
-      .andWhere('account.status = :status', { status });
+      .andWhere('account.status = :status', { status })
+      .andWhere('parentAccount.role = :parentRole', { parentRole: AccountRole.CLINIC_ADMIN });
 
-    // Apply search filter (ILIKE on clinicName AND description)
+    // Apply search filter (ILIKE on clinicName AND description from parent's clinic admin info)
     if (search) {
       queryBuilder.andWhere(
-        '(clinicInfo.clinicName ILIKE :search OR clinicInfo.description ILIKE :search)',
+        '(clinicAdminInfo.clinicName ILIKE :search OR clinicAdminInfo.description ILIKE :search)',
         { search: `%${search}%` },
       );
     }
@@ -441,10 +444,10 @@ export class AccountRepository {
       );
     }
 
-    // Apply specialty filter (JSONB containment query on specializedIn)
+    // Apply specialty filter (JSONB containment query on specializedIn from parent's clinic admin info)
     if (specialty) {
       queryBuilder.andWhere(
-        'clinicInfo.specializedIn @> :specialty',
+        'clinicAdminInfo.specializedIn @> :specialty',
         { specialty: JSON.stringify([specialty]) },
       );
     }

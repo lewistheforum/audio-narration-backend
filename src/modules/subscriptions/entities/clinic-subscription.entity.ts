@@ -35,7 +35,7 @@ export class ClinicSubscription {
   @Column({ name: 'service_id', type: 'uuid' })
   serviceId: string;
 
-  @OneToOne(() => SubscriptionService, {
+  @ManyToOne(() => SubscriptionService, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'service_id' })

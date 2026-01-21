@@ -9,8 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
-import { BankName } from '../enums/bank-name.enum';
-import { encryptionTransformer } from 'src/common/transformers/encryption.transformer';
+import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
 
 /**
  * ClinicAdminInformation Entity
@@ -113,7 +112,7 @@ export class ClinicAdminInformation {
     nullable: true,
     transformer: encryptionTransformer,
   })
-  bankName?: BankName | string;
+  bankName?: string;
 
   /**
    * Bank Account Number

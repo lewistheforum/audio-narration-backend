@@ -9,7 +9,7 @@ import { ClinicServiceConfig } from '../../modules/service-configs/entities/clin
 import { EmployeeSchedule } from '../../modules/schedules/entities/employee-schedule.entity';
 import { ClinicShift } from '../../modules/schedules/entities/clinic-shift.entity';
 import { ClinicShiftHour } from '../../modules/schedules/entities/clinic-shift-hour.entity';
-import { ClinicRoom } from '../../modules/accounts/entities/clinic_room.entity';
+import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity';
 
 @Injectable()
 export class KnowledgeBaseSeederService {

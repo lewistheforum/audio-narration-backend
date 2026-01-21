@@ -4,6 +4,17 @@ import { DoctorInformation } from '../../modules/accounts/entities/doctor_inform
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { DoctorInformationRepository } from '../../modules/accounts/repositories/doctor-information.repository';
+import { VIETNAMESE_NAMES } from '../constants/names';
+import {
+  ACADEMIC_DEGREES,
+  MEDICAL_SPECIALIZATIONS,
+  POSITIONS,
+  INTRODUCTIONS,
+  EXPERIENCE_YEARS,
+  BANK_BRANCHES,
+  NATIONALITIES,
+  WORK_SPECIALTIES,
+} from '../constants/medical-terms';
 
 /**
  * DoctorInformation Seeder Service
@@ -17,78 +28,33 @@ import { DoctorInformationRepository } from '../../modules/accounts/repositories
 export class DoctorInformationSeederService {
   private readonly logger = new Logger(DoctorInformationSeederService.name);
 
-  // Vietnamese doctor names
-  private readonly VIETNAMESE_NAMES = {
-    male: [
-      'Nguyễn Văn An',
-      'Trần Văn Bình',
-      'Lê Văn Cường',
-      'Phạm Văn Dũng',
-      'Hoàng Văn Em',
-      'Huỳnh Văn Giáp',
-      'Phan Văn Hùng',
-      'Vũ Văn Khôi',
-      'Đặng Văn Long',
-      'Đỗ Văn Minh',
-      'Ngô Văn Nam',
-      'Đinh Văn Phúc',
-      'Bùi Văn Quân',
-      'Dương Văn Sáng',
-      'Trương Văn Tùng',
-    ],
-    female: [
-      'Nguyễn Thị Lan',
-      'Trần Thị Mai',
-      'Lê Thị Ngọc',
-      'Phạm Thị Oanh',
-      'Hoàng Thị Phương',
-      'Huỳnh Thị Quỳnh',
-      'Phan Thị Thu',
-      'Vũ Thị Uyên',
-      'Đặng Thị Vân',
-      'Đỗ Thị Xuân',
-      'Ngô Thị Yến',
-      'Đinh Thị Ánh',
-      'Bùi Thị Chi',
-      'Dương Thị Dung',
-      'Trương Thị Hương',
-    ],
-  };
-
-  // Academic degrees (orthopedics-relevant)
-  private readonly ACADEMIC_DEGREES = [
-    'Thạc sĩ Y khoa',
-    'Tiến sĩ Y khoa',
-    'Bác sĩ Chuyên khoa II Cơ Xương Khớp',
-    'Bác sĩ Chuyên khoa I Chấn Thương Chỉnh Hình',
-    'Bác sĩ Chuyên khoa I Vật Lý Trị Liệu',
+  // Vietnamese doctor names without diacritics (per system context)
+  private readonly NAMES = VIETNAMESE_NAMES;
+  private readonly ACADEMIC_DEGREES_TEMPLATES = ACADEMIC_DEGREES;
+  private readonly SPECIALIZATIONS_TEMPLATES = MEDICAL_SPECIALIZATIONS;
+  private readonly POSITIONS_TEMPLATES = POSITIONS;
+  private readonly INTRODUCTIONS_TEMPLATES = INTRODUCTIONS;
+  private readonly BANK_NAMES = [
+    'VPBank',
+    'TPBank',
+    'VietinBank',
+    'BIDV',
+    'MBBank',
+    'OCB',
+    'KienLongBank',
+    'MSB',
   ];
+  private readonly BANK_BRANCHES = BANK_BRANCHES;
+  private readonly NATIONALITIES = NATIONALITIES;
+  private readonly WORK_SPECIALTIES = WORK_SPECIALTIES;
 
-  // Orthopedics-only medical specializations
-  private readonly SPECIALIZATIONS = [
-    'Cơ xương khớp',
-    'Chấn thương chỉnh hình',
-    'Vật lý trị liệu',
-    'Phục hồi chức năng',
-    'Thể thao y khoa',
-    'Chấn thương thể thao',
-    'Cột sống',
-    'Đau lưng mạn tính',
-    'Đầu gối',
-    'Vai',
-    'Gãy xương',
-    'Viêm xương khớp',
-    'Loãng xương',
-    'Thoái hóa khớp',
-  ];
-
-  // Orthopedics-focused positions
-  private readonly POSITIONS = [
-    'Trưởng khoa Cơ Xương Khớp',
-    'Phó trưởng khoa Chấn Thương Chỉnh Hình',
-    'Bác sĩ chuyên khoa Cơ Xương Khớp',
-    'Bác sĩ vật lý trị liệu',
-    'Bác sĩ phục hồi chức năng',
+  // Profile picture URLs for doctors
+  private readonly PROFILE_PICTURE_URLS = [
+    'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
   ];
 
   constructor(
@@ -128,15 +94,33 @@ export class DoctorInformationSeederService {
         }
 
         const gender = this.getRandomGender();
+        const doctorIndex = doctors.indexOf(account);
         const doctorInfo = this.doctorInfoRepository.create({
           _id: randomUUID(),
           accountId: account._id,
           fullName: this.getRandomName(gender),
           gender,
+          dob: this.generateDob(doctorIndex),
+          profilePicture: this.getRandomProfilePicture(doctorIndex),
           academicDegree: this.getRandomAcademicDegree(),
           experience: this.getRandomExperience(),
           position: this.getRandomPosition(),
           introduction1: this.getRandomIntroduction(),
+          workProcess2: this.generateWorkProcess(doctorIndex),
+          studyProcess3: this.generateStudyProcess(doctorIndex),
+          members4: this.generateMembers(doctorIndex),
+          scientificWork5: this.generateScientificWork(doctorIndex),
+          papers6: this.generatePapers(doctorIndex),
+          introductionImage: this.getRandomIntroductionImage(doctorIndex),
+          professionalLicense: this.generateProfessionalLicense(doctorIndex),
+          certificatePracticalTraining: this.generateCertificatePracticalTraining(doctorIndex),
+          medicalLicense: this.generateMedicalLicense(doctorIndex),
+          identityNumber: this.generateIdentityNumber(doctorIndex),
+          placeIdentityCard: this.generatePlaceIdentityCard(doctorIndex),
+          identityDate: this.generateIdentityDate(doctorIndex),
+          bankNumber: this.generateBankNumber(doctorIndex),
+          bankName: this.getRandomBankName(),
+          bankBranch: this.getRandomBankBranch(),
         });
 
         await this.doctorInfoRepository.save(doctorInfo);
@@ -159,13 +143,13 @@ export class DoctorInformationSeederService {
   }
 
   /**
-   * Get random Vietnamese name based on gender
+   * Get random Vietnamese name without diacritics based on gender
    */
   private getRandomName(gender: Gender): string {
     const names =
       gender === Gender.MALE
-        ? this.VIETNAMESE_NAMES.male
-        : this.VIETNAMESE_NAMES.female;
+        ? this.NAMES.male
+        : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 
@@ -173,8 +157,8 @@ export class DoctorInformationSeederService {
    * Get random academic degree
    */
   private getRandomAcademicDegree(): string {
-    return this.ACADEMIC_DEGREES[
-      Math.floor(Math.random() * this.ACADEMIC_DEGREES.length)
+    return this.ACADEMIC_DEGREES_TEMPLATES[
+      Math.floor(Math.random() * this.ACADEMIC_DEGREES_TEMPLATES.length)
     ];
   }
 
@@ -183,28 +167,234 @@ export class DoctorInformationSeederService {
    */
   private getRandomExperience(): string {
     const years = this.getRandomInt(1, 20);
-    return `${years} năm kinh nghiệm`;
+    return EXPERIENCE_YEARS(years);
   }
 
   /**
    * Get random position
    */
   private getRandomPosition(): string {
-    return this.POSITIONS[Math.floor(Math.random() * this.POSITIONS.length)];
+    return this.POSITIONS_TEMPLATES[Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)];
   }
 
   /**
    * Get random introduction (orthopedics-focused)
    */
   private getRandomIntroduction(): string {
-    const introductions = [
-      'Bác sĩ chuyên khoa cơ xương khớp với nhiều năm kinh nghiệm trong chẩn đoán và điều trị các bệnh lý về xương, khớp, cột sống.',
-      'Chuyên gia trong lĩnh vực chấn thương chỉnh hình và phẫu thuật nội soi khớp, cam kết mang lại kết quả điều trị tốt nhất cho người bệnh.',
-      'Bác sĩ vật lý trị liệu và phục hồi chức năng, có chuyên môn cao trong điều trị các chấn thương thể thao và phục hồi sau phẫu thuật.',
-      'Đội ngũ bác sĩ cơ xương khớp tận tâm, luôn cập nhật các phương pháp điều trị tiên tiến nhất như phẫu thuật nội soi và vật lý trị liệu.',
-      'Chuyên gia về cột sống và đau lưng mạn tính, với kinh nghiệm lâu năm trong điều trị thoái hóa khớp và loãng xương.',
+    return this.INTRODUCTIONS_TEMPLATES[Math.floor(Math.random() * this.INTRODUCTIONS_TEMPLATES.length)];
+  }
+
+  /**
+   * Generate date of birth (deterministic based on index)
+   * Doctors are typically 30-60 years old
+   */
+  private generateDob(index: number): Date {
+    const age = 30 + (index % 31); // 30-60 years old
+    const year = new Date().getFullYear() - age;
+    const month = 1 + (index % 12);
+    const day = 1 + (index % 28);
+    return new Date(year, month, day);
+  }
+
+  /**
+   * Get random profile picture URL (deterministic based on index)
+   */
+  private getRandomProfilePicture(index: number): string {
+    return this.PROFILE_PICTURE_URLS[index % this.PROFILE_PICTURE_URLS.length];
+  }
+
+  /**
+   * Generate work process (deterministic based on index)
+   */
+  private generateWorkProcess(index: number): Record<string, any> {
+    const startYear = 2010 + (index % 15);
+    return {
+      current: {
+        hospital: this.getRandomClinicName(index),
+        position: this.POSITIONS_TEMPLATES[index % this.POSITIONS_TEMPLATES.length],
+        startYear: startYear,
+      },
+      previous: [
+        {
+          hospital: this.getRandomClinicName((index + 1) % 5),
+          position: 'Orthopedic Surgeon',
+          startYear: startYear - 5,
+          endYear: startYear,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Generate study process (deterministic based on index)
+   */
+  private generateStudyProcess(index: number): Record<string, any> {
+    return {
+      undergraduate: {
+        university: 'Hanoi Medical University',
+        degree: 'Doctor of Medicine',
+        startYear: 2000 + (index % 10),
+        endYear: 2006 + (index % 10),
+      },
+      postgraduate: {
+        university: 'University of Medicine and Pharmacy',
+        degree: this.ACADEMIC_DEGREES_TEMPLATES[index % this.ACADEMIC_DEGREES_TEMPLATES.length],
+        startYear: 2007 + (index % 10),
+        endYear: 2010 + (index % 10),
+      },
+    };
+  }
+
+  /**
+   * Generate professional memberships (deterministic based on index)
+   */
+  private generateMembers(index: number): Record<string, any> {
+    const memberships = [
+      'Vietnam Orthopedic Association',
+      'Asia Pacific Orthopedic Association',
+      'International Society of Orthopedic Surgery',
+      'Vietnamese Medical Association',
+      'Sports Medicine Association',
     ];
-    return introductions[Math.floor(Math.random() * introductions.length)];
+    return {
+      memberships: memberships.slice(0, 2 + (index % 3)),
+    };
+  }
+
+  /**
+   * Generate scientific work (deterministic based on index)
+   */
+  private generateScientificWork(index: number): Record<string, any> {
+    return {
+      research: [
+        {
+          title: `Study on ${MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length]} Treatment`,
+          year: 2020 + (index % 5),
+          journal: 'Vietnamese Journal of Orthopedics',
+        },
+      ],
+    };
+  }
+
+  /**
+   * Generate published papers (deterministic based on index)
+   */
+  private generatePapers(index: number): Record<string, any> {
+    return {
+      papers: [
+        {
+          title: `Advanced Techniques in ${MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length]}`,
+          year: 2021 + (index % 4),
+          conference: 'International Orthopedic Conference',
+        },
+      ],
+    };
+  }
+
+  /**
+   * Get random introduction image URL (deterministic based on index)
+   */
+  private getRandomIntroductionImage(index: number): string {
+    return `https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=800&h=400&fit=crop&sig=${index}`;
+  }
+
+  /**
+   * Generate professional license (deterministic based on index)
+   */
+  private generateProfessionalLicense(index: number): Record<string, any> {
+    return {
+      licenseNumber: `PL-${20200000 + index}`,
+      issuedBy: 'Ministry of Health',
+      issuedDate: this.generateIdentityDate(index),
+      expiryDate: new Date(2030 + (index % 10), 0, 1),
+    };
+  }
+
+  /**
+   * Generate certificate of practical training (deterministic based on index)
+   */
+  private generateCertificatePracticalTraining(index: number): Record<string, any> {
+    return {
+      certificateNumber: `CPT-${20210000 + index}`,
+      institution: 'Hanoi Medical University Hospital',
+      issuedDate: this.generateIdentityDate(index),
+      duration: '12 months',
+    };
+  }
+
+  /**
+   * Generate medical license (deterministic based on index)
+   */
+  private generateMedicalLicense(index: number): Record<string, any> {
+    return {
+      licenseNumber: `ML-${20220000 + index}`,
+      specialization: MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length],
+      issuedBy: 'Ministry of Health',
+      issuedDate: this.generateIdentityDate(index),
+      validUntil: new Date(2035 + (index % 10), 0, 1),
+    };
+  }
+
+  /**
+   * Generate identity number (deterministic based on index)
+   */
+  private generateIdentityNumber(index: number): string {
+    return `${String(1970 + (index % 40))}${String(1 + (index % 12)).padStart(2, '0')}${String(1 + (index % 28)).padStart(2, '0')}${String(10000000 + index).slice(1)}`;
+  }
+
+  /**
+   * Generate place of identity card (deterministic based on index)
+   */
+  private generatePlaceIdentityCard(index: number): string {
+    const provinces = ['Hanoi', 'Ho Chi Minh City', 'Da Nang', 'Hai Phong', 'Can Tho'];
+    return `${provinces[index % provinces.length]} Police Department`;
+  }
+
+  /**
+   * Generate identity card date (deterministic based on index)
+   */
+  private generateIdentityDate(index: number): Date {
+    const year = 2015 + (index % 10);
+    const month = 1 + (index % 12);
+    const day = 1 + (index % 28);
+    return new Date(year, month, day);
+  }
+
+  /**
+   * Generate bank account number (deterministic based on index)
+   */
+  private generateBankNumber(index: number): string {
+    const prefix = [1234, 5678, 9012, 3456, 7890];
+    const suffix = String(100000000 + index).slice(1);
+    return `${prefix[index % prefix.length]}${suffix}`;
+  }
+
+  /**
+   * Get random bank name
+   */
+  private getRandomBankName(): string {
+    return this.BANK_NAMES[Math.floor(Math.random() * this.BANK_NAMES.length)];
+  }
+
+  /**
+   * Get random bank branch
+   */
+  private getRandomBankBranch(): string {
+    return this.BANK_BRANCHES[Math.floor(Math.random() * this.BANK_BRANCHES.length)];
+  }
+
+  /**
+   * Get random clinic name (for work process)
+   */
+  private getRandomClinicName(index: number): string {
+    const clinics = [
+      'Hanoi General Hospital',
+      'Cho Ray Hospital',
+      'Da Nang Hospital',
+      'Bach Mai Hospital',
+      'Viet Duc Hospital',
+    ];
+    return clinics[index % clinics.length];
   }
 
   /**

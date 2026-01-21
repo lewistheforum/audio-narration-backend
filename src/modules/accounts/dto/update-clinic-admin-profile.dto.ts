@@ -6,11 +6,9 @@ import {
   IsUrl,
   IsArray,
   IsBoolean,
-  IsEnum,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { BankName } from '../enums/bank-name.enum';
 
 /**
  * Update Clinic Admin Profile DTO
@@ -102,13 +100,12 @@ export class UpdateClinicAdminProfileDto {
 
   @ApiProperty({
     description: 'Bank name',
-    enum: BankName,
-    example: BankName.VPBANK,
+    example: 'VPBank',
     required: false,
   })
   @IsOptional()
-  @IsEnum(BankName, { message: 'Invalid bank name' })
-  bankName?: BankName;
+  @IsString({ message: 'Bank name must be a string' })
+  bankName?: string;
 
   @ApiProperty({
     description: 'Bank account number',
