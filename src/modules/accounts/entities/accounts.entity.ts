@@ -3,6 +3,9 @@ import { encryptionTransformer } from '../../../common/transformers/encryption.t
 import { ClinicManagerInformation } from './clinic_manager_information.entity';
 import { ClinicAdminInformation } from './clinic-admin-information.entity';
 import { Address } from './addresses.entity';
+import { GeneralAccount } from './general_accounts.entity';
+import { DoctorInformation } from './doctor_information.entity';
+import { ClinicStaffInformation } from './clinic_staff_information.entity';
 import {
   Entity,
   Column,
@@ -73,6 +76,24 @@ export class Account {
     cascade: true,
   })
   clinicAdminInformation?: ClinicAdminInformation;
+
+  /**
+   * General Account Information Relation
+   */
+  @OneToOne(() => GeneralAccount, (general) => general.account)
+  generalAccount?: GeneralAccount;
+
+  /**
+   * Doctor Information Relation
+   */
+  @OneToOne(() => DoctorInformation, (doctor) => doctor.account)
+  doctorInformation?: DoctorInformation;
+
+  /**
+   * Clinic Staff Information Relation
+   */
+  @OneToOne(() => ClinicStaffInformation, (staff) => staff.account)
+  clinicStaffInformation?: ClinicStaffInformation;
 
   /**
    * Addresses Relation

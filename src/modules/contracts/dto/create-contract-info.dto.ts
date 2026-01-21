@@ -2,7 +2,7 @@ import { IsNotEmpty, IsString, IsNumber, IsDateString, IsEnum, IsOptional } from
 import { ApiProperty } from '@nestjs/swagger';
 import { ContractType } from '../enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
-import { ContractStatus } from '../enums/contract-status.enum';
+import { ContractStatus } from '../../accounts/enums/contract-status.enum';
 
 export class CreateContractInfoDto {
     @ApiProperty({ description: 'Specialty of the doctor/staff', example: 'Cardiology' })

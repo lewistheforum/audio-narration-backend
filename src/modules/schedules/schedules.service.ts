@@ -134,7 +134,8 @@ export class SchedulesService {
 
 
     async findAll(query: any) {
-        const { clinicId, date, from, to, employeeId } = query;
+        const { clinicId, date, from, to, 
+            employeeId } = query;
 
         const queryBuilder = this.scheduleRepository
             .createQueryBuilder('schedule')
@@ -197,7 +198,8 @@ export class SchedulesService {
                     : null,
             };
         });
-    }
+    } 
+    
 
     async update(id: string, updateScheduleDto: UpdateScheduleDto) {
         const { clinicShiftId, workDate, roomId, employeeId } = updateScheduleDto;

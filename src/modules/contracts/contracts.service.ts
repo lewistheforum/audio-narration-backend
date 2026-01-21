@@ -38,23 +38,26 @@ export class ContractsService {
             throw new BadRequestException('Employee account must be CLINIC_STAFF');
         }
 
-        // 2. Check for existing active contract package (optional per business logic, but good practice)
-        /* 
-        const existing = await this.contractPackageRepository.findByClinicAndEmployee(clinicId, dto.employeeId);
-        if (existing) {
-             // Maybe check status? For now allow multiples or warn?
-        }
-        */
+        // 2. Auto-populate optional fields if missing
+        const headerDate = dto.headerDate || new Date().toISOString();
+        const headerAddress = dto.headerAddress || 'Vietnam'; // Could be improved by fetching Clinic Address
+        const clinicRepresentative = dto.clinicRepresentative || 'Clinic Representative';
+        const position = dto.position || 'Manager';
 
         // 3. Create Package
         const contractPackage = this.contractPackageRepository.create({
             ...dto,
+            headerDate,
+            headerAddress,
+            clinicRepresentative,
+            position,
             clinicId: clinicId,
             // Signatures are null initially
         });
 
         return this.contractPackageRepository.save(contractPackage);
     }
+
 
     async createContractInfo(packageId: string, dto: CreateContractInfoDto): Promise<ClinicContractInformation> {
         // 1. Check Package Exists
@@ -63,21 +66,27 @@ export class ContractsService {
             throw new NotFoundException('Contract package not found');
         }
 
-        // 2. Check if info already exists
-        const existingInfo = await this.clinicContractInfoRepository.findByContractId(packageId);
-        if (existingInfo) {
-            throw new BadRequestException('Contract information already exists for this package');
+        // 2. Check if info already exists - UPDATE if exists
+        let contractInfo = await this.clinicContractInfoRepository.findByContractId(packageId);
+
+        if (contractInfo) {
+            // Update existing
+            Object.assign(contractInfo, dto);
+            return this.clinicContractInfoRepository.save(contractInfo);
+        } else {
+            // Create new
+            contractInfo = this.clinicContractInfoRepository.create({
+                ...dto,
+                contractId: packageId,
+            });
+            return this.clinicContractInfoRepository.save(contractInfo);
         }
-
-        // 3. Create Info
-        const contractInfo = this.clinicContractInfoRepository.create({
-            ...dto,
-            contractId: packageId,
-            // contractStatus defaults to DRAFT via entity or DTO
-        });
-
-        return this.clinicContractInfoRepository.save(contractInfo);
     }
+
+    async getPackageById(id: string): Promise<ContractPackage> {
+        return this.contractPackageRepository.findById(id);
+    }
+
 
 
     private async calculateFileHash(filePath: string): Promise<string> {
@@ -187,6 +196,12 @@ export class ContractsService {
             throw new UnauthorizedException('User is not a party in this contract');
         }
 
+        // Update status to CURRENT if both parties have signed
+        if (contractPackage.managerSignature && contractPackage.employeeSignature) {
+            contractInfo.contractStatus = ContractStatus.CURRENT;
+            await this.clinicContractInfoRepository.save(contractInfo);
+        }
+
         await this.contractPackageRepository.save(contractPackage);
         return signature;
     }
@@ -261,13 +276,27 @@ export class ContractsService {
             const base64Content = file.buffer.toString('base64');
             const fileDataUri = `data:application/pdf;base64,${base64Content}`;
 
-            const uploadPayload = {
-                file: fileDataUri,
-                upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET,
-                folder: 'bonix-file-pdf' // Optional: as seen in user's postman
-            };
+            console.log('Uploading Contract ID:', contractId); // Debug
+            console.log('ENV PRESET VALUE:', process.env.CLOUDINARY_UPLOAD_PRESET);
+            console.log('ENV URL VALUE:', process.env.CLOUDINARY_UPLOAD_URL);
 
-            const response = await axios.post(process.env.CLOUDINARY_UPLOAD_URL, uploadPayload);
+            // Use FormData like Postman (multipart/form-data) instead of JSON
+            const FormData = require('form-data');
+            const formData = new FormData();
+            formData.append('file', fileDataUri);
+            formData.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
+            formData.append('folder', 'bonix-file-pdf'); // Now safe to use folder
+
+            console.log('FormData fields:', {
+                upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET,
+                folder: 'bonix-file-pdf'
+            });
+
+            const response = await axios.post(process.env.CLOUDINARY_UPLOAD_URL, formData, {
+                headers: {
+                    ...formData.getHeaders(), // Important: Set multipart headers
+                },
+            });
             const secureUrl = response.data.secure_url;
 
             if (!secureUrl) {
@@ -289,5 +318,28 @@ export class ContractsService {
             console.error('Cloudinary Upload Error:', error.response?.data || error.message);
             throw new BadRequestException(`Failed to upload file to Cloudinary: ${error.message}`);
         }
+    }
+    async getPackagesByClinic(
+        clinicId: string,
+        employeeName?: string,
+        page: number = 1,
+        limit: number = 10,
+    ) {
+        const [packages, total] = await this.contractPackageRepository.findPackagesByClinicWithFilters(
+            clinicId,
+            employeeName,
+            page,
+            limit,
+        );
+
+        return {
+            data: packages,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
     }
 }

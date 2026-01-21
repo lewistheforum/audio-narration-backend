@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsUUID, IsString, IsDateString, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsUUID, IsString, IsDateString, IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ContractRole } from '../enums/contract-role.enum';
 
@@ -11,13 +11,12 @@ export class CreateContractPackageDto {
     @IsUUID()
     employeeId: string;
 
-    @ApiProperty({
-        description: 'The ID of the Clinic (Manager) - For testing purposes',
-        example: 'manager-uuid-here',
-    })
-    @IsNotEmpty()
-    @IsUUID()
-    clinicId: string;
+    // @ApiProperty({
+    //     description: 'The ID of the Clinic (Manager) - Extracted from Token',
+    //     required: false
+    // })
+    @IsOptional()
+    clinicId?: string;
 
     @ApiProperty({
         description: 'The role of the contract (MANAGER or EMPLOYEE - usually determined by who is creating)',
@@ -31,32 +30,36 @@ export class CreateContractPackageDto {
     @ApiProperty({
         description: 'Address in the contract header',
         example: 'Ho Chi Minh City, Vietnam',
+        required: false
     })
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
-    headerAddress: string;
+    headerAddress?: string;
 
     @ApiProperty({
         description: 'Date in the contract header',
         example: '2023-10-27T10:00:00.000Z',
+        required: false
     })
-    @IsNotEmpty()
+    @IsOptional()
     @IsDateString()
-    headerDate: string;
+    headerDate?: string;
 
     @ApiProperty({
         description: 'Name of the clinic representative',
         example: 'Dr. Nguyen Van A',
+        required: false
     })
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
-    clinicRepresentative: string;
+    clinicRepresentative?: string;
 
     @ApiProperty({
         description: 'Position of the representative',
         example: 'Clinic Director',
+        required: false
     })
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
-    position: string;
+    position?: string;
 }

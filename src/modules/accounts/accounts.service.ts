@@ -2235,6 +2235,29 @@ export class AccountsService {
   }
 
   /**
+   * Find All Employees (Doctor + Staff) by Clinic
+   *
+   * Retrieves all employees belonging to a specific clinic.
+   * Useful for selecting contract assignees.
+   *
+   * @param {string} clinicId - Clinic UUID
+   * @param {AccountRole} [role] - Optional role filter
+   * @param {string} [search] - Optional search filter
+   * @returns {Promise<Account[]>} List of employees
+   */
+  async findAllEmployeesByClinic(
+    clinicId: string,
+    role?: AccountRole,
+    search?: string,
+  ): Promise<Account[]> {
+    return this.accountRepository.findEmployeesByClinicWithFilters(
+      clinicId,
+      role,
+      search,
+    );
+  }
+
+  /**
    * Get Doctor by ID with Full Details
    *
    * Retrieves detailed information for a specific doctor.

@@ -426,6 +426,66 @@ export class AccountsController {
   }
 
   /**
+   * Get All Employees by Clinic ID (Doctor + Staff)
+   *
+   * Retrieves all employees belonging to a specific clinic.
+   * Useful for contract creation dropdowns.
+   *
+   * Path Parameters:
+   * - clinicId: Clinic UUID
+   *
+   * Query Parameters:
+   * - role: Filter by role (DOCTOR | CLINIC_STAFF)
+   * - search: Search by name or username
+   *
+   * Response Format:
+   * - Returns array of Accounts
+   *
+   * @param {string} clinicId - Clinic UUID
+   * @param {AccountRole} [role] - Optional role filter
+   * @param {string} [search] - Optional search filter
+   * @returns {Promise<{data: Account[], message: string}>} List of employees
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved employees
+   */
+  @Get('clinic/:clinicId/employees')
+  @ApiOperation({ summary: 'Get all employees (Doctor + Staff) of a clinic' })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: AccountRole,
+    description: 'Filter by role (DOCTOR or CLINIC_STAFF)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name or username',
+  })
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Employees retrieved successfully',
+    isArray: true,
+  })
+  async getEmployeesByClinic(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query('role') role?: AccountRole,
+    @Query('search') search?: string,
+  ): Promise<{ data: any[]; message: string }> {
+    const employees = await this.accountsService.findAllEmployeesByClinic(
+      clinicId,
+      role,
+      search,
+    );
+    return {
+      data: employees,
+      message: 'Employees retrieved successfully',
+    };
+  }
+
+  /**
    * Get Doctor Details by ID (Public)
    *
    * Retrieves detailed information for a specific doctor.

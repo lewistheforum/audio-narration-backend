@@ -7,9 +7,11 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToOne,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ContractRole } from '../enums/contract-role.enum';
+import { ClinicContractInformation } from './clinic-contract-information.entity';
 
 @Entity('contract_package')
 export class ContractPackage {
@@ -33,6 +35,12 @@ export class ContractPackage {
   })
   @JoinColumn({ name: 'employee_id', referencedColumnName: '_id' })
   employeeAccount?: Account;
+
+  @OneToOne(
+    () => ClinicContractInformation,
+    (info) => info.contractPackage,
+  )
+  clinicContractInformation?: ClinicContractInformation;
 
   @Column({
     name: 'role',
