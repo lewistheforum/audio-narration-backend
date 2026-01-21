@@ -14,3 +14,4 @@ export * from './public-doctor-info.dto';
 export * from './public-clinic-info.dto';
 export * from './public-doctor-detail-data.dto';
 export * from './public-doctor-detail-response.dto';
+export * from './doctor-list-response.dto';

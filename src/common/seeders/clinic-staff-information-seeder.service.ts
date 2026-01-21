@@ -16,7 +16,9 @@ import { ENGLISH_NAMES } from '../constants/names';
  */
 @Injectable()
 export class ClinicStaffInformationSeederService {
-  private readonly logger = new Logger(ClinicStaffInformationSeederService.name);
+  private readonly logger = new Logger(
+    ClinicStaffInformationSeederService.name,
+  );
 
   // English names
   private readonly NAMES = ENGLISH_NAMES;
@@ -45,7 +47,8 @@ export class ClinicStaffInformationSeederService {
       this.logger.log('Starting to seed ClinicStaffInformation...');
 
       // Get all CLINIC_STAFF accounts
-      const clinicStaffAccounts = await this.accountRepository.findAllAccounts();
+      const clinicStaffAccounts =
+        await this.accountRepository.findAllAccounts();
       const clinicStaff = clinicStaffAccounts.filter(
         (acc) => acc.role === AccountRole.CLINIC_STAFF,
       );
@@ -60,7 +63,7 @@ export class ClinicStaffInformationSeederService {
       let createdCount = 0;
 
       for (const account of clinicStaff) {
-        const existing = await this.clinicStaffInfoRepository.findByClinicAccountId(
+        const existing = await this.clinicStaffInfoRepository.findByAccountId(
           account._id,
         );
 

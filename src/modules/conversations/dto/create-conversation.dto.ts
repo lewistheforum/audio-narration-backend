@@ -49,7 +49,10 @@ export class CreateConversationDto {
   @IsArray({ message: 'Participants must be an array' })
   @ArrayNotEmpty({ message: 'Participants list cannot be empty' })
   @ArrayMinSize(2, { message: 'At least 2 participants are required' })
-  @IsUUID('4', { each: true, message: 'Each participant ID must be a valid UUID' })
+  @IsUUID('4', {
+    each: true,
+    message: 'Each participant ID must be a valid UUID',
+  })
   participants: string[];
 
   @ApiProperty({

@@ -17,6 +17,8 @@ import { AddressSeederService } from './address-seeder.service';
 import { GoogleIframeSeederService } from './google-iframe-seeder.service';
 import { ContractPackageSeederService } from './contract-package-seeder.service';
 import { ClinicContractInformationSeederService } from './clinic-contract-information-seeder.service';
+import { AiConversationSeederService } from './ai-conversation-seeder.service';
+import { KnowledgeBaseSeederService } from './knowledge-base-seeder.service';
 import { ClinicServiceCategorySeederService } from './clinic-service-category-seeder.service';
 import { ClinicServiceSeederService } from './clinic-service-seeder.service';
 import { ClinicServiceConfigSeederService } from './clinic-service-config-seeder.service';
@@ -59,6 +61,12 @@ import { ClinicServiceRepository } from '../../modules/clinic-services/repositor
  * 2. AccountSeederService - Seeds all account roles (CLINIC_ADMIN, CLINIC_MANAGER, CLINIC_STAFF, DOCTOR, PATIENT)
  * 3. ClinicAdminInformationSeederService - Seeds ClinicAdminInformation records
  * 4. ClinicManagerInformationSeederService - Seeds ClinicManagerInformation records
+ * 5. ClinicStaffInformationSeederService - Seeds ClinicStaffInformation records
+ * 6. DoctorInformationSeederService - Seeds DoctorInformation records
+ * 7. GeneralAccountSeederService - Seeds GeneralAccount records for PATIENT accounts
+ * 8. FeedbackSeederService - Seeds feedback records
+ * 9. AiConversationSeederService - Seeds AI conversations and messages
+ * 10. KnowledgeBaseSeederService - Seeds system information into Knowledge Base
  * 5. ClinicsLegalDocumentsSeederService - Seeds ClinicsLegalDocuments records
  * 6. AddressSeederService - Seeds Address records
  * 7. GoogleIframeSeederService - Seeds GoogleIframe records
@@ -107,6 +115,8 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly clinicServiceCategoryRepository: ClinicServiceCategoryRepository,
     private readonly clinicServiceRepository: ClinicServiceRepository,
+    private readonly aiConversationSeeder: AiConversationSeederService,
+    private readonly knowledgeBaseSeeder: KnowledgeBaseSeederService,
   ) {}
 
   /**
@@ -194,7 +204,13 @@ export class SeederOrchestratorService implements OnModuleInit {
       const seedDataExists = await this.checkSeedDataExists();
 
       if (seedDataExists) {
-        this.logger.log('✅ Seed data already exists. Skipping seeding.');
+        this.logger.log('✅ Seed data already exists.');
+
+        // Ensure AI conversations are seeded even if other data exists
+        await this.aiConversationSeeder.seed();
+        this.logger.log(
+          '✅ AI Conversation seeding completed (Incremental update)',
+        );
         return;
       }
 
@@ -252,6 +268,13 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.feedbackSeeder.seed();
       this.logger.log('✅ Feedback seeding completed');
 
+      // Step 10: Seed AI conversations
+      await this.aiConversationSeeder.seed();
+      this.logger.log('✅ AI Conversation seeding completed');
+
+      // Step 11: Seed Knowledge Base
+      await this.knowledgeBaseSeeder.seed();
+      this.logger.log('✅ Knowledge Base seeding completed');
       // Step 14: Seed blog records
       await this.blogSeeder.seed();
       this.logger.log('✅ Blog seeding completed');

@@ -23,7 +23,9 @@ import {
  */
 @Injectable()
 export class ClinicAdminInformationSeederService {
-  private readonly logger = new Logger(ClinicAdminInformationSeederService.name);
+  private readonly logger = new Logger(
+    ClinicAdminInformationSeederService.name,
+  );
 
   // Orthopedics-focused English clinic names
   private readonly CLINIC_NAMES = CLINIC_NAMES;
@@ -73,7 +75,8 @@ export class ClinicAdminInformationSeederService {
       this.logger.log('Starting to seed ClinicAdminInformation...');
 
       // Get all CLINIC_ADMIN accounts
-      const clinicAdminAccounts = await this.accountRepository.findAllAccounts();
+      const clinicAdminAccounts =
+        await this.accountRepository.findAllAccounts();
       const clinicAdmins = clinicAdminAccounts.filter(
         (acc) => acc.role === AccountRole.CLINIC_ADMIN,
       );
@@ -192,7 +195,9 @@ export class ClinicAdminInformationSeederService {
    * Get random bank branch
    */
   private getRandomBankBranch(): string {
-    return this.BANK_BRANCHES[Math.floor(Math.random() * this.BANK_BRANCHES.length)];
+    return this.BANK_BRANCHES[
+      Math.floor(Math.random() * this.BANK_BRANCHES.length)
+    ];
   }
 
   /**

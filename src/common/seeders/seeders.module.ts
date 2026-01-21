@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountsModule } from '../../modules/accounts/accounts.module';
 import { ReportsModule } from '../../modules/reports/reports.module';
+import { ChatBotModule } from '../../modules/ai-rag-chat-bot/chat-bot.module';
+
 import { BlogsModule } from '../../modules/blogs/blogs.module';
 import { SubscriptionsModule } from '../../modules/subscriptions/subscriptions.module';
 import { ClinicServicesModule } from '../../modules/clinic-services/clinic-services.module';
@@ -25,6 +28,19 @@ import { ClinicServiceCategorySeederService } from './clinic-service-category-se
 import { ClinicServiceSeederService } from './clinic-service-seeder.service';
 import { ClinicServiceConfigSeederService } from './clinic-service-config-seeder.service';
 import { SeederOrchestratorService } from './seeder-orchestrator.service';
+import { AiConversationSeederService } from './ai-conversation-seeder.service';
+import { KnowledgeBaseSeederService } from './knowledge-base-seeder.service';
+import { KnowledgeBaseRepository } from '../../modules/ai-rag-chat-bot/repositories/knowledge-base.repository';
+
+// Entities for KnowledgeBaseSeeder
+import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
+import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
+import { Feedback } from '../../modules/reports/entities/feedback.entity';
+import { ClinicServiceConfig } from '../../modules/service-configs/entities/clinic-service-config.entity';
+import { EmployeeSchedule } from '../../modules/schedules/entities/employee-schedule.entity';
+import { ClinicShift } from '../../modules/schedules/entities/clinic-shift.entity';
+import { ClinicShiftHour } from '../../modules/schedules/entities/clinic-shift-hour.entity';
+import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity';
 
 /**
  * Seeders Module
@@ -61,6 +77,17 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
   imports: [
     AccountsModule,
     ReportsModule,
+    ChatBotModule,
+    TypeOrmModule.forFeature([
+      DoctorInformation,
+      ClinicAdminInformation,
+      Feedback,
+      ClinicServiceConfig,
+      EmployeeSchedule,
+      ClinicShift,
+      ClinicShiftHour,
+      ClinicRoom,
+    ]),
     BlogsModule,
     SubscriptionsModule,
     ClinicServicesModule,
@@ -80,6 +107,8 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
     DoctorInformationSeederService,
     GeneralAccountSeederService,
     FeedbackSeederService,
+    AiConversationSeederService,
+    KnowledgeBaseSeederService,
     BlogSeederService,
     SubscriptionServiceSeederService,
     SubscriptionsSeederService,
@@ -87,6 +116,7 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
     ClinicServiceSeederService,
     ClinicServiceConfigSeederService,
     SeederOrchestratorService,
+    KnowledgeBaseRepository,
   ],
   exports: [
     AdminSeederService,
@@ -102,6 +132,8 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
     DoctorInformationSeederService,
     GeneralAccountSeederService,
     FeedbackSeederService,
+    AiConversationSeederService,
+    KnowledgeBaseSeederService,
     BlogSeederService,
     SubscriptionServiceSeederService,
     SubscriptionsSeederService,

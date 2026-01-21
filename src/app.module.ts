@@ -20,6 +20,7 @@ import { ClinicLegalDocumentsModule } from './modules/clinic-legal-documents/cli
 import { ClinicServicesModule } from './modules/clinic-services/clinic-services.module';
 import { ServiceConfigsModule } from './modules/service-configs/service-configs.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { AiModule } from './modules/ai/ai.module';
 import { SeedersModule } from './common/seeders/seeders.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
 
@@ -60,6 +61,7 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     ClinicServicesModule,
     ServiceConfigsModule,
     AppointmentsModule,
+    AiModule,
     SeedersModule,
   ],
   controllers: [],

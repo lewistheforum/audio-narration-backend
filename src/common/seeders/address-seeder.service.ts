@@ -4,7 +4,12 @@ import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { Address } from '../../modules/accounts/entities/addresses.entity';
 import { AddressRepository } from '../../modules/accounts/repositories/address.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
-import { PROVINCES, WARDS, STREET_NAMES, BUILDING_TYPES } from '../constants/locations';
+import {
+  PROVINCES,
+  WARDS,
+  STREET_NAMES,
+  BUILDING_TYPES,
+} from '../constants/locations';
 
 /**
  * Address Seeder Service
@@ -43,10 +48,11 @@ export class AddressSeederService {
       this.logger.log('Starting to seed addresses...');
 
       // Get all CLINIC_MANAGER accounts
-      const clinicManagers = await this.accountRepository.findAllAccounts().then(
-        (accounts) =>
+      const clinicManagers = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
           accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER),
-      );
+        );
 
       if (clinicManagers.length === 0) {
         this.logger.warn('No CLINIC_MANAGER accounts found. Skipping seeding.');
@@ -58,13 +64,14 @@ export class AddressSeederService {
 
       for (const manager of clinicManagers) {
         // Check if address already exists for this manager
-        const existingAddresses =
-          await this.addressRepository.findByAccountId(manager._id);
+        const existingAddresses = await this.addressRepository.findByAccountId(
+          manager._id,
+        );
 
-        if (existingAddresses.length > 0) {
-          skippedCount++;
-          continue;
-        }
+        // if (existingAddresses.length > 0) {
+        //   skippedCount++;
+        //   continue;
+        // }
 
         // Create address with realistic Vietnamese clinic address
         const address = this.addressRepository.create({
@@ -95,9 +102,13 @@ export class AddressSeederService {
    * Generate realistic clinic address
    */
   private generateClinicAddress(): string {
-    const buildingType = this.BUILDING_TYPES[Math.floor(Math.random() * this.BUILDING_TYPES.length)];
+    const buildingType =
+      this.BUILDING_TYPES[
+        Math.floor(Math.random() * this.BUILDING_TYPES.length)
+      ];
     const buildingNumber = Math.floor(Math.random() * 500) + 1;
-    const streetName = this.STREET_NAMES[Math.floor(Math.random() * this.STREET_NAMES.length)];
+    const streetName =
+      this.STREET_NAMES[Math.floor(Math.random() * this.STREET_NAMES.length)];
     return `${buildingType} ${buildingNumber}, ${streetName}`;
   }
 
@@ -105,7 +116,8 @@ export class AddressSeederService {
    * Get random province code
    */
   private getRandomProvinceCode(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
     return province.code;
   }
 
@@ -113,7 +125,8 @@ export class AddressSeederService {
    * Get random province name
    */
   private getRandomProvinceName(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
     return province.name;
   }
 
@@ -121,7 +134,8 @@ export class AddressSeederService {
    * Get random district code (using first 2 chars of province code + district index)
    */
   private getRandomDistrictCode(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
     const districtIndex = Math.floor(Math.random() * province.districts.length);
     return `${province.code}${String(districtIndex + 1).padStart(2, '0')}`;
   }
@@ -130,8 +144,11 @@ export class AddressSeederService {
    * Get random district name
    */
   private getRandomDistrictName(): string {
-    const province = this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    return province.districts[Math.floor(Math.random() * province.districts.length)];
+    const province =
+      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
+    return province.districts[
+      Math.floor(Math.random() * province.districts.length)
+    ];
   }
 
   /**

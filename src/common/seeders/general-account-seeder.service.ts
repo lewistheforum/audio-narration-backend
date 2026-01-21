@@ -42,7 +42,9 @@ export class GeneralAccountSeederService {
    */
   async seed(): Promise<void> {
     try {
-      this.logger.log('Starting to seed GeneralAccount for PATIENT accounts...');
+      this.logger.log(
+        'Starting to seed GeneralAccount for PATIENT accounts...',
+      );
 
       // Get all PATIENT accounts
       const patientAccounts = await this.accountRepository.findAllAccounts();
@@ -71,14 +73,15 @@ export class GeneralAccountSeederService {
 
         const gender = this.getRandomGender();
         const patientIndex = patients.indexOf(account);
-        const generalAccount = this.generalAccountRepository.createGeneralAccount({
-          _id: randomUUID(),
-          accountId: account._id,
-          fullName: this.getRandomName(gender),
-          gender,
-          dob: this.generateDob(patientIndex),
-          profilePicture: this.getRandomProfilePicture(patientIndex),
-        });
+        const generalAccount =
+          this.generalAccountRepository.createGeneralAccount({
+            _id: randomUUID(),
+            accountId: account._id,
+            fullName: this.getRandomName(gender),
+            gender,
+            dob: this.generateDob(patientIndex),
+            profilePicture: this.getRandomProfilePicture(patientIndex),
+          });
 
         await this.generalAccountRepository.saveGeneralAccount(generalAccount);
         createdCount++;
@@ -103,10 +106,7 @@ export class GeneralAccountSeederService {
    * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
-    const names =
-      gender === Gender.MALE
-        ? this.NAMES.male
-        : this.NAMES.female;
+    const names = gender === Gender.MALE ? this.NAMES.male : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 
