@@ -14,6 +14,8 @@ import { AddressSeederService } from './address-seeder.service';
 import { GoogleIframeSeederService } from './google-iframe-seeder.service';
 import { ContractPackageSeederService } from './contract-package-seeder.service';
 import { ClinicContractInformationSeederService } from './clinic-contract-information-seeder.service';
+import { AiConversationSeederService } from './ai-conversation-seeder.service';
+import { KnowledgeBaseSeederService } from './knowledge-base-seeder.service';
 
 /**
  * Seeder Orchestrator Service
@@ -39,6 +41,8 @@ import { ClinicContractInformationSeederService } from './clinic-contract-inform
  * 6. DoctorInformationSeederService - Seeds DoctorInformation records
  * 7. GeneralAccountSeederService - Seeds GeneralAccount records for PATIENT accounts
  * 8. FeedbackSeederService - Seeds feedback records
+ * 9. AiConversationSeederService - Seeds AI conversations and messages
+ * 10. KnowledgeBaseSeederService - Seeds system information into Knowledge Base
  *
  * The orchestrator implements OnModuleInit and is the only seeder that runs automatically
  * during application startup. Individual seeder services expose public seed() methods
@@ -62,6 +66,8 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly doctorInfoSeeder: DoctorInformationSeederService,
     private readonly generalAccountSeeder: GeneralAccountSeederService,
     private readonly feedbackSeeder: FeedbackSeederService,
+    private readonly aiConversationSeeder: AiConversationSeederService,
+    private readonly knowledgeBaseSeeder: KnowledgeBaseSeederService,
     private readonly accountRepository: AccountRepository,
   ) {}
 
@@ -112,7 +118,13 @@ export class SeederOrchestratorService implements OnModuleInit {
       const seedDataExists = await this.checkSeedDataExists();
 
       if (seedDataExists) {
-        this.logger.log('✅ Seed data already exists. Skipping seeding.');
+        this.logger.log('✅ Seed data already exists.');
+
+        // Ensure AI conversations are seeded even if other data exists
+        await this.aiConversationSeeder.seed();
+        this.logger.log(
+          '✅ AI Conversation seeding completed (Incremental update)',
+        );
         return;
       }
 
@@ -169,6 +181,14 @@ export class SeederOrchestratorService implements OnModuleInit {
       // Step 8: Seed feedback records
       await this.feedbackSeeder.seed();
       this.logger.log('✅ Feedback seeding completed');
+
+      // Step 10: Seed AI conversations
+      await this.aiConversationSeeder.seed();
+      this.logger.log('✅ AI Conversation seeding completed');
+
+      // Step 11: Seed Knowledge Base
+      await this.knowledgeBaseSeeder.seed();
+      this.logger.log('✅ Knowledge Base seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {
