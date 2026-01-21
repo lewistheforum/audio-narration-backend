@@ -42,11 +42,9 @@ import {
   GoogleMapDto,
   DoctorSummaryDto,
   SubscriptionDto,
-} from './dto';
-import {
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
-} from './dto/public-doctor-detail-response.dto';
+} from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
 import { AccountRepository } from './repositories/account.repository';
@@ -2154,10 +2152,10 @@ export class AccountsService {
    * - clinic.phone: comes from clinic account, not clinic_manager_information
    *
    * @param {string} id - Doctor account UUID
-   * @returns {Promise<PublicDoctorDetailResponseDto>} Public doctor details with security controls
+   * @returns {Promise<PublicDoctorDetailData>} Public doctor details data with security controls
    * @throws {NotFoundException} If doctor not found or not eligible
    */
-  async getPublicDoctorById(id: string): Promise<PublicDoctorDetailResponseDto> {
+  async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
     // Get doctor account
     const doctor = await this.accountRepository.findAccountById(id);
     if (!doctor) {
@@ -2214,7 +2212,7 @@ export class AccountsService {
       clinicInfo,
     );
 
-    return new PublicDoctorDetailResponseDto(publicDoctorDetailData);
+    return publicDoctorDetailData;
   }
 
   /**

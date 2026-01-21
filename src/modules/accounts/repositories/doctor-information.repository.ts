@@ -176,30 +176,30 @@ export class DoctorInformationRepository {
       .createQueryBuilder('doctor_info')
       .select([
         'doctor_info._id',
-        'doctor_info.account_id',
-        'doctor_info.full_name',
+        'doctor_info.accountId',
+        'doctor_info.fullName',
         'doctor_info.gender',
         'doctor_info.dob',
-        'doctor_info.profile_picture',
-        'doctor_info.academic_degree',
+        'doctor_info.profilePicture',
+        'doctor_info.academicDegree',
         'doctor_info.experience',
         'doctor_info.position',
-        'doctor_info.introduction_1',
-        'doctor_info.work_process_2',
-        'doctor_info.study_process_3',
-        'doctor_info.members_4',
-        'doctor_info.scientific_work_5',
-        'doctor_info.papers_6',
-        'doctor_info.introduction_image',
-        'doctor_info.created_at',
-        'doctor_info.updated_at',
+        'doctor_info.introduction1',
+        'doctor_info.workProcess2',
+        'doctor_info.studyProcess3',
+        'doctor_info.members4',
+        'doctor_info.scientificWork5',
+        'doctor_info.papers6',
+        'doctor_info.introductionImage',
+        'doctor_info.createdAt',
+        'doctor_info.updatedAt',
       ])
       .addSelect([
-        'doctor_info.professional_license',
-        'doctor_info.certificate_practical_training',
-        'doctor_info.medical_license',
+        'doctor_info.professionalLicense',
+        'doctor_info.certificatePracticalTraining',
+        'doctor_info.medicalLicense',
       ])
-      .where('doctor_info.account_id = :accountId', { accountId: doctorAccId })
+      .where('doctor_info.accountId = :accountId', { accountId: doctorAccId })
       .getOne();
   }
 }

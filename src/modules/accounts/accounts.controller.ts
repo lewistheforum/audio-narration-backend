@@ -34,6 +34,10 @@ import {
   CreateClinicManagerDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
+  PublicDoctorInfo,
+  PublicClinicInfo,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -77,6 +81,10 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   ClinicDetailResponseDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
+  PublicDoctorInfo,
+  PublicClinicInfo,
 )
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
@@ -319,6 +327,61 @@ export class AccountsController {
       data: clinic,
       message: 'Clinic details retrieved successfully',
     };
+  }
+
+  /**
+   * Get Doctor Details by ID (Public)
+   *
+   * Retrieves detailed information for a specific doctor.
+   * Includes account info, doctor profile, and clinic information.
+   *
+   * Security Controls:
+   * - Only returns doctors with role='DOCTOR' and status='ACTIVE'
+   * - Excludes soft-deleted records
+   * - Uses allowlist approach for encrypted fields:
+   *   - professional_license (allowed)
+   *   - certificate_practical_training (allowed)
+   *   - medical_license (allowed)
+   * - identity_number, place_identity_card, identity_date (excluded)
+   * - bank_number, bank_name, bank_branch (excluded)
+   *
+   * Path Parameters:
+   * - id: Doctor account UUID
+   *
+   * Response Format:
+   * - Returns PublicDoctorDetailResponseDto with full doctor details
+   * - Includes account information (username, email, phone, etc.)
+   * - Includes doctor profile (experience, education, etc.)
+   * - Includes clinic information (parent clinic)
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Doctor profile page
+   * - Doctor details view
+   * - Booking interface doctor information
+   *
+   * @param {string} id - Doctor account UUID
+   * @returns {Promise<PublicDoctorDetailResponseDto>} Full doctor details with security controls
+   * @throws {NotFoundException} If doctor not found or not eligible
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved doctor details
+   * @response 404 - Doctor not found
+   */
+  @Get('doctors/:id')
+  @ApiOperation({ summary: 'Get doctor details by ID' })
+  @ApiResponseData({
+    type: PublicDoctorDetailData,
+    status: MESSAGES.statusCode.success,
+    message: 'Doctor details retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
+  async getDoctorById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PublicDoctorDetailData> {
+    return this.accountsService.getPublicDoctorById(id);
   }
 
   /**

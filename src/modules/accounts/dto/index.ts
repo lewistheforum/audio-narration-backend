@@ -10,3 +10,7 @@ export * from './account-response.dto';
 export * from './ban-account.dto';
 export * from './clinic-list-response.dto';
 export * from './clinic-detail-response.dto';
+export * from './public-doctor-info.dto';
+export * from './public-clinic-info.dto';
+export * from './public-doctor-detail-data.dto';
+export * from './public-doctor-detail-response.dto';
