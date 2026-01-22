@@ -63,5 +63,9 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 #datasets
 /data
 
+# Database storage (Docker volumes)
+/database/postgres_data/
+/database/backups/
+
 # Sequence diagrams
 sequence_diagram/
