@@ -25,6 +25,10 @@ import { ClinicServiceConfigSeederService } from './clinic-service-config-seeder
 import { SubscriptionServiceRepository } from '../../modules/subscriptions/repositories/subscription-service.repository';
 import { ClinicServiceCategoryRepository } from '../../modules/clinic-services/repositories/clinic-service-category.repository';
 import { ClinicServiceRepository } from '../../modules/clinic-services/repositories/clinic-service.repository';
+import { ClinicRoomSeederService } from './clinic-room-seeder.service';
+import { ClinicShiftSeederService } from './clinic-shift-seeder.service';
+import { EmployeeScheduleSeederService } from './employee-schedule-seeder.service';
+import { ClinicRoomEmployeeScheduleSeederService } from './clinic-room-employee-schedule-seeder.service';
 
 /**
  * Seeder Orchestrator Service
@@ -117,6 +121,10 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly clinicServiceRepository: ClinicServiceRepository,
     private readonly aiConversationSeeder: AiConversationSeederService,
     private readonly knowledgeBaseSeeder: KnowledgeBaseSeederService,
+    private readonly clinicRoomSeeder: ClinicRoomSeederService,
+    private readonly clinicShiftSeeder: ClinicShiftSeederService,
+    private readonly employeeScheduleSeeder: EmployeeScheduleSeederService,
+    private readonly clinicRoomEmployeeScheduleSeeder: ClinicRoomEmployeeScheduleSeederService,
   ) {}
 
   /**
@@ -268,36 +276,53 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.feedbackSeeder.seed();
       this.logger.log('✅ Feedback seeding completed');
 
-      // Step 10: Seed AI conversations
+      // Step 14: Seed AI conversations
       await this.aiConversationSeeder.seed();
       this.logger.log('✅ AI Conversation seeding completed');
 
-      // Step 11: Seed Knowledge Base
+      // Step 15: Seed Knowledge Base
       await this.knowledgeBaseSeeder.seed();
       this.logger.log('✅ Knowledge Base seeding completed');
-      // Step 14: Seed blog records
+
+      // Step 16: Seed blog records
       await this.blogSeeder.seed();
       this.logger.log('✅ Blog seeding completed');
 
-      // Step 15: Seed subscription services
+      // Step 17: Seed subscription services
       await this.subscriptionServiceSeeder.seed();
       this.logger.log('✅ SubscriptionService seeding completed');
 
-      // Step 16: Seed clinic subscriptions and subscription history
+      // Step 18: Seed clinic subscriptions and subscription history
       await this.subscriptionsSeeder.seed();
       this.logger.log('✅ Clinic subscriptions seeding completed');
 
-      // Step 17: Seed clinic service categories
+      // Step 19: Seed clinic service categories
       await this.clinicServiceCategorySeeder.seed();
       this.logger.log('✅ ClinicServiceCategory seeding completed');
 
-      // Step 18: Seed clinic services
+      // Step 20: Seed clinic services
       await this.clinicServiceSeeder.seed();
       this.logger.log('✅ ClinicService seeding completed');
 
-      // Step 19: Seed clinic service configs
+      // Step 21: Seed clinic service configs
       await this.clinicServiceConfigSeeder.seed();
       this.logger.log('✅ ClinicServiceConfig seeding completed');
+
+      // Step 22: Seed clinic rooms
+      await this.clinicRoomSeeder.seed();
+      this.logger.log('✅ ClinicRoom seeding completed');
+
+      // Step 23: Seed clinic shifts and shift hours
+      await this.clinicShiftSeeder.seed();
+      this.logger.log('✅ ClinicShift seeding completed');
+
+      // Step 24: Seed employee schedules
+      await this.employeeScheduleSeeder.seed();
+      this.logger.log('✅ EmployeeSchedule seeding completed');
+
+      // Step 25: Seed clinic room employee schedule assignments
+      await this.clinicRoomEmployeeScheduleSeeder.seed();
+      this.logger.log('✅ ClinicRoomEmployeeSchedule seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {

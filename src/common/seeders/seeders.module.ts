@@ -8,6 +8,7 @@ import { BlogsModule } from '../../modules/blogs/blogs.module';
 import { SubscriptionsModule } from '../../modules/subscriptions/subscriptions.module';
 import { ClinicServicesModule } from '../../modules/clinic-services/clinic-services.module';
 import { ServiceConfigsModule } from '../../modules/service-configs/service-configs.module';
+import { SchedulesModule } from '../../modules/schedules/schedules.module';
 import { AdminSeederService } from './admin-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
 import { AccountSeederService } from './account-seeder.service';
@@ -31,6 +32,14 @@ import { SeederOrchestratorService } from './seeder-orchestrator.service';
 import { AiConversationSeederService } from './ai-conversation-seeder.service';
 import { KnowledgeBaseSeederService } from './knowledge-base-seeder.service';
 import { KnowledgeBaseRepository } from '../../modules/ai-rag-chat-bot/repositories/knowledge-base.repository';
+import { ClinicRoomSeederService } from './clinic-room-seeder.service';
+import { ClinicShiftSeederService } from './clinic-shift-seeder.service';
+import { EmployeeScheduleSeederService } from './employee-schedule-seeder.service';
+import { ClinicRoomEmployeeScheduleSeederService } from './clinic-room-employee-schedule-seeder.service';
+import { ClinicRoomRepository } from '../../modules/schedules/repositories/clinic-room.repository';
+import { ClinicShiftRepository } from '../../modules/schedules/repositories/clinic-shift.repository';
+import { ClinicShiftHourRepository } from '../../modules/schedules/repositories/clinic-shift-hour.repository';
+import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
 
 // Entities for KnowledgeBaseSeeder
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
@@ -92,6 +101,7 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     SubscriptionsModule,
     ClinicServicesModule,
     ServiceConfigsModule,
+    SchedulesModule,
   ],
   providers: [
     AdminSeederService,
@@ -115,8 +125,16 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ClinicServiceCategorySeederService,
     ClinicServiceSeederService,
     ClinicServiceConfigSeederService,
+    ClinicRoomSeederService,
+    ClinicShiftSeederService,
+    EmployeeScheduleSeederService,
+    ClinicRoomEmployeeScheduleSeederService,
     SeederOrchestratorService,
     KnowledgeBaseRepository,
+    ClinicRoomRepository,
+    ClinicShiftRepository,
+    ClinicShiftHourRepository,
+    EmployeeScheduleRepository,
   ],
   exports: [
     AdminSeederService,
@@ -140,6 +158,10 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ClinicServiceCategorySeederService,
     ClinicServiceSeederService,
     ClinicServiceConfigSeederService,
+    ClinicRoomSeederService,
+    ClinicShiftSeederService,
+    EmployeeScheduleSeederService,
+    ClinicRoomEmployeeScheduleSeederService,
     SeederOrchestratorService,
   ],
 })
