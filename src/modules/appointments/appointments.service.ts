@@ -95,10 +95,32 @@ export class AppointmentsService {
         appointmentIds,
       );
 
+    // Fetch clinic rooms for all appointments with doctors
+    const doctorDatePairs = appointments
+      .filter((apt) => apt.doctorId)
+      .map((apt) => ({
+        doctorId: apt.doctorId!,
+        appointmentDate: apt.appointmentDate,
+      }));
+
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+        doctorDatePairs,
+      );
+
     // Transform to response DTOs
-    const data = appointments.map((appointment) =>
-      this.transformToResponseDto(appointment, servicesMap.get(appointment._id)),
-    );
+    const data = appointments.map((appointment) => {
+      const roomsKey = appointment.doctorId
+        ? `${appointment.doctorId}_${appointment.appointmentDate}`
+        : null;
+      const clinicRooms = roomsKey ? clinicRoomsMap.get(roomsKey) || [] : [];
+
+      return this.transformToResponseDto(
+        appointment,
+        servicesMap.get(appointment._id),
+        clinicRooms,
+      );
+    });
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / queryDto.limit);
@@ -634,30 +656,25 @@ export class AppointmentsService {
    *
    * @param appointment - Appointment entity with relations
    * @param services - Optional array of services for this appointment
+   * @param clinicRooms - Optional array of clinic rooms for this appointment
    * @returns AppointmentResponseDto
    */
   private transformToResponseDto(
     appointment: any,
     services?: any[],
+    clinicRooms?: any[],
   ): AppointmentResponseDto {
-    // Get patient full name from generalAccount or fallback to username
+    // Get patient full name from raw query result or fallback to username
     const patientFullName =
-      appointment.patient?.generalAccount?.fullName ||
+      appointment.patientProfile_full_name ||
       appointment.patient?.username ||
       'N/A';
 
-    // Get doctor full name from doctorInformation or fallback to username
+    // Get doctor full name from raw query result or fallback to username
     const doctorFullName =
-      appointment.doctor?.doctorInformation?.fullName ||
+      appointment.doctorProfile_full_name ||
       appointment.doctor?.username ||
       null;
-
-    // Get clinic rooms from shift hour
-    const clinicRooms =
-      appointment.doctorShiftHour?.rooms?.map((room: any) => ({
-        id: room._id,
-        roomName: room.roomName,
-      })) || [];
 
     return {
       id: appointment._id,
@@ -669,7 +686,7 @@ export class AppointmentsService {
       clinicName: appointment.clinic?.username || 'N/A',
       doctorId: appointment.doctorId,
       doctorFullName,
-      clinicRooms,
+      clinicRooms: clinicRooms || [],
       services: services || [],
       appointmentDate: appointment.appointmentDate,
       appointmentHour: appointment.appointmentHour,
@@ -765,36 +782,35 @@ export class AppointmentsService {
     appointmentPackage: any,
     clinicRooms: any[],
   ): AppointmentDetailResponseDto {
-    // Patient details
-    const patientProfile = appointment.patient?.generalAccount;
+    // Patient details from raw query result
     const patient = {
       id: appointment.patient?._id || appointment.patientId,
       username: appointment.patient?.username || 'N/A',
       email: appointment.patient?.email,
       phone: appointment.patient?.phone,
-      fullName: patientProfile?.fullName,
-      gender: patientProfile?.gender,
-      dob: patientProfile?.dob,
-      profilePicture: patientProfile?.profilePicture,
+      fullName: appointment.patientProfile_full_name,
+      gender: appointment.patientProfile_gender,
+      dob: appointment.patientProfile_dob,
+      profilePicture: appointment.patientProfile_profile_picture,
     };
 
-    // Doctor details (if assigned)
+    // Doctor details from raw query result (if assigned)
     let doctor = null;
     if (appointment.doctor) {
-      const doctorProfile = appointment.doctor?.doctorInformation;
       doctor = {
         id: appointment.doctor._id,
         username: appointment.doctor.username,
         email: appointment.doctor.email,
         phone: appointment.doctor.phone,
-        fullName: doctorProfile?.fullName,
-        gender: doctorProfile?.gender,
-        dob: doctorProfile?.dob,
-        profilePicture: doctorProfile?.profilePicture,
-        academicDegree: doctorProfile?.academicDegree,
-        experience: doctorProfile?.experience,
-        position: doctorProfile?.position,
-      };}
+        fullName: appointment.doctorProfile_full_name,
+        gender: appointment.doctorProfile_gender,
+        dob: appointment.doctorProfile_dob,
+        profilePicture: appointment.doctorProfile_profile_picture,
+        academicDegree: appointment.doctorProfile_academic_degree,
+        experience: appointment.doctorProfile_experience,
+        position: appointment.doctorProfile_position,
+      };
+    }
 
     // Shift hour details (if assigned)
     let shiftHour = null;

@@ -37,12 +37,24 @@ export class AppointmentRepository {
     const queryBuilder = this.repository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('patient.generalAccount', 'patientProfile')
+      .leftJoin(
+        'general_accounts',
+        'patientProfile',
+        'patientProfile.account_id = patient._id',
+      )
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoinAndSelect('doctor.doctorInformation', 'doctorProfile')
-      .leftJoinAndSelect('appointment.doctorShiftHour', 'shiftHour')
-      .leftJoinAndSelect('shiftHour.rooms', 'clinicRoom')
+      .leftJoin(
+        'doctor_information',
+        'doctorProfile',
+        'doctorProfile.account_id = doctor._id',
+      )
+      .addSelect([
+        'patientProfile._id',
+        'patientProfile.full_name',
+        'doctorProfile._id',
+        'doctorProfile.full_name',
+      ])
       .where('appointment.clinicId = :clinicId', { clinicId })
       .andWhere('appointment.deletedAt IS NULL');
 
@@ -92,7 +104,7 @@ export class AppointmentRepository {
    * - Patient with profile (GeneralAccount)
    * - Doctor with profile (DoctorInformation)
    * - Clinic
-   * - Appointment packages with services
+   * - Shift hour and shift information
    *
    * @param id - Appointment UUID
    * @returns Appointment with all details or null
@@ -101,12 +113,35 @@ export class AppointmentRepository {
     return this.repository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('patient.generalAccount', 'patientProfile')
+      .leftJoin(
+        'general_accounts',
+        'patientProfile',
+        'patientProfile.account_id = patient._id',
+      )
       .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoinAndSelect('doctor.doctorInformation', 'doctorProfile')
+      .leftJoin(
+        'doctor_information',
+        'doctorProfile',
+        'doctorProfile.account_id = doctor._id',
+      )
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('appointment.doctorShiftHour', 'shiftHour')
       .leftJoinAndSelect('shiftHour.shift', 'shift')
+      .addSelect([
+        'patientProfile._id',
+        'patientProfile.full_name',
+        'patientProfile.gender',
+        'patientProfile.dob',
+        'patientProfile.profile_picture',
+        'doctorProfile._id',
+        'doctorProfile.full_name',
+        'doctorProfile.gender',
+        'doctorProfile.dob',
+        'doctorProfile.profile_picture',
+        'doctorProfile.academic_degree',
+        'doctorProfile.experience',
+        'doctorProfile.position',
+      ])
       .where('appointment._id = :id', { id })
       .andWhere('appointment.deletedAt IS NULL')
       .getOne();
