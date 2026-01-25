@@ -43,13 +43,11 @@ import {
   GoogleMapDto,
   DoctorSummaryDto,
   SubscriptionDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
-  DoctorDetailResponseDto,
-  DoctorDetailData,
-  DoctorInfo,
-  ClinicInfo,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -2258,19 +2256,24 @@ export class AccountsService {
   }
 
   /**
-   * Get Doctor by ID with Full Details
+   * Get Doctor by ID (Public View with Security Controls)
    *
-   * Retrieves detailed information for a specific doctor.
-   * Includes doctor information and clinic manager information (parent clinic).
+   * Retrieves detailed information for a specific doctor with security controls.
+   * Uses allowlist approach to prevent sensitive data leakage.
    *
    * Business Rules:
    * - Only returns doctors with role='DOCTOR' and status='ACTIVE'
    * - Excludes soft-deleted records (accounts.deletedAt IS NULL and doctor_information.deleted_at IS NULL)
    * - Returns 404 Not Found if doctor not found or not eligible
    *
+   * Security Controls:
+   * - Uses findPublicByDoctorAccountId repository method with explicit select
+   * - Only includes permitted encrypted fields (professional_license, certificate_practical_training, medical_license)
+   * - Excludes sensitive encrypted fields (identity_number, place_identity_card, identity_date, bank_number, bank_name, bank_branch)
+   *
    * Data Sources:
    * - accounts table: Core account data
-   * - doctor_information table: Doctor details (joined via doctor_acc_id)
+   * - doctor_information table: Doctor details (public view only)
    * - accounts table (clinic): Parent clinic account (via parentId)
    * - clinic_manager_information table: Clinic manager details
    *
@@ -2280,10 +2283,10 @@ export class AccountsService {
    * - clinic.phone: comes from clinic account, not clinic_manager_information
    *
    * @param {string} id - Doctor account UUID
-   * @returns {Promise<DoctorDetailResponseDto>} Full doctor details
+   * @returns {Promise<PublicDoctorDetailData>} Public doctor details data with security controls
    * @throws {NotFoundException} If doctor not found or not eligible
    */
-  async getDoctorById(id: string): Promise<DoctorDetailResponseDto> {
+  async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
     // Get doctor account
     const doctor = await this.accountRepository.findAccountById(id);
     if (!doctor) {
@@ -2298,9 +2301,9 @@ export class AccountsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get doctor information
+    // Get doctor information with security controls (allowlist approach)
     const doctorInfo =
-      await this.doctorInfoRepository.findByDoctorAccountId(id);
+      await this.doctorInfoRepository.findPublicByDoctorAccountId(id);
     if (!doctorInfo) {
       throw new NotFoundException('Doctor information not found');
     }
@@ -2333,14 +2336,14 @@ export class AccountsService {
       dob: doctorInfo.dob,
     };
 
-    // Create DoctorDetailData with modified account and doctor info
-    const doctorDetailData = new DoctorDetailData(
+    // Create PublicDoctorDetailData with modified account and doctor info
+    const publicDoctorDetailData = new PublicDoctorDetailData(
       modifiedAccount,
       doctorInfo,
       clinicInfo,
     );
 
-    return new DoctorDetailResponseDto(doctorDetailData);
+    return publicDoctorDetailData;
   }
 
   /**

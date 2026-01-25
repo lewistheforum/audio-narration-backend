@@ -6,6 +6,7 @@ import { Address } from './addresses.entity';
 import { GeneralAccount } from './general_accounts.entity';
 import { DoctorInformation } from './doctor_information.entity';
 import { ClinicStaffInformation } from './clinic_staff_information.entity';
+import { Blog } from '../../blogs/entities/blog.entity';
 import {
   Entity,
   Column,
@@ -104,6 +105,16 @@ export class Account {
     cascade: true,
   })
   addresses?: Address[];
+
+  /**
+   * Blogs Relation
+   *
+   * One-to-many relation with blogs table for clinic accounts
+   */
+  @OneToMany(() => Blog, (blog) => blog.clinic, {
+    cascade: true,
+  })
+  blogs?: Blog[];
 
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;

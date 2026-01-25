@@ -56,6 +56,38 @@ export class BlogRepository {
   }
 
   /**
+   * Find All Blogs with Clinic
+   *
+   * Retrieves all blog records with clinic information.
+   * Excludes soft-deleted records.
+   * Orders by newest first (createdAt DESC).
+   *
+   * @returns {Promise<Blog[]>} Array of blog entities with clinic relations
+   */
+  async findAllWithClinic(): Promise<Blog[]> {
+    return this.blogRepository.find({
+      relations: ['clinic', 'clinic.clinicManagerInformation'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find Blog by ID with Clinic
+   *
+   * Retrieves a single blog by its UUID with clinic information.
+   * Excludes soft-deleted records.
+   *
+   * @param {string} id - Blog UUID
+   * @returns {Promise<Blog | null>} Blog entity with clinic relations or null if not found
+   */
+  async findByIdWithClinic(id: string): Promise<Blog | null> {
+    return this.blogRepository.findOne({
+      where: { _id: id },
+      relations: ['clinic', 'clinic.clinicManagerInformation'],
+    });
+  }
+
+  /**
    * Find Blog by ID
    *
    * Retrieves a single blog by its UUID.

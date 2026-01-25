@@ -18,7 +18,7 @@ export class ContractsController {
 
     @Get('packages/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER)
+    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER, AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
     @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Get contract package by ID' })
     async getPackageById(@Param('id') id: string) {
@@ -27,7 +27,7 @@ export class ContractsController {
 
     @Get('packages')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER)
+    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER, AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
     @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Get all contract packages for the logged-in clinic' })
     @ApiQuery({ name: 'employeeName', required: false, description: 'Search by employee name' })
@@ -56,7 +56,7 @@ export class ContractsController {
 
     @Post('packages/:id/info')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER)
+    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER, AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
     @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Create contract terms/information (Step 2)' })
     @ApiResponse({ status: 201, description: 'Contract information created successfully' })
