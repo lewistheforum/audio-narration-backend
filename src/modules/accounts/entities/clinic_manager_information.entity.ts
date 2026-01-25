@@ -1,7 +1,7 @@
 import {
   Entity,
   Column,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
@@ -19,7 +19,7 @@ import { Gender } from '../enums/gender.enum';
  */
 @Entity('clinic_manager_information')
 export class ClinicManagerInformation {
-  @PrimaryColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   _id: string;
 
   /**

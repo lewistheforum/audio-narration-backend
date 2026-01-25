@@ -82,31 +82,76 @@ export class DoctorInformation {
   @Column({ name: 'introduction_image', type: 'text', nullable: true })
   introductionImage?: string;
 
-  @Column({ name: 'professional_license', type: 'text', nullable: true, transformer: jsonbEncryptionTransformer })
+  @Column({
+    name: 'professional_license',
+    type: 'text',
+    nullable: true,
+    transformer: jsonbEncryptionTransformer,
+  })
   professionalLicense?: Record<string, any>;
 
-  @Column({ name: 'certificate_practical_training', type: 'text', nullable: true, transformer: jsonbEncryptionTransformer })
+  @Column({
+    name: 'certificate_practical_training',
+    type: 'text',
+    nullable: true,
+    transformer: jsonbEncryptionTransformer,
+  })
   certificatePracticalTraining?: Record<string, any>;
 
-  @Column({ name: 'medical_license', type: 'text', nullable: true, transformer: jsonbEncryptionTransformer })
+  @Column({
+    name: 'medical_license',
+    type: 'text',
+    nullable: true,
+    transformer: jsonbEncryptionTransformer,
+  })
   medicalLicense?: Record<string, any>;
 
-  @Column({ name: 'identity_number', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'identity_number',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   identityNumber?: string;
 
-  @Column({ name: 'place_identity_card', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'place_identity_card',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   placeIdentityCard?: string;
 
-  @Column({ name: 'identity_date', type: 'text', nullable: true, transformer: dateEncryptionTransformer })
+  @Column({
+    name: 'identity_date',
+    type: 'text',
+    nullable: true,
+    transformer: dateEncryptionTransformer,
+  })
   identityDate?: Date;
 
-  @Column({ name: 'bank_number', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'bank_number',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankNumber?: string;
 
-  @Column({ name: 'bank_name', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'bank_name',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankName?: string;
 
-  @Column({ name: 'bank_branch', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'bank_branch',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankBranch?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

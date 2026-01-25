@@ -20,9 +20,7 @@ export class CodeVerificationRepository {
   /**
    * Find all code verification records
    */
-  async findAll(
-    includeDeleted: boolean = false,
-  ): Promise<CodeVerification[]> {
+  async findAll(includeDeleted: boolean = false): Promise<CodeVerification[]> {
     return this.repository.find({
       withDeleted: includeDeleted,
     });
@@ -108,7 +106,9 @@ export class CodeVerificationRepository {
   create(data: DeepPartial<CodeVerification>): CodeVerification {
     // Validate required fields to prevent NULL values in database
     if (!data.code) {
-      throw new Error('CodeVerification: code field is required and cannot be empty');
+      throw new Error(
+        'CodeVerification: code field is required and cannot be empty',
+      );
     }
     if (!data.accountId) {
       throw new Error('CodeVerification: accountId field is required');
@@ -119,7 +119,7 @@ export class CodeVerificationRepository {
     if (!data.type) {
       throw new Error('CodeVerification: type field is required');
     }
-    
+
     return this.repository.create(data);
   }
 
@@ -141,7 +141,7 @@ export class CodeVerificationRepository {
     if ('code' in data && !data.code) {
       throw new Error('CodeVerification: code field cannot be empty');
     }
-    
+
     await this.repository.update(id, data);
     return this.findById(id);
   }
@@ -203,10 +203,7 @@ export class CodeVerificationRepository {
   /**
    * Check if valid code exists for user
    */
-  async hasValidCode(
-    userId: string,
-    type: VerificationType,
-  ): Promise<boolean> {
+  async hasValidCode(userId: string, type: VerificationType): Promise<boolean> {
     const count = await this.repository.count({
       where: {
         accountId: userId,
@@ -216,5 +213,18 @@ export class CodeVerificationRepository {
       },
     });
     return count > 0;
+  }
+
+  /**
+   * Invalidate all verification codes for a user
+   */
+  async invalidateAllUserCodes(
+    userId: string,
+    type: VerificationType,
+  ): Promise<void> {
+    await this.repository.update(
+      { accountId: userId, type, used: false },
+      { used: true },
+    );
   }
 }

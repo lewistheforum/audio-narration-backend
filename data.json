@@ -1,0 +1,228 @@
+[
+        {
+            "id": "ec8ba2c0-4150-42df-8f5b-16b2fb7fd45b",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 3,
+            "description": "Không gian phòng khám rộng rãi, vệ sinh tốt. Có nhắc đến wait time. Chi phí cao hơn dự kiến, thu phí không minh bạch.",
+            "descriptionLabel": [
+                "FACILITY:Positive",
+                "COST:Negative",
+                "WAIT_TIME:Neutral"
+            ],
+            "feedbackImagesLabel": [
+                {
+                    "description": "The image shows a hospital room with a hospital bed in the center. The bed is covered with a blue bedsheet and has wheels for easy movement. On the right side of the bed, there is a medical equipment set up with a monitor, keyboard, and other medical equipment. There is also a desk with a computer and a chair in the background. The walls are painted in a light green color and there are posters and a clock on the wall. The room has a whiteboard on the left side and a window on the right. The floor is made of concrete and the ceiling has recessed lighting."
+                },
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has blue walls and a white ceiling with recessed lighting. In the center of the room, there is a large surgical table with two black beds on either side. On the left side of the table, there are several medical equipment, including a monitor, a monitor screen, and a control panel with various buttons and switches. There is also a large screen on the wall and a door on the right side. The operating room appears to be clean and well-maintained."
+                }
+            ]
+        },
+        {
+            "id": "7ef935fd-56e6-45a7-a9fe-121ed45d4213",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 2,
+            "description": "Chi phí cao hơn dự kiến, thu phí không minh bạch. Nhân viên thiếu chuyên nghiệp, không hỗ trợ.",
+            "descriptionLabel": [
+                "COST:Negative",
+                "STAFF:Negative"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "ad034da7-8e0c-4138-915b-7292a5206a26",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 4,
+            "description": "Nhân viên thân thiện, xử lý thủ tục nhanh. Quy trình khám nhanh gọn, thủ tục đơn giản. Có nhắc đến dr skill.",
+            "descriptionLabel": [
+                "STAFF:Positive",
+                "PROCEDURE:Positive",
+                "DR_SKILL:Neutral"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "615495dc-00a8-48b3-b9d3-8a5ce5199e11",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 4,
+            "description": "Chi phí hợp lý và được thông báo rõ ràng từ đầu.",
+            "descriptionLabel": [
+                "COST:Positive"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "305b781b-204c-4a1d-a3c2-c8ddd3ddb17f",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 4,
+            "description": "Lễ tân khó chịu, nói chuyện cộc lốc. Quy trình khám nhanh gọn, thủ tục đơn giản. Tay nghề bác sĩ tốt, chẩn đoán đúng và tư vấn rất chi tiết.",
+            "descriptionLabel": [
+                "DR_SKILL:Positive",
+                "STAFF:Negative",
+                "PROCEDURE:Positive"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "52b599a3-ee23-4f81-829d-9b3a9e639760",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 2,
+            "description": "Quy trình khám nhanh gọn, thủ tục đơn giản. Đợi gần một tiếng mới tới lượt.",
+            "descriptionLabel": [
+                "WAIT_TIME:Negative",
+                "PROCEDURE:Positive"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "5a8f25ba-dd35-4fe6-977d-87f08ccce021",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 2,
+            "description": "Lễ tân khó chịu, nói chuyện cộc lốc. Cảm giác bác sĩ thiếu kinh nghiệm, tư vấn mơ hồ.",
+            "descriptionLabel": [
+                "DR_SKILL:Negative",
+                "STAFF:Negative"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "8d7d337e-8e57-4fe9-b95c-e3acef66193b",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 3,
+            "description": "Thời gian chờ hợp lý, không phải đợi lâu. Quy trình khám nhanh gọn, thủ tục đơn giản. Lễ tân khó chịu, nói chuyện cộc lốc.",
+            "descriptionLabel": [
+                "PROCEDURE:Positive",
+                "WAIT_TIME:Positive",
+                "STAFF:Negative"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "9ff7c427-8118-4f6b-9556-aa956d5d10b0",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 2,
+            "description": "Lễ tân khó chịu, nói chuyện cộc lốc.",
+            "descriptionLabel": [
+                "STAFF:Negative"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "5f0268f1-e497-4ec7-89cc-0b1064ebd677",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 2,
+            "description": "Thái độ bác sĩ thiếu quan tâm đến bệnh nhân. Chi phí cao hơn dự kiến, thu phí không minh bạch. Nhân viên và lễ tân hỗ trợ nhiệt tình, hướng dẫn rõ ràng.",
+            "descriptionLabel": [
+                "STAFF:Positive",
+                "DR_ATTITUDE:Negative",
+                "COST:Negative"
+            ],
+            "feedbackImagesLabel": null
+        },
+        {
+            "id": "e9b74813-6526-4b60-ab3b-d0736a5a7115",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 4,
+            "description": "Chi phí hợp lý và được thông báo rõ ràng từ đầu.",
+            "descriptionLabel": [
+                "COST:Positive"
+            ],
+            "feedbackImagesLabel": [
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has blue walls and a white ceiling with recessed lighting. In the center of the room, there is a large surgical table with two black beds on either side. On the left side of the table, there are several medical equipment, including a monitor, a monitor screen, and a control panel with various buttons and switches. There is also a large screen on the wall and a door on the right side. The operating room appears to be clean and well-maintained."
+                }
+            ]
+        },
+        {
+            "id": "2313a39e-1582-47e5-9679-38d5816f9db7",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 3,
+            "description": "Phải chờ rất lâu dù đã đặt lịch. Thái độ bác sĩ thân thiện, tạo cảm giác yên tâm. Quy trình khám nhanh gọn, thủ tục đơn giản.",
+            "descriptionLabel": [
+                "PROCEDURE:Positive",
+                "WAIT_TIME:Negative",
+                "DR_ATTITUDE:Positive"
+            ],
+            "feedbackImagesLabel": [
+                {
+                    "description": "The image shows a hospital room with a hospital bed in the center. The bed is covered with a blue bedsheet and has wheels for easy movement. On the right side of the bed, there is a medical equipment set up with a monitor, keyboard, and other medical equipment. There is also a desk with a computer and a chair in the background. The walls are painted in a light green color and there are posters and a clock on the wall. The room has a whiteboard on the left side and a window on the right. The floor is made of concrete and the ceiling has recessed lighting."
+                },
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has blue walls and a white ceiling with recessed lighting. In the center of the room, there is a large surgical table with two black beds on either side. On the left side of the table, there are several medical equipment, including a monitor, a monitor screen, and a control panel with various buttons and switches. There is also a large screen on the wall and a door on the right side. The operating room appears to be clean and well-maintained."
+                }
+            ]
+        },
+        {
+            "id": "47308f9c-f276-40e8-8cf8-1b3ae114b144",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 2,
+            "description": "Thủ tục rườm rà, mất nhiều thời gian. Bác sĩ rất tận tâm, nói chuyện nhẹ nhàng và dễ hiểu.",
+            "descriptionLabel": [
+                "PROCEDURE:Negative",
+                "DR_ATTITUDE:Positive"
+            ],
+            "feedbackImagesLabel": [
+                {
+                    "description": "The image shows a hospital room with a hospital bed in the center. The bed is covered with a blue bedsheet and has wheels for easy movement. On the right side of the bed, there is a medical equipment set up with a monitor, keyboard, and other medical equipment. There is also a desk with a computer and a chair in the background. The walls are painted in a light green color and there are posters and a clock on the wall. The room has a whiteboard on the left side and a window on the right. The floor is made of concrete and the ceiling has recessed lighting."
+                },
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has a high ceiling with recessed lighting and white walls. On the left side of the room, there is a large white MRI machine with a monitor and other medical equipment. Next to the MRI machine, there are several medical equipment such as a CT scan machine, a CT scanner, and a medical cart. In the center of the image, there appears to be a surgical bed with a green cover. The bed is covered with a blue blanket and there are shelves and cabinets on the right side. There is also a door in the background."
+                }
+            ]
+        },
+        {
+            "id": "bf47f30d-4a41-4138-a45a-30074156dd96",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 4,
+            "description": "Bác sĩ khám rất kỹ, giải thích rõ ràng tình trạng bệnh và hướng điều trị. Không gian phòng khám rộng rãi, vệ sinh tốt. Có nhắc đến wait time.",
+            "descriptionLabel": [
+                "FACILITY:Positive",
+                "DR_SKILL:Positive",
+                "WAIT_TIME:Neutral"
+            ],
+            "feedbackImagesLabel": [
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has blue walls and a white ceiling with recessed lighting. In the center of the room, there is a large surgical table with two black beds on either side. On the left side of the table, there are several medical equipment, including a monitor, a monitor screen, and a control panel with various buttons and switches. There is also a large screen on the wall and a door on the right side. The operating room appears to be clean and well-maintained."
+                },
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has a high ceiling with recessed lighting and white walls. On the left side of the room, there is a large white MRI machine with a monitor and other medical equipment. Next to the MRI machine, there are several medical equipment such as a CT scan machine, a CT scanner, and a medical cart. In the center of the image, there appears to be a surgical bed with a green cover. The bed is covered with a blue blanket and there are shelves and cabinets on the right side. There is also a door in the background."
+                }
+            ]
+        },
+        {
+            "id": "73f1651d-7fbd-478f-8bb8-6ecd920fe464",
+            "clinicId": "f4f92697-5e76-4228-bb43-96a4061aec5f",
+            "doctorId": null,
+            "rating": 4,
+            "description": "Nhân viên thân thiện, xử lý thủ tục nhanh. Bác sĩ khám rất kỹ, giải thích rõ ràng tình trạng bệnh và hướng điều trị.",
+            "descriptionLabel": [
+                "STAFF:Positive",
+                "DR_SKILL:Positive"
+            ],
+            "feedbackImagesLabel": [
+                {
+                    "description": "The image shows an operating room in an operating theatre. The room has blue walls and a white ceiling with recessed lighting. In the center of the room, there is a large surgical table with two black beds on either side. On the left side of the table, there are several medical equipment, including a monitor, a monitor screen, and a control panel with various buttons and switches. There is also a large screen on the wall and a door on the right side. The operating room appears to be clean and well-maintained."
+                },
+                {
+                    "description": "The image shows a hospital room with a hospital bed in the center. The bed is covered with a blue bedsheet and has wheels for easy movement. On the right side of the bed, there is a medical equipment set up with a monitor, keyboard, and other medical equipment. There is also a desk with a computer and a chair in the background. The walls are painted in a light green color and there are posters and a clock on the wall. The room has a whiteboard on the left side and a window on the right. The floor is made of concrete and the ceiling has recessed lighting."
+                },
+                {
+                    "description": "The image shows a long, empty waiting area in an airport terminal. The floor is made of white tiles and the walls are painted in a light blue color. On the left side of the image, there is a row of blue waiting chairs with chrome legs. The chairs are arranged in a neat row and there are several potted plants scattered around the room. The room has large windows on the right side, allowing natural light to enter. The overall atmosphere of the space is bright and airy."
+                }
+            ]
+        }
+    ]
