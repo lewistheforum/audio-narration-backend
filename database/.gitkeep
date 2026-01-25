@@ -1,3 +1,0 @@
-# This folder stores PostgreSQL data from Docker
-# postgres_data/ - Main database files
-# backups/ - Database backup files
