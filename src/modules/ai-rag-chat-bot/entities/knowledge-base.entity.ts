@@ -15,7 +15,7 @@ export class KnowledgeBase {
   @Column({ name: 'content', type: 'text' })
   content: string;
 
-  @Column({ name: 'embedding', type: 'vector', length: 1536, nullable: true })
+  @Column({ name: 'embedding', type: 'vector', length: 384, nullable: true })
   embedding: number[];
 
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })

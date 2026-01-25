@@ -219,6 +219,12 @@ export class SeederOrchestratorService implements OnModuleInit {
         this.logger.log(
           '✅ AI Conversation seeding completed (Incremental update)',
         );
+
+        // Ensure Knowledge Base is seeded/updated even if other data exists
+        // await this.knowledgeBaseSeeder.seed();
+        // this.logger.log(
+        //   '✅ Knowledge Base seeding completed (Incremental update)',
+        // );
         return;
       }
 
@@ -280,49 +286,49 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.aiConversationSeeder.seed();
       this.logger.log('✅ AI Conversation seeding completed');
 
-      // Step 15: Seed Knowledge Base
-      await this.knowledgeBaseSeeder.seed();
-      this.logger.log('✅ Knowledge Base seeding completed');
-
-      // Step 16: Seed blog records
+      // Step 15: Seed blog records
       await this.blogSeeder.seed();
       this.logger.log('✅ Blog seeding completed');
 
-      // Step 17: Seed subscription services
+      // Step 16: Seed subscription services
       await this.subscriptionServiceSeeder.seed();
       this.logger.log('✅ SubscriptionService seeding completed');
 
-      // Step 18: Seed clinic subscriptions and subscription history
+      // Step 17: Seed clinic subscriptions and subscription history
       await this.subscriptionsSeeder.seed();
       this.logger.log('✅ Clinic subscriptions seeding completed');
 
-      // Step 19: Seed clinic service categories
+      // Step 18: Seed clinic service categories
       await this.clinicServiceCategorySeeder.seed();
       this.logger.log('✅ ClinicServiceCategory seeding completed');
 
-      // Step 20: Seed clinic services
+      // Step 19: Seed clinic services
       await this.clinicServiceSeeder.seed();
       this.logger.log('✅ ClinicService seeding completed');
 
-      // Step 21: Seed clinic service configs
+      // Step 20: Seed clinic service configs
       await this.clinicServiceConfigSeeder.seed();
       this.logger.log('✅ ClinicServiceConfig seeding completed');
 
-      // Step 22: Seed clinic rooms
+      // Step 21: Seed clinic rooms
       await this.clinicRoomSeeder.seed();
       this.logger.log('✅ ClinicRoom seeding completed');
 
-      // Step 23: Seed clinic shifts and shift hours
+      // Step 22: Seed clinic shifts and shift hours
       await this.clinicShiftSeeder.seed();
       this.logger.log('✅ ClinicShift seeding completed');
 
-      // Step 24: Seed employee schedules
+      // Step 23: Seed employee schedules
       await this.employeeScheduleSeeder.seed();
       this.logger.log('✅ EmployeeSchedule seeding completed');
 
-      // Step 25: Seed clinic room employee schedule assignments
+      // Step 24: Seed clinic room employee schedule assignments
       await this.clinicRoomEmployeeScheduleSeeder.seed();
       this.logger.log('✅ ClinicRoomEmployeeSchedule seeding completed');
+
+      // Step 25: Seed Knowledge Base - MUST RUN LAST after all other data is seeded
+      // await this.knowledgeBaseSeeder.seed();
+      // this.logger.log('✅ Knowledge Base seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {
