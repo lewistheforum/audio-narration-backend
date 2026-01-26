@@ -4,8 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository } from 'typeorm';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
-import { PaymentDirection, PaymentStatus,Transaction } from './entities';
+import { PaymentDirection, PaymentStatus, Transaction } from './entities';
 import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto } from './dto';
+import { Appointment } from '../appointments/entities/appointment.entity';
 
 @Injectable()
 export class TransactionsService {
@@ -19,6 +20,8 @@ export class TransactionsService {
     private readonly paymentRepository: Repository<Transaction>,
     @InjectRepository(ClinicAdminInformation)
     private readonly clinicAdminRepo: Repository<ClinicAdminInformation>,
+    @InjectRepository(Appointment)
+    private readonly appointmentRepository: Repository<Appointment>,
     private readonly configService: ConfigService,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
@@ -32,15 +35,34 @@ export class TransactionsService {
   async createDynamicQr(
     dto: CreateTransactionDto,
   ): Promise<PaymentResponseDto> {
-    const { acc, bank } = await this.resolveSepayConfig(dto.clinicId);
+
+    // Verify appointment and get real amount & clinic
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: dto.prescriptionId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    let clinicAdminId: string | undefined;
+    if (appointment?.clinicId) {
+      const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { accountId: appointment.clinicId } });
+      clinicAdminId = clinicAdmin?._id;
+    }
+
+    const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
+
+    const amount = Number(appointment.total);
+    // Ignore dto.amount, use source of truth from DB
 
     const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(dto.amount, dto.prescriptionId, acc, bank);
-    const qrPayload = this.buildQrPayload(dto.amount, dto.prescriptionId, acc, bank);
+    const qrCodeUrl = this.buildQrUrl(amount, dto.prescriptionId, acc, bank);
+    const qrPayload = this.buildQrPayload(amount, dto.prescriptionId, acc, bank);
 
     return new PaymentResponseDto({
       id: null,
-      amount: dto.amount,
+      amount: amount,
       currency: 'VND',
       status: PaymentStatus.PENDING,
       qrCodeUrl,
@@ -78,12 +100,29 @@ export class TransactionsService {
     const isIncoming = payload.transferType === PaymentDirection.IN;
     const status = isIncoming ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
 
+    // Resolve sender (patient) and clinic from appointment
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: prescriptionId },
+    });
+
+    let clinicAdminId: string | undefined;
+    if (appointment?.clinicId) {
+      const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { accountId: appointment.clinicId } });
+      clinicAdminId = clinicAdmin?._id;
+    }
+
+    // Note: If appointment not found, we still save transaction but with null sender/clinic
+    // to match user preference of capturing every callback.
+    // However, logic implies prescriptionId == appointmentId so it SHOULD be found.
+
     const transaction = this.paymentRepository.create({
       prescriptionId,
       amount: payload.transferAmount,
       currency: 'VND',
       status,
       gateway: payload.gateway,
+      clinicId: clinicAdminId,
+      senderAccountId: appointment?.patientId,
       transactionDate: new Date(payload.transactionDate),
       accountNumber: payload.accountNumber,
       code: payload.code,

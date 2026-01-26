@@ -24,46 +24,22 @@ import { ApiResponseData } from '../../common/decorators/api-response.decorator'
 @Controller('transactions')
 @ApiExtraModels(PaymentResponseDto)
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) {}
+  constructor(private readonly transactionsService: TransactionsService) { }
 
-//   @Post(':prescriptionId/qr')
-//   @HttpCode(HttpStatus.CREATED)
-//   @ApiOperation({ summary: 'Tạo QR thanh toán cho đơn thuốc' })
-//   @ApiResponseData({
-//     type: PaymentResponseDto,
-//     status: HttpStatus.CREATED,
-//     message: 'Payment QR created successfully',
-//   })
-//   async createQr(
-//     @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
-//     @Body() body: Omit<CreateTransactionDto, 'prescriptionId'>,
-//   ) {
-//     const payment = await this.transactionsService.createDynamicQr({
-//       ...body,
-//       prescriptionId,
-//     });
-//     return {
-//       data: payment,
-//       message: 'Payment QR created successfully',
-//     };
-//   }
-
-  @Post(':prescriptionId/clinic/:clinicId/qr')
+  @Post(':prescriptionId/qr')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán, truy vấn VA theo clinicId' })
+  @ApiOperation({ summary: 'Tạo QR thanh toán cho đơn thuốc' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
     message: 'Payment QR created successfully',
   })
-  async createQrForPrescription(
+  async createQr(
     @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
-    @Param('clinicId', ParseUUIDPipe) clinicId: string,
-    @Body() body: Omit<CreateTransactionDto, 'prescriptionId' | 'clinicId'>,
+    @Body() body: Omit<CreateTransactionDto, 'prescriptionId'>,
   ) {
     const payment = await this.transactionsService.createDynamicQr({
       ...body,
-      clinicId,
       prescriptionId,
     });
     return {
@@ -71,6 +47,30 @@ export class TransactionsController {
       message: 'Payment QR created successfully',
     };
   }
+
+  //   @Post(':prescriptionId/clinic/:clinicId/qr')
+  //   @HttpCode(HttpStatus.CREATED)
+  //   @ApiOperation({ summary: 'Tạo QR thanh toán, truy vấn VA theo clinicId' })
+  //   @ApiResponseData({
+  //     type: PaymentResponseDto,
+  //     status: HttpStatus.CREATED,
+  //     message: 'Payment QR created successfully',
+  //   })
+  //   async createQrForPrescription(
+  //     @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
+  //     @Param('clinicId', ParseUUIDPipe) clinicId: string,
+  //     @Body() body: Omit<CreateTransactionDto, 'prescriptionId' | 'clinicId'>,
+  //   ) {
+  //     const payment = await this.transactionsService.createDynamicQr({
+  //       ...body,
+  //       clinicId,
+  //       prescriptionId,
+  //     });
+  //     return {
+  //       data: payment,
+  //       message: 'Payment QR created successfully',
+  //     };
+  //   }
 
   @Post('clinic/:clinicId/verification-qr')
   @HttpCode(HttpStatus.CREATED)
@@ -112,7 +112,7 @@ export class TransactionsController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'clinicId', required: false, type: String })
   @ApiQuery({ name: 'senderAccountId', required: false, type: String })
-  @ApiQuery({ name: 'fromDate', required: false, type: String, description: 'ISO date filter from (transaction_date)'} )
+  @ApiQuery({ name: 'fromDate', required: false, type: String, description: 'ISO date filter from (transaction_date)' })
   @ApiQuery({ name: 'toDate', required: false, type: String, description: 'ISO date filter to (transaction_date)' })
   @ApiResponseData({
     type: PaymentHistoryResponseDto,
