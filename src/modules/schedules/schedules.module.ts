@@ -10,6 +10,7 @@ import {
 import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
 import { Account } from '../accounts/entities/accounts.entity';
+import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
 import { ClinicRoomRepository } from './repositories/clinic-room.repository';
 import { ClinicShiftRepository } from './repositories/clinic-shift.repository';
 import { ClinicShiftHourRepository } from './repositories/clinic-shift-hour.repository';
@@ -28,6 +29,7 @@ import { EmployeeScheduleRepository } from './repositories/employee-schedule.rep
       ClinicShiftHour,
       EmployeeSchedule,
       Account,
+      DoctorInformation,
     ]),
   ],
   controllers: [SchedulesController],

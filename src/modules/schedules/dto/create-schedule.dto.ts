@@ -37,13 +37,7 @@ export class ScheduleItemDto {
 }
 
 export class CreateScheduleDto {
-    @ApiProperty({
-        description: 'Clinic ID',
-        example: 'uuid-clinic-id',
-    })
-    @IsNotEmpty({ message: 'Clinic ID is required' })
-    @IsUUID('4', { message: 'Invalid Clinic ID format' })
-    clinicId: string;
+
 
     @ApiProperty({
         description: 'Employee ID',
