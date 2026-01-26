@@ -221,10 +221,10 @@ export class SeederOrchestratorService implements OnModuleInit {
         );
 
         // Ensure Knowledge Base is seeded/updated even if other data exists
-        // await this.knowledgeBaseSeeder.seed();
-        // this.logger.log(
-        //   '✅ Knowledge Base seeding completed (Incremental update)',
-        // );
+        await this.knowledgeBaseSeeder.seed();
+        this.logger.log(
+          '✅ Knowledge Base seeding completed (Incremental update)',
+        );
         return;
       }
 
@@ -327,8 +327,8 @@ export class SeederOrchestratorService implements OnModuleInit {
       this.logger.log('✅ ClinicRoomEmployeeSchedule seeding completed');
 
       // Step 25: Seed Knowledge Base - MUST RUN LAST after all other data is seeded
-      // await this.knowledgeBaseSeeder.seed();
-      // this.logger.log('✅ Knowledge Base seeding completed');
+      await this.knowledgeBaseSeeder.seed();
+      this.logger.log('✅ Knowledge Base seeding completed');
 
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {
