@@ -2,13 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
 
 export class GetSchedulesDto {
-    @ApiProperty({
-        description: 'Clinic ID',
-        example: 'uuid-clinic-id',
-    })
-    @IsNotEmpty({ message: 'Clinic ID is required' })
-    @IsUUID('4', { message: 'Invalid Clinic ID format' })
-    clinicId: string;
 
     @ApiProperty({
         description: 'Filter by specific date (YYYY-MM-DD)',
