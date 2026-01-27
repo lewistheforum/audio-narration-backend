@@ -7,7 +7,7 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
 import { ClinicSubscription } from '../../modules/subscriptions/entities/clinic-subscription.entity';
 import { ClinicSubscriptionHistory } from '../../modules/subscriptions/entities/clinic-subscription-history.entity';
 import { SubscriptionService } from '../../modules/subscriptions/entities/subscription-service.entity';
-import { SubscriptionStatus } from '../../modules/subscriptions/enums';
+import { RegistrationStatus } from '../../modules/subscriptions/enums';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import { SubscriptionServiceRepository } from '../../modules/subscriptions/repositories/subscription-service.repository';
 
@@ -123,7 +123,7 @@ export class SubscriptionsSeederService {
         serviceId: service._id,
         subscriptionDate,
         expirationDate,
-        subscriptionStatus: SubscriptionStatus.ACTIVE,
+        subscriptionStatus: RegistrationStatus.ACTIVE,
       });
 
       await this.clinicSubscriptionRepository.save(clinicSubscription);
@@ -176,10 +176,7 @@ export class SubscriptionsSeederService {
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
         // Randomly select a status for history (expired or cancelled)
-        const status =
-          Math.random() > 0.5
-            ? SubscriptionStatus.EXPIRED
-            : SubscriptionStatus.CANCELLED;
+        const status = Math.random() > 0.5 ? RegistrationStatus.EXPIRED : RegistrationStatus.CANCELLED;
 
         // Create clinic subscription history
         const historyRecord = this.clinicSubscriptionHistoryRepository.create({
