@@ -16,7 +16,7 @@ import { AccountRole } from '../../modules/accounts/enums';
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<AccountRole[]>(
@@ -29,14 +29,18 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
+    console.log('RolesGuard Debug - User:', user ? user.role : 'UNDEFINED');
+    console.log('RolesGuard Debug - Required Roles:', requiredRoles);
 
     if (!user) {
+      console.error('RolesGuard Debug - No user attached to request');
       throw new ForbiddenException('User not authenticated');
     }
 
     const hasRole = requiredRoles.includes(user.role);
 
     if (!hasRole) {
+      console.error(`RolesGuard Debug - Role mismatch. User: ${user.role}, Required: ${requiredRoles.join(', ')}`);
       throw new ForbiddenException(
         `Access denied. Required roles: ${requiredRoles.join(', ')}`,
       );
