@@ -7,11 +7,13 @@ import { ClinicContractInformation } from './entities/clinic-contract-informatio
 import { ContractPackageRepository } from './repositories/contract-package.repository';
 import { ClinicContractInformationRepository } from './repositories/clinic-contract-information.repository';
 import { AccountsModule } from '../accounts/accounts.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([ContractPackage, ClinicContractInformation]),
         AccountsModule,
+        MailerModule,
     ],
     controllers: [ContractsController],
     providers: [

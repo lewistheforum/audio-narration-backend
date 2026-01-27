@@ -4,7 +4,7 @@ import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class MailerService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   mailTransport(): nodemailer.Transporter {
     const transporter = nodemailer.createTransport({
@@ -169,6 +169,77 @@ export class MailerService {
   }
 
   /**
+   * Send Contract Signing OTP
+   * Sends a 6-digit OTP for contract signing
+   */
+  async sendContractSigningCode(
+    email: string,
+    code: string,
+    contractCode: string,
+    firstName?: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = firstName || 'User';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Contract Signing OTP - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #f0fdf4; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #166534; margin: 0 0 20px 0;">✍️ Contract Signing OTP</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
+              Hi ${displayName},
+            </p>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
+              You are attempting to sign contract <strong>#${contractCode}</strong>. Please use the verification code below to confirm your signature:
+            </p>
+            
+            <div style="background: white; border: 2px dashed #166534; border-radius: 8px; padding: 20px; margin: 30px 0;">
+              <h2 style="color: #166534; font-size: 36px; letter-spacing: 8px; margin: 0;">
+                ${code}
+              </h2>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0;">
+              This code will expire in <strong>15 minutes</strong>.
+            </p>
+            <p style="color: #166534; font-size: 14px; margin: 10px 0 0 0; font-weight: 600;">
+               If you are not trying to sign this contract, please contact support immediately.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Contract signing OTP sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send contract signing OTP:', error);
+      throw new Error('Failed to send contract signing OTP');
+    }
+  }
+
+  /**
    * Send Welcome Email
    * Sends a welcome email after successful email verification
    */
@@ -237,10 +308,9 @@ export class MailerService {
             </div>
             
             <div style="text-align: center; margin-top: 30px;">
-              <a href="${
-                this.configService.get<string>('FRONTEND_URL') ||
-                'http://localhost:5173'
-              }" 
+              <a href="${this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:5173'
+        }" 
                  style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
                 Get Started
               </a>
