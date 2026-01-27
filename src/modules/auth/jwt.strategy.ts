@@ -46,13 +46,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * @throws UnauthorizedException if user not found or invalid token
    */
   async validate(payload: { sub: string; email: string; role?: string }): Promise<Account> {
-    const user = await this.AccountsService.findAccountEntityById(payload.sub);
+    console.log('JwtStrategy Debug - Payload:', JSON.stringify(payload));
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid token or user does not exist');
+    try {
+      const user = await this.AccountsService.findAccountEntityById(payload.sub);
+      console.log('JwtStrategy Debug - User found:', user ? `${user._id} (${user.role})` : 'NULL');
+
+      if (!user) {
+        console.error('JwtStrategy Debug - User lookup failed for ID:', payload.sub);
+        throw new UnauthorizedException('Invalid token or user does not exist');
+      }
+
+      return user;
+    } catch (error) {
+      console.error('JwtStrategy Debug - Exception during validate:', error.message);
+      throw error;
     }
-
-    return user;
   }
 }
 
