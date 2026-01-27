@@ -75,12 +75,6 @@ export class Transaction {
   @Column({ length: 10, default: 'VND' })
   currency: string;
 
-  @Column({ name: 'qr_code_url', type: 'text', nullable: true })
-  qrCodeUrl?: string;
-
-  @Column({ name: 'qr_payload', type: 'text', nullable: true })
-  qrPayload?: string;
-
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status: PaymentStatus;
 
@@ -122,9 +116,6 @@ export class Transaction {
 
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
-
-  @Column({ name: 'signature', type: 'text', nullable: true })
-  signature?: string;
 
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;

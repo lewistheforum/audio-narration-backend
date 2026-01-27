@@ -5,6 +5,10 @@ import { Appointment } from '../appointments/entities/appointment.entity';
 import { Transaction, TransactionType } from './entities';
 import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
+import { ConfigModule } from '@nestjs/config';
+import seepayConfig from '../../config/seepay.config';
+
+import { TransactionRepository } from './repositories/transaction.repository';
 
 /**
  * Transactions Module
@@ -19,9 +23,10 @@ import { TransactionsController } from './transactions.controller';
       ClinicAdminInformation,
       Appointment,
     ]),
+    ConfigModule.forFeature(seepayConfig),
   ],
   controllers: [TransactionsController],
-  providers: [TransactionsService],
+  providers: [TransactionsService, TransactionRepository],
   exports: [TypeOrmModule, TransactionsService],
 })
 export class TransactionsModule { }

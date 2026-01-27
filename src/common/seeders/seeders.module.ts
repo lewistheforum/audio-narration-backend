@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { HttpModule } from '@nestjs/axios';
 import { AccountsModule } from '../../modules/accounts/accounts.module';
 import { ReportsModule } from '../../modules/reports/reports.module';
 import { ChatBotModule } from '../../modules/ai-rag-chat-bot/chat-bot.module';
@@ -104,6 +105,7 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ServiceConfigsModule,
     ContractsModule,
     SchedulesModule,
+    HttpModule,
   ],
   providers: [
     AdminSeederService,
