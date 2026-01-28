@@ -76,6 +76,12 @@ export class GeneralAccountRepository {
     });
   }
 
+  async findByAccountId(userId: string): Promise<GeneralAccount | null> {
+    return this.generalAccountRepository.findOne({
+      where: { accountId: userId },
+    });
+  }
+
   /**
    * Create GeneralAccount Entity
    *

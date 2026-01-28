@@ -6,4 +6,5 @@ export default registerAs('seepay', () => ({
   bank: process.env.SEEPAY_BANK,
   qrExpireMinutes: parseInt(process.env.SEEPAY_QR_EXPIRE_MINUTES || '15', 10),
   callbackSecret: process.env.SEEPAY_CALLBACK_SECRET,
+  apiKey: process.env.SEEPAY_API_KEY,
 }));

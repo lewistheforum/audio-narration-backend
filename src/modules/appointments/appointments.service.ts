@@ -65,7 +65,7 @@ export class AppointmentsService {
   ): Promise<PaginatedAppointmentResponseDto> {
     // Get staff information to find their clinic
     const staffInfo =
-      await this.clinicStaffRepository.findByClinicAccountId(staffAccountId);
+      await this.clinicStaffRepository.findByAccountId(staffAccountId);
 
     if (!staffInfo || !staffInfo.account?.parentId) {
       throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
@@ -159,7 +159,7 @@ export class AppointmentsService {
   ): Promise<AppointmentResponseDto> {
     // Get staff information to verify clinic access
     const staffInfo =
-      await this.clinicStaffRepository.findByClinicAccountId(staffAccountId);
+      await this.clinicStaffRepository.findByAccountId(staffAccountId);
 
     if (!staffInfo || !staffInfo.account?.parentId) {
       throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
@@ -830,7 +830,7 @@ export class AppointmentsService {
   ): Promise<AppointmentDetailResponseDto> {
     // Get staff information to verify clinic access
     const staffInfo =
-      await this.clinicStaffRepository.findByClinicAccountId(staffAccountId);
+      await this.clinicStaffRepository.findByAccountId(staffAccountId);
 
     if (!staffInfo || !staffInfo.account?.parentId) {
       throw new NotFoundException(MESSAGES.failMessage.accountNotFound);

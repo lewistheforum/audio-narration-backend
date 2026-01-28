@@ -32,10 +32,12 @@ import {
   UpdatePasswordDto,
   BanAccountDto,
   CreateClinicManagerDto,
-  DoctorListResponseDto,
-  DoctorDetailResponseDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
+  PublicDoctorInfo,
+  PublicClinicInfo,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -77,9 +79,12 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   AccountResponseDto,
   ClinicListResponseDto,
   ClinicDetailResponseDto,
-  DoctorDetailResponseDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
+  PublicDoctorInfo,
+  PublicClinicInfo,
 )
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
@@ -118,7 +123,7 @@ export class AccountsController {
    */
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.ADMIN)
+  // @Roles(AccountRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all accounts (Admin only)' })
   @ApiQuery({
@@ -175,6 +180,16 @@ export class AccountsController {
    */
   @Get('username-email-list')
   @ApiOperation({ summary: 'Get full list of usernames and emails' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    AccountRole.ADMIN,
+    AccountRole.PATIENT,
+    AccountRole.DOCTOR,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
+  @ApiBearerAuth('JWT-auth')
   @ApiResponseData({
     type: UsernameEmailListDto,
     status: MESSAGES.statusCode.success,
@@ -219,7 +234,9 @@ export class AccountsController {
    * @response 200 - Successfully retrieved clinics
    */
   @Get('clinics')
-  @ApiOperation({ summary: 'Get all clinics with pagination, search and filters' })
+  @ApiOperation({
+    summary: 'Get all clinics with pagination, search and filters',
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -236,7 +253,8 @@ export class AccountsController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search keyword to match clinic name or description (case-insensitive)',
+    description:
+      'Search keyword to match clinic name or description (case-insensitive)',
   })
   @ApiQuery({
     name: 'province',
@@ -325,101 +343,29 @@ export class AccountsController {
   }
 
   /**
-   * Get All Doctors (Public)
-   *
-   * Retrieves a paginated list of all active doctors.
-   * Only returns accounts with role: DOCTOR and status: ACTIVE
-   * Excludes soft-deleted records (deletedAt is null)
-   *
-   * Query Parameters:
-   * - clinicId: Filter by parent clinic ID (optional)
-   * - gender: Filter by doctor gender - MALE | FEMALE | OTHER (optional)
-   * - page: Page number (default: 1)
-   * - limit: Items per page (default: 10)
-   *
-   * Response Format:
-   * - Returns DoctorListResponseDto with doctors array and pagination metadata
-   * - Combines data from accounts + doctor_information + clinic_manager_information tables
-   *
-   * Access Control:
-   * - Public endpoint (no authentication required)
-   *
-   * Use Cases:
-   * - Doctor directory listing
-   * - Doctor search results
-   * - Doctor browsing
-   *
-   * @param {number} page - Page number
-   * @param {number} limit - Items per page
-   * @param {string} [clinicId] - Filter by parent clinic ID
-   * @param {string} [gender] - Filter by doctor gender
-   * @returns {Promise<{data: DoctorListResponseDto, message: string}>} Doctors with pagination
-   *
-   * @swagger
-   * @response 200 - Successfully retrieved doctors
-   */
-  @Get('doctors')
-  @ApiOperation({ summary: 'Get all doctors with pagination and filters' })
-  @ApiQuery({
-    name: 'clinicId',
-    required: false,
-    type: String,
-    description: 'Filter by parent clinic ID',
-  })
-  @ApiQuery({
-    name: 'gender',
-    required: false,
-    type: String,
-    description: 'Filter by doctor gender (MALE | FEMALE | OTHER)',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page (default: 10)',
-  })
-  @ApiResponseData({
-    type: DoctorListResponseDto,
-    status: MESSAGES.statusCode.success,
-    message: 'Doctors list retrieved successfully',
-  })
-  async getAllDoctors(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('clinicId') clinicId?: string,
-    @Query('gender') gender?: string,
-  ): Promise<{ data: DoctorListResponseDto; message: string }> {
-    const result = await this.accountsService.findAllDoctors(
-      page,
-      limit,
-      clinicId,
-      gender,
-    );
-    return {
-      data: result,
-      message: 'Doctors list retrieved successfully',
-    };
-  }
-
-  /**
    * Get Doctor Details by ID (Public)
    *
    * Retrieves detailed information for a specific doctor.
-   * Includes doctor information and clinic information (parent clinic).
+   * Includes account info, doctor profile, and clinic information.
+   *
+   * Security Controls:
+   * - Only returns doctors with role='DOCTOR' and status='ACTIVE'
+   * - Excludes soft-deleted records
+   * - Uses allowlist approach for encrypted fields:
+   *   - professional_license (allowed)
+   *   - certificate_practical_training (allowed)
+   *   - medical_license (allowed)
+   * - identity_number, place_identity_card, identity_date (excluded)
+   * - bank_number, bank_name, bank_branch (excluded)
    *
    * Path Parameters:
    * - id: Doctor account UUID
    *
    * Response Format:
-   * - Returns DoctorDetailResponseDto with full doctor details
-   * - Includes doctor information (profile, specialization, etc.)
-   * - Includes clinic information if doctor belongs to a clinic
+   * - Returns PublicDoctorDetailResponseDto with full doctor details
+   * - Includes account information (username, email, phone, etc.)
+   * - Includes doctor profile (experience, education, etc.)
+   * - Includes clinic information (parent clinic)
    *
    * Access Control:
    * - Public endpoint (no authentication required)
@@ -430,8 +376,8 @@ export class AccountsController {
    * - Booking interface doctor information
    *
    * @param {string} id - Doctor account UUID
-   * @returns {Promise<{data: DoctorDetailResponseDto, message: string}>} Full doctor details
-   * @throws {NotFoundException} If doctor not found or not active
+   * @returns {Promise<PublicDoctorDetailResponseDto>} Full doctor details with security controls
+   * @throws {NotFoundException} If doctor not found or not eligible
    *
    * @swagger
    * @response 200 - Successfully retrieved doctor details
@@ -440,19 +386,15 @@ export class AccountsController {
   @Get('doctors/:id')
   @ApiOperation({ summary: 'Get doctor details by ID' })
   @ApiResponseData({
-    type: DoctorDetailResponseDto,
+    type: PublicDoctorDetailData,
     status: MESSAGES.statusCode.success,
     message: 'Doctor details retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
   async getDoctorById(
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{ data: DoctorDetailResponseDto; message: string }> {
-    const doctor = await this.accountsService.getDoctorById(id);
-    return {
-      data: doctor,
-      message: 'Doctor details retrieved successfully',
-    };
+  ): Promise<PublicDoctorDetailData> {
+    return this.accountsService.getPublicDoctorById(id);
   }
 
   /**
@@ -564,66 +506,13 @@ export class AccountsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateClinicAdminProfileDto,
   ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.createClinicAdminProfile(id, dto);
+    const profile = await this.accountsService.createClinicAdminProfile(
+      id,
+      dto,
+    );
     return {
       data: profile,
       message: 'Clinic admin profile created successfully',
-    };
-  }
-
-  /**
-   * Update Clinic Admin Profile
-   *
-   * Updates an existing clinic admin profile for an account.
-   * This endpoint allows updating all or partial profile fields.
-   *
-   * Path Parameters:
-   * - id: Account UUID
-   *
-   * Request Body:
-   * - All fields are optional, only provided fields are updated
-   * - If profile doesn't exist, creates new profile
-   *
-   * Access Control:
-   * - Requires JWT authentication
-   * - Available to CLINIC_ADMIN role
-   *
-   * Use Cases:
-   * - Updating clinic admin profile information
-   * - Modifying clinic details
-   * - Updating bank information
-   *
-   * @param {string} id - Account UUID
-   * @param {UpdateClinicAdminProfileDto} dto - Clinic admin profile data to update
-   * @returns {Promise<{data: ClinicAdminInformation, message: string}>} Updated clinic admin profile
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 200 - Successfully updated clinic admin profile
-   * @response 401 - Unauthorized - Missing or invalid JWT token
-   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
-   * @response 404 - Account not found or doesn't have CLINIC_ADMIN role
-   */
-  @Put('clinic-admin/:id/profile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update clinic admin profile' })
-  @HttpCode(HttpStatus.OK)
-  @ApiResponseData({
-    type: Object,
-    status: MESSAGES.statusCode.success,
-    message: 'Clinic admin profile updated successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Account not found' })
-  async updateClinicAdminProfile(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateClinicAdminProfileDto,
-  ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.updateClinicAdminProfile(id, dto);
-    return {
-      data: profile,
-      message: 'Clinic admin profile updated successfully',
     };
   }
 
@@ -664,9 +553,11 @@ export class AccountsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     AccountRole.ADMIN,
+    AccountRole.PATIENT,
     AccountRole.DOCTOR,
     AccountRole.CLINIC_STAFF,
-    AccountRole.PATIENT,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
   )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get account by ID' })
@@ -679,7 +570,8 @@ export class AccountsController {
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const account = await this.accountsService.findOne(id);
+    const account = await this.accountsService.getAccountInformationByRole(id);
+
     return { data: account, message: MESSAGES.successMessage.userFetchSuccess };
   }
 
@@ -732,8 +624,10 @@ export class AccountsController {
   @Roles(
     AccountRole.ADMIN,
     AccountRole.PATIENT,
-    AccountRole.CLINIC_STAFF,
     AccountRole.DOCTOR,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
   )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update account profile' })
@@ -815,8 +709,10 @@ export class AccountsController {
   @Roles(
     AccountRole.ADMIN,
     AccountRole.PATIENT,
-    AccountRole.CLINIC_STAFF,
     AccountRole.DOCTOR,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
   )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update account password' })
@@ -835,6 +731,72 @@ export class AccountsController {
     @Body() updatePasswordDto: UpdatePasswordDto,
   ): Promise<void> {
     await this.accountsService.updatePassword(id, updatePasswordDto);
+  }
+
+  /**
+   * Encrypt Bank Information
+   *
+   * Triggers encryption for bank-related fields of an account.
+   * Used to migrate existing plain-text data to encrypted format.
+   *
+   * Path Parameters:
+   * - id: Account UUID
+   *
+   * Access Control:
+   * - Requires JWT authentication
+   * - Users can encrypt their own data
+   * - Admins can encrypt any data
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<{message: string}>} Success message
+   */
+  @Post(':id/encrypt-bank')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_ADMIN, AccountRole.DOCTOR)
+  // @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Encrypt bank information' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank information encrypted successfully',
+  })
+  async encryptBank(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ message: string }> {
+    await this.accountsService.encryptBankAccount(id);
+    return {
+      message: 'Bank information encrypted successfully',
+    };
+  }
+
+  /**
+   * Get Decrypted Bank Information
+   *
+   * Retrieves the decrypted bank information for an account.
+   *
+   * Path Parameters:
+   * - id: Account UUID
+   *
+   * Access Control:
+   * - Requires JWT authentication
+   * - Users can view their own data
+   * - Admins can view any data
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<any>} Decrypted bank information
+   */
+  @Get(':id/decrypted-bank')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_ADMIN, AccountRole.DOCTOR)
+  // @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get decrypted bank information' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank information retrieved successfully',
+  })
+  async getDecryptedBankInfo(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<any> {
+    return this.accountsService.getDecryptedBankInfo(id);
   }
 
   /**

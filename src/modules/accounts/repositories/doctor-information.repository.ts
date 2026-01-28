@@ -37,7 +37,7 @@ export class DoctorInformationRepository {
   /**
    * Find doctor information by doctor account ID
    */
-  async findByDoctorAccountId(
+  async findByAccountId(
     doctorAccId: string,
   ): Promise<DoctorInformation | null> {
     return this.repository.findOne({
@@ -90,7 +90,7 @@ export class DoctorInformationRepository {
     data: DeepPartial<DoctorInformation>,
   ): Promise<DoctorInformation | null> {
     await this.repository.update({ accountId: doctorAccId }, data);
-    return this.findByDoctorAccountId(doctorAccId);
+    return this.findByAccountId(doctorAccId);
   }
 
   /**
@@ -145,5 +145,61 @@ export class DoctorInformationRepository {
       where: { accountId: doctorAccId },
     });
     return count > 0;
+  }
+
+  /**
+   * Find public doctor information by doctor account ID
+   *
+   * Returns doctor information with security controls on encrypted fields.
+   * Uses allowlist approach to prevent sensitive data leakage.
+   *
+   * Allowed encrypted fields (using addSelect):
+   * - professional_license
+   * - certificate_practical_training
+   * - medical_license
+   *
+   * Excluded encrypted fields (NOT selected):
+   * - identity_number
+   * - place_identity_card
+   * - identity_date
+   * - bank_number
+   * - bank_name
+   * - bank_branch
+   *
+   * @param {string} doctorAccId - Doctor account UUID
+   * @returns {Promise<DoctorInformation | null>} Doctor information with allowed fields only
+   */
+  async findPublicByDoctorAccountId(
+    doctorAccId: string,
+  ): Promise<DoctorInformation | null> {
+    return this.repository
+      .createQueryBuilder('doctor_info')
+      .select([
+        'doctor_info._id',
+        'doctor_info.accountId',
+        'doctor_info.fullName',
+        'doctor_info.gender',
+        'doctor_info.dob',
+        'doctor_info.profilePicture',
+        'doctor_info.academicDegree',
+        'doctor_info.experience',
+        'doctor_info.position',
+        'doctor_info.introduction1',
+        'doctor_info.workProcess2',
+        'doctor_info.studyProcess3',
+        'doctor_info.members4',
+        'doctor_info.scientificWork5',
+        'doctor_info.papers6',
+        'doctor_info.introductionImage',
+        'doctor_info.createdAt',
+        'doctor_info.updatedAt',
+      ])
+      .addSelect([
+        'doctor_info.professionalLicense',
+        'doctor_info.certificatePracticalTraining',
+        'doctor_info.medicalLicense',
+      ])
+      .where('doctor_info.accountId = :accountId', { accountId: doctorAccId })
+      .getOne();
   }
 }

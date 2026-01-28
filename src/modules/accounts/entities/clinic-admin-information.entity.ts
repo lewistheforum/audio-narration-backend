@@ -119,7 +119,12 @@ export class ClinicAdminInformation {
    *
    * Bank account number for receiving payments
    */
-  @Column({ name: 'bank_number', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'bank_number',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankNumber?: string;
 
   /**
@@ -127,7 +132,12 @@ export class ClinicAdminInformation {
    *
    * Branch location of the bank
    */
-  @Column({ name: 'bank_branch', type: 'text', nullable: true, transformer: encryptionTransformer })
+  @Column({
+    name: 'bank_branch',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   bankBranch?: string;
 
   /**
@@ -135,7 +145,12 @@ export class ClinicAdminInformation {
    *
    * SePay virtual account number for payment processing
    */
-  @Column({ name: 'sepay_va', type: 'text', nullable: true })
+  @Column({
+    name: 'sepay_va',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
   sepayVa?: string;
 
   /**
@@ -143,7 +158,12 @@ export class ClinicAdminInformation {
    *
    * Indicates whether the clinic administrator is verified
    */
-  @Column({ name: 'is_verify', type: 'boolean', default: false, nullable: true })
+  @Column({
+    name: 'is_verify',
+    type: 'boolean',
+    default: false,
+    nullable: true,
+  })
   isVerify?: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

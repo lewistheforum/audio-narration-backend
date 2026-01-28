@@ -1,9 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Blog } from '../../modules/blogs/entities/blog.entity';
 import { BlogType } from '../../modules/blogs/enums/blog-type.enum';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { BlogRepository } from '../../modules/blogs/repositories/blog.repository';
+
+/**
+ * Blog Content Map Interface
+ *
+ * Defines the structure for mapping blog IDs to their corresponding content files.
+ * This enables scalable bulk updates of blog content from external text files.
+ */
+interface BlogContentMap {
+  [blogId: string]: string; // Maps blog ID to file path
+}
+
+/**
+ * Blog Content File Mapping
+ *
+ * Configuration object that maps blog records to their content file paths.
+ * Add new entries here to enable bulk content updates from external files.
+ */
+const BLOG_CONTENT_FILES: BlogContentMap = {
+  'blog-1': 'data/blog.txt',
+  // Add more mappings as needed:
+  // 'blog-2': 'data/blog-2.txt',
+  // 'blog-3': 'data/blog-3.txt',
+};
 
 /**
  * Blog Seeder Service
@@ -12,10 +37,18 @@ import { BlogRepository } from '../../modules/blogs/repositories/blog.repository
  * Must run after AccountSeederService to ensure accounts exist.
  *
  * Idempotent: Uses check-then-insert pattern by checking if blogs exist before inserting.
+ *
+ * Features:
+ * - Reads blog content from external text files
+ * - Provides scalable pattern for mapping text files to blog records
+ * - Supports bulk content updates via BlogContentMap
  */
 @Injectable()
 export class BlogSeederService {
   private readonly logger = new Logger(BlogSeederService.name);
+
+  // Default content file path
+  private readonly DEFAULT_CONTENT_FILE = 'data/blog.txt';
 
   // Blog titles
   private readonly TITLES = [
@@ -39,30 +72,6 @@ export class BlogSeederService {
     'Mental Wellness: Signs to Watch For',
     'Nutrition for Children and Teens',
     'Preventing Falls in Older Adults',
-  ];
-
-  // Blog contents
-  private readonly CONTENTS = [
-    'Comprehensive guide to managing diabetes through lifestyle changes and medication. Learn about blood sugar monitoring, dietary adjustments, and exercise routines that can help you maintain optimal glucose levels.',
-    'Regular health check-ups are essential for early detection and prevention of diseases. Discover which screenings you should get based on your age, gender, and risk factors.',
-    'Heart-healthy eating can significantly reduce your risk of cardiovascular disease. Learn about foods that promote heart health and those to avoid for optimal cardiac function.',
-    'Finding time to exercise can be challenging with a busy schedule. Discover efficient workout routines that fit into your daily routine without requiring hours at the gym.',
-    'Mental health is just as important as physical health. Learn about common mental health conditions, their symptoms, and when to seek professional help.',
-    'Sports injuries are common but often preventable. Learn proper warm-up techniques, equipment usage, and recovery strategies to keep you active and injury-free.',
-    'Yoga offers numerous benefits for joint health and flexibility. Discover poses and sequences that can help alleviate joint pain and improve range of motion.',
-    'Chronic stress can have serious health implications. Learn effective stress management techniques including mindfulness, breathing exercises, and lifestyle adjustments.',
-    'Strong bones are essential for overall health and mobility. Discover the best nutrients and exercises for maintaining bone density throughout your life.',
-    'Blood pressure management is crucial for preventing heart disease and stroke. Learn about monitoring, lifestyle changes, and treatment options for hypertension.',
-    'Quality sleep is fundamental to good health. Understand the importance of sleep hygiene and how to improve your sleep patterns for better overall wellness.',
-    'Vaccinations protect against serious diseases and contribute to community immunity. Learn about recommended vaccines for different age groups and risk factors.',
-    'Chronic pain affects millions of people worldwide. Explore various pain management strategies including medication, physical therapy, and alternative treatments.',
-    'Proper hydration is essential for all bodily functions. Learn about the signs of dehydration and how to maintain optimal fluid intake throughout the day.',
-    'Developing healthy habits can transform your life. Discover simple daily practices that can lead to significant improvements in physical and mental well-being.',
-    'Allergies can range from mild annoyances to life-threatening conditions. Learn about common allergens, symptoms, and effective management strategies.',
-    'Regular physical activity provides numerous health benefits. Discover how exercise can improve cardiovascular health, strengthen muscles, and boost mental wellness.',
-    'Mental wellness encompasses emotional, psychological, and social well-being. Learn to recognize warning signs of mental health issues and when to seek support.',
-    'Proper nutrition is crucial during childhood and adolescence. Learn about essential nutrients for growing bodies and how to encourage healthy eating habits in young people.',
-    'Falls are a leading cause of injury among older adults. Discover prevention strategies including home modifications, exercises, and medical interventions.',
   ];
 
   // Blog thumbnails
@@ -91,6 +100,7 @@ export class BlogSeederService {
    * Seed Blog records for all CLINIC_ADMIN accounts
    *
    * This method is called by SeederOrchestratorService during application bootstrap.
+   * Reads blog content from external text file (data/blog.txt) instead of hardcoded content.
    */
   async seed(): Promise<void> {
     try {
@@ -119,6 +129,9 @@ export class BlogSeederService {
 
       this.logger.log(`Found ${clinicAdmins.length} CLINIC_ADMIN accounts`);
 
+      // Read content from external file
+      const blogContent = this.readContentFromFile(this.DEFAULT_CONTENT_FILE);
+
       // Create blog posts for each clinic
       const blogs: Blog[] = [];
       const blogsPerClinic = this.getRandomInt(3, 5);
@@ -128,7 +141,7 @@ export class BlogSeederService {
           const blog = this.blogRepository.create({
             clinicId: clinicAdmin._id,
             title: this.getRandomTitle(),
-            content: this.getRandomContent(),
+            content: blogContent,
             thumbnail: this.getRandomThumbnail(),
             type: this.getRandomBlogType(),
           });
@@ -147,17 +160,157 @@ export class BlogSeederService {
   }
 
   /**
+   * Read content from a text file
+   *
+   * Helper function that reads content from a text file given a file path.
+   * Uses path.join(process.cwd(), ...) for path resolution relative to project root.
+   *
+   * @param {string} filePath - Relative path to the text file from project root
+   * @returns {string} File content as a string
+   * @throws {Error} If file cannot be read or does not exist
+   *
+   * @example
+   * ```typescript
+   * const content = this.readContentFromFile('data/blog.txt');
+   * ```
+   */
+  readContentFromFile(filePath: string): string {
+    try {
+      const fullPath = path.join(process.cwd(), filePath);
+      this.logger.log(`Reading content from file: ${fullPath}`);
+
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      this.logger.log(`Successfully read ${content.length} characters from ${filePath}`);
+
+      return content;
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        this.logger.error(`File not found: ${filePath}`);
+        throw new Error(`Content file not found: ${filePath}`);
+      }
+      this.logger.error(`Failed to read file ${filePath}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Update blog content from file by blog ID
+   *
+   * Scalable method for updating multiple blog records from external text files.
+   * Uses the BlogContentMap to determine which file to use for each blog.
+   *
+   * @param {string} blogId - The ID of the blog to update
+   * @param {string} filePath - Path to the content file (optional, uses BLOG_CONTENT_FILES if not provided)
+   * @returns {Promise<Blog | null>} Updated blog entity or null if not found
+   *
+   * @example
+   * ```typescript
+   * // Update using predefined mapping
+   * await this.updateBlogContentFromFile('blog-1');
+   *
+   * // Update with custom file path
+   * await this.updateBlogContentFromFile('blog-1', 'data/custom-content.txt');
+   * ```
+   */
+  async updateBlogContentFromFile(
+    blogId: string,
+    filePath?: string,
+  ): Promise<Blog | null> {
+    try {
+      // Find the blog by ID
+      const blog = await this.blogRepository.findById(blogId);
+
+      if (!blog) {
+        this.logger.warn(`Blog with ID ${blogId} not found`);
+        return null;
+      }
+
+      // Determine file path
+      const contentFilePath = filePath || BLOG_CONTENT_FILES[blogId];
+
+      if (!contentFilePath) {
+        this.logger.warn(
+          `No content file mapping found for blog ID ${blogId}`,
+        );
+        return null;
+      }
+
+      // Read content from file
+      const content = this.readContentFromFile(contentFilePath);
+
+      // Update blog content
+      blog.content = content;
+      const updatedBlog = await this.blogRepository.saveBlog(blog);
+
+      this.logger.log(
+        `✅ Updated blog ${blogId} with content from ${contentFilePath}`,
+      );
+
+      return updatedBlog;
+    } catch (error) {
+      this.logger.error(
+        `Failed to update blog ${blogId} from file: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk update multiple blogs from their mapped content files
+   *
+   * Updates multiple blog records in a single operation using the BLOG_CONTENT_FILES mapping.
+   * This provides an efficient way to refresh content for multiple blogs at once.
+   *
+   * @param {string[]} blogIds - Array of blog IDs to update (optional, updates all mapped blogs if not provided)
+   * @returns {Promise<{ updated: number; failed: string[] }>} Result object with count of updated blogs and array of failed IDs
+   *
+   * @example
+   * ```typescript
+   * // Update all mapped blogs
+   * const result = await this.bulkUpdateBlogContents();
+   *
+   * // Update specific blogs
+   * const result = await this.bulkUpdateBlogContents(['blog-1', 'blog-2']);
+   * ```
+   */
+  async bulkUpdateBlogContents(
+    blogIds?: string[],
+  ): Promise<{ updated: number; failed: string[] }> {
+    const idsToUpdate = blogIds || Object.keys(BLOG_CONTENT_FILES);
+    const failed: string[] = [];
+    let updated = 0;
+
+    this.logger.log(
+      `Starting bulk update for ${idsToUpdate.length} blogs`,
+    );
+
+    for (const blogId of idsToUpdate) {
+      try {
+        const result = await this.updateBlogContentFromFile(blogId);
+        if (result) {
+          updated++;
+        } else {
+          failed.push(blogId);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to update blog ${blogId}: ${error.message}`);
+        failed.push(blogId);
+      }
+    }
+
+    this.logger.log(
+      `Bulk update complete: ${updated} updated, ${failed.length} failed`,
+    );
+
+    return { updated, failed };
+  }
+
+  /**
    * Get random title
    */
   private getRandomTitle(): string {
     return this.TITLES[Math.floor(Math.random() * this.TITLES.length)];
-  }
-
-  /**
-   * Get random content
-   */
-  private getRandomContent(): string {
-    return this.CONTENTS[Math.floor(Math.random() * this.CONTENTS.length)];
   }
 
   /**

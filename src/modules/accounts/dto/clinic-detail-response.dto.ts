@@ -2,6 +2,292 @@ import { ApiProperty } from '@nestjs/swagger';
 import { AccountRole, AccountStatus } from '../enums';
 
 /**
+ * Clinic Manager Account DTO
+ *
+ * Account fields for clinic manager
+ */
+export class ClinicManagerAccountDto {
+  @ApiProperty({
+    description: 'Clinic manager account ID',
+    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Clinic manager username',
+    example: 'clinicmanager',
+  })
+  username: string;
+
+  @ApiProperty({
+    description: 'Clinic manager email',
+    example: 'manager@clinic.com',
+  })
+  email: string;
+
+  @ApiProperty({
+    description: 'Clinic manager phone number',
+    example: '+84987654321',
+    required: false,
+    nullable: true,
+  })
+  phone?: string;
+
+  @ApiProperty({
+    description: 'Clinic manager date of birth',
+    example: '1980-05-15',
+    required: false,
+    nullable: true,
+  })
+  dob?: Date;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/manager-avatar.jpg',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string;
+
+  @ApiProperty({
+    description: 'Account role',
+    enum: AccountRole,
+    example: AccountRole.CLINIC_MANAGER,
+  })
+  role: AccountRole;
+
+  @ApiProperty({
+    description: 'Account status',
+    enum: AccountStatus,
+    example: AccountStatus.ACTIVE,
+  })
+  status: AccountStatus;
+
+  @ApiProperty({
+    description: 'Whether email has been verified',
+    example: true,
+  })
+  isEmailVerified: boolean;
+
+  @ApiProperty({
+    description: 'Account creation timestamp',
+    example: '2023-10-27T10:00:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Last update timestamp',
+    example: '2023-10-27T10:00:00.000Z',
+  })
+  updatedAt: Date;
+
+  constructor(account: any) {
+    this.id = account._id;
+    this.username = account.username;
+    this.email = account.email;
+    this.phone = account.phone;
+    this.dob = account.dob;
+    this.profilePicture = account.profilePicture;
+    this.role = account.role;
+    this.status = account.status;
+    this.isEmailVerified = account.isEmailVerified;
+    this.createdAt = account.createdAt;
+    this.updatedAt = account.updatedAt;
+  }
+}
+
+/**
+ * Clinic Admin Account DTO
+ *
+ * Account fields for clinic admin
+ */
+export class ClinicAdminAccountDto {
+  @ApiProperty({
+    description: 'Clinic admin account ID',
+    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Clinic admin username',
+    example: 'clinicadmin',
+  })
+  username: string;
+
+  @ApiProperty({
+    description: 'Clinic admin email',
+    example: 'admin@clinic.com',
+  })
+  email: string;
+
+  @ApiProperty({
+    description: 'Clinic admin phone number',
+    example: '+84987654321',
+    required: false,
+    nullable: true,
+  })
+  phone?: string;
+
+  @ApiProperty({
+    description: 'Clinic admin date of birth',
+    example: '1980-05-15',
+    required: false,
+    nullable: true,
+  })
+  dob?: Date;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/admin-avatar.jpg',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string;
+
+  @ApiProperty({
+    description: 'Account role',
+    enum: AccountRole,
+    example: AccountRole.CLINIC_ADMIN,
+  })
+  role: AccountRole;
+
+  @ApiProperty({
+    description: 'Account status',
+    enum: AccountStatus,
+    example: AccountStatus.ACTIVE,
+  })
+  status: AccountStatus;
+
+  @ApiProperty({
+    description: 'Whether email has been verified',
+    example: true,
+  })
+  isEmailVerified: boolean;
+
+  @ApiProperty({
+    description: 'Account creation timestamp',
+    example: '2023-10-27T10:00:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Last update timestamp',
+    example: '2023-10-27T10:00:00.000Z',
+  })
+  updatedAt: Date;
+
+  constructor(account: any) {
+    this.id = account._id;
+    this.username = account.username;
+    this.email = account.email;
+    this.phone = account.phone;
+    this.dob = account.dob;
+    this.profilePicture = account.profilePicture;
+    this.role = account.role;
+    this.status = account.status;
+    this.isEmailVerified = account.isEmailVerified;
+    this.createdAt = account.createdAt;
+    this.updatedAt = account.updatedAt;
+  }
+}
+
+/**
+ * Clinic Admin Info Detail DTO
+ *
+ * Clinic admin information from clinic_admin_information table
+ */
+export class ClinicAdminInfoDetailDto {
+  @ApiProperty({
+    description: 'Clinic admin information ID',
+    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Clinic name',
+    example: 'City Medical Group',
+  })
+  clinicName: string;
+
+  @ApiProperty({
+    description: 'Clinic phone',
+    example: '+84987654321',
+    required: false,
+    nullable: true,
+  })
+  clinicPhone?: string;
+
+  @ApiProperty({
+    description: 'Clinic description',
+    example: 'A modern healthcare facility',
+    required: false,
+    nullable: true,
+  })
+  description?: string;
+
+  @ApiProperty({
+    description: 'Medical specializations offered',
+    example: ['Cardiology', 'Dermatology'],
+    required: false,
+    nullable: true,
+  })
+  specializedIn?: string[];
+
+  @ApiProperty({
+    description: 'Advantages or strengths of clinic',
+    example: ['24/7 service', 'Modern equipment'],
+    required: false,
+    nullable: true,
+  })
+  pros?: string[];
+
+  @ApiProperty({
+    description: 'Paraclinical services offered',
+    example: ['X-ray', 'Ultrasound'],
+    required: false,
+    nullable: true,
+  })
+  paraclinical?: string[];
+
+  @ApiProperty({
+    description: 'Date of birth of clinic administrator',
+    example: '1980-05-15',
+    required: false,
+    nullable: true,
+  })
+  dob?: Date;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/admin-avatar.jpg',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string;
+
+  @ApiProperty({
+    description: 'Whether clinic administrator is verified',
+    example: true,
+    required: false,
+    nullable: true,
+  })
+  isVerify?: boolean;
+
+  constructor(clinicAdminInfo: any) {
+    this.id = clinicAdminInfo._id;
+    this.clinicName = clinicAdminInfo.clinicName;
+    this.clinicPhone = clinicAdminInfo.clinicPhone;
+    this.description = clinicAdminInfo.description;
+    this.specializedIn = clinicAdminInfo.specializedIn;
+    this.pros = clinicAdminInfo.pros;
+    this.paraclinical = clinicAdminInfo.paraclinical;
+    this.dob = clinicAdminInfo.dob;
+    this.profilePicture = clinicAdminInfo.profilePicture;
+    this.isVerify = clinicAdminInfo.isVerify;
+  }
+}
+
+/**
  * Clinic Info Detail DTO
  *
  * Clinic manager information from clinic_manager_information table
@@ -394,10 +680,40 @@ export class ClinicDetailResponseDto {
   updatedAt: Date;
 
   @ApiProperty({
-    description: 'Clinic information',
+    description: 'Clinic manager account information',
+    type: ClinicManagerAccountDto,
+  })
+  clinicManager: ClinicManagerAccountDto;
+
+  @ApiProperty({
+    description: 'Clinic manager information',
     type: ClinicInfoDetailDto,
   })
-  clinicInfo: ClinicInfoDetailDto;
+  clinicManagerInformation: ClinicInfoDetailDto;
+
+  @ApiProperty({
+    description: 'Clinic admin account information',
+    type: ClinicAdminAccountDto,
+    required: false,
+    nullable: true,
+  })
+  clinicAdmin?: ClinicAdminAccountDto;
+
+  @ApiProperty({
+    description: 'Clinic admin information',
+    type: ClinicAdminInfoDetailDto,
+    required: false,
+    nullable: true,
+  })
+  clinicAdminInformation?: ClinicAdminInfoDetailDto;
+
+  @ApiProperty({
+    description: 'Final clinic name combining clinic admin name and branch name',
+    example: 'City Medical Group Branch 1',
+    required: false,
+    nullable: true,
+  })
+  finalClinicName?: string | null;
 
   @ApiProperty({
     description: 'Clinic addresses (branches)',
@@ -425,6 +741,9 @@ export class ClinicDetailResponseDto {
     addresses: AddressDetailDto[],
     doctors: DoctorSummaryDto[],
     subscription?: SubscriptionDto,
+    clinicAdmin?: any,
+    clinicAdminInfo?: any,
+    finalClinicName?: string | null,
   ) {
     this.id = account._id;
     this.username = account.username;
@@ -438,7 +757,8 @@ export class ClinicDetailResponseDto {
     this.createdAt = account.createdAt;
     this.updatedAt = account.updatedAt;
 
-    this.clinicInfo = {
+    this.clinicManager = new ClinicManagerAccountDto(account);
+    this.clinicManagerInformation = {
       id: clinicInfo._id,
       clinicBranchName: clinicInfo.clinicBranchName,
       fullName: clinicInfo.fullName,
@@ -446,6 +766,16 @@ export class ClinicDetailResponseDto {
       profilePicture: clinicInfo.profilePicture,
       dob: clinicInfo.dob,
     };
+
+    if (clinicAdmin) {
+      this.clinicAdmin = new ClinicAdminAccountDto(clinicAdmin);
+    }
+
+    if (clinicAdminInfo) {
+      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(clinicAdminInfo);
+    }
+
+    this.finalClinicName = finalClinicName;
 
     this.addresses = addresses;
     this.doctors = doctors;

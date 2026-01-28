@@ -46,7 +46,13 @@ export const encryptionTransformer: ValueTransformer = {
     if (value === null || value === undefined || value === '') {
       return value;
     }
-    return decrypt(value);
+
+    // Try to decrypt; if it fails (not encrypted or different format), return original
+    try {
+      return decrypt(value);
+    } catch {
+      return value; // Assume it was plain text or legacy data
+    }
   },
 };
 

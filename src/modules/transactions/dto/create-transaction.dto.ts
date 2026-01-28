@@ -7,7 +7,8 @@ export class CreateTransactionDto {
     example: 'f91af8b4-391e-4a41-a8c9-1f08b4b6a690',
   })
   @IsUUID()
-  clinicId: string;
+  @IsOptional()
+  clinicId?: string;
 
   @ApiProperty({
     description: 'Prescription identifier the payment belongs to',

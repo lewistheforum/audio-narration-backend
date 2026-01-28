@@ -37,8 +37,8 @@ export class AddressRepository {
   /**
    * Find addresses by account ID
    */
-  async findByAccountId(accountId: string): Promise<Address[]> {
-    return this.repository.find({
+  async findByAccountId(accountId: string): Promise<Address> {
+    return this.repository.findOne({
       where: { accountId },
     });
   }

@@ -68,7 +68,8 @@ export class FeedbackSeederService {
       this.logger.log('Starting to seed feedbacks...');
 
       // Check if feedbacks already exist
-      const existingFeedbacks = await this.feedbackRepository.findAllFeedbacks();
+      const existingFeedbacks =
+        await this.feedbackRepository.findAllFeedbacks();
       if (existingFeedbacks.length > 0) {
         this.logger.log(
           `Feedbacks already exist (${existingFeedbacks.length} records). Skipping seeding.`,
@@ -83,7 +84,9 @@ export class FeedbackSeederService {
       );
 
       if (clinics.length === 0) {
-        this.logger.warn('No clinic manager accounts found. Skipping feedback seeding.');
+        this.logger.warn(
+          'No clinic manager accounts found. Skipping feedback seeding.',
+        );
         return;
       }
 
@@ -93,7 +96,9 @@ export class FeedbackSeederService {
       );
 
       if (patients.length === 0) {
-        this.logger.warn('No patient accounts found. Skipping feedback seeding.');
+        this.logger.warn(
+          'No patient accounts found. Skipping feedback seeding.',
+        );
         return;
       }
 
@@ -104,7 +109,9 @@ export class FeedbackSeederService {
       // Read CSV data
       const csvData = await this.readCsvFile();
       if (csvData.length === 0) {
-        this.logger.warn('No data found in test.csv. Skipping feedback seeding.');
+        this.logger.warn(
+          'No data found in test.csv. Skipping feedback seeding.',
+        );
         return;
       }
 
@@ -174,21 +181,26 @@ export class FeedbackSeederService {
       const hasImages = imageIndices.includes(i);
 
       // Randomly select a patient ID
-      const patientId = patientIds[Math.floor(Math.random() * patientIds.length)];
+      const patientId =
+        patientIds[Math.floor(Math.random() * patientIds.length)];
 
       // Deterministically select feedback type (clinic or doctor)
       const isDoctorFeedback = i % 3 === 0; // Every 3rd feedback is for a doctor
 
       // Generate deterministic appointment ID based on clinic ID and index
-      const appointmentId = this.generateDeterministicAppointmentId(clinicId, i);
+      const appointmentId = this.generateDeterministicAppointmentId(
+        clinicId,
+        i,
+      );
 
       // Prepare feedback data
       const feedbackData = {
         appointmentId: appointmentId, // Use deterministic appointment ID
         clinicId: clinicId,
-        doctorId: isDoctorFeedback && doctors.length > 0
-          ? doctors[i % doctors.length]._id
-          : null,
+        doctorId:
+          isDoctorFeedback && doctors.length > 0
+            ? doctors[i % doctors.length]._id
+            : null,
         rating: parseInt(row.rating, 10),
         description: row.review_text,
         descriptionLabel: null,
@@ -212,7 +224,10 @@ export class FeedbackSeederService {
    * @param {number} index - Feedback index
    * @returns {string} Deterministic UUID for appointment
    */
-  private generateDeterministicAppointmentId(clinicId: string, index: number): string {
+  private generateDeterministicAppointmentId(
+    clinicId: string,
+    index: number,
+  ): string {
     const hash = createHash('sha256');
     hash.update(`${clinicId}-${index}-appointment`);
     const hashValue = hash.digest('hex');

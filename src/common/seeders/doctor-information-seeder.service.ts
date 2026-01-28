@@ -87,9 +87,7 @@ export class DoctorInformationSeederService {
       let createdCount = 0;
 
       for (const account of doctors) {
-        const existing = await this.doctorInfoRepository.findByDoctorAccountId(
-          account._id,
-        );
+        const existing = await this.doctorInfoRepository.findById(account._id);
 
         if (existing) {
           continue;

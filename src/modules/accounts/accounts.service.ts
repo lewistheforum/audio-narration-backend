@@ -5,19 +5,15 @@ import {
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus, VerificationType } from './enums';
 import { GeneralAccount } from './entities/general_accounts.entity';
+import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
 import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
 import { DoctorInformation } from './entities/doctor_information.entity';
-import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
-import { Address } from './entities/addresses.entity';
-import { GoogleIframe } from './entities/google_iframe.entity';
 import {
   CreateAccountDto,
   UpdatePasswordDto,
@@ -33,22 +29,15 @@ import {
 import {
   ClinicListResponseDto,
   ClinicItemDto,
-  ClinicInfoDto,
-  AddressDto,
-  PaginationDto,
   ClinicDetailResponseDto,
-  ClinicInfoDetailDto,
   AddressDetailDto,
-  GoogleMapDto,
   DoctorSummaryDto,
   SubscriptionDto,
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
-  DoctorDetailResponseDto,
-  DoctorDetailData,
-  DoctorInfo,
-  ClinicInfo,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -70,8 +59,6 @@ import {
   ClinicSubscriptionRepository,
   SubscriptionServiceRepository,
 } from '../subscriptions/repositories';
-import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
-import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 
 /**
  * Accounts Service
@@ -172,9 +159,8 @@ export class AccountsService {
   async findAll(
     includeDeleted: boolean = false,
   ): Promise<AccountResponseDto[]> {
-    const accounts = await this.accountRepository.findAllAccounts(
-      includeDeleted,
-    );
+    const accounts =
+      await this.accountRepository.findAllAccounts(includeDeleted);
 
     const result: AccountResponseDto[] = [];
     for (const account of accounts) {
@@ -243,6 +229,90 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
     const generalAccount = await this.findGeneralAccountByUserId(id);
     return new AccountResponseDto(account, generalAccount);
+  }
+
+  async getAccountInformationByRole(id: string): Promise<AccountResponseDto> {
+    const account = await this.findAccountEntityById(id);
+
+    const address = await this.addressRepository.findByAccountId(id);
+
+    const googleIframe = await this.googleIframeRepository.findByAddressId(
+      address?._id,
+    );
+
+    switch (account.role) {
+      case AccountRole.ADMIN:
+      case AccountRole.PATIENT:
+        const generalAccount =
+          await this.generalAccountRepository.findByAccountId(id);
+        return new AccountResponseDto(
+          account,
+          generalAccount,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          address,
+          googleIframe,
+        );
+
+      case AccountRole.CLINIC_MANAGER:
+        const managerInfo =
+          await this.clinicManagerInfoRepository.findByAccountId(id);
+        return new AccountResponseDto(
+          account,
+          undefined,
+          undefined,
+          undefined,
+          managerInfo,
+          undefined,
+          address,
+          googleIframe,
+        );
+
+      case AccountRole.DOCTOR:
+        const doctorInfo = await this.doctorInfoRepository.findByAccountId(id);
+        return new AccountResponseDto(
+          account,
+          undefined,
+          undefined,
+          doctorInfo,
+          undefined,
+          undefined,
+          address,
+          googleIframe,
+        );
+
+      case AccountRole.CLINIC_ADMIN:
+        const clinicAdminInfo =
+          await this.clinicAdminInfoRepository.findByAccountId(id);
+        return new AccountResponseDto(
+          account,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          clinicAdminInfo,
+          address,
+          googleIframe,
+        );
+
+      case AccountRole.CLINIC_STAFF:
+        const staffInfo = await this.clinicStaffRepository.findByAccountId(id);
+        return new AccountResponseDto(
+          account,
+          undefined,
+          staffInfo,
+          undefined,
+          undefined,
+          undefined,
+          address,
+          googleIframe,
+        );
+
+      default:
+        throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+    }
   }
 
   /**
@@ -447,29 +517,6 @@ export class AccountsService {
   }
 
   /**
-   * Update GeneralAccount Entity (Internal)
-   *
-   * Internal method to persist changes to a GeneralAccount entity.
-   * This is a low-level data access method.
-   *
-   * @param {GeneralAccount} generalAccount - GeneralAccount entity with changes to persist
-   * @returns {Promise<GeneralAccount>} Updated general account entity from database
-   *
-   * @private
-   * @example
-   * ```typescript
-   * const generalAccount = await accountsService.findGeneralAccountByUserId(id);
-   * generalAccount.profilePicture = 'new-url';
-   * await accountsService.updateGeneralAccountEntity(generalAccount);
-   * ```
-   */
-  async updateGeneralAccountEntity(
-    generalAccount: GeneralAccount,
-  ): Promise<GeneralAccount> {
-    return this.generalAccountRepository.saveGeneralAccount(generalAccount);
-  }
-
-  /**
    * Update Account Profile
    *
    * Updates account profile information with comprehensive validation.
@@ -511,22 +558,23 @@ export class AccountsService {
     updateAccountDto: UpdateAccountDto,
   ): Promise<{ user: AccountResponseDto; emailChanged?: boolean }> {
     const account = await this.findAccountEntityById(id);
+
     let emailChanged = false;
 
     // Validate email change permission - only PATIENT can change their own email
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
-      if (account.role !== AccountRole.PATIENT) {
-        throw new ForbiddenException(
-          'Only PATIENT accounts can change their email address. Other roles must contact administrator.',
-        );
-      }
+      // if (account.role !== AccountRole.PATIENT) {
+      //   throw new ForbiddenException(
+      //     'Only PATIENT accounts can change their email address. Other roles must contact administrator.',
+      //   );
+      // }
 
-      const existingAccountWithEmail = await this.findByEmail(
-        updateAccountDto.email,
-      );
-      if (existingAccountWithEmail && existingAccountWithEmail._id !== id) {
-        throw new ConflictException(MESSAGES.failMessage.emailAlreadyExists);
-      }
+      // const existingAccountWithEmail = await this.findByEmail(
+      //   updateAccountDto.email,
+      // );
+      // if (existingAccountWithEmail && existingAccountWithEmail._id !== id) {
+      //   throw new ConflictException(MESSAGES.failMessage.emailAlreadyExists);
+      // }
 
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
@@ -549,27 +597,723 @@ export class AccountsService {
 
     const updatedAccount = await this.accountRepository.saveAccount(account);
 
-    // Update GeneralAccount if needed
-    if (
-      updateAccountDto.fullName !== undefined ||
-      updateAccountDto.gender !== undefined ||
-      updateAccountDto.dob !== undefined ||
-      updateAccountDto.profilePicture !== undefined
-    ) {
-      await this.updateGeneralAccount(id, {
-        fullName: updateAccountDto.fullName,
-        gender: updateAccountDto.gender,
-        dob: updateAccountDto.dob ? new Date(updateAccountDto.dob) : undefined,
-        profilePicture: updateAccountDto.profilePicture,
-      });
+    // Update Role Specific Information
+    switch (account.role) {
+      case AccountRole.ADMIN:
+      case AccountRole.PATIENT:
+        if (
+          updateAccountDto.fullName !== undefined ||
+          updateAccountDto.gender !== undefined ||
+          updateAccountDto.dob !== undefined ||
+          updateAccountDto.profilePicture !== undefined
+        ) {
+          await this.updateGeneralAccount(id, {
+            fullName: updateAccountDto.fullName,
+            gender: updateAccountDto.gender,
+            dob: updateAccountDto.dob
+              ? new Date(updateAccountDto.dob)
+              : undefined,
+            profilePicture: updateAccountDto.profilePicture,
+          });
+        }
+        break;
+
+      case AccountRole.CLINIC_ADMIN:
+        await this.updateClinicAdminInformation(id, {
+          clinicName: updateAccountDto.clinicName,
+          description: updateAccountDto.description,
+          specializedIn: updateAccountDto.specializedIn,
+          pros: updateAccountDto.pros,
+          paraclinical: updateAccountDto.paraclinical,
+          dob: updateAccountDto.dob
+            ? new Date(updateAccountDto.dob)
+            : undefined,
+          profilePicture: updateAccountDto.profilePicture,
+          bankName: updateAccountDto.bankName,
+          bankNumber: updateAccountDto.bankNumber,
+          bankBranch: updateAccountDto.bankBranch,
+          sepayVa: updateAccountDto.sepayVa,
+        });
+        break;
+
+      case AccountRole.CLINIC_MANAGER:
+        await this.updateClinicManagerInformation(id, {
+          clinicBranchName: updateAccountDto.clinicBranchName,
+          fullName: updateAccountDto.fullName,
+          gender: updateAccountDto.gender,
+          profilePicture: updateAccountDto.profilePicture,
+          dob: updateAccountDto.dob
+            ? new Date(updateAccountDto.dob)
+            : undefined,
+        });
+        break;
+
+      case AccountRole.CLINIC_STAFF:
+        await this.updateClinicStaffInformation(id, {
+          fullName: updateAccountDto.fullName,
+          gender: updateAccountDto.gender,
+          clinicRole: updateAccountDto.clinicRole,
+          dob: updateAccountDto.dob
+            ? new Date(updateAccountDto.dob)
+            : undefined,
+          profilePicture: updateAccountDto.profilePicture,
+        });
+        break;
+
+      case AccountRole.DOCTOR:
+        await this.updateDoctorInformation(id, {
+          fullName: updateAccountDto.fullName,
+          gender: updateAccountDto.gender,
+          dob: updateAccountDto.dob
+            ? new Date(updateAccountDto.dob)
+            : undefined,
+          profilePicture: updateAccountDto.profilePicture,
+          academicDegree: updateAccountDto.academicDegree,
+          experience: updateAccountDto.experience,
+          position: updateAccountDto.position,
+          introduction1: updateAccountDto.introduction1,
+          workProcess2: updateAccountDto.workProcess2,
+          studyProcess3: updateAccountDto.studyProcess3,
+          members4: updateAccountDto.members4,
+          scientificWork5: updateAccountDto.scientificWork5,
+          papers6: updateAccountDto.papers6,
+          introductionImage: updateAccountDto.introductionImage,
+          professionalLicense: updateAccountDto.professionalLicense,
+          certificatePracticalTraining:
+            updateAccountDto.certificatePracticalTraining,
+          medicalLicense: updateAccountDto.medicalLicense,
+          identityNumber: updateAccountDto.identityNumber,
+          placeIdentityCard: updateAccountDto.placeIdentityCard,
+          identityDate: updateAccountDto.identityDate
+            ? new Date(updateAccountDto.identityDate)
+            : undefined,
+          bankNumber: updateAccountDto.bankNumber,
+          bankName: updateAccountDto.bankName,
+          bankBranch: updateAccountDto.bankBranch,
+        });
+        break;
     }
 
-    const generalAccount = await this.findGeneralAccountByUserId(id);
+    // Update Address and Google Iframe
+    await this.updateAddressAndGoogleIframe(id, updateAccountDto);
 
+    // Retrieve updated information for response
     return {
-      user: new AccountResponseDto(updatedAccount, generalAccount),
+      user: await this.getAccountInformationByRole(id),
       emailChanged,
     };
+  }
+
+  /**
+   * Encrypt Bank Account Information
+   *
+   * Manually triggers encryption for bank-related fields.
+   * Useful for migrating existing plain-text data to encrypted format.
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<any>} Updated profile
+   */
+  async encryptBankAccount(id: string): Promise<any> {
+    const account = await this.findAccountEntityById(id);
+
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      const profile = await this.clinicAdminInfoRepository.findByAccountId(id);
+      if (!profile) return;
+
+      // Saving the entity triggers the encryption transformer
+      await this.clinicAdminInfoRepository.save(profile);
+      return profile;
+    } else if (account.role === AccountRole.DOCTOR) {
+      const profile = await this.doctorInfoRepository.findByAccountId(id);
+      if (!profile) return;
+
+      // Saving the entity triggers the encryption transformer
+      await this.doctorInfoRepository.save(profile);
+      return profile;
+    }
+
+    throw new BadRequestException(
+      'Account role does not support bank information',
+    );
+  }
+
+  /**
+   * Get Decrypted Bank Information
+   *
+   * Retrieves bank information for an account.
+   * Since the entity columns use the encryptionTransformer,
+   * fetching the entity automatically decrypts the data.
+   *
+   * @param {string} id - Account UUID
+   * @returns {Promise<any>} Object containing decrypted bank details
+   */
+  async getDecryptedBankInfo(id: string): Promise<any> {
+    const account = await this.findAccountEntityById(id);
+
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      const profile = await this.clinicAdminInfoRepository.findByAccountId(id);
+      if (!profile) return null;
+
+      return {
+        bankName: profile.bankName,
+        bankNumber: profile.bankNumber,
+        bankBranch: profile.bankBranch,
+        sepayVa: profile.sepayVa,
+      };
+    } else if (account.role === AccountRole.DOCTOR) {
+      const profile = await this.doctorInfoRepository.findByAccountId(id);
+      if (!profile) return null;
+
+      return {
+        bankName: profile.bankName,
+        bankNumber: profile.bankNumber,
+        bankBranch: profile.bankBranch,
+      };
+    }
+
+    throw new BadRequestException(
+      'Account role does not support bank information',
+    );
+  }
+
+  /**
+   * Update GeneralAccount Entity (Internal)
+   *
+   * Internal method to persist changes to a GeneralAccount entity.
+   * This is a low-level data access method.
+   *
+   * @param {GeneralAccount} generalAccount - GeneralAccount entity with changes to persist
+   * @returns {Promise<GeneralAccount>} Updated general account entity from database
+   *
+   * @private
+   * @example
+   * ```typescript
+   * const generalAccount = await accountsService.findGeneralAccountByUserId(id);
+   * generalAccount.profilePicture = 'new-url';
+   * await accountsService.updateGeneralAccountEntity(generalAccount);
+   * ```
+   */
+  async updateGeneralAccountEntity(
+    generalAccount: GeneralAccount,
+  ): Promise<GeneralAccount> {
+    return this.generalAccountRepository.saveGeneralAccount(generalAccount);
+  }
+
+  /**
+   * Update General Account Profile
+   *
+   * Updates or creates the GeneralAccount entity associated with an account.
+   * This method handles extended profile data (fullName, gender) stored separately from core account data.
+   *
+   * Behavior:
+   * - If GeneralAccount exists: Updates provided fields
+   * - If GeneralAccount doesn't exist: Creates new GeneralAccount with provided data
+   *
+   * Use Cases:
+   * - Updating user profile information
+   * - Adding profile data to accounts created before GeneralAccount feature
+   * - Synchronizing profile data from external sources
+   *
+   * @param {string} userId - Account UUID
+   * @param {Object} data - Profile data to update
+   * @param {string} [data.fullName] - Full name of the user
+   * @param {string} [data.gender] - Gender (MALE, FEMALE, OTHER)
+   * @returns {Promise<GeneralAccount>} Updated or created GeneralAccount entity
+   *
+   * @example
+   * ```typescript
+   * const generalAccount = await accountsService.updateGeneralAccount(
+   *   'account-uuid',
+   *   {
+   *     fullName: 'John Doe',
+   *     gender: 'MALE'
+   *   }
+   * );
+   * ```
+   */
+  async updateGeneralAccount(
+    userId: string,
+    data: {
+      fullName?: string;
+      gender?: string;
+      dob?: Date;
+      profilePicture?: string;
+    },
+  ): Promise<GeneralAccount> {
+    let generalAccount = await this.findGeneralAccountByUserId(userId);
+
+    if (generalAccount) {
+      // Update existing
+      if (data.fullName !== undefined) {
+        generalAccount.fullName = data.fullName;
+      }
+      if (data.gender !== undefined) {
+        generalAccount.gender = data.gender as any;
+      }
+      if (data.dob !== undefined) {
+        generalAccount.dob = data.dob;
+      }
+      if (data.profilePicture !== undefined) {
+        generalAccount.profilePicture = data.profilePicture;
+      }
+      return this.generalAccountRepository.saveGeneralAccount(generalAccount);
+    } else {
+      // Create new
+      generalAccount = this.generalAccountRepository.createGeneralAccount({
+        accountId: userId,
+        fullName: data.fullName,
+        gender: data.gender as any,
+        dob: data.dob,
+        profilePicture: data.profilePicture,
+      });
+      return this.generalAccountRepository.saveGeneralAccount(generalAccount);
+    }
+  }
+
+  /**
+   * Update Address and Google Iframe Information
+   *
+   * @param {string} accountId - The ID of the account
+   * @param {UpdateAccountDto} dto - Data transfer object containing address and google iframe info
+   * @private
+   */
+  private async updateAddressAndGoogleIframe(
+    accountId: string,
+    dto: UpdateAccountDto,
+  ): Promise<void> {
+    // 1. Update Address
+    if (
+      dto.address !== undefined ||
+      dto.ward !== undefined ||
+      dto.district !== undefined ||
+      dto.province !== undefined ||
+      dto.provinceName !== undefined ||
+      dto.districtName !== undefined ||
+      dto.wardName !== undefined
+    ) {
+      let address = await this.addressRepository.findByAccountId(accountId);
+      if (address) {
+        // Update existing address
+        if (dto.address !== undefined) address.address = dto.address;
+        if (dto.ward !== undefined) address.ward = dto.ward;
+        if (dto.district !== undefined) address.district = dto.district;
+        if (dto.province !== undefined) address.province = dto.province;
+        if (dto.provinceName !== undefined)
+          address.provinceName = dto.provinceName;
+        if (dto.districtName !== undefined)
+          address.districtName = dto.districtName;
+        if (dto.wardName !== undefined) address.wardName = dto.wardName;
+        await this.addressRepository.save(address);
+      } else {
+        // Create new address
+        address = this.addressRepository.create({
+          accountId,
+          address: dto.address,
+          ward: dto.ward,
+          district: dto.district,
+          province: dto.province,
+          provinceName: dto.provinceName,
+          districtName: dto.districtName,
+          wardName: dto.wardName,
+        });
+        await this.addressRepository.save(address);
+      }
+
+      // 2. Update Google Iframe (Only if address exists or was created)
+      if (
+        address &&
+        (dto.location !== undefined ||
+          dto.mapStyle !== undefined ||
+          dto.zoomLevel !== undefined ||
+          dto.mapHeight !== undefined ||
+          dto.mapWidth !== undefined ||
+          dto.responsive !== undefined ||
+          dto.googleMapIframe !== undefined)
+      ) {
+        let googleIframe = await this.googleIframeRepository.findByAddressId(
+          address._id,
+        );
+        if (googleIframe) {
+          // Update existing iframe
+          if (dto.location !== undefined) googleIframe.location = dto.location;
+          if (dto.mapStyle !== undefined) googleIframe.mapStyle = dto.mapStyle;
+          if (dto.zoomLevel !== undefined)
+            googleIframe.zoomLevel = dto.zoomLevel;
+          if (dto.mapHeight !== undefined)
+            googleIframe.mapHeight = dto.mapHeight;
+          if (dto.mapWidth !== undefined) googleIframe.mapWidth = dto.mapWidth;
+          if (dto.responsive !== undefined)
+            googleIframe.responsive = dto.responsive;
+          if (dto.googleMapIframe !== undefined)
+            googleIframe.googleMapIframe = dto.googleMapIframe;
+          await this.googleIframeRepository.save(googleIframe);
+        } else {
+          // Create new iframe
+          googleIframe = this.googleIframeRepository.create({
+            addressId: address._id,
+            location: dto.location,
+            mapStyle: dto.mapStyle,
+            zoomLevel: dto.zoomLevel,
+            mapHeight: dto.mapHeight,
+            mapWidth: dto.mapWidth,
+            responsive: dto.responsive !== undefined ? dto.responsive : true,
+            googleMapIframe: dto.googleMapIframe,
+          });
+          await this.googleIframeRepository.save(googleIframe);
+        }
+      }
+    }
+  }
+
+  /**
+   * Update Clinic Admin Information
+   *
+   * Updates or creates clinic admin information for an account.
+   * If the clinic admin information doesn't exist, it will be created.
+   *
+   * @param {string} accountId - Account UUID
+   * @param {Partial<ClinicAdminInformation>} data - Clinic admin data to update
+   * @returns {Promise<ClinicAdminInformation>} Updated or created clinic admin information
+   *
+   * @example
+   * ```typescript
+   * await accountsService.updateClinicAdminInformation(accountId, {
+   *   clinicName: 'New Clinic Name',
+   *   description: 'Updated description',
+   *   specializedIn: ['Cardiology', 'Neurology']
+   * });
+   * ```
+   */
+  async updateClinicAdminInformation(
+    accountId: string,
+    data: {
+      clinicName?: string;
+      description?: string;
+      specializedIn?: string[];
+      pros?: string[];
+      paraclinical?: string[];
+      dob?: Date;
+      profilePicture?: string;
+      bankName?: string;
+      bankNumber?: string;
+      bankBranch?: string;
+      sepayVa?: string;
+      isVerify?: boolean;
+    },
+  ): Promise<ClinicAdminInformation> {
+    let clinicAdminInfo =
+      await this.clinicAdminInfoRepository.findByAccountId(accountId);
+
+    if (clinicAdminInfo) {
+      // Update existing
+      if (data.clinicName !== undefined) {
+        clinicAdminInfo.clinicName = data.clinicName;
+      }
+      if (data.description !== undefined) {
+        clinicAdminInfo.description = data.description;
+      }
+      if (data.specializedIn !== undefined) {
+        clinicAdminInfo.specializedIn = data.specializedIn;
+      }
+      if (data.pros !== undefined) {
+        clinicAdminInfo.pros = data.pros;
+      }
+      if (data.paraclinical !== undefined) {
+        clinicAdminInfo.paraclinical = data.paraclinical;
+      }
+      if (data.dob !== undefined) {
+        clinicAdminInfo.dob = data.dob;
+      }
+      if (data.profilePicture !== undefined) {
+        clinicAdminInfo.profilePicture = data.profilePicture;
+      }
+      if (data.bankName !== undefined) {
+        clinicAdminInfo.bankName = data.bankName;
+      }
+      if (data.bankNumber !== undefined) {
+        clinicAdminInfo.bankNumber = data.bankNumber;
+      }
+      if (data.bankBranch !== undefined) {
+        clinicAdminInfo.bankBranch = data.bankBranch;
+      }
+      if (data.sepayVa !== undefined) {
+        clinicAdminInfo.sepayVa = data.sepayVa;
+      }
+      if (data.isVerify !== undefined) {
+        clinicAdminInfo.isVerify = data.isVerify;
+      }
+      return this.clinicAdminInfoRepository.save(clinicAdminInfo);
+    } else {
+      // Create new
+      clinicAdminInfo = this.clinicAdminInfoRepository.create({
+        accountId,
+        ...data,
+      });
+      return this.clinicAdminInfoRepository.save(clinicAdminInfo);
+    }
+  }
+
+  /**
+   * Update Clinic Manager Information
+   *
+   * Updates or creates clinic manager information for an account.
+   * If the clinic manager information doesn't exist, it will be created.
+   *
+   * @param {string} accountId - Account UUID
+   * @param {Partial<ClinicManagerInformation>} data - Clinic manager data to update
+   * @returns {Promise<ClinicManagerInformation>} Updated or created clinic manager information
+   *
+   * @example
+   * ```typescript
+   * await accountsService.updateClinicManagerInformation(accountId, {
+   *   clinicBranchName: 'Branch 1',
+   *   fullName: 'John Doe',
+   *   gender: Gender.MALE
+   * });
+   * ```
+   */
+  async updateClinicManagerInformation(
+    accountId: string,
+    data: {
+      clinicBranchName?: string;
+      fullName?: string;
+      gender?: string;
+      profilePicture?: string;
+      dob?: Date;
+    },
+  ): Promise<ClinicManagerInformation> {
+    let managerInfo =
+      await this.clinicManagerInfoRepository.findByAccountId(accountId);
+
+    if (managerInfo) {
+      // Update existing
+      if (data.clinicBranchName !== undefined) {
+        managerInfo.clinicBranchName = data.clinicBranchName;
+      }
+      if (data.fullName !== undefined) {
+        managerInfo.fullName = data.fullName;
+      }
+      if (data.gender !== undefined) {
+        managerInfo.gender = data.gender as any;
+      }
+      if (data.profilePicture !== undefined) {
+        managerInfo.profilePicture = data.profilePicture;
+      }
+      if (data.dob !== undefined) {
+        managerInfo.dob = data.dob;
+      }
+      return this.clinicManagerInfoRepository.save(managerInfo);
+    } else {
+      // Create new
+      managerInfo = this.clinicManagerInfoRepository.create({
+        accountId,
+        clinicBranchName: data.clinicBranchName || '',
+        fullName: data.fullName || '',
+        gender: data.gender as any,
+        profilePicture: data.profilePicture,
+        dob: data.dob,
+      });
+      return this.clinicManagerInfoRepository.save(managerInfo);
+    }
+  }
+
+  /**
+   * Update Clinic Staff Information
+   *
+   * Updates or creates clinic staff information for an account.
+   * If the clinic staff information doesn't exist, it will be created.
+   *
+   * @param {string} accountId - Account UUID
+   * @param {Partial<ClinicStaffInformation>} data - Clinic staff data to update
+   * @returns {Promise<ClinicStaffInformation>} Updated or created clinic staff information
+   *
+   * @example
+   * ```typescript
+   * await accountsService.updateClinicStaffInformation(accountId, {
+   *   fullName: 'Jane Smith',
+   *   gender: Gender.FEMALE,
+   *   clinicRole: ClinicRole.NURSE
+   * });
+   * ```
+   */
+  async updateClinicStaffInformation(
+    accountId: string,
+    data: {
+      fullName?: string;
+      gender?: string;
+      clinicRole?: string;
+      dob?: Date;
+      profilePicture?: string;
+    },
+  ): Promise<ClinicStaffInformation> {
+    let staffInfo = await this.clinicStaffRepository.findByAccountId(accountId);
+
+    if (staffInfo) {
+      // Update existing
+      if (data.fullName !== undefined) {
+        staffInfo.fullName = data.fullName;
+      }
+      if (data.gender !== undefined) {
+        staffInfo.gender = data.gender as any;
+      }
+      if (data.clinicRole !== undefined) {
+        staffInfo.clinicRole = data.clinicRole as any;
+      }
+      if (data.dob !== undefined) {
+        staffInfo.dob = data.dob;
+      }
+      if (data.profilePicture !== undefined) {
+        staffInfo.profilePicture = data.profilePicture;
+      }
+      return this.clinicStaffRepository.save(staffInfo);
+    } else {
+      // Create new
+      staffInfo = this.clinicStaffRepository.create({
+        accountId,
+        fullName: data.fullName || '',
+        gender: data.gender as any,
+        clinicRole: data.clinicRole as any,
+        dob: data.dob,
+        profilePicture: data.profilePicture,
+      });
+      return this.clinicStaffRepository.save(staffInfo);
+    }
+  }
+
+  /**
+   * Update Doctor Information
+   *
+   * Updates or creates doctor information for an account.
+   * If the doctor information doesn't exist, it will be created.
+   *
+   * @param {string} accountId - Account UUID
+   * @param {Partial<DoctorInformation>} data - Doctor data to update
+   * @returns {Promise<DoctorInformation>} Updated or created doctor information
+   *
+   * @example
+   * ```typescript
+   * await accountsService.updateDoctorInformation(accountId, {
+   *   fullName: 'Dr. John Smith',
+   *   academicDegree: 'MD, PhD',
+   *   experience: '10 years',
+   *   position: 'Senior Cardiologist'
+   * });
+   * ```
+   */
+  async updateDoctorInformation(
+    accountId: string,
+    data: {
+      fullName?: string;
+      gender?: string;
+      dob?: Date;
+      profilePicture?: string;
+      academicDegree?: string;
+      experience?: string;
+      position?: string;
+      introduction1?: string;
+      workProcess2?: Record<string, any>;
+      studyProcess3?: Record<string, any>;
+      members4?: Record<string, any>;
+      scientificWork5?: Record<string, any>;
+      papers6?: Record<string, any>;
+      introductionImage?: string;
+      professionalLicense?: Record<string, any>;
+      certificatePracticalTraining?: Record<string, any>;
+      medicalLicense?: Record<string, any>;
+      identityNumber?: string;
+      placeIdentityCard?: string;
+      identityDate?: Date;
+      bankNumber?: string;
+      bankName?: string;
+      bankBranch?: string;
+    },
+  ): Promise<DoctorInformation> {
+    let doctorInfo = await this.doctorInfoRepository.findByAccountId(accountId);
+
+    if (doctorInfo) {
+      // Update existing
+      if (data.fullName !== undefined) {
+        doctorInfo.fullName = data.fullName;
+      }
+      if (data.gender !== undefined) {
+        doctorInfo.gender = data.gender as any;
+      }
+      if (data.dob !== undefined) {
+        doctorInfo.dob = data.dob;
+      }
+      if (data.profilePicture !== undefined) {
+        doctorInfo.profilePicture = data.profilePicture;
+      }
+      if (data.academicDegree !== undefined) {
+        doctorInfo.academicDegree = data.academicDegree;
+      }
+      if (data.experience !== undefined) {
+        doctorInfo.experience = data.experience;
+      }
+      if (data.position !== undefined) {
+        doctorInfo.position = data.position;
+      }
+      if (data.introduction1 !== undefined) {
+        doctorInfo.introduction1 = data.introduction1;
+      }
+      if (data.workProcess2 !== undefined) {
+        doctorInfo.workProcess2 = data.workProcess2;
+      }
+      if (data.studyProcess3 !== undefined) {
+        doctorInfo.studyProcess3 = data.studyProcess3;
+      }
+      if (data.members4 !== undefined) {
+        doctorInfo.members4 = data.members4;
+      }
+      if (data.scientificWork5 !== undefined) {
+        doctorInfo.scientificWork5 = data.scientificWork5;
+      }
+      if (data.papers6 !== undefined) {
+        doctorInfo.papers6 = data.papers6;
+      }
+      if (data.introductionImage !== undefined) {
+        doctorInfo.introductionImage = data.introductionImage;
+      }
+      if (data.professionalLicense !== undefined) {
+        doctorInfo.professionalLicense = data.professionalLicense;
+      }
+      if (data.certificatePracticalTraining !== undefined) {
+        doctorInfo.certificatePracticalTraining =
+          data.certificatePracticalTraining;
+      }
+      if (data.medicalLicense !== undefined) {
+        doctorInfo.medicalLicense = data.medicalLicense;
+      }
+      if (data.identityNumber !== undefined) {
+        doctorInfo.identityNumber = data.identityNumber;
+      }
+      if (data.placeIdentityCard !== undefined) {
+        doctorInfo.placeIdentityCard = data.placeIdentityCard;
+      }
+      if (data.identityDate !== undefined) {
+        doctorInfo.identityDate = data.identityDate;
+      }
+      if (data.bankNumber !== undefined) {
+        doctorInfo.bankNumber = data.bankNumber;
+      }
+      if (data.bankName !== undefined) {
+        doctorInfo.bankName = data.bankName;
+      }
+      if (data.bankBranch !== undefined) {
+        doctorInfo.bankBranch = data.bankBranch;
+      }
+      return this.doctorInfoRepository.save(doctorInfo);
+    } else {
+      // Create new
+      const { gender, ...restData } = data;
+      doctorInfo = this.doctorInfoRepository.create({
+        accountId,
+        fullName: data.fullName || '',
+        gender: gender as any,
+        ...restData,
+      });
+      return this.doctorInfoRepository.save(doctorInfo);
+    }
   }
 
   /**
@@ -1019,77 +1763,6 @@ export class AccountsService {
   }
 
   /**
-   * Update General Account Profile
-   *
-   * Updates or creates the GeneralAccount entity associated with an account.
-   * This method handles extended profile data (fullName, gender) stored separately from core account data.
-   *
-   * Behavior:
-   * - If GeneralAccount exists: Updates provided fields
-   * - If GeneralAccount doesn't exist: Creates new GeneralAccount with provided data
-   *
-   * Use Cases:
-   * - Updating user profile information
-   * - Adding profile data to accounts created before GeneralAccount feature
-   * - Synchronizing profile data from external sources
-   *
-   * @param {string} userId - Account UUID
-   * @param {Object} data - Profile data to update
-   * @param {string} [data.fullName] - Full name of the user
-   * @param {string} [data.gender] - Gender (MALE, FEMALE, OTHER)
-   * @returns {Promise<GeneralAccount>} Updated or created GeneralAccount entity
-   *
-   * @example
-   * ```typescript
-   * const generalAccount = await accountsService.updateGeneralAccount(
-   *   'account-uuid',
-   *   {
-   *     fullName: 'John Doe',
-   *     gender: 'MALE'
-   *   }
-   * );
-   * ```
-   */
-  async updateGeneralAccount(
-    userId: string,
-    data: {
-      fullName?: string;
-      gender?: string;
-      dob?: Date;
-      profilePicture?: string;
-    },
-  ): Promise<GeneralAccount> {
-    let generalAccount = await this.findGeneralAccountByUserId(userId);
-
-    if (generalAccount) {
-      // Update existing
-      if (data.fullName !== undefined) {
-        generalAccount.fullName = data.fullName;
-      }
-      if (data.gender !== undefined) {
-        generalAccount.gender = data.gender as any;
-      }
-      if (data.dob !== undefined) {
-        generalAccount.dob = data.dob;
-      }
-      if (data.profilePicture !== undefined) {
-        generalAccount.profilePicture = data.profilePicture;
-      }
-      return this.generalAccountRepository.saveGeneralAccount(generalAccount);
-    } else {
-      // Create new
-      generalAccount = this.generalAccountRepository.createGeneralAccount({
-        accountId: userId,
-        fullName: data.fullName,
-        gender: data.gender as any,
-        dob: data.dob,
-        profilePicture: data.profilePicture,
-      });
-      return this.generalAccountRepository.saveGeneralAccount(generalAccount);
-    }
-  }
-
-  /**
    * Verify Email with Code
    *
    * Verifies user's email address using a 6-digit verification code sent to their email.
@@ -1211,7 +1884,7 @@ export class AccountsService {
    */
   async resendVerificationCode(
     email: string,
-  ): Promise<{ code: string; user: Account & { firstName?: string } }> {
+  ): Promise<{ code: string; user: Account }> {
     const account = await this.findByEmail(email);
     if (!account) {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
@@ -1220,6 +1893,12 @@ export class AccountsService {
     if (account.isEmailVerified) {
       throw new ConflictException(MESSAGES.failMessage.emailAlreadyVerified);
     }
+
+    // Invalidate all previous verification codes for this user
+    await this.codeVerificationRepository.invalidateAllUserCodes(
+      account._id,
+      VerificationType.VERIFY,
+    );
 
     // Generate new 6-digit code
     const code = generateVerificationCode();
@@ -1237,16 +1916,9 @@ export class AccountsService {
     });
     await this.codeVerificationRepository.save(verification);
 
-    // Get general account for firstName
-    const generalAccount = await this.findGeneralAccountByUserId(account._id);
-    const names = generalAccount?.fullName?.split(' ') || [];
-
     return {
       code,
-      user: {
-        ...account,
-        username: account.username,
-      },
+      user: account,
     };
   }
 
@@ -1302,6 +1974,12 @@ export class AccountsService {
         MESSAGES.failMessage.oauthUserCannotResetPassword,
       );
     }
+
+    // Invalidate all previous verification codes for this user
+    await this.codeVerificationRepository.invalidateAllUserCodes(
+      account._id,
+      VerificationType.RESET,
+    );
 
     // Generate new 6-digit code
     const code = generateVerificationCode();
@@ -1433,7 +2111,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_MANAGER) {
       throw new BadRequestException(
         'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
-        `Current role: ${account.role}`,
+          `Current role: ${account.role}`,
       );
     }
   }
@@ -1562,9 +2240,8 @@ export class AccountsService {
         },
       );
 
-      const savedGeneralAccount = await queryRunner.manager.save(
-        generalAccount,
-      );
+      const savedGeneralAccount =
+        await queryRunner.manager.save(generalAccount);
 
       await queryRunner.commitTransaction();
 
@@ -1932,6 +2609,8 @@ export class AccountsService {
    * - accounts table: Core account data
    * - clinic_manager_information table: Clinic manager details
    * - addresses table: Address information
+   * - accounts table (parent): CLINIC_ADMIN account linked via parentId
+   * - clinic_admin_information table: Clinic admin details
    *
    * Filtering Logic:
    * - search: Case-insensitive match on clinicBranchName AND description
@@ -1954,30 +2633,38 @@ export class AccountsService {
     specialty?: string,
   ): Promise<ClinicListResponseDto> {
     // Get clinic manager accounts with ACTIVE status and filters
-    const [clinics, total] = await this.accountRepository.findClinicsWithFilters(
-      AccountRole.CLINIC_MANAGER,
-      AccountStatus.ACTIVE,
-      (page - 1) * limit,
-      limit,
-      search,
-      province,
-      specialty,
-    );
+    // The query now includes parent account (CLINIC_ADMIN) and clinic_admin_information
+    const [clinics, total] =
+      await this.accountRepository.findClinicsWithFilters(
+        AccountRole.CLINIC_MANAGER,
+        AccountStatus.ACTIVE,
+        (page - 1) * limit,
+        limit,
+        search,
+        province,
+        specialty,
+      );
 
     const clinicItems: ClinicItemDto[] = [];
 
     for (const clinic of clinics) {
       // Get clinic manager information
-      const clinicInfo =
-        await this.clinicManagerInfoRepository.findByAccountId(clinic._id);
+      const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(
+        clinic._id,
+      );
 
       // Get primary address (first address)
-      const addresses = await this.addressRepository.findByAccountId(clinic._id);
-      const primaryAddress = addresses.length > 0 ? addresses[0] : null;
+      const address = await this.addressRepository.findByAccountId(clinic._id);
 
-      if (clinicInfo && primaryAddress) {
+      // Get clinic admin information from parent account
+      let clinicAdminInfo = null;
+      if (clinic.parent && clinic.parent.clinicAdminInformation) {
+        clinicAdminInfo = clinic.parent.clinicAdminInformation;
+      }
+
+      if (clinicInfo && address) {
         clinicItems.push(
-          new ClinicItemDto(clinic, clinicInfo, primaryAddress),
+          new ClinicItemDto(clinic, clinicInfo, address, clinicAdminInfo),
         );
       }
     }
@@ -2031,21 +2718,21 @@ export class AccountsService {
     }
 
     // Get clinic manager information
-    const clinicInfo =
-      await this.clinicManagerInfoRepository.findByAccountId(clinic._id);
+    const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(
+      clinic._id,
+    );
     if (!clinicInfo) {
       throw new NotFoundException('Clinic manager information not found');
     }
 
     // Get all addresses with Google maps
-    const addresses = await this.addressRepository.findByAccountId(clinic._id);
+    const address = await this.addressRepository.findByAccountId(clinic._id);
     const addressDetails: AddressDetailDto[] = [];
 
-    for (const address of addresses) {
-      const googleIframe =
-        await this.googleIframeRepository.findByAddressId(address._id);
-      addressDetails.push(new AddressDetailDto(address, googleIframe));
-    }
+    const googleIframe = await this.googleIframeRepository.findByAddressId(
+      address._id,
+    );
+    addressDetails.push(new AddressDetailDto(address, googleIframe));
 
     // Get doctors (accounts with parentId = clinic id and role = DOCTOR)
     const doctorAccounts = await this.accountRepository.findByParentIdAndRole(
@@ -2055,8 +2742,9 @@ export class AccountsService {
 
     const doctors: DoctorSummaryDto[] = [];
     for (const doctor of doctorAccounts) {
-      const doctorInfo =
-        await this.doctorInfoRepository.findByDoctorAccountId(doctor._id);
+      const doctorInfo = await this.doctorInfoRepository.findByAccountId(
+        doctor._id,
+      );
       doctors.push(new DoctorSummaryDto(doctor, doctorInfo));
     }
 
@@ -2078,17 +2766,52 @@ export class AccountsService {
       }
     }
 
+    // Fetch parent CLINIC_ADMIN account and information
+    let clinicAdmin = null;
+    let clinicAdminInfo = null;
+    let finalClinicName: string | null = null;
+
+    if (clinic.parentId) {
+      clinicAdmin = await this.accountRepository.findAccountById(
+        clinic.parentId,
+      );
+      if (clinicAdmin) {
+        clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(
+          clinicAdmin._id,
+        );
+
+        // Compute final clinic name using same logic as ClinicItemDto
+        if (clinicAdminInfo) {
+          const adminName = (clinicAdminInfo.clinicName || '').trim();
+          const branchName = (clinicInfo.clinicBranchName || '').trim();
+
+          if (adminName && branchName) {
+            finalClinicName = `${adminName} ${branchName}`;
+          } else if (adminName) {
+            finalClinicName = adminName;
+          } else if (branchName) {
+            finalClinicName = branchName;
+          } else {
+            finalClinicName = null;
+          }
+        }
+      }
+    }
+
     return new ClinicDetailResponseDto(
       clinic,
       clinicInfo,
       addressDetails,
       doctors,
       subscription,
+      clinicAdmin,
+      clinicAdminInfo,
+      finalClinicName,
     );
   }
 
   /**
-   * Find All Doctors with Pagination and Filters
+   * Get Doctor by ID (Public View with Security Controls)
    *
    * Retrieves doctor accounts with pagination support and optional filtering.
    * Only returns accounts with role: DOCTOR and status: ACTIVE
@@ -2117,21 +2840,23 @@ export class AccountsService {
     gender?: string,
   ): Promise<DoctorListResponseDto> {
     // Get doctor accounts with filters
-    const [doctors, total] = await this.accountRepository.findDoctorsWithFilters(
-      AccountRole.DOCTOR,
-      AccountStatus.ACTIVE,
-      (page - 1) * limit,
-      limit,
-      clinicId,
-      gender,
-    );
+    const [doctors, total] =
+      await this.accountRepository.findDoctorsWithFilters(
+        AccountRole.DOCTOR,
+        AccountStatus.ACTIVE,
+        (page - 1) * limit,
+        limit,
+        clinicId,
+        gender,
+      );
 
     const doctorItems: DoctorItemDto[] = [];
 
     for (const doctor of doctors) {
       // Get doctor information
-      const doctorInfo =
-        await this.doctorInfoRepository.findByDoctorAccountId(doctor._id);
+      const doctorInfo = await this.doctorInfoRepository.findByAccountId(
+        doctor._id,
+      );
 
       // Get parent clinic manager information if exists
       let clinicInfo = null;
@@ -2171,9 +2896,14 @@ export class AccountsService {
    * - Excludes soft-deleted records (accounts.deletedAt IS NULL and doctor_information.deleted_at IS NULL)
    * - Returns 404 Not Found if doctor not found or not eligible
    *
+   * Security Controls:
+   * - Uses findPublicByDoctorAccountId repository method with explicit select
+   * - Only includes permitted encrypted fields (professional_license, certificate_practical_training, medical_license)
+   * - Excludes sensitive encrypted fields (identity_number, place_identity_card, identity_date, bank_number, bank_name, bank_branch)
+   *
    * Data Sources:
    * - accounts table: Core account data
-   * - doctor_information table: Doctor details (joined via doctor_acc_id)
+   * - doctor_information table: Doctor details (public view only)
    * - accounts table (clinic): Parent clinic account (via parentId)
    * - clinic_manager_information table: Clinic manager details
    *
@@ -2183,10 +2913,10 @@ export class AccountsService {
    * - clinic.phone: comes from clinic account, not clinic_manager_information
    *
    * @param {string} id - Doctor account UUID
-   * @returns {Promise<DoctorDetailResponseDto>} Full doctor details
+   * @returns {Promise<PublicDoctorDetailData>} Public doctor details data with security controls
    * @throws {NotFoundException} If doctor not found or not eligible
    */
-  async getDoctorById(id: string): Promise<DoctorDetailResponseDto> {
+  async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
     // Get doctor account
     const doctor = await this.accountRepository.findAccountById(id);
     if (!doctor) {
@@ -2201,9 +2931,9 @@ export class AccountsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get doctor information
+    // Get doctor information with security controls (allowlist approach)
     const doctorInfo =
-      await this.doctorInfoRepository.findByDoctorAccountId(id);
+      await this.doctorInfoRepository.findPublicByDoctorAccountId(id);
     if (!doctorInfo) {
       throw new NotFoundException('Doctor information not found');
     }
@@ -2216,7 +2946,9 @@ export class AccountsService {
     // Get clinic manager information if exists (via parentId)
     let clinicInfo = null;
     if (doctor.parentId) {
-      const clinic = await this.accountRepository.findAccountById(doctor.parentId);
+      const clinic = await this.accountRepository.findAccountById(
+        doctor.parentId,
+      );
       if (clinic && clinic.clinicManagerInformation) {
         // Combine clinic account and clinic manager information for ClinicInfo DTO
         clinicInfo = {
@@ -2236,14 +2968,14 @@ export class AccountsService {
       dob: doctorInfo.dob,
     };
 
-    // Create DoctorDetailData with modified account and doctor info
-    const doctorDetailData = new DoctorDetailData(
+    // Create PublicDoctorDetailData with modified account and doctor info
+    const publicDoctorDetailData = new PublicDoctorDetailData(
       modifiedAccount,
       doctorInfo,
       clinicInfo,
     );
 
-    return new DoctorDetailResponseDto(doctorDetailData);
+    return publicDoctorDetailData;
   }
 
   /**
@@ -2390,7 +3122,8 @@ export class AccountsService {
     const account = await this.findAccountEntityById(accountId);
     this.validateClinicAdminRole(account);
 
-    let profile = await this.clinicAdminInfoRepository.findByAccountId(accountId);
+    let profile =
+      await this.clinicAdminInfoRepository.findByAccountId(accountId);
 
     if (profile) {
       // Update existing profile
