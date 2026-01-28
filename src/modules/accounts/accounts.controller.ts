@@ -13,6 +13,8 @@ import {
   UseGuards,
   Request,
   Query,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,6 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { AccountsService } from './accounts.service';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
+
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import {
@@ -38,6 +41,7 @@ import {
   PublicDoctorDetailData,
   PublicDoctorInfo,
   PublicClinicInfo,
+  DoctorListResponseDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -87,7 +91,22 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   PublicClinicInfo,
 )
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+  constructor(private readonly accountsService: AccountsService) { }
+
+  @Post(':id/keys/generate')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(AccountRole.ADMIN, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR) // Restrict who can generate keys if needed, or keep public if for dev
+  // @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Generate digital signature keys for an account' })
+  @ApiResponse({ status: 201, description: 'Keys generated successfully' })
+  async generateKeys(@Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.accountsService.generateUserKeys(id);
+    return {
+      message: 'Digital signature keys generated successfully',
+      data
+    };
+  }
+
 
   /**
    * Get All Accounts (Admin Only)
@@ -339,6 +358,149 @@ export class AccountsController {
     return {
       data: clinic,
       message: 'Clinic details retrieved successfully',
+    };
+  }
+
+  /**
+   * Get All Doctors (Public)
+   *
+   * Retrieves a paginated list of all active doctors.
+   * Only returns accounts with role: DOCTOR and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Query Parameters:
+   * - clinicId: Filter by parent clinic ID (optional)
+   * - gender: Filter by doctor gender - MALE | FEMALE | OTHER (optional)
+   * - page: Page number (default: 1)
+   * - limit: Items per page (default: 10)
+   *
+   * Response Format:
+   * - Returns DoctorListResponseDto with doctors array and pagination metadata
+   * - Combines data from accounts + doctor_information + clinic_manager_information tables
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Doctor directory listing
+   * - Doctor search results
+   * - Doctor browsing
+   *
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @param {string} [clinicId] - Filter by parent clinic ID
+   * @param {string} [gender] - Filter by doctor gender
+   * @returns {Promise<{data: DoctorListResponseDto, message: string}>} Doctors with pagination
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved doctors
+   */
+  @Get('doctors')
+  @ApiOperation({ summary: 'Get all doctors with pagination and filters' })
+  @ApiQuery({
+    name: 'clinicId',
+    required: false,
+    type: String,
+    description: 'Filter by parent clinic ID',
+  })
+  @ApiQuery({
+    name: 'gender',
+    required: false,
+    type: String,
+    description: 'Filter by doctor gender (MALE | FEMALE | OTHER)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiResponseData({
+    type: DoctorListResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Doctors list retrieved successfully',
+  })
+  async getAllDoctors(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('clinicId') clinicId?: string,
+    @Query('gender') gender?: string,
+  ): Promise<{ data: DoctorListResponseDto; message: string }> {
+    const result = await this.accountsService.findAllDoctors(
+      page,
+      limit,
+      clinicId,
+      gender,
+    );
+    return {
+      data: result,
+      message: 'Doctors list retrieved successfully',
+    };
+  }
+
+  /**
+   * Get All Employees by Clinic ID (Doctor + Staff)
+   *
+   * Retrieves all employees belonging to a specific clinic.
+   * Useful for contract creation dropdowns.
+   *
+   * Path Parameters:
+   * - clinicId: Clinic UUID
+   *
+   * Query Parameters:
+   * - role: Filter by role (DOCTOR | CLINIC_STAFF)
+   * - search: Search by name or username
+   *
+   * Response Format:
+   * - Returns array of Accounts
+   *
+   * @param {string} clinicId - Clinic UUID
+   * @param {AccountRole} [role] - Optional role filter
+   * @param {string} [search] - Optional search filter
+   * @returns {Promise<{data: Account[], message: string}>} List of employees
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved employees
+   */
+  @Get('clinic/:clinicId/employees')
+  @ApiOperation({ summary: 'Get all employees (Doctor + Staff) of a clinic' })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: AccountRole,
+    description: 'Filter by role (DOCTOR or CLINIC_STAFF)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name or username',
+  })
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Employees retrieved successfully',
+    isArray: true,
+  })
+  async getEmployeesByClinic(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query('role') role?: AccountRole,
+    @Query('search') search?: string,
+  ): Promise<{ data: any[]; message: string }> {
+    const employees = await this.accountsService.findAllEmployeesByClinic(
+      clinicId,
+      role,
+      search,
+    );
+    return {
+      data: employees,
+      message: 'Employees retrieved successfully',
     };
   }
 

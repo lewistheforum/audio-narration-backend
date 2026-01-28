@@ -41,7 +41,7 @@ export class AccountRepository {
   constructor(
     @InjectRepository(Account)
     private readonly accountRepository: Repository<Account>,
-  ) {}
+  ) { }
 
   /**
    * Find All Accounts
@@ -611,5 +611,55 @@ export class AccountRepository {
     }
 
     return filteredAccounts;
+  }
+  /**
+   * Find Employees by Clinic with Filters
+   *
+   * Retrieves all employees (DOCTOR, CLINIC_STAFF) for a specific clinic.
+   * Supports filtering by role and searching by name/username.
+   *
+   * @param {string} clinicId - Clinic ID (parentId)
+   * @param {AccountRole} [role] - Optional role filter (DOCTOR | CLINIC_STAFF)
+   * @param {string} [search] - Optional search keyword (username, email, or fullName)
+   * @returns {Promise<Account[]>} List of employee accounts
+   */
+  async findEmployeesByClinicWithFilters(
+    clinicId: string,
+    role?: AccountRole,
+    search?: string,
+  ): Promise<Account[]> {
+    const queryBuilder = this.accountRepository.createQueryBuilder('account');
+
+    // Join with general_accounts for fullName search
+    queryBuilder.leftJoinAndSelect('account.generalAccount', 'generalAccount');
+    // Join with specific info tables for more detailed search if needed (optional)
+    queryBuilder.leftJoinAndSelect('account.clinicStaffInformation', 'staffInfo');
+    queryBuilder.leftJoinAndSelect('account.doctorInformation', 'doctorInfo');
+
+    queryBuilder.where('account.parentId = :clinicId', { clinicId });
+    queryBuilder.andWhere('account.status = :status', { status: AccountStatus.ACTIVE });
+    queryBuilder.andWhere('account.deletedAt IS NULL');
+
+    // Filter by Role
+    if (role) {
+      queryBuilder.andWhere('account.role = :role', { role });
+    } else {
+      // Default: Fetch both DOCTOR and CLINIC_STAFF
+      queryBuilder.andWhere('account.role IN (:...roles)', {
+        roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+      });
+    }
+
+    // Search Filter
+    if (search) {
+      queryBuilder.andWhere(
+        '(account.username ILIKE :search OR account.email ILIKE :search OR generalAccount.fullName ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    queryBuilder.orderBy('account.createdAt', 'DESC');
+
+    return queryBuilder.getMany();
   }
 }

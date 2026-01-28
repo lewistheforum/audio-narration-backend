@@ -9,6 +9,7 @@ import { BlogsModule } from '../../modules/blogs/blogs.module';
 import { SubscriptionsModule } from '../../modules/subscriptions/subscriptions.module';
 import { ClinicServicesModule } from '../../modules/clinic-services/clinic-services.module';
 import { ServiceConfigsModule } from '../../modules/service-configs/service-configs.module';
+import { ContractsModule } from '../../modules/contracts/contracts.module';
 import { SchedulesModule } from '../../modules/schedules/schedules.module';
 import { AdminSeederService } from './admin-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
@@ -102,6 +103,7 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     SubscriptionsModule,
     ClinicServicesModule,
     ServiceConfigsModule,
+    ContractsModule,
     SchedulesModule,
     HttpModule,
   ],
@@ -167,4 +169,4 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     SeederOrchestratorService,
   ],
 })
-export class SeedersModule {}
+export class SeedersModule { }

@@ -1,7 +1,11 @@
 import { AccountRole, AccountStatus } from '../enums';
+import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
 import { ClinicManagerInformation } from './clinic_manager_information.entity';
 import { ClinicAdminInformation } from './clinic-admin-information.entity';
 import { Address } from './addresses.entity';
+import { GeneralAccount } from './general_accounts.entity';
+import { DoctorInformation } from './doctor_information.entity';
+import { ClinicStaffInformation } from './clinic_staff_information.entity';
 import { Blog } from '../../blogs/entities/blog.entity';
 import {
   Entity,
@@ -75,6 +79,24 @@ export class Account {
   clinicAdminInformation?: ClinicAdminInformation;
 
   /**
+   * General Account Information Relation
+   */
+  @OneToOne(() => GeneralAccount, (general) => general.account)
+  generalAccount?: GeneralAccount;
+
+  /**
+   * Doctor Information Relation
+   */
+  @OneToOne(() => DoctorInformation, (doctor) => doctor.account)
+  doctorInformation?: DoctorInformation;
+
+  /**
+   * Clinic Staff Information Relation
+   */
+  @OneToOne(() => ClinicStaffInformation, (staff) => staff.account)
+  clinicStaffInformation?: ClinicStaffInformation;
+
+  /**
    * Addresses Relation
    *
    * One-to-many relation with addresses table
@@ -138,6 +160,17 @@ export class Account {
     nullable: true,
   })
   banDescription?: string;
+
+  @Column({ name: 'public_key', type: 'text', nullable: true })
+  publicKey?: string;
+
+  @Column({
+    name: 'encrypted_private_key',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+  })
+  encryptedPrivateKey?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

@@ -8,4 +8,5 @@
 export enum VerificationType {
   VERIFY = 'VERIFY',
   RESET = 'RESET',
+  CONTRACT_SIGNING = 'CONTRACT_SIGNING',
 }
