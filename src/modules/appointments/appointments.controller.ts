@@ -25,6 +25,7 @@ import {
   QueryAppointmentDto,
   PaginatedAppointmentResponseDto,
   CreateAppointmentDto,
+  StaffCreateAppointmentDto,
   CancelAppointmentDto,
   AppointmentResponseDto,
   RescheduleAppointmentDto,
@@ -48,6 +49,7 @@ import { AppointmentStatus } from './enums';
  * Endpoints:
  * - GET /appointments/staff - View all clinic appointments (Staff only)
  * - GET /appointments/:id/detail - View appointment detail (Staff only)
+ * - POST /appointments/staff/create - Staff create appointment with services (Staff only)
  * - POST /appointments - Create new appointment (Patient only)
  * - PATCH /appointments/:id/cancel - Cancel appointment (Staff/Patient)
  * - PATCH /appointments/:id/reschedule - Reschedule appointment (Staff/Patient)
@@ -186,6 +188,63 @@ export class AppointmentsController {
   ): Promise<AppointmentDetailResponseDto> {
     const staffAccountId = req.user.id;
     return this.appointmentsService.getAppointmentDetail(id, staffAccountId);
+  }
+
+  /**
+   * Staff create appointment with services
+   *
+   * Allows clinic staff to create appointments for existing patients
+   * with selected services. This will create records in 3 tables:
+   * appointments, appointment_package, and service_appointments
+   *
+   * @param req - Request object containing authenticated user
+   * @param createDto - Appointment creation data with services
+   * @returns Created appointment details
+   */
+  @Post('staff/create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create appointment for patient (Staff only)',
+    description:
+      'Staff creates an appointment for an existing patient with selected clinic services. This operation creates records in appointments, appointment_package, and service_appointments tables within a transaction to ensure data consistency.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Appointment created successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid input data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a clinic staff member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Staff information or patient not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Appointment time already booked',
+  })
+  async staffCreateAppointment(
+    @Request() req: any,
+    @Body() createDto: StaffCreateAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    const staffAccountId = req.user.id;
+    return this.appointmentsService.staffCreateAppointment(
+      staffAccountId,
+      createDto,
+    );
   }
 
   /**

@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { AppointmentRepository, AppointmentPackageRepository } from './repositories';
 import { ClinicStaffInformationRepository } from '../accounts/repositories';
 import { EmployeeScheduleRepository } from '../schedules/repositories/employee-schedule.repository';
@@ -13,6 +14,7 @@ import {
   AppointmentResponseDto,
   PaginatedAppointmentResponseDto,
   CreateAppointmentDto,
+  StaffCreateAppointmentDto,
   CancelAppointmentDto,
   RescheduleAppointmentDto,
   CheckInDto,
@@ -22,7 +24,7 @@ import {
   AppointmentDetailResponseDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
-import { Appointment } from './entities';
+import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentStatus } from './enums';
 
 /**
@@ -40,6 +42,7 @@ import { AppointmentStatus } from './enums';
 @Injectable()
 export class AppointmentsService {
   constructor(
+    private readonly dataSource: DataSource,
     private readonly appointmentRepository: AppointmentRepository,
     private readonly appointmentPackageRepository: AppointmentPackageRepository,
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
@@ -132,6 +135,113 @@ export class AppointmentsService {
       limit: queryDto.limit,
       totalPages,
     };
+  }
+
+  /**
+   * Create appointment by staff with services (Transaction)
+   *
+   * Staff creates appointment for existing patient with selected services.
+   * This method performs database operations across 3 tables in a transaction:
+   * 1. appointments - Main appointment record
+   * 2. appointment_package - Payment package information
+   * 3. service_appointments - Services included in the appointment
+   *
+   * @param staffAccountId - Staff account UUID (for authorization)
+   * @param createDto - Appointment creation data with services
+   * @returns Created appointment details
+   * @throws NotFoundException if staff or patient not found
+   * @throws BadRequestException if patient doesn't belong to staff's clinic
+   * @throws ConflictException if appointment time conflict exists
+   */
+  async staffCreateAppointment(
+    staffAccountId: string,
+    createDto: StaffCreateAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    // Get staff information to verify clinic access
+    const staffInfo =
+      await this.clinicStaffRepository.findByClinicAccountId(staffAccountId);
+
+    if (!staffInfo || !staffInfo.account?.parentId) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const clinicId = staffInfo.account.parentId;
+
+    // Convert date strings to Date objects
+    const appointmentDate = new Date(createDto.appointmentDate);
+    const appointmentHour = new Date(createDto.appointmentHour);
+    const extraHour = createDto.extraHour
+      ? new Date(createDto.extraHour)
+      : null;
+
+    // Check for time conflicts
+    const existingAppointments = await this.appointmentRepository.find({
+      clinicId: clinicId,
+      appointmentDate: appointmentDate,
+      appointmentHour: appointmentHour,
+      deletedAt: null,
+      status: AppointmentStatus.PENDING,
+    });
+
+    if (existingAppointments.length > 0) {
+      throw new ConflictException(
+        MESSAGES.failMessage.appointmentTimeConflict ||
+          'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
+      );
+    }
+
+    // Execute transaction to create appointment + package + services
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Create appointment
+      const appointment = manager.create(Appointment, {
+        patientId: createDto.patientId,
+        clinicId: clinicId,
+        doctorId: createDto.doctorId || null,
+        doctorShiftHourId: createDto.doctorShiftHourId || null,
+        appointmentDate: appointmentDate,
+        appointmentHour: appointmentHour,
+        extraHour: extraHour,
+        total: createDto.total,
+        patientNote: createDto.patientNote || null,
+        status: AppointmentStatus.PENDING,
+        rejectReason: null,
+      });
+
+      const savedAppointment = await manager.save(Appointment, appointment);
+
+      // 2. Create appointment package
+      const appointmentPackage = manager.create(AppointmentPackage, {
+        appointmentId: savedAppointment._id,
+        transactionId: createDto.transactionId,
+        amount: createDto.total,
+        status: createDto.paymentStatus || null,
+        paymentType: createDto.paymentType || null,
+      });
+
+      const savedPackage = await manager.save(
+        AppointmentPackage,
+        appointmentPackage,
+      );
+
+      // 3. Create service appointments
+      const serviceAppointments = createDto.services.map((service) =>
+        manager.create(ServiceAppointment, {
+          clinicServiceId: service.clinicServiceId,
+          appointmentPackageId: savedPackage._id,
+        }),
+      );
+
+      await manager.save(ServiceAppointment, serviceAppointments);
+
+      // Fetch complete appointment with relations for response
+      const appointmentWithRelations =
+        await manager.findOne(Appointment, {
+          where: { _id: savedAppointment._id },
+          relations: ['patient', 'clinic', 'doctor'],
+        });
+
+      return this.transformToResponseDto(appointmentWithRelations!);
+    });
   }
 
   /**

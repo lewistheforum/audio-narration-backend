@@ -2,6 +2,7 @@ export * from './query-appointment.dto';
 export * from './appointment-response.dto';
 export * from './appointment-detail-response.dto';
 export * from './create-appointment.dto';
+export * from './staff-create-appointment.dto';
 export * from './cancel-appointment.dto';
 export * from './reschedule-appointment.dto';
 export * from './check-in.dto';

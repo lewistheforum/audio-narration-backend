@@ -58,6 +58,7 @@ const successMessage = {
   appointmentAcceptedSuccess: 'Appointment accepted successfully',
   appointmentDeclinedSuccess: 'Appointment declined successfully',
   appointmentStatusUpdatedSuccess: 'Appointment status updated successfully',
+  appointmentCreatedSuccess: 'Appointment created successfully',
   // Mail Service
   mailSendSuccess: 'Mail sent successfully',
   registerSuccess: 'User register successfully',
@@ -124,6 +125,7 @@ const failMessage = {
   messageNotFound: 'Message not found',
   // Appointment Errors
   appointmentNotFound: 'Appointment not found',
+  appointmentTimeConflict: 'Appointment time is already booked. Please choose a different time slot.',
   appointmentCannotBeAccepted: 'Only appointments with PENDING status can be accepted',
   appointmentCannotBeDeclined: 'Only appointments with PENDING status can be declined',
   appointmentNotAssignedToDoctor: 'This appointment is not assigned to you',
