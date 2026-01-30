@@ -15,8 +15,7 @@ import {
   DoctorInformation,
   ClinicAdminInformation,
   CodeVerification,
-  ContractPackage,
-  ClinicContractInformation,
+
 } from './entities';
 import {
   AccountRepository,
@@ -29,8 +28,7 @@ import {
   DoctorInformationRepository,
   ClinicAdminInformationRepository,
   CodeVerificationRepository,
-  ContractPackageRepository,
-  ClinicContractInformationRepository,
+
 } from './repositories';
 import { MailerModule } from '../mailer/mailer.module';
 import { TransactionRepository } from '../transactions/repositories/transaction.repository';
@@ -77,8 +75,7 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
       DoctorInformation,
       ClinicAdminInformation,
       CodeVerification,
-      ContractPackage,
-      ClinicContractInformation,
+
     ]),
     forwardRef(() => MailerModule),
     SubscriptionsModule,
@@ -96,8 +93,7 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
     CodeVerificationRepository,
-    ContractPackageRepository,
-    ClinicContractInformationRepository,
+
     TransactionRepository,
     AccountsService,
   ],
@@ -113,9 +109,8 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
     ClinicStaffInformationRepository,
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
-    ContractPackageRepository,
-    ClinicContractInformationRepository,
+
     TransactionRepository,
   ],
 })
-export class AccountsModule {}
+export class AccountsModule { }

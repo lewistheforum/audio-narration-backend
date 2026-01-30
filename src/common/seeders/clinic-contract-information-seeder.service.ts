@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
-import { ContractType } from '../../modules/accounts/enums/contract-type.enum';
-import { SalaryPaymentMethod } from '../../modules/accounts/enums/salary-payment-method.enum';
+import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
+import { SalaryPaymentMethod } from '../../modules/contracts/enums/salary-payment-method.enum';
 import { ContractStatus } from '../../modules/accounts/enums/contract-status.enum';
-import { ClinicContractInformation } from '../../modules/accounts/entities/clinic-contract-information.entity';
-import { ClinicContractInformationRepository } from '../../modules/accounts/repositories/clinic-contract-information.repository';
-import { ContractPackageRepository } from '../../modules/accounts/repositories/contract-package.repository';
+import { ClinicContractInformation } from '../../modules/contracts/entities/clinic-contract-information.entity';
+import { ClinicContractInformationRepository } from '../../modules/contracts/repositories/clinic-contract-information.repository';
+import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import {
   DOCTOR_SPECIALTIES,
@@ -60,7 +60,7 @@ export class ClinicContractInformationSeederService {
     private readonly clinicContractInformationRepository: ClinicContractInformationRepository,
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
-  ) {}
+  ) { }
 
   /**
    * Seed clinic contract information for CLINIC_STAFF and DOCTOR accounts
@@ -383,14 +383,14 @@ export class ClinicContractInformationSeederService {
     const contractFiles = [
       '/contracts/contract_' + Math.floor(Math.random() * 10000) + '.pdf',
       '/contracts/employment_agreement_' +
-        Math.floor(Math.random() * 10000) +
-        '.pdf',
+      Math.floor(Math.random() * 10000) +
+      '.pdf',
       'https://storage.medicare.vn/contracts/contract_' +
-        Math.floor(Math.random() * 10000) +
-        '.pdf',
+      Math.floor(Math.random() * 10000) +
+      '.pdf',
       'https://s3.medicare.vn/contracts/employment_' +
-        Math.floor(Math.random() * 10000) +
-        '.pdf',
+      Math.floor(Math.random() * 10000) +
+      '.pdf',
       null, // 20% chance of no contract file
       null,
     ];

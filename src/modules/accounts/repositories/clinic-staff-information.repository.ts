@@ -44,6 +44,7 @@ export class ClinicStaffInformationRepository {
   ): Promise<ClinicStaffInformation | null> {
     return this.repository.findOne({
       where: { accountId: clinicAccId },
+      relations: ['account'],
     });
   }
 

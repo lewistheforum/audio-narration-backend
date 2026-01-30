@@ -1,82 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AccountRole, AccountStatus, Gender } from '../enums';
-import { AddressDto } from './clinic-list-response.dto';
+import { AccountRole, AccountStatus } from '../enums';
+import { PublicDoctorInfo } from './public-doctor-info.dto';
+import { ClinicInfoDto } from './clinic-list-response.dto';
+import { PaginationDto } from './clinic-list-response.dto';
 
 /**
- * Doctor Info DTO
- *
- * Doctor information from doctor_information table
+ * Doctor Pagination DTO
  */
-export class DoctorInfoDto {
-  @ApiProperty({
-    description: 'Doctor information ID',
-    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-  })
-  id: string;
-
-  @ApiProperty({
-    description: 'Doctor full name',
-    example: 'Dr. John Smith',
-  })
-  fullName: string;
-
-  @ApiProperty({
-    description: 'Doctor gender',
-    enum: Gender,
-    example: Gender.MALE,
-    required: false,
-    nullable: true,
-  })
-  gender?: Gender;
-
-  @ApiProperty({
-    description: 'Profile picture URL',
-    example: 'https://example.com/doctor-avatar.jpg',
-    required: false,
-    nullable: true,
-  })
-  profilePicture?: string;
-
-  @ApiProperty({
-    description: 'Date of birth',
-    example: '1980-05-15',
-    required: false,
-    nullable: true,
-  })
-  dob?: Date;
-
-  @ApiProperty({
-    description: 'Academic Degree',
-    example: 'MD, PhD',
-    required: false,
-    nullable: true,
-  })
-  academicDegree?: string;
-
-  @ApiProperty({
-    description: 'Experience',
-    example: '10 years',
-    required: false,
-    nullable: true,
-  })
-  experience?: string;
-
-  @ApiProperty({
-    description: 'Position',
-    example: 'Head of Department',
-    required: false,
-    nullable: true,
-  })
-  position?: string;
-
-  @ApiProperty({
-    description: 'Introduction',
-    example: 'Experienced cardiologist...',
-    required: false,
-    nullable: true,
-  })
-  introduction1?: string;
-}
+export class DoctorPaginationDto extends PaginationDto { }
 
 /**
  * Doctor Item DTO
@@ -85,30 +16,38 @@ export class DoctorInfoDto {
  */
 export class DoctorItemDto {
   @ApiProperty({
-    description: 'Account ID',
+    description: 'Doctor account ID',
     example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
   })
   id: string;
 
   @ApiProperty({
-    description: 'Username',
-    example: 'drjohn',
+    description: 'Doctor username',
+    example: 'drjohnsmith',
   })
   username: string;
 
   @ApiProperty({
-    description: 'Email',
-    example: 'drjohn@example.com',
+    description: 'Doctor email',
+    example: 'john.smith@example.com',
   })
   email: string;
 
   @ApiProperty({
-    description: 'Phone number',
+    description: 'Doctor phone number',
     example: '+84987654321',
     required: false,
     nullable: true,
   })
   phone?: string;
+
+  @ApiProperty({
+    description: 'Profile picture URL',
+    example: 'https://example.com/doctor-avatar.jpg',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string;
 
   @ApiProperty({
     description: 'Account role',
@@ -126,82 +65,72 @@ export class DoctorItemDto {
 
   @ApiProperty({
     description: 'Doctor information',
-    type: DoctorInfoDto,
+    type: PublicDoctorInfo,
   })
-  doctorInfo: DoctorInfoDto;
+  doctorInfo: PublicDoctorInfo;
 
   @ApiProperty({
-    description: 'Address',
-    type: AddressDto,
+    description: 'Parent clinic information (if applicable)',
+    type: ClinicInfoDto,
+    required: false,
+    nullable: true,
   })
-  address: AddressDto;
+  clinicInfo?: ClinicInfoDto;
 
-  constructor(account: any, doctorInfo: any, address: any) {
+  constructor(
+    account: any,
+    doctorInfo: any,
+    clinicInfo?: any,
+  ) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;
     this.phone = account.phone;
+    this.profilePicture = account.profilePicture;
     this.role = account.role;
     this.status = account.status;
 
-    this.doctorInfo = {
-      id: doctorInfo._id,
-      fullName: doctorInfo.fullName,
-      gender: doctorInfo.gender,
-      profilePicture: doctorInfo.profilePicture,
-      dob: doctorInfo.dob,
-      academicDegree: doctorInfo.academicDegree,
-      experience: doctorInfo.experience,
-      position: doctorInfo.position,
-      introduction1: doctorInfo.introduction1,
-    };
+    // Map doctor info
+    this.doctorInfo = new PublicDoctorInfo(doctorInfo);
 
-    if (address) {
-      this.address = {
-        id: address._id,
-        address: address.address,
-        ward: address.ward,
-        wardName: address.wardName,
-        district: address.district,
-        districtName: address.districtName,
-        province: address.province,
-        provinceName: address.provinceName,
+    // Map clinic info if exists
+    if (clinicInfo && clinicInfo.length > 0) {
+      // Handle case if clinicInfo is passed as direct object or array
+      // Based on logic in service: clinicInfo = findByAccountId which might return object or array? 
+      // ClinicManagerInfoRepository.findByAccountId likely returns a single object logic-wise but strict typing matters.
+      // Let's assume object for now, adapting if needed.
+      // In service: clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(doctor.parentId);
+      // Checking clinic-list-response: ClinicInfoDto construction
+
+      const info = Array.isArray(clinicInfo) ? clinicInfo[0] : clinicInfo;
+
+      if (info) {
+        this.clinicInfo = {
+          id: info._id,
+          clinicBranchName: info.clinicBranchName,
+          fullName: info.fullName,
+          gender: info.gender,
+          profilePicture: info.profilePicture,
+          dob: info.dob,
+        };
+      }
+    } else if (clinicInfo && !Array.isArray(clinicInfo)) {
+      this.clinicInfo = {
+        id: clinicInfo._id,
+        clinicBranchName: clinicInfo.clinicBranchName,
+        fullName: clinicInfo.fullName,
+        gender: clinicInfo.gender,
+        profilePicture: clinicInfo.profilePicture,
+        dob: clinicInfo.dob,
       };
     }
   }
 }
 
 /**
- * Doctor Pagination DTO
- */
-export class DoctorPaginationDto {
-  @ApiProperty({
-    description: 'Current page number',
-    example: 1,
-  })
-  page: number;
-
-  @ApiProperty({
-    description: 'Number of items per page',
-    example: 10,
-  })
-  limit: number;
-
-  @ApiProperty({
-    description: 'Total number of items',
-    example: 50,
-  })
-  total: number;
-
-  @ApiProperty({
-    description: 'Total number of pages',
-    example: 5,
-  })
-  totalPages: number;
-}
-
-/**
  * Doctor List Response DTO
+ *
+ * Response wrapper for doctor list with pagination
  */
 export class DoctorListResponseDto {
   @ApiProperty({
