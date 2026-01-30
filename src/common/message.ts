@@ -62,6 +62,9 @@ const successMessage = {
   // Mail Service
   mailSendSuccess: 'Mail sent successfully',
   registerSuccess: 'User register successfully',
+  // Cancellation
+  registrationCancelled: 'Registration cancelled successfully',
+  subscriptionCancelled: 'Subscription cancelled successfully',
 };
 
 const failMessage = {
@@ -120,6 +123,11 @@ const failMessage = {
   // 2-Step Registration Errors
   accountNotIncomplete: 'Account is not in PENDING state',
   profileCreationFailed: 'Failed to create profile. Account has been deleted. Please register again.',
+  // Clinic Admin Registration Flow
+  clinicAdminRegistrationSuccess: 'Clinic admin account created successfully. Please complete your payment configuration.',
+  emailUsageLimitExceeded: 'Email can only be used once as CLINIC_ADMIN and once as CLINIC_MANAGER. This email has reached its maximum usage limit.',
+  registrationStatusNotFound: 'No registration found for this email. You can start a new registration.',
+  registrationStatusInProgress: 'Registration is in progress. Please complete the required steps.',
   // Conversation & Message Errors
   conversationNotFound: 'Conversation not found',
   messageNotFound: 'Message not found',
@@ -136,6 +144,11 @@ const failMessage = {
   profileAlreadyExists: 'Profile already exists for this user',
   cannotUpdateOtherProfile: 'You can only update your own profile',
   generalAccountNotFound: 'General account profile not found',
+  // Cancellation Errors
+  pendingApprovalBlocked: 'Cannot cancel registration while documents are under review. Please wait for the Admin\'s decision.',
+  successTransactionExists: 'Cannot cancel registration after successful payment',
+  invalidStatus: 'Cannot cancel registration with current status',
+  subscriptionNotActive: 'Only active subscriptions can be cancelled',
 };
 
 const MESSAGES = {

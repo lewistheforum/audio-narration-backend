@@ -30,7 +30,7 @@ import { MESSAGES } from 'src/common/message';
  */
 @ApiTags('Subscription Services')
 @ApiExtraModels(SubscriptionServiceResponseDto)
-@Controller('subscription-services')
+@Controller('subscription/services')
 export class SubscriptionServicesController {
   constructor(
     private readonly subscriptionServicesService: SubscriptionServicesService,
