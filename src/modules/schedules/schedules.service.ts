@@ -432,6 +432,15 @@ export class SchedulesService {
         if (employeeId) schedule.employeeId = employeeId;
         if (clinicShiftId) schedule.clinicShiftId = clinicShiftId;
 
+        // Update Room if provided
+        if (roomId) {
+            const room = await this.roomRepository.findOne({
+                where: { _id: roomId, clinicId: schedule.clinicId }
+            });
+            if (!room) throw new NotFoundException('Clinic Room not found');
+            schedule.rooms = [room];
+        }
+
         // Conflict Check on Update
         if (clinicShiftId || workDate || employeeId) {
             const conflict = await this.scheduleRepository.findConflict(
