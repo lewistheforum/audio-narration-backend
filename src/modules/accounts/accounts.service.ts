@@ -9,6 +9,7 @@ import {
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus, VerificationType } from './enums';
+import * as crypto from 'crypto';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
@@ -33,11 +34,11 @@ import {
   AddressDetailDto,
   DoctorSummaryDto,
   SubscriptionDto,
+  PublicDoctorDetailResponseDto,
+  PublicDoctorDetailData,
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
-  PublicDoctorDetailResponseDto,
-  PublicDoctorDetailData,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -131,7 +132,32 @@ export class AccountsService {
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly mailerService: MailerService,
-  ) {}
+  ) { }
+
+  private generateKeyPair(): { publicKey: string; encryptedPrivateKey: string } {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    });
+
+    return { publicKey, encryptedPrivateKey: privateKey };
+  }
+
+  async generateUserKeys(userId: string): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
+    const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+    const account = await this.findAccountEntityById(userId);
+    account.publicKey = publicKey;
+    account.encryptedPrivateKey = encryptedPrivateKey;
+    await this.accountRepository.saveAccount(account);
+    return { publicKey, encryptedPrivateKey };
+  }
 
   /**
    * Find All Accounts
@@ -2111,7 +2137,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_MANAGER) {
       throw new BadRequestException(
         'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }
@@ -2371,6 +2397,8 @@ export class AccountsService {
         banDescription: '',
       });
 
+
+
       const savedAccount = await queryRunner.manager.save(account);
 
       // Step 5: Validate account has CLINIC_MANAGER role before creating ClinicManagerInformation
@@ -2475,6 +2503,8 @@ export class AccountsService {
         isEmailVerified: false, // Staff must verify themselves
       });
 
+
+
       const savedAccount = await queryRunner.manager.save(account);
 
       // Step 5: Create ClinicStaffInformation entity with basic info
@@ -2571,6 +2601,8 @@ export class AccountsService {
         status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
         isEmailVerified: false, // Doctor must verify themselves
       });
+
+
 
       const savedAccount = await queryRunner.manager.save(account);
 
@@ -2811,7 +2843,7 @@ export class AccountsService {
   }
 
   /**
-   * Get Doctor by ID (Public View with Security Controls)
+   * Find All Doctors with Pagination and Filters
    *
    * Retrieves doctor accounts with pagination support and optional filtering.
    * Only returns accounts with role: DOCTOR and status: ACTIVE
@@ -2840,23 +2872,21 @@ export class AccountsService {
     gender?: string,
   ): Promise<DoctorListResponseDto> {
     // Get doctor accounts with filters
-    const [doctors, total] =
-      await this.accountRepository.findDoctorsWithFilters(
-        AccountRole.DOCTOR,
-        AccountStatus.ACTIVE,
-        (page - 1) * limit,
-        limit,
-        clinicId,
-        gender,
-      );
+    const [doctors, total] = await this.accountRepository.findDoctorsWithFilters(
+      AccountRole.DOCTOR,
+      AccountStatus.ACTIVE,
+      (page - 1) * limit,
+      limit,
+      clinicId,
+      gender,
+    );
 
     const doctorItems: DoctorItemDto[] = [];
 
     for (const doctor of doctors) {
       // Get doctor information
-      const doctorInfo = await this.doctorInfoRepository.findByAccountId(
-        doctor._id,
-      );
+      const doctorInfo =
+        await this.doctorInfoRepository.findByAccountId(doctor._id);
 
       // Get parent clinic manager information if exists
       let clinicInfo = null;
@@ -2884,6 +2914,31 @@ export class AccountsService {
       } as DoctorPaginationDto,
     };
   }
+
+  /**
+   * Find All Employees (Doctor + Staff) by Clinic
+   *
+   * Retrieves all employees belonging to a specific clinic.
+   * Useful for selecting contract assignees.
+   *
+   * @param {string} clinicId - Clinic UUID
+   * @param {AccountRole} [role] - Optional role filter
+   * @param {string} [search] - Optional search filter
+   * @returns {Promise<Account[]>} List of employees
+   */
+  async findAllEmployeesByClinic(
+    clinicId: string,
+    role?: AccountRole,
+    search?: string,
+  ): Promise<Account[]> {
+    return this.accountRepository.findEmployeesByClinicWithFilters(
+      clinicId,
+      role,
+      search,
+    );
+  }
+
+
 
   /**
    * Get Doctor by ID with Full Details
@@ -3004,7 +3059,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_ADMIN) {
       throw new BadRequestException(
         'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }

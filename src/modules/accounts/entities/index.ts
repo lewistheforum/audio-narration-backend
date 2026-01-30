@@ -9,5 +9,3 @@ export * from './doctor_information.entity';
 export * from './clinic-admin-information.entity';
 export * from './code_verification.entity';
 export * from './ban-history.entity';
-export * from './contract-package.entity';
-export * from './clinic-contract-information.entity';

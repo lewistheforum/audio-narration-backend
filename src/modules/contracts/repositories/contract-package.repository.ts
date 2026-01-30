@@ -14,7 +14,7 @@ export class ContractPackageRepository {
   constructor(
     @InjectRepository(ContractPackage)
     private readonly repository: Repository<ContractPackage>,
-  ) {}
+  ) { }
 
   /**
    * Find all contract packages
@@ -32,7 +32,7 @@ export class ContractPackageRepository {
   async findById(id: string): Promise<ContractPackage | null> {
     return this.repository.findOne({
       where: { _id: id },
-      relations: ['clinicAccount', 'employeeAccount'],
+      relations: ['clinicAccount', 'employeeAccount', 'clinicContractInformation'],
     });
   }
 
@@ -141,5 +141,44 @@ export class ContractPackageRepository {
    */
   async countByEmployeeId(employeeId: string): Promise<number> {
     return this.repository.count({ where: { employeeId } });
+  }
+  /**
+   * Find Contract Packages by Clinic ID with Filters and Pagination
+   *
+   * @param clinicId - Filter by Clinic ID
+   * @param employeeName - Search by Employee Name (Optional)
+   * @param page - Page number (Default 1)
+   * @param limit - Limit per page (Default 10)
+   */
+  async findPackagesByClinicWithFilters(
+    clinicId: string,
+    employeeName?: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<[ContractPackage[], number]> {
+    const queryBuilder = this.repository.createQueryBuilder('contractPackage');
+
+    // Join relations
+    queryBuilder
+      .leftJoinAndSelect('contractPackage.clinicAccount', 'clinic')
+      .leftJoinAndSelect('contractPackage.employeeAccount', 'employee')
+      .leftJoinAndSelect('contractPackage.clinicContractInformation', 'info')
+      .leftJoinAndSelect('employee.generalAccount', 'generalAccount'); // Assuming name is in generalAccount
+
+    // Filter by Clinic ID
+    queryBuilder.where('contractPackage.clinicId = :clinicId', { clinicId });
+
+    // Optional Filter: Employee Name search
+    if (employeeName) {
+      queryBuilder.andWhere('generalAccount.fullName ILIKE :name', { name: `%${employeeName}%` });
+    }
+
+    // Pagination
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    // Order by created date (Newest first)
+    queryBuilder.orderBy('contractPackage.createdAt', 'DESC');
+
+    return queryBuilder.getManyAndCount();
   }
 }

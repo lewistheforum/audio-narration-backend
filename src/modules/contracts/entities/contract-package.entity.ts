@@ -7,9 +7,11 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToOne,
 } from 'typeorm';
-import { Account } from './accounts.entity';
+import { Account } from '../../accounts/entities/accounts.entity';
 import { ContractRole } from '../enums/contract-role.enum';
+import { ClinicContractInformation } from './clinic-contract-information.entity';
 
 @Entity('contract_package')
 export class ContractPackage {
@@ -34,6 +36,12 @@ export class ContractPackage {
   @JoinColumn({ name: 'employee_id', referencedColumnName: '_id' })
   employeeAccount?: Account;
 
+  @OneToOne(
+    () => ClinicContractInformation,
+    (info) => info.contractPackage,
+  )
+  clinicContractInformation?: ClinicContractInformation;
+
   @Column({
     name: 'role',
     type: 'enum',
@@ -52,6 +60,12 @@ export class ContractPackage {
 
   @Column({ name: 'position', type: 'text' })
   position: string;
+
+  @Column({ name: 'manager_signature', type: 'text', nullable: true })
+  managerSignature?: string;
+
+  @Column({ name: 'employee_signature', type: 'text', nullable: true })
+  employeeSignature?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

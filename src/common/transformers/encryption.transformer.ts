@@ -46,12 +46,14 @@ export const encryptionTransformer: ValueTransformer = {
     if (value === null || value === undefined || value === '') {
       return value;
     }
-
-    // Try to decrypt; if it fails (not encrypted or different format), return original
     try {
       return decrypt(value);
-    } catch {
-      return value; // Assume it was plain text or legacy data
+    } catch (error) {
+      // If decryption fails (e.g. legacy data or invalid format), return null
+      // This prevents the application from crashing for existing users
+      // They will need to re-generate their keys
+      console.warn(`EncryptionTransformer: Failed to decrypt value. It may be using legacy format or is corrupted. Resetting to null.`);
+      return null;
     }
   },
 };

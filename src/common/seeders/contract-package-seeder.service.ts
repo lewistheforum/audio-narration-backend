@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
-import { ContractRole } from '../../modules/accounts/enums/contract-role.enum';
-import { ContractPackage } from '../../modules/accounts/entities/contract-package.entity';
-import { ContractPackageRepository } from '../../modules/accounts/repositories/contract-package.repository';
+import { ContractRole } from '../../modules/contracts/enums/contract-role.enum';
+import { ContractPackage } from '../../modules/contracts/entities/contract-package.entity';
+import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { CLINIC_REPRESENTATIVES } from '../constants/names';
 import { CLINIC_POSITIONS } from '../constants/medical-terms';
@@ -34,7 +34,7 @@ export class ContractPackageSeederService {
   constructor(
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
-  ) {}
+  ) { }
 
   /**
    * Seed contract packages for CLINIC_STAFF and DOCTOR accounts
