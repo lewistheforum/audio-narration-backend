@@ -14,18 +14,28 @@ import { ClinicAdminInformation } from './entities/clinic-admin-information.enti
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
 import { ClinicStaffInformation } from './entities/clinic_staff_information.entity';
 import { DoctorInformation } from './entities/doctor_information.entity';
+import { ClinicsLegalDocuments } from './entities/clinics_legal_documents.entity';
+import { LegalDocumentVerificationStatus } from './enums/legal-document-verification-status.enum';
 import {
   CreateAccountDto,
   UpdatePasswordDto,
   UpdateAccountDto,
   AccountResponseDto,
   BanAccountDto,
-  CreateClinicManagerDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
+  RegisterClinicAdminDto,
+  CheckRegistrationStatusResponseDto,
+  CreateClinicManagerForRegistrationDto,
+  UploadLegalDocumentDto,
+  UpdateLegalDocumentsDto,
+  CancelRegistrationResponseDto,
+  CancelSubscriptionDto,
+  CancelSubscriptionResponseDto,
 } from './dto';
+import { RegistrationStatus } from '../subscriptions/enums/subscription-status.enum';
 import {
   ClinicListResponseDto,
   ClinicItemDto,
@@ -59,6 +69,12 @@ import {
   ClinicSubscriptionRepository,
   SubscriptionServiceRepository,
 } from '../subscriptions/repositories';
+import {
+  ClinicsLegalDocumentsRepository,
+} from './repositories';
+import { TransactionRepository } from '../transactions/repositories/transaction.repository';
+import { Transaction, PaymentStatus } from '../transactions/entities/transaction.entity';
+import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 
 /**
  * Accounts Service
@@ -131,6 +147,8 @@ export class AccountsService {
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly mailerService: MailerService,
+    private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
+    private readonly transactionRepository: TransactionRepository,
   ) {}
 
   /**
@@ -2323,84 +2341,6 @@ export class AccountsService {
    * });
    * ```
    */
-  async createClinicManager(
-    patientId: string,
-    dto: CreateClinicManagerDto,
-  ): Promise<AccountResponseDto> {
-    // Step 1: Validate patient exists and has PATIENT role
-    const patient = await this.findAccountEntityById(patientId);
-    if (patient.role !== AccountRole.PATIENT) {
-      throw new ForbiddenException(
-        'Only PATIENT accounts can create clinic manager',
-      );
-    }
-
-    // TODO: Add validation for clinic service purchase/subscription
-    // if (!patient.hasClinicServiceSubscription) {
-    //   throw new ForbiddenException('You must purchase clinic service first');
-    // }
-
-    // Step 2: Validate email uniqueness
-    const existingAccount = await this.findByEmail(dto.email);
-    if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
-    }
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // Step 3: Hash password
-      const hashedPassword = await bcrypt.hash(
-        dto.password,
-        this.BCRYPT_SALT_ROUNDS,
-      );
-
-      // Step 4: Create Account entity with CLINIC_MANAGER role
-      const account = this.accountRepository.createAccount({
-        username: dto.username,
-        email: dto.email,
-        password: hashedPassword,
-        phone: dto.phone,
-        role: AccountRole.CLINIC_MANAGER, // Clinic manager role
-        status: AccountStatus.ACTIVE, // Clinic managers are immediately active
-        isOAuthUser: false,
-        isEmailVerified: true, // No email verification required for clinic managers
-        banCounts: 0,
-        banDescription: '',
-      });
-
-      const savedAccount = await queryRunner.manager.save(account);
-
-      // Step 5: Validate account has CLINIC_MANAGER role before creating ClinicManagerInformation
-      // This ensures data integrity - only CLINIC_MANAGER accounts can have clinic manager information
-      this.validateClinicManagerRole(savedAccount);
-
-      // Step 6: Create ClinicManagerInformation entity
-      const clinicManagerInfo = this.clinicManagerInfoRepository.create({
-        accountId: savedAccount._id,
-        clinicBranchName: dto.clinicName,
-        fullName: dto.clinicName, // Use clinicName as fullName
-        gender: 'OTHER' as any, // Default to OTHER
-        dob: dto.dob ? new Date(dto.dob) : undefined,
-        profilePicture: dto.profilePicture,
-      });
-
-      await queryRunner.manager.save(clinicManagerInfo);
-
-      await queryRunner.commitTransaction();
-
-      // Return complete account DTO
-      return new AccountResponseDto(savedAccount);
-    } catch (error) {
-      // Rollback transaction
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-  }
 
   /**
    * Create Clinic Staff by Clinic Manager
@@ -3184,5 +3124,879 @@ export class AccountsService {
 
       return this.clinicAdminInfoRepository.save(profile);
     }
+  }
+
+  /**
+   * Check Registration Status
+   *
+   * Checks if an email has an in-progress clinic admin registration.
+   * Returns the current registration status and next action for the user.
+   *
+   * Business Rules:
+   * - Does NOT modify the database
+   * - Returns status if email exists and has pending registration
+   * - Returns canStart: true if email doesn't exist or no pending registration
+   * - Returns managerAccountId for legal document related statuses
+   * - Returns rejectionReason for REJECTED status
+   * - Returns notice for NON_RENEWING status
+   * - Returns expirationDate for ACTIVE, NON_RENEWING, EXPIRED statuses
+   *
+   * @param {string} email - Email address to check
+   * @returns {Promise<CheckRegistrationStatusResponseDto>} Registration status information
+   *
+   * @example
+   * ```typescript
+   * const status = await accountsService.checkRegistrationStatus('admin@clinic.com');
+   * // Returns: { status: 'PENDING_SEPAY_SETUP', canResume: true, ... }
+   * ```
+   */
+  async checkRegistrationStatus(
+    email: string,
+  ): Promise<CheckRegistrationStatusResponseDto> {
+    const account = await this.findByEmail(email);
+
+    if (!account) {
+      // Email doesn't exist - user can start registration
+      return {
+        message: 'You can start a new registration',
+        canResume: true,
+        currentStep: 'STEP_2',
+        nextAction: 'Start clinic admin registration',
+      };
+    }
+
+    // Check if account has CLINIC_ADMIN role
+    if (account.role !== AccountRole.CLINIC_ADMIN) {
+      return {
+        message: 'Not a clinic admin account',
+        canResume: false,
+        currentStep: null,
+        nextAction: null,
+      };
+    }
+
+    // Get clinic subscription to check registration status
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(account._id);
+
+    if (!subscription) {
+      // Account exists but no subscription
+      return {
+        message: 'No subscription found',
+        canResume: false,
+        currentStep: null,
+        nextAction: null,
+      };
+    }
+
+    // Query for manager account (linked via parentId)
+    const managerAccounts = await this.accountRepository.findByParentIdAndRole(
+      account._id,
+      AccountRole.CLINIC_MANAGER,
+    );
+    const managerAccount = managerAccounts.length > 0 ? managerAccounts[0] : null;
+    const managerAccountId = managerAccount?._id || null;
+
+    // Map registration status to step information
+    const status = subscription.subscriptionStatus;
+    let currentStep: string;
+    let nextAction: string;
+    let rejectionReason: string | null = null;
+    let notice: string | null = null;
+    let expirationDate: string | null = null;
+
+    switch (status) {
+      case RegistrationStatus.PENDING_SEPAY_SETUP:
+        currentStep = 'STEP_3';
+        nextAction = 'Configure your payment gateway (Sepay)';
+        break;
+      case RegistrationStatus.PENDING_MANAGER_SETUP:
+        currentStep = 'STEP_4';
+        nextAction = 'Create clinic manager account';
+        break;
+      case RegistrationStatus.PENDING_LEGAL_SETUP:
+        currentStep = 'STEP_4';
+        nextAction = 'Upload legal documents for clinic manager';
+        if (!managerAccountId) {
+          return {
+            status,
+            currentStep,
+            nextAction,
+            canResume: false,
+            message: 'Registration data is inconsistent. Please contact support.',
+          };
+        }
+        break;
+      case RegistrationStatus.PENDING_APPROVAL:
+        currentStep = 'STEP_5';
+        nextAction = 'Waiting for admin approval';
+        if (!managerAccountId) {
+          return {
+            status,
+            currentStep,
+            nextAction,
+            canResume: false,
+            message: 'Registration data is inconsistent. Please contact support.',
+          };
+        }
+        break;
+      case RegistrationStatus.REJECTED:
+        currentStep = 'STEP_4';
+        nextAction = 'Update legal documents and resubmit';
+        if (!managerAccountId) {
+          return {
+            status,
+            currentStep,
+            nextAction,
+            canResume: false,
+            message: 'Registration data is inconsistent. Please contact support.',
+          };
+        }
+        // Query for legal documents to get rejection reason
+        if (managerAccountId) {
+          const legalDocs =
+            await this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
+          if (legalDocs && legalDocs.verificationStatus === LegalDocumentVerificationStatus.REJECTED) {
+            // Note: The ClinicsLegalDocuments entity doesn't have a dedicated rejectionReason field.
+            // The rejection reason would need to be added to the entity schema.
+            // For now, return null for rejectionReason.
+            rejectionReason = null;
+          }
+        }
+        break;
+      case RegistrationStatus.PENDING_PAYMENT:
+        currentStep = 'STEP_6';
+        nextAction = 'Complete payment for subscription';
+        break;
+      case RegistrationStatus.ACTIVE:
+        currentStep = 'COMPLETED';
+        nextAction = 'Access your dashboard';
+        expirationDate = subscription.expirationDate
+          ? subscription.expirationDate.toISOString()
+          : null;
+        break;
+      case RegistrationStatus.EXPIRED:
+        currentStep = 'COMPLETED';
+        nextAction = 'Renew your subscription';
+        expirationDate = subscription.expirationDate
+          ? subscription.expirationDate.toISOString()
+          : null;
+        break;
+      case RegistrationStatus.NON_RENEWING:
+        currentStep = 'COMPLETED';
+        nextAction = 'Access your dashboard (subscription will not renew)';
+        notice = 'Your subscription will not renew automatically';
+        expirationDate = subscription.expirationDate
+          ? subscription.expirationDate.toISOString()
+          : null;
+        break;
+      default:
+        currentStep = 'STEP_2';
+        nextAction = 'Complete your registration';
+    }
+
+    return {
+      status,
+      currentStep,
+      nextAction,
+      canResume: true,
+      message: MESSAGES.failMessage.registrationStatusInProgress,
+      managerAccountId: managerAccountId || undefined,
+      rejectionReason: rejectionReason || undefined,
+      notice: notice || undefined,
+      expirationDate: expirationDate || undefined,
+    };
+  }
+
+  /**
+   * Register Clinic Admin (Transactional)
+   *
+   * Creates a complete clinic admin registration with account, profile, and subscription.
+   * Uses QueryRunner for transaction safety - all operations succeed or none do.
+   *
+   * Business Rules:
+   * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
+   * - Creates Account with CLINIC_ADMIN role and PENDING status
+   * - Creates ClinicAdminInformation with clinic details
+   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
+   * - Password is hashed with bcrypt before storage
+   *
+   * @param {RegisterClinicAdminDto} dto - Clinic admin registration data
+   * @returns {Promise<AccountResponseDto>} Created account with subscription status
+   * @throws {ConflictException} If email already exists or exceeds usage limit
+   * @throws {BadRequestException} If validation fails
+   * @throws {Error} Any error will trigger transaction rollback
+   *
+   * @example
+   * ```typescript
+   * const account = await accountsService.registerClinicAdmin({
+   *   username: 'clinicadmin',
+   *   email: 'admin@clinic.com',
+   *   password: 'AdminPass123',
+   *   clinicName: 'City Medical Center',
+   *   serviceId: '550e8400-e29b-41d4-a716-446655440000'
+   * });
+   * ```
+   */
+  async registerClinicAdmin(
+    dto: RegisterClinicAdminDto,
+  ): Promise<AccountResponseDto> {
+    // Step 1: Validate email uniqueness and policy (max 2 uses: 1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
+    const existingAccount = await this.findByEmail(dto.email);
+
+    if (existingAccount) {
+      // Check if existing account is CLINIC_ADMIN or CLINIC_MANAGER
+      if (
+        existingAccount.role === AccountRole.CLINIC_ADMIN ||
+        existingAccount.role === AccountRole.CLINIC_MANAGER
+      ) {
+        throw new ConflictException(
+          MESSAGES.failMessage.emailUsageLimitExceeded,
+        );
+      }
+      // Email exists but with different role - allow registration
+    }
+
+    // Step 2: Hash password for secure storage
+    const hashedPassword = await bcrypt.hash(
+      dto.password,
+      this.BCRYPT_SALT_ROUNDS,
+    );
+
+    // Step 3: Create all entities in a transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Create Account entity with CLINIC_ADMIN role and PENDING status
+      const account = this.accountRepository.createAccount({
+        username: dto.username,
+        email: dto.email,
+        password: hashedPassword,
+        phone: dto.phone,
+        role: AccountRole.CLINIC_ADMIN,
+        status: AccountStatus.PENDING,
+        isEmailVerified: false,
+        isOAuthUser: false,
+      });
+
+      const savedAccount = await queryRunner.manager.save(account);
+
+      // Create ClinicAdminInformation entity
+      const clinicAdminInfo = this.clinicAdminInfoRepository.create({
+        accountId: savedAccount._id,
+        clinicName: dto.clinicName,
+        description: dto.description,
+        specializedIn: dto.specializedIn,
+        pros: dto.pros,
+        paraclinical: dto.paraclinical,
+        dob: dto.dob ? new Date(dto.dob) : undefined,
+        profilePicture: dto.profilePicture,
+      });
+
+      await queryRunner.manager.save(clinicAdminInfo);
+
+      // Create ClinicSubscription entity with PENDING_MANAGER_SETUP status
+      const clinicSubscription = this.clinicSubscriptionRepository.create({
+        clinicId: savedAccount._id,
+        serviceId: dto.serviceId,
+        subscriptionStatus: RegistrationStatus.PENDING_MANAGER_SETUP,
+        subscriptionDate: new Date(),
+      });
+
+      await queryRunner.manager.save(clinicSubscription);
+
+      await queryRunner.commitTransaction();
+
+      // Return complete account DTO with subscription status
+      return new AccountResponseDto(savedAccount, null, null, null, null, null, clinicAdminInfo);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Create Clinic Manager for Registration (Step 4A)
+   *
+   * Creates a clinic manager account for a clinic admin during registration flow.
+   * Uses QueryRunner for transaction safety - all operations succeed or none do.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Registration/subscription status must be PENDING_MANAGER_SETUP
+   * - Only one manager allowed for this clinic admin (validate none exists)
+   * - Creates manager Account with CLINIC_MANAGER role and ACTIVE status
+   * - Creates ClinicManagerInformation entity
+   * - Links via parentId to the clinic admin account
+   * - Transitions status to PENDING_LEGAL_SETUP
+   *
+   * @param {string} clinicAdminId - Clinic admin account UUID
+   * @param {CreateClinicManagerForRegistrationDto} dto - Clinic manager registration data
+   * @returns {Promise<AccountResponseDto>} Created clinic manager account
+   * @throws {NotFoundException} If clinic admin not found
+   * @throws {ForbiddenException} If account is not CLINIC_ADMIN or status is not PENDING_MANAGER_SETUP
+   * @throws {ConflictException} If manager already exists or email already used
+   * @throws {Error} Any error will trigger transaction rollback
+   */
+  async createClinicManagerForRegistration(
+    clinicAdminId: string,
+    dto: CreateClinicManagerForRegistrationDto,
+  ): Promise<AccountResponseDto> {
+    // Step 1: Validate clinic admin exists and has CLINIC_ADMIN role
+    const clinicAdmin = await this.findAccountEntityById(clinicAdminId);
+    if (clinicAdmin.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException(
+        'Only clinic admins can create clinic managers during registration',
+      );
+    }
+
+    // Step 2: Validate subscription status is PENDING_MANAGER_SETUP
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+    if (!subscription) {
+      throw new NotFoundException('Clinic subscription not found');
+    }
+    if (subscription.subscriptionStatus !== RegistrationStatus.PENDING_MANAGER_SETUP) {
+      throw new ForbiddenException(
+        `Cannot create clinic manager. Current status: ${subscription.subscriptionStatus}. Expected: ${RegistrationStatus.PENDING_MANAGER_SETUP}`,
+      );
+    }
+
+    // Step 3: Validate only one manager allowed (check if any manager already exists)
+    const existingManagers = await this.accountRepository.findByParentIdAndRole(
+      clinicAdminId,
+      AccountRole.CLINIC_MANAGER,
+    );
+    if (existingManagers.length > 0) {
+      throw new ConflictException(
+        'Only one clinic manager is allowed per clinic admin',
+      );
+    }
+
+    // Step 4: Validate email uniqueness
+    const existingAccount = await this.findByEmail(dto.email);
+    if (existingAccount) {
+      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    }
+
+    // Step 5: Create all entities in a transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Generate default password for manager account
+      const defaultPassword = 'Manager' + Date.now();
+      const hashedPassword = await bcrypt.hash(
+        defaultPassword,
+        this.BCRYPT_SALT_ROUNDS,
+      );
+
+      // Create Account entity with CLINIC_MANAGER role and ACTIVE status
+      const managerAccount = this.accountRepository.createAccount({
+        username: dto.email.split('@')[0],
+        email: dto.email,
+        password: hashedPassword,
+        phone: dto.phone,
+        parentId: clinicAdminId, // Link to clinic admin
+        role: AccountRole.CLINIC_MANAGER,
+        status: AccountStatus.ACTIVE,
+        isEmailVerified: false,
+        isOAuthUser: false,
+      });
+
+      const savedManagerAccount = await queryRunner.manager.save(managerAccount);
+
+      // Create ClinicManagerInformation entity
+      const managerInfo = this.clinicManagerInfoRepository.create({
+        accountId: savedManagerAccount._id,
+        clinicBranchName: 'Main Branch', // Default branch name
+        fullName: dto.fullName,
+        gender: dto.gender,
+        dob: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+      });
+
+      await queryRunner.manager.save(managerInfo);
+
+      // Create Address entity for manager
+      const address = this.addressRepository.create({
+        accountId: savedManagerAccount._id,
+        address: dto.address,
+        ward: dto.wardCode,
+        district: dto.districtCode,
+        province: dto.provinceCode,
+      });
+
+      await queryRunner.manager.save(address);
+
+      // Update subscription status to PENDING_LEGAL_SETUP
+      subscription.subscriptionStatus = RegistrationStatus.PENDING_LEGAL_SETUP;
+      await queryRunner.manager.save(subscription);
+
+      await queryRunner.commitTransaction();
+
+      // Return complete account DTO
+      return new AccountResponseDto(savedManagerAccount, null, null, null, managerInfo);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Upload Legal Documents for Clinic Manager (Step 4B)
+   *
+   * Uploads legal documents for a specific clinic manager during registration flow.
+   * Uses QueryRunner for transaction safety.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   * - Docs stored per manager (FK to manager account)
+   * - Status transitions to PENDING_APPROVAL
+   * - verificationStatus transitions to PENDING_REVIEW
+   *
+   * @param {string} clinicAdminId - Clinic admin account UUID
+   * @param {string} managerAccountId - Clinic manager account UUID
+   * @param {UploadLegalDocumentDto} dto - Legal document data
+   * @returns {Promise<ClinicsLegalDocuments>} Created legal documents
+   * @throws {NotFoundException} If clinic admin or manager not found
+   * @throws {ForbiddenException} If account is not CLINIC_ADMIN or manager is not owned by admin
+   * @throws {Error} Any error will trigger transaction rollback
+   */
+  async uploadLegalDocumentsForManager(
+    clinicAdminId: string,
+    managerAccountId: string,
+    dto: UploadLegalDocumentDto,
+  ): Promise<ClinicsLegalDocuments> {
+    // Step 1: Validate clinic admin exists and has CLINIC_ADMIN role
+    const clinicAdmin = await this.findAccountEntityById(clinicAdminId);
+    if (clinicAdmin.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException(
+        'Only clinic admins can upload legal documents',
+      );
+    }
+
+    // Step 2: Validate manager exists and has CLINIC_MANAGER role
+    const manager = await this.findAccountEntityById(managerAccountId);
+    if (manager.role !== AccountRole.CLINIC_MANAGER) {
+      throw new NotFoundException('Clinic manager not found');
+    }
+
+    // Step 3: Validate ownership (manager.parentId equals admin account id)
+    if (manager.parentId !== clinicAdminId) {
+      throw new ForbiddenException(
+        'You do not have permission to upload documents for this manager',
+      );
+    }
+
+    // Step 4: Validate subscription status is PENDING_LEGAL_SETUP or REJECTED
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+    if (!subscription) {
+      throw new NotFoundException('Clinic subscription not found');
+    }
+    if (
+      subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP &&
+      subscription.subscriptionStatus !== RegistrationStatus.REJECTED
+    ) {
+      throw new ForbiddenException(
+        `Cannot upload legal documents. Current status: ${subscription.subscriptionStatus}`,
+      );
+    }
+
+    // Step 5: Create or update legal documents in a transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Check if legal documents already exist for this manager
+      let legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        managerAccountId,
+      );
+
+      if (legalDocs) {
+        // Update existing documents
+        legalDocs.businessLicense = dto.businessLicenseUrl;
+        legalDocs.taxIdUrl = dto.taxIdUrl;
+        legalDocs.otherDocs = dto.otherDocs;
+        legalDocs.verificationStatus =
+          LegalDocumentVerificationStatus.PENDING_REVIEW;
+        legalDocs = await queryRunner.manager.save(legalDocs);
+      } else {
+        // Create new legal documents
+        legalDocs = this.clinicLegalDocsRepository.create({
+          accountId: managerAccountId,
+          businessLicense: dto.businessLicenseUrl,
+          taxIdUrl: dto.taxIdUrl,
+          otherDocs: dto.otherDocs,
+          verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW,
+        });
+        legalDocs = await queryRunner.manager.save(legalDocs);
+      }
+
+      // Update subscription status to PENDING_APPROVAL
+      subscription.subscriptionStatus = RegistrationStatus.PENDING_APPROVAL;
+      await queryRunner.manager.save(subscription);
+
+      await queryRunner.commitTransaction();
+
+      return legalDocs;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Get Legal Documents for Clinic Manager
+   *
+   * Retrieves legal documents for a specific clinic manager.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   *
+   * @param {string} clinicAdminId - Clinic admin account UUID
+   * @param {string} managerAccountId - Clinic manager account UUID
+   * @returns {Promise<ClinicsLegalDocuments | null>} Legal documents or null
+   * @throws {NotFoundException} If clinic admin or manager not found
+   * @throws {ForbiddenException} If account is not CLINIC_ADMIN or manager is not owned by admin
+   */
+  async getLegalDocumentsForManager(
+    clinicAdminId: string,
+    managerAccountId: string,
+  ): Promise<ClinicsLegalDocuments | null> {
+    // Step 1: Validate clinic admin exists and has CLINIC_ADMIN role
+    const clinicAdmin = await this.findAccountEntityById(clinicAdminId);
+    if (clinicAdmin.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException(
+        'Only clinic admins can view legal documents',
+      );
+    }
+
+    // Step 2: Validate manager exists and has CLINIC_MANAGER role
+    const manager = await this.findAccountEntityById(managerAccountId);
+    if (manager.role !== AccountRole.CLINIC_MANAGER) {
+      throw new NotFoundException('Clinic manager not found');
+    }
+
+    // Step 3: Validate ownership (manager.parentId equals admin account id)
+    if (manager.parentId !== clinicAdminId) {
+      throw new ForbiddenException(
+        'You do not have permission to view documents for this manager',
+      );
+    }
+
+    // Step 4: Return legal documents
+    return this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
+  }
+
+  /**
+   * Update Legal Documents for Clinic Manager (Rejected Documents)
+   *
+   * Updates rejected legal documents for a specific clinic manager during registration flow.
+   * This endpoint is used when documents have been rejected and need to be resubmitted.
+   * Uses QueryRunner for transaction safety.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   * - Documents must be in REJECTED status
+   * - verificationStatus transitions to PENDING_REVIEW
+   * - Subscription status transitions back to PENDING_APPROVAL
+   *
+   * @param {string} clinicAdminId - Clinic admin account UUID
+   * @param {string} managerAccountId - Clinic manager account UUID
+   * @param {UpdateLegalDocumentsDto} dto - Legal document data to update
+   * @returns {Promise<ClinicsLegalDocuments>} Updated legal documents
+   * @throws {NotFoundException} If clinic admin or manager not found
+   * @throws {ForbiddenException} If account is not CLINIC_ADMIN or manager is not owned by admin
+   * @throws {BadRequestException} If documents are not in REJECTED status
+   * @throws {Error} Any error will trigger transaction rollback
+   */
+  async updateLegalDocumentsForManager(
+    clinicAdminId: string,
+    managerAccountId: string,
+    dto: UpdateLegalDocumentsDto,
+  ): Promise<ClinicsLegalDocuments> {
+    // Step 1: Validate clinic admin exists and has CLINIC_ADMIN role
+    const clinicAdmin = await this.findAccountEntityById(clinicAdminId);
+    if (clinicAdmin.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException(
+        'Only clinic admins can update legal documents',
+      );
+    }
+
+    // Step 2: Validate manager exists and has CLINIC_MANAGER role
+    const manager = await this.findAccountEntityById(managerAccountId);
+    if (manager.role !== AccountRole.CLINIC_MANAGER) {
+      throw new NotFoundException('Clinic manager not found');
+    }
+
+    // Step 3: Validate ownership (manager.parentId equals admin account id)
+    if (manager.parentId !== clinicAdminId) {
+      throw new ForbiddenException(
+        'You do not have permission to update documents for this manager',
+      );
+    }
+
+    // Step 4: Validate legal documents exist and are in REJECTED status
+    const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+      managerAccountId,
+    );
+    if (!legalDocs) {
+      throw new NotFoundException('Legal documents not found');
+    }
+    if (legalDocs.verificationStatus !== LegalDocumentVerificationStatus.REJECTED) {
+      throw new BadRequestException(
+        'Can only update documents that have been rejected',
+      );
+    }
+
+    // Step 5: Validate subscription status is REJECTED
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+    if (!subscription) {
+      throw new NotFoundException('Clinic subscription not found');
+    }
+    if (subscription.subscriptionStatus !== RegistrationStatus.REJECTED) {
+      throw new BadRequestException(
+        `Cannot update legal documents. Current status: ${subscription.subscriptionStatus}. Expected: ${RegistrationStatus.REJECTED}`,
+      );
+    }
+
+    // Step 6: Update legal documents and subscription in a transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Update legal documents
+      if (dto.operatingLicense !== undefined) {
+        legalDocs.operatingLicense = dto.operatingLicense;
+      }
+      if (dto.businessLicense !== undefined) {
+        legalDocs.businessLicense = dto.businessLicense;
+      }
+      legalDocs.verificationStatus =
+        LegalDocumentVerificationStatus.PENDING_REVIEW;
+      const updatedLegalDocs = await queryRunner.manager.save(legalDocs);
+
+      // Update subscription status back to PENDING_APPROVAL
+      subscription.subscriptionStatus = RegistrationStatus.PENDING_APPROVAL;
+      await queryRunner.manager.save(subscription);
+
+      await queryRunner.commitTransaction();
+
+      return updatedLegalDocs;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Cancel Pending Registration (Hard Delete)
+   *
+   * Performs a hard delete on a pending clinic admin registration.
+   * This is an irreversible operation that completely removes all registration data.
+   *
+   * Business Rules:
+   * - Only CLINIC_ADMIN role can cancel their registration
+   * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
+   * - Cannot cancel if any SUCCESS transaction exists (payment already made)
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   *
+   * Deletion Order (respects foreign key constraints):
+   * 1. ClinicsLegalDocuments (linked to manager account)
+   * 2. ClinicManagerInformation + Account (manager)
+   * 3. Pending Transactions
+   * 4. ClinicSubscription
+   * 5. ClinicAdminInformation
+   * 6. Account (admin)
+   *
+   * @param {string} accountId - Clinic admin account UUID
+   * @returns {Promise<CancelRegistrationResponseDto>} Cancellation result
+   * @throws {ForbiddenException} If account is not CLINIC_ADMIN
+   * @throws {NotFoundException} If subscription not found
+   * @throws {BadRequestException} If status is PENDING_APPROVAL
+   * @throws {BadRequestException} If SUCCESS transaction exists
+   * @throws {BadRequestException} If status is invalid for cancellation
+   */
+  async cancelPendingRegistration(
+    accountId: string,
+  ): Promise<CancelRegistrationResponseDto> {
+    // Get account with subscription
+    const account = await this.findAccountEntityById(accountId);
+    if (account.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException(
+        'Only clinic admin can cancel their registration',
+      );
+    }
+
+    // Get subscription
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(accountId);
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    // Check if status is PENDING_APPROVAL
+    if (subscription.subscriptionStatus === RegistrationStatus.PENDING_APPROVAL) {
+      throw new BadRequestException(
+        MESSAGES.failMessage.pendingApprovalBlocked,
+      );
+    }
+
+    // Check for forbidden statuses
+    const forbiddenStatuses = [
+      RegistrationStatus.ACTIVE,
+      RegistrationStatus.NON_RENEWING,
+      RegistrationStatus.EXPIRED,
+    ];
+    if (forbiddenStatuses.includes(subscription.subscriptionStatus)) {
+      throw new BadRequestException(MESSAGES.failMessage.invalidStatus);
+    }
+
+    // Check for any SUCCESS transaction
+    const successTransaction = await this.transactionRepository.findOne({
+      where: {
+        clinicId: accountId,
+        status: PaymentStatus.SUCCESS,
+      },
+    });
+    if (successTransaction) {
+      throw new BadRequestException(
+        MESSAGES.failMessage.successTransactionExists,
+      );
+    }
+
+    // Perform hard delete in transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Delete ClinicsLegalDocuments (linked to manager account)
+      await queryRunner.manager.delete(ClinicsLegalDocuments, {
+        account: { parentId: accountId },
+      });
+
+      // 2. Delete ClinicManagerInformation + Account (manager)
+      await queryRunner.manager.delete(ClinicManagerInformation, {
+        account: { parentId: accountId },
+      });
+      await queryRunner.manager.delete(Account, {
+        parentId: accountId,
+        role: AccountRole.CLINIC_MANAGER,
+      });
+
+      // 3. Delete pending Transactions
+      await queryRunner.manager.delete(Transaction, {
+        clinicId: accountId,
+        status: PaymentStatus.PENDING,
+      });
+
+      // 4. Delete ClinicSubscription
+      await queryRunner.manager.delete(ClinicSubscription, {
+        clinicId: accountId,
+      });
+
+      // 5. Delete ClinicAdminInformation
+      await queryRunner.manager.delete(ClinicAdminInformation, {
+        accountId: accountId,
+      });
+
+      // 6. Delete Account (admin)
+      await queryRunner.manager.delete(Account, {
+        _id: accountId,
+      });
+
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: MESSAGES.successMessage.registrationCancelled,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Cancel Active Subscription (Churn)
+   *
+   * Cancels an active subscription by changing its status to NON_RENEWING.
+   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   *
+   * Business Rules:
+   * - Only CLINIC_ADMIN role can cancel their subscription
+   * - Subscription must be in ACTIVE status
+   *
+   * Effects:
+   * - Status changes to NON_RENEWING
+   * - Account remains fully functional until expirationDate
+   * - System will NOT renew automatically
+   * - After expirationDate passes, status transitions to EXPIRED
+   *
+   * @param {string} accountId - Clinic admin account UUID
+   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
+   * @throws {ForbiddenException} If account is not CLINIC_ADMIN
+   * @throws {NotFoundException} If subscription not found
+   * @throws {BadRequestException} If subscription is not ACTIVE
+   */
+  async cancelSubscription(
+    accountId: string,
+    dto: CancelSubscriptionDto,
+  ): Promise<CancelSubscriptionResponseDto> {
+    // Get account
+    const account = await this.findAccountEntityById(accountId);
+    if (account.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException(
+        'Only clinic admin can cancel their subscription',
+      );
+    }
+
+    // Get subscription
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(accountId);
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    // Check if status is ACTIVE
+    if (subscription.subscriptionStatus !== RegistrationStatus.ACTIVE) {
+      throw new BadRequestException(
+        MESSAGES.failMessage.subscriptionNotActive,
+      );
+    }
+
+    // Update status to NON_RENEWING
+    subscription.subscriptionStatus = RegistrationStatus.NON_RENEWING;
+    await this.clinicSubscriptionRepository.save(subscription);
+
+    return {
+      message: MESSAGES.successMessage.subscriptionCancelled,
+      newStatus: RegistrationStatus.NON_RENEWING,
+    };
   }
 }

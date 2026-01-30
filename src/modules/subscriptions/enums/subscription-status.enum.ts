@@ -7,9 +7,16 @@ export enum RegistrationStatus {
   PENDING_SEPAY_SETUP = 'PENDING_SEPAY_SETUP',
 
   /**
-   * STEP 3 START: Sepay configured.
-   * Status: User hasn't created Manager account or hasn't uploaded legal documents yet.
-   * Action: User needs to create first Manager and upload Operating/Business License.
+   * STEP 3 START: Account created (Step 2 completed).
+   * Status: User has account but hasn't created Clinic Manager yet.
+   * Action: User needs to create Clinic Manager account.
+   */
+  PENDING_MANAGER_SETUP = 'PENDING_MANAGER_SETUP',
+
+  /**
+   * STEP 4 START: Manager configured.
+   * Status: User hasn't uploaded legal documents yet.
+   * Action: User needs to upload Operating/Business License.
    */
   PENDING_LEGAL_SETUP = 'PENDING_LEGAL_SETUP',
 
@@ -49,9 +56,9 @@ export enum RegistrationStatus {
   EXPIRED = 'EXPIRED',
 
   /**
-   * LIFECYCLE END: User or Admin cancelled the service.
-   * Status: Account is permanently disabled or archived.
-   * Action: No further actions allowed. Data retention policy applies.
+   * LIFECYCLE CHURN: User cancelled the subscription while Active.
+   * Status: Account remains fully functional (same as ACTIVE) until expirationDate.
+   * Action: System will NOT renew automatically. Transitions to EXPIRED after date passes.
    */
-  CANCELLED = 'CANCELLED',
+  NON_RENEWING = 'NON_RENEWING',
 }

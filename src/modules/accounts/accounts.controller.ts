@@ -31,13 +31,15 @@ import {
   AccountResponseDto,
   UpdatePasswordDto,
   BanAccountDto,
-  CreateClinicManagerDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
   PublicDoctorInfo,
   PublicClinicInfo,
+  CancelRegistrationResponseDto,
+  CancelSubscriptionDto,
+  CancelSubscriptionResponseDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -1054,5 +1056,97 @@ export class AccountsController {
       data: account,
       message: MESSAGES.successMessage.userUnbannedSuccess,
     };
+  }
+
+  /**
+   * Cancel Pending Registration (Hard Delete)
+   *
+   * Cancels a pending clinic admin registration by performing a hard delete.
+   * This is an irreversible operation that completely removes all registration data.
+   *
+   * Business Rules:
+   * - Only CLINIC_ADMIN role can cancel their registration
+   * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
+   * - Cannot cancel if any SUCCESS transaction exists (payment already made)
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   *
+   * Deletion Order:
+   * 1. ClinicsLegalDocuments (linked to manager account)
+   * 2. ClinicManagerInformation + Account (manager)
+   * 3. Pending Transactions
+   * 4. ClinicSubscription
+   * 5. ClinicAdminInformation
+   * 6. Account (admin)
+   *
+   * @param {any} req - Request object containing authenticated user info
+   * @returns {Promise<CancelRegistrationResponseDto>} Cancellation result
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Registration cancelled successfully
+   * @response 400 - Cannot cancel registration with current status
+   * @response 403 - Forbidden - Not CLINIC_ADMIN role
+   * @response 404 - Subscription not found
+   */
+  @Delete('register/cancel-pending')
+  @ApiOperation({ summary: 'Cancel pending registration (hard delete)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiResponseData({
+    type: CancelRegistrationResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Registration cancelled successfully',
+  })
+  async cancelPendingRegistration(
+    @Request() req: any,
+  ): Promise<{ data: CancelRegistrationResponseDto; message: string }> {
+    const result = await this.accountsService.cancelPendingRegistration(req.user.accountId);
+    return { data: result, message: result.message };
+  }
+
+  /**
+   * Cancel Active Subscription (Churn)
+   *
+   * Cancels an active subscription by changing its status to NON_RENEWING.
+   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   *
+   * Business Rules:
+   * - Only CLINIC_ADMIN role can cancel their subscription
+   * - Subscription must be in ACTIVE status
+   *
+   * Effects:
+   * - Status changes to NON_RENEWING
+   * - Account remains fully functional until expirationDate
+   * - System will NOT renew automatically
+   * - After expirationDate passes, status transitions to EXPIRED
+   *
+   * @param {any} req - Request object containing authenticated user info
+   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Subscription cancelled successfully
+   * @response 400 - Cannot cancel subscription with current status
+   * @response 403 - Forbidden - Not CLINIC_ADMIN role
+   * @response 404 - Subscription not found
+   */
+  @Post('subscription/cancel')
+  @ApiOperation({ summary: 'Cancel active subscription (churn)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiResponseData({
+    type: CancelSubscriptionResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Subscription cancelled successfully',
+  })
+  async cancelSubscription(
+    @Request() req: any,
+    @Body() dto: CancelSubscriptionDto,
+  ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
+    const result = await this.accountsService.cancelSubscription(req.user.accountId, dto);
+    return { data: result, message: result.message };
   }
 }
