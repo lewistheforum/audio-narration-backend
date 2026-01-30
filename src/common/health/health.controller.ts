@@ -41,7 +41,14 @@ export class HealthController {
       },
     },
   })
-  async getHealth() {
+  async getHealth(): Promise<{
+    status: string;
+    timestamp: string;
+    services: {
+      database: any;
+      details: any;
+    };
+  }> {
     const connections = await this.databaseHealthService.checkAllConnections();
     const connectionInfo = this.databaseHealthService.getConnectionInfo();
 
@@ -69,7 +76,7 @@ export class HealthController {
       },
     },
   })
-  async getDatabaseHealth() {
+  async getDatabaseHealth(): Promise<any> {
     return await this.databaseHealthService.checkAllConnections();
   }
 
@@ -86,7 +93,7 @@ export class HealthController {
       },
     },
   })
-  getDatabaseInfo() {
+  getDatabaseInfo(): any {
     return this.databaseHealthService.getConnectionInfo();
   }
 }

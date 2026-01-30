@@ -2,7 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { SocketGatewayService } from './socket-gateway.service';
-import { UserModule } from '../user/user.module';
+import { AccountsModule } from '../accounts/accounts.module';
 import { MessagesModule } from '../messages/messages.module';
 import { ConversationModule } from '../conversations/conversation.module';
 import { getJwtConfig } from '../../config/jwt.config';
@@ -15,12 +15,12 @@ import { getJwtConfig } from '../../config/jwt.config';
       useFactory: getJwtConfig,
       inject: [],
     }),
-    UserModule,
-    MessagesModule,
-    ConversationModule,
+    AccountsModule,
+    forwardRef(() => MessagesModule),
+    forwardRef(() => ConversationModule),
   ],
   controllers: [],
   providers: [SocketGatewayService],
   exports: [SocketGatewayService],
 })
-export class SocketGatewayModule {}
+export class SocketGatewayModule { }

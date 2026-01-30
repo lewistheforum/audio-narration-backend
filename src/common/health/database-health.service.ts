@@ -9,25 +9,8 @@ export class DatabaseHealthService {
   private readonly logger = new Logger(DatabaseHealthService.name);
 
   constructor(
-    // @InjectConnection() private readonly mongoConnection: Connection,
     @InjectDataSource() private readonly postgresDataSource: DataSource,
   ) {}
-
-  // checkMongoConnection(): boolean {
-  //   try {
-  //     const state = this.mongoConnection.readyState;
-  //     if (state === 1) {
-  //       this.logger.log('✅ MongoDB connected successfully');
-  //       return true;
-  //     } else {
-  //       this.logger.error(`❌ MongoDB connection failed. State: ${state}`);
-  //       return false;
-  //     }
-  //   } catch (error) {
-  //     this.logger.error('❌ MongoDB connection error:', error.message);
-  //     return false;
-  //   }
-  // }
 
   async checkPostgresConnection(): Promise<boolean> {
     try {

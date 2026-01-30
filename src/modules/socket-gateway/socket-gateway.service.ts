@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserService } from '../user/user.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationService } from '../conversations/conversation.service';
 import {
@@ -27,6 +27,7 @@ import {
 } from './types/socket.types';
 import { verifyToken, DecodedToken } from './utils/jwt.utils';
 import { CreateMessageDto } from '../messages/dto/create-message.dto';
+import { MessageType } from '../messages/enums';
 
 @WebSocketGateway({
   cors: {
@@ -42,8 +43,7 @@ import { CreateMessageDto } from '../messages/dto/create-message.dto';
 })
 @Injectable()
 export class SocketGatewayService
-  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server<ClientToServerEvents, ServerToClientEvents>;
 
@@ -54,25 +54,23 @@ export class SocketGatewayService
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly userService: UserService,
+    private readonly AccountsService: AccountsService,
     private readonly messagesService: MessagesService,
     private readonly conversationService: ConversationService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     console.log('Socket Gateway initialized');
   }
 
-  async handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket): Promise<void> {
     const user = client.data.user;
     if (user) {
       console.log(`User ${user.username} disconnected`);
 
-      // Remove from connected users
       this.connectedUsers.delete(user.userId);
       this.userSockets.delete(client.id);
 
-      // Notify others that user is offline
       client.broadcast.emit('userOffline', {
         userId: user.userId,
         username: user.username,
@@ -81,9 +79,9 @@ export class SocketGatewayService
     }
   }
 
-  async handleConnection(client: Socket) {
+  async handleConnection(client: Socket): Promise<void> {
     try {
-      // Authentication middleware
+      // Extract and validate authentication token
       const token = client.handshake.auth.token || client.handshake.query.token;
 
       if (!token) {
@@ -95,8 +93,7 @@ export class SocketGatewayService
         return;
       }
 
-      // const decoded = verifyToken(token as string, this.jwtService);
-      const user = await this.userService.findUserEntityById(token);
+      const user = await this.AccountsService.findAccountEntityById(token);
 
       if (!user) {
         client.emit('error', {
@@ -109,8 +106,8 @@ export class SocketGatewayService
 
       // Store user data in socket
       client.data.user = {
-        userId: user.id,
-        username: user.name || user.email,
+        userId: user._id,
+        username: user.username || user.email,
         email: user.email,
       };
 
@@ -118,16 +115,15 @@ export class SocketGatewayService
         `User ${client.data.user.username} connected with socket ${client.id}`,
       );
 
-      // Store user connection
       const socketUser: SocketUser = {
-        userId: user.id,
-        username: user.name || user.email,
+        userId: user._id,
+        username: user.username || user.email,
         email: user.email,
         socketId: client.id,
       };
 
-      this.connectedUsers.set(user.id, socketUser);
-      this.userSockets.set(client.id, user.id);
+      this.connectedUsers.set(user._id, socketUser);
+      this.userSockets.set(client.id, user._id);
 
       // Send current online users to the newly connected socket
       client.emit('onlineUsers', {
@@ -136,8 +132,8 @@ export class SocketGatewayService
 
       // Notify others that user is online
       client.broadcast.emit('userOnline', {
-        userId: user.id,
-        username: user.name || user.email,
+        userId: user._id,
+        username: user.username || user.email,
         status: 'online',
       });
     } catch (error) {
@@ -155,9 +151,9 @@ export class SocketGatewayService
   async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): Promise<void> {
     try {
-      // TODO: Implement conversation access validation
+      // TODO: Validate user has access to this conversation
       client.join(`conversation:${conversationId}`);
       console.log(
         `User ${client.data.user.username} joined conversation ${conversationId}`,
@@ -174,7 +170,7 @@ export class SocketGatewayService
   handleLeaveConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): void {
     client.leave(`conversation:${conversationId}`);
     console.log(
       `User ${client.data.user.username} left conversation ${conversationId}`,
@@ -191,20 +187,16 @@ export class SocketGatewayService
       type?: string;
       receiverId: string;
     },
-  ) {
+  ): Promise<void> {
     try {
       const createMessageDto: CreateMessageDto = {
         conversationId: data.conversationId,
         senderId: client.data.user.userId,
         receiverId: data.receiverId,
         content: data.content,
-        messageType: data.type || 'text',
+        messageType: (data.type as MessageType) || MessageType.TEXT,
         isRead: false,
       };
-
-      // Create the message in the database
-      // This will automatically emit socket events via messagesService.create()
-      // const savedMessage = await this.messagesService.create(createMessageDto);
 
       // Legacy event for backward compatibility
       this.server.emit(`onNewMessageChat-${data.conversationId}`, {
@@ -228,7 +220,7 @@ export class SocketGatewayService
   async handleMarkAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageId: string; conversationId: string },
-  ) {
+  ): Promise<void> {
     try {
       // Mark the message as read in the database
       const updatedMessage = await this.messagesService.markAsRead(
@@ -261,7 +253,7 @@ export class SocketGatewayService
   async handleMarkMultipleAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageIds: string[]; conversationId: string },
-  ) {
+  ): Promise<void> {
     try {
       // Mark multiple messages as read in the database
       const updatedMessages = await this.messagesService.markMultipleAsRead(
@@ -295,7 +287,7 @@ export class SocketGatewayService
   async handleMarkConversationAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
-  ) {
+  ): Promise<void> {
     try {
       // Mark all unread messages in the conversation as read
       const affectedCount = await this.messagesService.markConversationAsRead(
@@ -330,35 +322,27 @@ export class SocketGatewayService
   handleStartTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): void {
     client.to(`conversation:${conversationId}`).emit('typingStart', {
       userId: client.data.user.userId,
       conversationId,
     });
-
-    // console.log(
-    //   `User ${client.data.user.userId} started typing in conversation ${conversationId}`,
-    // );
   }
 
   @SubscribeMessage('stopTyping')
   handleStopTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
-  ) {
+  ): void {
     client.to(`conversation:${conversationId}`).emit('typingStop', {
       userId: client.data.user.userId,
       conversationId,
     });
-
-    // console.log(
-    //   `User ${client.data.user.userId} stopped typing in conversation ${conversationId}`,
-    // );
   }
 
   // Legacy events for backward compatibility
   @SubscribeMessage('updateSchedule')
-  onUpdateSchedule(@MessageBody() body: any) {
+  onUpdateSchedule(@MessageBody() body: any): void {
     console.log(body);
     (this.server as any).emit('updateScheduleData', {
       message: 'Schedule updated',
@@ -367,8 +351,7 @@ export class SocketGatewayService
   }
 
   @SubscribeMessage('newMessageChat')
-  onNewMessageChat(@MessageBody() body: any) {
-    // console.log('CHECK NEW MESSAGE CHAT', body);
+  onNewMessageChat(@MessageBody() body: any): void {
     (this.server as any).emit(`onNewMessageChat-${body.conversationid}`, {
       message: 'New message received',
       data: body,
@@ -397,7 +380,7 @@ export class SocketGatewayService
   }
 
   // Mark user online (called from auth service)
-  public markUserOnline(userId: string) {
+  public markUserOnline(userId: string): void {
     if (!userId) return;
     const user = this.connectedUsers.get(userId);
     if (user) {
@@ -410,7 +393,7 @@ export class SocketGatewayService
   }
 
   // Mark user offline (called from auth service)
-  public markUserOffline(userId: string) {
+  public markUserOffline(userId: string): void {
     if (!userId) return;
     const user = this.connectedUsers.get(userId);
     if (user) {
@@ -440,12 +423,12 @@ export class SocketGatewayService
       );
 
       // Get sender information
-      const sender = await this.userService.findUserEntityById(senderId);
+      const sender = await this.AccountsService.findAccountEntityById(senderId);
 
       // Prepare the new message event
       const newMessageEvent: NewMessageEvent = {
         message: {
-          id: message.id,
+          id: message._id,
           conversationId: message.conversationId,
           senderId: message.senderId,
           receiverId: message.receiverId,
@@ -456,8 +439,8 @@ export class SocketGatewayService
           updatedAt: message.updatedAt,
         },
         sender: {
-          id: sender.id,
-          username: sender.name || sender.email,
+          id: sender._id,
+          username: sender.username || sender.email,
           email: sender.email,
         },
       };
@@ -466,7 +449,7 @@ export class SocketGatewayService
       const conversationUpdateEvent: ConversationUpdateEvent = {
         conversationId: conversationId,
         lastMessage: {
-          id: message.id,
+          id: message._id,
           content: message.content,
           senderId: message.senderId,
           messageType: message.messageType,
@@ -492,7 +475,7 @@ export class SocketGatewayService
           if (participantSocket) {
             const messageNotificationEvent: MessageNotificationEvent = {
               conversationId: conversationId,
-              messageId: message.id,
+              messageId: message._id,
               senderId: message.senderId,
               receiverId: participant.id,
               content: message.content,
@@ -522,7 +505,7 @@ export class SocketGatewayService
       const conversationUpdateEvent: ConversationUpdateEvent = {
         conversationId: conversationId,
         lastMessage: {
-          id: lastMessage.id,
+          id: lastMessage._id,
           content: lastMessage.content,
           senderId: lastMessage.senderId,
           messageType: lastMessage.messageType,
@@ -553,7 +536,7 @@ export class SocketGatewayService
       if (userSocket) {
         const messageNotificationEvent: MessageNotificationEvent = {
           conversationId: conversationId,
-          messageId: message.id,
+          messageId: message._id,
           senderId: message.senderId,
           receiverId: userId,
           content: message.content,

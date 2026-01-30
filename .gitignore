@@ -19,6 +19,11 @@ lerna-debug.log*
 /coverage
 /.nyc_output
 
+# Testing documentation and flows
+/TestFlow
+/document
+/instructions
+
 # IDEs and editors
 /.idea
 .project
@@ -29,7 +34,7 @@ lerna-debug.log*
 *.sublime-workspace
 
 # IDE - VSCode
-.vscode/*
+/.vscode
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -54,3 +59,12 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+#datasets
+/data
+
+# Database storage (Docker volumes)
+/database
+
+# Sequence diagrams
+sequence_diagram/

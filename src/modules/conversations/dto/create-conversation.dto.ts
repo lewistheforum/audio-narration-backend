@@ -5,57 +5,62 @@ import {
   MaxLength,
   IsArray,
   ArrayNotEmpty,
+  ArrayMinSize,
+  IsNotEmpty,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class CreateConversationDto {
   @ApiProperty({
-    description: 'Title of the conversation',
+    description: 'Conversation title',
     example: 'Medical Consultation',
     required: false,
+    maxLength: 255,
   })
   @IsOptional()
-  @IsString()
-  @MaxLength(255)
+  @IsString({ message: 'Title must be a string' })
+  @MaxLength(255, { message: 'Title must not exceed 255 characters' })
+  @Transform(({ value }) => value?.trim())
   title?: string;
 
   @ApiProperty({
-    description: 'Description of the conversation',
+    description: 'Conversation description',
     example: 'Discussion about patient symptoms and treatment options',
     required: false,
+    maxLength: 1000,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Description must be a string' })
+  @MaxLength(1000, { message: 'Description must not exceed 1000 characters' })
+  @Transform(({ value }) => value?.trim())
   description?: string;
 
   @ApiProperty({
-    description: 'List of participant IDs in the conversation',
+    description: 'List of participant user IDs (minimum 2)',
     example: [
       '123e4567-e89b-12d3-a456-426614174000',
       '223e4567-e89b-12d3-a456-426614174001',
     ],
-    required: true,
     isArray: true,
     type: String,
   })
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsUUID('4', { each: true })
+  @IsNotEmpty({ message: 'Participants list is required' })
+  @IsArray({ message: 'Participants must be an array' })
+  @ArrayNotEmpty({ message: 'Participants list cannot be empty' })
+  @ArrayMinSize(2, { message: 'At least 2 participants are required' })
+  @IsUUID('4', {
+    each: true,
+    message: 'Each participant ID must be a valid UUID',
+  })
   participants: string[];
 
   @ApiProperty({
-    description: 'ID of the user creating the conversation',
+    description: 'User ID creating the conversation',
     example: '123e4567-e89b-12d3-a456-426614174000',
-    required: true,
+    required: false,
   })
   @IsOptional()
-  @IsUUID()
-  createdUserId: string;
-
-  // @ApiProperty({
-  //   description: 'ID of the user creating the conversation',
-  //   example: '123e4567-e89b-12d3-a456-426614174000',
-  // })
-  // @IsUUID()
-  // userId: string;
+  @IsUUID('4', { message: 'Created user ID must be a valid UUID' })
+  createdUserId?: string;
 }

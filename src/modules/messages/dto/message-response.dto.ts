@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MessageType } from '../enums';
 
 export class MessageResponseDto {
   @ApiProperty({
@@ -33,10 +34,10 @@ export class MessageResponseDto {
 
   @ApiProperty({
     description: 'Type of the message',
-    example: 'text',
-    enum: ['text', 'image', 'file', 'audio', 'video'],
+    example: MessageType.TEXT,
+    enum: MessageType,
   })
-  messageType: string;
+  messageType: MessageType;
 
   @ApiProperty({
     description: 'Whether the message has been read',
@@ -79,17 +80,18 @@ export class MessageResponseDto {
   })
   deletedAt: Date | null;
 
-  constructor(message: any) {
-    this.id = message.id;
-    this.conversationId = message.conversationId;
-    this.senderId = message.senderId;
-    this.receiverId = message.receiverId;
-    this.content = message.content;
-    this.messageType = message.messageType;
-    this.isRead = message.isRead;
+  constructor(message: Partial<MessageResponseDto> | any) {
+    this.id = message._id || message.id || '';
+    this.conversationId = message.conversationId || '';
+    this.senderId = message.senderId || '';
+    this.receiverId = message.receiverId || '';
+    this.content = message.content || '';
+    this.messageType = message.messageType || MessageType.TEXT;
+    this.isRead = message.isRead ?? false;
     this.deletedBy = message.deletedBy || [];
-    this.createdAt = message.createdAt;
-    this.updatedAt = message.updatedAt;
+    this.validatedAt = message.validatedAt || new Date();
+    this.createdAt = message.createdAt || new Date();
+    this.updatedAt = message.updatedAt || new Date();
     this.deletedAt = message.deletedAt || null;
   }
 }
