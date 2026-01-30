@@ -4,8 +4,8 @@ import { Appointment, AppointmentPackage, ServiceAppointment } from './entities'
 import { AppointmentsController } from './appointments.controller';
 import { AppointmentsService } from './appointments.service';
 import { AppointmentRepository, AppointmentPackageRepository } from './repositories';
-import { ClinicStaffInformation } from '../accounts/entities';
-import { ClinicStaffInformationRepository } from '../accounts/repositories';
+import { ClinicStaffInformation, Account } from '../accounts/entities';
+import { ClinicStaffInformationRepository, AccountRepository } from '../accounts/repositories';
 import { EmployeeSchedule } from '../schedules/entities/employee-schedule.entity';
 import { EmployeeScheduleRepository } from '../schedules/repositories/employee-schedule.repository';
 
@@ -26,6 +26,7 @@ import { EmployeeScheduleRepository } from '../schedules/repositories/employee-s
       ServiceAppointment,
       ClinicStaffInformation,
       EmployeeSchedule,
+      Account,
     ]),
   ],
   controllers: [AppointmentsController],
@@ -35,6 +36,7 @@ import { EmployeeScheduleRepository } from '../schedules/repositories/employee-s
     AppointmentPackageRepository,
     ClinicStaffInformationRepository,
     EmployeeScheduleRepository,
+    AccountRepository,
   ],
   exports: [TypeOrmModule, AppointmentsService],
 })

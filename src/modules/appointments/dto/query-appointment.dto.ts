@@ -20,10 +20,10 @@ export class QueryAppointmentDto {
 
   @ApiProperty({
     description: 'Filter by appointment date (YYYY-MM-DD)',
-    example: '2026-01-20',
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsDateString({}, { message: 'Invalid date format. Use YYYY-MM-DD' })
   appointmentDate?: string;
 

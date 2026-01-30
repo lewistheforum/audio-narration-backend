@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AppointmentRepository, AppointmentPackageRepository } from './repositories';
-import { ClinicStaffInformationRepository } from '../accounts/repositories';
+import { ClinicStaffInformationRepository, AccountRepository } from '../accounts/repositories';
+import { AccountRole } from '../accounts/enums';
 import { EmployeeScheduleRepository } from '../schedules/repositories/employee-schedule.repository';
 import {
   QueryAppointmentDto,
@@ -47,6 +48,7 @@ export class AppointmentsService {
     private readonly appointmentPackageRepository: AppointmentPackageRepository,
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
+    private readonly accountRepository: AccountRepository,
   ) {}
 
   /**
@@ -63,16 +65,15 @@ export class AppointmentsService {
     staffAccountId: string,
     queryDto: QueryAppointmentDto,
   ): Promise<PaginatedAppointmentResponseDto> {
-    // Get staff information to find their clinic
-    const staffInfo =
-      await this.clinicStaffRepository.findByAccountId(staffAccountId);
+    // Get staff account to verify clinic access
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
 
-    if (!staffInfo || !staffInfo.account?.parentId) {
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
       throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
     }
 
     // Get clinic ID from staff's parent account (clinic manager)
-    const clinicId = staffInfo.account.parentId;
+    const clinicId = staffAccount.parentId;
 
     // Prepare filters
     const filters = {
@@ -98,25 +99,22 @@ export class AppointmentsService {
         appointmentIds,
       );
 
-    // Fetch clinic rooms for all appointments with doctors
-    const doctorDatePairs = appointments
-      .filter((apt) => apt.doctorId)
-      .map((apt) => ({
-        doctorId: apt.doctorId!,
-        appointmentDate: apt.appointmentDate,
-      }));
+    // Fetch clinic rooms for all appointments
+    const appointmentData = appointments.map((apt) => ({
+      appointmentId: apt._id,
+      doctorShiftHourId: apt.doctorShiftHourId,
+      doctorId: apt.doctorId,
+      appointmentDate: apt.appointmentDate,
+    }));
 
     const clinicRoomsMap =
       await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
-        doctorDatePairs,
+        appointmentData,
       );
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
-      const roomsKey = appointment.doctorId
-        ? `${appointment.doctorId}_${appointment.appointmentDate}`
-        : null;
-      const clinicRooms = roomsKey ? clinicRoomsMap.get(roomsKey) || [] : [];
+      const clinicRooms = clinicRoomsMap.get(appointment._id) || [];
 
       return this.transformToResponseDto(
         appointment,
@@ -157,15 +155,14 @@ export class AppointmentsService {
     staffAccountId: string,
     createDto: StaffCreateAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    // Get staff information to verify clinic access
-    const staffInfo =
-      await this.clinicStaffRepository.findByAccountId(staffAccountId);
+    // Get staff account to verify clinic access
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
 
-    if (!staffInfo || !staffInfo.account?.parentId) {
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
       throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
     }
 
-    const clinicId = staffInfo.account.parentId;
+    const clinicId = staffAccount.parentId;
 
     // Convert date strings to Date objects
     const appointmentDate = new Date(createDto.appointmentDate);
@@ -192,6 +189,35 @@ export class AppointmentsService {
 
     // Execute transaction to create appointment + package + services
     return await this.dataSource.transaction(async (manager) => {
+      // Query service prices to calculate total
+      const serviceIds = createDto.services.map((s) => s.clinicServiceId);
+      const servicePrices = await manager
+        .createQueryBuilder()
+        .select('config._id', 'id')
+        .addSelect('config.price', 'price')
+        .from('clinic_service_config', 'config')
+        .where('config._id IN (:...serviceIds)', { serviceIds })
+        .andWhere('config.clinic_id = :clinicId', { clinicId })
+        .andWhere('config.is_active = :isActive', { isActive: true })
+        .andWhere('config.deleted_at IS NULL')
+        .getRawMany();
+
+      // Validate all services exist and are active
+      if (servicePrices.length !== serviceIds.length) {
+        throw new BadRequestException(
+          `One or more services not found or inactive for this clinic. Expected ${serviceIds.length} services, found ${servicePrices.length}`,
+        );
+      }
+
+      // Calculate total amount from services
+      const calculatedTotal = servicePrices.reduce(
+        (sum, service) => sum + parseFloat(service.price),
+        0,
+      );
+
+      // Use provided total or calculated total
+      const finalTotal = createDto.total ?? calculatedTotal;
+
       // 1. Create appointment
       const appointment = manager.create(Appointment, {
         patientId: createDto.patientId,
@@ -201,7 +227,7 @@ export class AppointmentsService {
         appointmentDate: appointmentDate,
         appointmentHour: appointmentHour,
         extraHour: extraHour,
-        total: createDto.total,
+        total: finalTotal,
         patientNote: createDto.patientNote || null,
         status: AppointmentStatus.PENDING,
         rejectReason: null,
@@ -209,11 +235,12 @@ export class AppointmentsService {
 
       const savedAppointment = await manager.save(Appointment, appointment);
 
-      // 2. Create appointment package
+      // 2. Create appointment package (always create to store services)
+      // TransactionId can be null and updated later when payment is made
       const appointmentPackage = manager.create(AppointmentPackage, {
         appointmentId: savedAppointment._id,
-        transactionId: createDto.transactionId,
-        amount: createDto.total,
+        transactionId: createDto.transactionId || null,
+        amount: finalTotal,
         status: createDto.paymentStatus || null,
         paymentType: createDto.paymentType || null,
       });
@@ -223,7 +250,7 @@ export class AppointmentsService {
         appointmentPackage,
       );
 
-      // 3. Create service appointments
+      // 3. Create service appointments (always create to store selected services)
       const serviceAppointments = createDto.services.map((service) =>
         manager.create(ServiceAppointment, {
           clinicServiceId: service.clinicServiceId,
@@ -436,12 +463,13 @@ export class AppointmentsService {
    * Check in patient for appointment
    *
    * Changes appointment status to CHECKED_IN when patient arrives at clinic
+   * Accepts both PENDING and CONFIRMED appointments
    *
    * @param appointmentId - Appointment UUID
    * @param checkInDto - Empty DTO (for future extensibility)
    * @returns Updated appointment details
    * @throws NotFoundException if appointment not found
-   * @throws BadRequestException if appointment status is not CONFIRMED
+   * @throws BadRequestException if appointment status is not PENDING or CONFIRMED
    */
   async checkInPatient(
     appointmentId: string,
@@ -455,10 +483,13 @@ export class AppointmentsService {
       throw new NotFoundException('Appointment not found.');
     }
 
-    // Validate current status - only CONFIRMED appointments can be checked in
-    if (appointment.status !== AppointmentStatus.CONFIRMED) {
+    // Validate current status - only PENDING or CONFIRMED appointments can be checked in
+    if (
+      appointment.status !== AppointmentStatus.PENDING &&
+      appointment.status !== AppointmentStatus.CONFIRMED
+    ) {
       throw new BadRequestException(
-        `Cannot check in appointment with status "${appointment.status}". Only confirmed appointments (CONFIRMED) can be checked in.`,
+        `Cannot check in appointment with status "${appointment.status}". Only pending (PENDING) or confirmed (CONFIRMED) appointments can be checked in.`,
       );
     }
 
@@ -473,29 +504,28 @@ export class AppointmentsService {
   }
 
   /**
-   * Accept appointment (Doctor)
+   * Accept appointment (Staff/Doctor)
    *
-   * Allows a doctor to accept a pending appointment
+   * Allows clinic staff or doctor to accept a pending appointment
    * Changes status from PENDING to CONFIRMED
    *
    * @param appointmentId - Appointment UUID
-   * @param doctorAccountId - Doctor's account UUID
+   * @param userAccountId - User's account UUID (staff or doctor)
    * @param acceptDto - Empty DTO (for future extensibility)
    * @returns Updated appointment details
    * @throws NotFoundException if appointment not found
-   * @throws ForbiddenException if appointment not assigned to this doctor
    * @throws BadRequestException if appointment status is not PENDING
    *
    * @example
    * const appointment = await this.appointmentsService.acceptAppointment(
    *   appointmentId,
-   *   doctorId,
+   *   userId,
    *   {}
    * );
    */
   async acceptAppointment(
     appointmentId: string,
-    doctorAccountId: string,
+    userAccountId: string,
     acceptDto: AcceptAppointmentDto,
   ): Promise<AppointmentResponseDto> {
     // Find appointment with relations
@@ -504,13 +534,6 @@ export class AppointmentsService {
 
     if (!appointment || appointment.deletedAt) {
       throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound);
-    }
-
-    // Verify appointment is assigned to this doctor
-    if (appointment.doctorId !== doctorAccountId) {
-      throw new ForbiddenException(
-        MESSAGES.failMessage.appointmentNotAssignedToDoctor,
-      );
     }
 
     // Validate current status - only PENDING appointments can be accepted
@@ -531,29 +554,28 @@ export class AppointmentsService {
   }
 
   /**
-   * Decline appointment (Doctor)
+   * Decline appointment (Staff/Doctor)
    *
-   * Allows a doctor to decline a pending appointment
+   * Allows clinic staff or doctor to decline a pending appointment
    * Changes status from PENDING to CANCELLED with reject reason
    *
    * @param appointmentId - Appointment UUID
-   * @param doctorAccountId - Doctor's account UUID
+   * @param userAccountId - User's account UUID (staff or doctor)
    * @param declineDto - Reject reason (required)
    * @returns Updated appointment details
    * @throws NotFoundException if appointment not found
-   * @throws ForbiddenException if appointment not assigned to this doctor
    * @throws BadRequestException if appointment status is not PENDING
    *
    * @example
    * const appointment = await this.appointmentsService.declineAppointment(
    *   appointmentId,
-   *   doctorId,
-   *   { rejectReason: 'Doctor is fully booked on this date' }
+   *   userId,
+   *   { rejectReason: 'Clinic is fully booked on this date' }
    * );
    */
   async declineAppointment(
     appointmentId: string,
-    doctorAccountId: string,
+    userAccountId: string,
     declineDto: DeclineAppointmentDto,
   ): Promise<AppointmentResponseDto> {
     // Find appointment with relations
@@ -562,13 +584,6 @@ export class AppointmentsService {
 
     if (!appointment || appointment.deletedAt) {
       throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound);
-    }
-
-    // Verify appointment is assigned to this doctor
-    if (appointment.doctorId !== doctorAccountId) {
-      throw new ForbiddenException(
-        MESSAGES.failMessage.appointmentNotAssignedToDoctor,
-      );
     }
 
     // Validate current status - only PENDING appointments can be declined
@@ -786,6 +801,12 @@ export class AppointmentsService {
       appointment.doctor?.username ||
       null;
 
+    // Get clinic branch name from raw query result or fallback to username
+    const clinicName =
+      appointment.clinicProfile_clinic_branch_name ||
+      appointment.clinic?.username ||
+      'N/A';
+
     return {
       id: appointment._id,
       patientId: appointment.patientId,
@@ -793,7 +814,7 @@ export class AppointmentsService {
       patientEmail: appointment.patient?.email,
       patientPhone: appointment.patient?.phone,
       clinicId: appointment.clinicId,
-      clinicName: appointment.clinic?.username || 'N/A',
+      clinicName,
       doctorId: appointment.doctorId,
       doctorFullName,
       clinicRooms: clinicRooms || [],
@@ -828,15 +849,19 @@ export class AppointmentsService {
     appointmentId: string,
     staffAccountId: string,
   ): Promise<AppointmentDetailResponseDto> {
-    // Get staff information to verify clinic access
-    const staffInfo =
-      await this.clinicStaffRepository.findByAccountId(staffAccountId);
+    // Get staff account to verify clinic access
+    const staffAccount =
+      await this.accountRepository.findAccountById(staffAccountId);
 
-    if (!staffInfo || !staffInfo.account?.parentId) {
+    if (
+      !staffAccount ||
+      staffAccount.role !== AccountRole.CLINIC_STAFF ||
+      !staffAccount.parentId
+    ) {
       throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
     }
 
-    const clinicId = staffInfo.account.parentId;
+    const clinicId = staffAccount.parentId;
 
     // Fetch appointment with complete details
     const appointment =
@@ -863,12 +888,17 @@ export class AppointmentsService {
 
     // Fetch clinic rooms (if doctor assigned)
     let clinicRooms: any[] = [];
-    if (appointment.doctorId && appointment.appointmentDate) {
-      clinicRooms =
-        await this.employeeScheduleRepository.findClinicRoomsByDoctorAndDate(
-          appointment.doctorId,
-          appointment.appointmentDate,
-        );
+    if (appointment.doctorId && appointment.appointmentDate && appointment.doctorShiftHourId) {
+      const roomsMap =
+        await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments([
+          {
+            appointmentId: appointment._id,
+            doctorShiftHourId: appointment.doctorShiftHourId,
+            doctorId: appointment.doctorId,
+            appointmentDate: appointment.appointmentDate,
+          },
+        ]);
+      clinicRooms = roomsMap.get(appointment._id) || [];
     }
 
     // Transform to response DTO

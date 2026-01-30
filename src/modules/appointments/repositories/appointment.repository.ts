@@ -43,6 +43,11 @@ export class AppointmentRepository {
         'patientProfile.account_id = patient._id',
       )
       .leftJoinAndSelect('appointment.clinic', 'clinic')
+      .leftJoin(
+        'clinic_manager_information',
+        'clinicProfile',
+        'clinicProfile.account_id = clinic._id',
+      )
       .leftJoinAndSelect('appointment.doctor', 'doctor')
       .leftJoin(
         'doctor_information',
@@ -52,6 +57,8 @@ export class AppointmentRepository {
       .addSelect([
         'patientProfile._id',
         'patientProfile.full_name',
+        'clinicProfile._id',
+        'clinicProfile.clinic_branch_name',
         'doctorProfile._id',
         'doctorProfile.full_name',
       ])

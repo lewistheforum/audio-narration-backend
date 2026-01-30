@@ -125,59 +125,82 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
   }
 
   /**
-   * Find clinic rooms for multiple doctor-date combinations
-   *
-   * @param doctorDatePairs - Array of {doctorId, appointmentDate} objects
-   * @returns Map of "doctorId_date" to clinic rooms array
+   * Find clinic rooms for multiple appointments
+   * 
+   * Uses doctor_shift_hour_id to find rooms via the chain:
+   * appointment → clinic_shift_hour → clinic_shift → employee_schedule → clinic_room_employee_schedule → clinic_rooms
+   * 
+   * @param appointmentData - Array of {appointmentId, doctorShiftHourId, doctorId, appointmentDate}
+   * @returns Map of appointmentId to clinic rooms array
    */
   async findClinicRoomsForMultipleAppointments(
-    doctorDatePairs: Array<{ doctorId: string; appointmentDate: Date }>,
+    appointmentData: Array<{ 
+      appointmentId: string;
+      doctorShiftHourId: string | null;
+      doctorId: string | null;
+      appointmentDate: Date;
+    }>,
   ): Promise<Map<string, any[]>> {
-    if (doctorDatePairs.length === 0) {
+    if (appointmentData.length === 0) {
       return new Map();
     }
 
-    // Build OR conditions for each doctor-date pair
-    const conditions = doctorDatePairs
-      .map(
-        (_, index) =>
-          `(schedule.employee_id = :doctorId${index} AND schedule.work_date = :workDate${index})`,
+    // Filter only appointments with doctor_shift_hour_id
+    const validAppointments = appointmentData.filter(a => a.doctorShiftHourId && a.doctorId);
+    
+    if (validAppointments.length === 0) {
+      return new Map();
+    }
+
+    // Build OR conditions for each appointment
+    // Filter by work_date to get the correct room for that specific day
+    const conditions = validAppointments
+      .map((_, index) => 
+        `(a._id = :aptId${index} AND a.doctor_shift_hour_id = :shiftHourId${index} AND es.employee_id = :doctorId${index} AND es.work_date = a.appointment_date)`
       )
       .join(' OR ');
 
     // Build parameters object
     const parameters: any = {};
-    doctorDatePairs.forEach((pair, index) => {
-      parameters[`doctorId${index}`] = pair.doctorId;
-      parameters[`workDate${index}`] = pair.appointmentDate;
+    validAppointments.forEach((apt, index) => {
+      parameters[`aptId${index}`] = apt.appointmentId;
+      parameters[`shiftHourId${index}`] = apt.doctorShiftHourId;
+      parameters[`doctorId${index}`] = apt.doctorId;
     });
 
-    const result = await this.dataSource
+    const queryBuilder = this.dataSource
       .createQueryBuilder()
-      .select('schedule.employee_id', 'doctorId')
-      .addSelect('schedule.work_date', 'workDate')
-      .addSelect('room._id', 'roomId')
-      .addSelect('room.room_name', 'roomName')
-      .from(EmployeeSchedule, 'schedule')
-      .innerJoin('schedule.rooms', 'room')
+      .select('a._id', 'appointmentId')
+      .addSelect('a.appointment_date', 'appointmentDate')
+      .addSelect('es.work_date', 'workDate')
+      .addSelect('cr._id', 'roomId')
+      .addSelect('cr.room_name', 'roomName')
+      .from('appointments', 'a')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.doctor_shift_hour_id')
+      .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+      .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
+      .innerJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
+      .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
       .where(conditions, parameters)
-      .andWhere('schedule.deletedAt IS NULL')
-      .andWhere('room.deletedAt IS NULL')
-      .getRawMany();
+      .andWhere('a.deleted_at IS NULL')
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('cr.deleted_at IS NULL');
 
-    // Group by doctorId_date key
+    const result = await queryBuilder.getRawMany();
+
+    // Group by appointmentId
     const roomsMap = new Map<string, any[]>();
     result.forEach((row) => {
-      const key = `${row.doctorId}_${row.workDate}`;
+      const appointmentId = row.appointmentId;
       const room = {
         id: row.roomId,
         roomName: row.roomName,
       };
 
-      if (!roomsMap.has(key)) {
-        roomsMap.set(key, []);
+      if (!roomsMap.has(appointmentId)) {
+        roomsMap.set(appointmentId, []);
       }
-      roomsMap.get(key)!.push(room);
+      roomsMap.get(appointmentId)!.push(room);
     });
 
     return roomsMap;

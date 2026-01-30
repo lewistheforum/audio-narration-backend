@@ -21,11 +21,11 @@ import { Transform, Type } from 'class-transformer';
  */
 export class ServiceItemDto {
   @ApiProperty({
-    description: 'Clinic service config ID',
-    example: '123e4567-e89b-12d3-a456-426614174010',
+    description: 'Clinic service config ID (UUID format)',
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsNotEmpty({ message: 'Service ID is required' })
-  @IsUUID('4', { message: 'Invalid service ID format' })
+  @IsUUID('4', { message: 'Service ID must be a valid UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)' })
   clinicServiceId: string;
 }
 
@@ -85,6 +85,7 @@ export class StaffCreateAppointmentDto {
   })
   @IsOptional()
   @IsDateString({}, { message: 'Invalid datetime format' })
+  @Transform(({ value }) => (value === '' ? null : value))
   extraHour?: string;
 
   @ApiProperty({
@@ -103,21 +104,24 @@ export class StaffCreateAppointmentDto {
   services: ServiceItemDto[];
 
   @ApiProperty({
-    description: 'Total amount for all services',
+    description: 'Total amount for all services (optional - will be auto-calculated from services if not provided)',
     example: 500000,
+    required: false,
   })
-  @IsNotEmpty({ message: 'Total amount is required' })
+  @IsOptional()
   @IsNumber({}, { message: 'Total must be a number' })
   @Min(0, { message: 'Total must be a positive number' })
-  total: number;
+  total?: number;
 
   @ApiProperty({
-    description: 'Transaction ID for payment',
+    description: 'Transaction ID for payment (optional - can be created later)',
     example: '123e4567-e89b-12d3-a456-426614174020',
+    required: false,
   })
-  @IsNotEmpty({ message: 'Transaction ID is required' })
+  @IsOptional()
   @IsUUID('4', { message: 'Invalid transaction ID format' })
-  transactionId: string;
+  @Transform(({ value }) => (value === '' ? null : value))
+  transactionId?: string;
 
   @ApiProperty({
     description: 'Payment status',

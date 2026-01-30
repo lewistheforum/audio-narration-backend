@@ -30,11 +30,12 @@ export class AppointmentPackage {
   @JoinColumn({ name: 'appointment_id' })
   appointment?: Appointment;
 
-  @Column({ name: 'transaction_id', type: 'uuid' })
-  transactionId: string;
+  @Column({ name: 'transaction_id', type: 'uuid', nullable: true })
+  transactionId?: string | null;
 
   @ManyToOne(() => Transaction, {
     onDelete: 'CASCADE',
+    nullable: true,
   })
   @JoinColumn({ name: 'transaction_id' })
   transaction?: Transaction;

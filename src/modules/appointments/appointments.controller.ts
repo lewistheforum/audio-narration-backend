@@ -131,7 +131,7 @@ export class AppointmentsController {
     @Request() req: any,
     @Query() queryDto: QueryAppointmentDto,
   ): Promise<PaginatedAppointmentResponseDto> {
-    const staffAccountId = req.user.id;
+    const staffAccountId = req.user._id;
     return this.appointmentsService.getAppointmentsForStaff(
       staffAccountId,
       queryDto,
@@ -186,7 +186,7 @@ export class AppointmentsController {
     @Request() req: any,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<AppointmentDetailResponseDto> {
-    const staffAccountId = req.user.id;
+    const staffAccountId = req.user._id;
     return this.appointmentsService.getAppointmentDetail(id, staffAccountId);
   }
 
@@ -240,7 +240,7 @@ export class AppointmentsController {
     @Request() req: any,
     @Body() createDto: StaffCreateAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    const staffAccountId = req.user.id;
+    const staffAccountId = req.user._id;
     return this.appointmentsService.staffCreateAppointment(
       staffAccountId,
       createDto,
@@ -406,7 +406,7 @@ export class AppointmentsController {
    * Check in patient for appointment
    *
    * Allows clinic staff to check in a patient when they arrive at the clinic
-   * Changes appointment status from CONFIRMED to CHECKED_IN
+   * Changes appointment status from PENDING or CONFIRMED to CHECKED_IN
    *
    * @param id - Appointment UUID
    * @param checkInDto - Empty DTO (endpoint does not require body)
@@ -420,7 +420,7 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Check in patient for appointment',
     description:
-      'Check in a patient when they arrive at the clinic. Changes status from CONFIRMED to CHECKED_IN.',
+      'Check in a patient when they arrive at the clinic. Changes status from PENDING or CONFIRMED to CHECKED_IN.',
   })
   @ApiResponse({
     status: 200,
@@ -429,7 +429,7 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment status is not CONFIRMED',
+    description: 'Bad Request - Appointment status is not PENDING or CONFIRMED',
   })
   @ApiResponse({
     status: 401,
@@ -457,25 +457,25 @@ export class AppointmentsController {
   }
 
   /**
-   * Accept appointment (Doctor)
+   * Accept appointment (Staff/Doctor)
    *
-   * Allows a doctor to accept a pending appointment
+   * Allows clinic staff or doctor to accept a pending appointment
    * Changes appointment status from PENDING to CONFIRMED
    *
-   * @param req - Request object containing authenticated doctor
+   * @param req - Request object containing authenticated user
    * @param id - Appointment UUID
    * @param acceptDto - Empty DTO (endpoint does not require body)
    * @returns Updated appointment details
    */
   @Patch(':id/accept')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR)
+  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Accept appointment (Doctor only)',
+    summary: 'Accept appointment (Staff/Doctor)',
     description:
-      'Doctor accepts a pending appointment. Changes status from PENDING to CONFIRMED. Only the assigned doctor can accept.',
+      'Staff or doctor accepts a pending appointment. Changes status from PENDING to CONFIRMED.',
   })
   @ApiResponse({
     status: 200,
@@ -493,7 +493,7 @@ export class AppointmentsController {
   @ApiResponse({
     status: 403,
     description:
-      'Forbidden - User is not a doctor or appointment not assigned to this doctor',
+      'Forbidden - User is not a clinic staff or doctor',
   })
   @ApiResponse({
     status: 404,
@@ -510,34 +510,34 @@ export class AppointmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() acceptDto: AcceptAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    const doctorAccountId = req.user.id;
+    const userAccountId = req.user._id;
     return this.appointmentsService.acceptAppointment(
       id,
-      doctorAccountId,
+      userAccountId,
       acceptDto,
     );
   }
 
   /**
-   * Decline appointment (Doctor)
+   * Decline appointment (Staff/Doctor)
    *
-   * Allows a doctor to decline a pending appointment
+   * Allows clinic staff or doctor to decline a pending appointment
    * Changes appointment status from PENDING to CANCELLED with reject reason
    *
-   * @param req - Request object containing authenticated doctor
+   * @param req - Request object containing authenticated user
    * @param id - Appointment UUID
    * @param declineDto - Reject reason (required)
    * @returns Updated appointment details
    */
   @Patch(':id/decline')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR)
+  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Decline appointment (Doctor only)',
+    summary: 'Decline appointment (Staff/Doctor)',
     description:
-      'Doctor declines a pending appointment. Changes status from PENDING to CANCELLED with reject reason. Only the assigned doctor can decline.',
+      'Staff or doctor declines a pending appointment. Changes status from PENDING to CANCELLED with reject reason.',
   })
   @ApiResponse({
     status: 200,
@@ -555,7 +555,7 @@ export class AppointmentsController {
   @ApiResponse({
     status: 403,
     description:
-      'Forbidden - User is not a doctor or appointment not assigned to this doctor',
+      'Forbidden - User is not a clinic staff or doctor',
   })
   @ApiResponse({
     status: 404,
@@ -572,10 +572,10 @@ export class AppointmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() declineDto: DeclineAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    const doctorAccountId = req.user.id;
+    const userAccountId = req.user._id;
     return this.appointmentsService.declineAppointment(
       id,
-      doctorAccountId,
+      userAccountId,
       declineDto,
     );
   }
