@@ -109,7 +109,6 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
     ClinicStaffInformationRepository,
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
-
     TransactionRepository,
   ],
 })
