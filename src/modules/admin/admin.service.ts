@@ -156,11 +156,10 @@ export class AdminService {
   /**
    * Reject a clinic registration
    *
-   * Sets legal documents to REJECTED and stores rejection reason
+   * Sets legal documents to REJECTED
    */
   async rejectRegistration(
     clinicAdminId: string,
-    rejectionReason: string,
   ): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -220,9 +219,6 @@ export class AdminService {
 
       // Update legal documents status to REJECTED
       legalDocs.verificationStatus = LegalDocumentVerificationStatus.REJECTED;
-      // Store rejection reason in otherDocs
-      legalDocs.otherDocs = legalDocs.otherDocs || [];
-      legalDocs.otherDocs.push(`REJECTION_REASON:${rejectionReason}`);
       await queryRunner.manager.save(ClinicsLegalDocuments, legalDocs);
 
       // Update subscription status to REJECTED

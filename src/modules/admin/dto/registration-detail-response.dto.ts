@@ -119,7 +119,4 @@ export class RegistrationDetailResponseDto {
 
   @ApiProperty({ type: SubscriptionInfoDto })
   subscription: SubscriptionInfoDto;
-
-  @ApiProperty({ description: 'Rejection reason (if rejected)', required: false })
-  rejectionReason?: string;
 }

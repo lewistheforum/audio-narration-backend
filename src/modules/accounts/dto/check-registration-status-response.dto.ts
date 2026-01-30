@@ -60,14 +60,6 @@ export class CheckRegistrationStatusResponseDto {
   managerAccountId?: string;
 
   @ApiProperty({
-    description: 'Rejection reason when status is REJECTED',
-    example: 'Business license is invalid or expired',
-    required: false,
-    nullable: true,
-  })
-  rejectionReason?: string;
-
-  @ApiProperty({
     description: 'Optional notice message for statuses like NON_RENEWING',
     example: 'Your subscription will not renew automatically',
     required: false,

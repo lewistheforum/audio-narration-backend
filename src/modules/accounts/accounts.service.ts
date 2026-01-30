@@ -3190,7 +3190,6 @@ export class AccountsService {
    * - Returns status if email exists and has pending registration
    * - Returns canStart: true if email doesn't exist or no pending registration
    * - Returns managerAccountId for legal document related statuses
-   * - Returns rejectionReason for REJECTED status
    * - Returns notice for NON_RENEWING status
    * - Returns expirationDate for ACTIVE, NON_RENEWING, EXPIRED statuses
    *
@@ -3254,7 +3253,6 @@ export class AccountsService {
     const status = subscription.subscriptionStatus;
     let currentStep: string;
     let nextAction: string;
-    let rejectionReason: string | null = null;
     let notice: string | null = null;
     let expirationDate: string | null = null;
 
@@ -3305,17 +3303,6 @@ export class AccountsService {
             message: 'Registration data is inconsistent. Please contact support.',
           };
         }
-        // Query for legal documents to get rejection reason
-        if (managerAccountId) {
-          const legalDocs =
-            await this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
-          if (legalDocs && legalDocs.verificationStatus === LegalDocumentVerificationStatus.REJECTED) {
-            // Note: The ClinicsLegalDocuments entity doesn't have a dedicated rejectionReason field.
-            // The rejection reason would need to be added to the entity schema.
-            // For now, return null for rejectionReason.
-            rejectionReason = null;
-          }
-        }
         break;
       case RegistrationStatus.PENDING_PAYMENT:
         currentStep = 'STEP_6';
@@ -3355,7 +3342,6 @@ export class AccountsService {
       canResume: true,
       message: MESSAGES.failMessage.registrationStatusInProgress,
       managerAccountId: managerAccountId || undefined,
-      rejectionReason: rejectionReason || undefined,
       notice: notice || undefined,
       expirationDate: expirationDate || undefined,
     };
@@ -3681,6 +3667,7 @@ export class AccountsService {
         legalDocs.businessLicense = dto.businessLicenseUrl;
         legalDocs.taxIdUrl = dto.taxIdUrl;
         legalDocs.otherDocs = dto.otherDocs;
+        legalDocs.operatingLicense = dto.operatingLicense;
         legalDocs.verificationStatus =
           LegalDocumentVerificationStatus.PENDING_REVIEW;
         legalDocs = await queryRunner.manager.save(legalDocs);
@@ -3691,6 +3678,7 @@ export class AccountsService {
           businessLicense: dto.businessLicenseUrl,
           taxIdUrl: dto.taxIdUrl,
           otherDocs: dto.otherDocs,
+          operatingLicense: dto.operatingLicense,
           verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW,
         });
         legalDocs = await queryRunner.manager.save(legalDocs);

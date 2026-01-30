@@ -15,12 +15,4 @@ export class AdminApprovalDto {
     message: 'Action must be either APPROVE or REJECT',
   })
   action: 'APPROVE' | 'REJECT';
-
-  @ApiProperty({
-    description: 'Rejection reason (required for REJECT action)',
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  rejectionReason?: string;
 }

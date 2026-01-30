@@ -24,6 +24,16 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class UploadLegalDocumentDto {
   @ApiProperty({
+    description: 'Operating license document URL',
+    example: 'https://example.com/operating-license.pdf',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Operating license must be a string' })
+  @MaxLength(1000, { message: 'Operating license must not exceed 1000 characters' })
+  operatingLicense?: string;
+
+  @ApiProperty({
     description: 'Business license document URL',
     example: 'https://example.com/business-license.pdf',
   })

@@ -1167,4 +1167,171 @@ export class AccountsController {
     const result = await this.accountsService.cancelSubscription(req.user.accountId, dto);
     return { data: result, message: result.message };
   }
+
+  /**
+   * Upload Legal Documents for Clinic Manager (Step 4B)
+   *
+   * Uploads legal documents for a specific clinic manager during registration flow.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   * - Docs stored per manager (FK to manager account)
+   * - Status transitions to PENDING_APPROVAL
+   * - verificationStatus transitions to PENDING_REVIEW
+   *
+   * @param req - Request object containing authenticated user
+   * @param managerAccountId - Clinic manager account UUID
+   * @param dto - Legal document data
+   * @returns Created legal documents
+   */
+  @Post('clinic-managers/:managerAccountId/legal-documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Upload legal documents for clinic manager (Step 4B)',
+    description:
+      'Uploads legal documents for a specific clinic manager. Transitions subscription status to PENDING_APPROVAL.',
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: Object,
+    status: MESSAGES.statusCode.created,
+    message: 'Legal documents uploaded successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or no ownership',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic manager not found' })
+  async uploadLegalDocumentsForManager(
+    @Request() req: any,
+    @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
+    @Body() dto: any,
+  ): Promise<{ data: any; message: string }> {
+    const clinicAdminId = req.user.accountId;
+    const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
+      clinicAdminId,
+      managerAccountId,
+      dto,
+    );
+    return {
+      data: legalDocs,
+      message: 'Legal documents uploaded successfully. Waiting for admin approval.',
+    };
+  }
+
+  /**
+   * Get Legal Documents for Clinic Manager
+   *
+   * Retrieves legal documents for a specific clinic manager.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   *
+   * @param req - Request object containing authenticated user
+   * @param managerAccountId - Clinic manager account UUID
+   * @returns Legal documents
+   */
+  @Get('clinic-managers/:managerAccountId/legal-documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get legal documents for clinic manager',
+    description:
+      'Retrieves legal documents for a specific clinic manager.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiResponseData({
+    type: Object,
+    status: MESSAGES.statusCode.success,
+    message: 'Legal documents retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or no ownership',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic manager not found' })
+  async getLegalDocumentsForManager(
+    @Request() req: any,
+    @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
+  ): Promise<{ data: any; message: string }> {
+    const clinicAdminId = req.user.accountId;
+    const legalDocs = await this.accountsService.getLegalDocumentsForManager(
+      clinicAdminId,
+      managerAccountId,
+    );
+    return {
+      data: legalDocs,
+      message: 'Legal documents retrieved successfully',
+    };
+  }
+
+  /**
+   * Update Legal Documents for Clinic Manager (Rejected Documents)
+   *
+   * Updates rejected legal documents for a specific clinic manager.
+   * This endpoint is used when documents have been rejected and need to be resubmitted.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   * - Documents must be in REJECTED status
+   * - verificationStatus transitions to PENDING_REVIEW
+   * - Subscription status transitions back to PENDING_APPROVAL
+   *
+   * @param req - Request object containing authenticated user
+   * @param managerAccountId - Clinic manager account UUID
+   * @param dto - Legal document data to update
+   * @returns Updated legal documents
+   */
+  @Put('clinic-managers/:managerAccountId/legal-documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Update legal documents for clinic manager (Rejected Documents)',
+    description:
+      'Updates rejected legal documents for a specific clinic manager. Transitions subscription status back to PENDING_APPROVAL.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiResponseData({
+    type: Object,
+    status: MESSAGES.statusCode.success,
+    message: 'Legal documents updated successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or no ownership',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic manager not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot update documents with current status',
+  })
+  async updateLegalDocumentsForManager(
+    @Request() req: any,
+    @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
+    @Body() dto: any,
+  ): Promise<{ data: any; message: string }> {
+    const clinicAdminId = req.user.accountId;
+    const legalDocs = await this.accountsService.updateLegalDocumentsForManager(
+      clinicAdminId,
+      managerAccountId,
+      dto,
+    );
+    return {
+      data: legalDocs,
+      message: 'Legal documents updated successfully. Waiting for admin approval.',
+    };
+  }
 }
