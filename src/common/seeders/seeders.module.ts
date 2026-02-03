@@ -11,6 +11,8 @@ import { ClinicServicesModule } from '../../modules/clinic-services/clinic-servi
 import { ServiceConfigsModule } from '../../modules/service-configs/service-configs.module';
 import { ContractsModule } from '../../modules/contracts/contracts.module';
 import { SchedulesModule } from '../../modules/schedules/schedules.module';
+import { PrescriptionsModule } from '../../modules/prescriptions/prescriptions.module';
+import { AppointmentsModule } from '../../modules/appointments/appointments.module';
 import { AdminSeederService } from './admin-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
 import { AccountSeederService } from './account-seeder.service';
@@ -42,6 +44,10 @@ import { ClinicRoomRepository } from '../../modules/schedules/repositories/clini
 import { ClinicShiftRepository } from '../../modules/schedules/repositories/clinic-shift.repository';
 import { ClinicShiftHourRepository } from '../../modules/schedules/repositories/clinic-shift-hour.repository';
 import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
+import { AppointmentSeederService } from './appointment-seeder.service';
+import { ERMSeederService } from './erm-seeder.service';
+import { EPrescriptionSeederService } from './e-prescription-seeder.service';
+import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder.service';
 
 // Entities for KnowledgeBaseSeeder
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
@@ -52,6 +58,16 @@ import { EmployeeSchedule } from '../../modules/schedules/entities/employee-sche
 import { ClinicShift } from '../../modules/schedules/entities/clinic-shift.entity';
 import { ClinicShiftHour } from '../../modules/schedules/entities/clinic-shift-hour.entity';
 import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity';
+
+// Entities for Appointment Seeders
+import { Appointment } from '../../modules/appointments/entities/appointment.entity';
+import { AppointmentPackage } from '../../modules/appointments/entities/appointment-package.entity';
+import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
+import { ERM } from '../../modules/prescriptions/entities/erm.entity';
+import { EPrescription } from '../../modules/prescriptions/entities/e-prescription.entity';
+import { DetailEPrescription } from '../../modules/prescriptions/entities/detail-e-prescription.entity';
+import { Medicine } from '../../modules/prescriptions/entities/medicine.entity';
+import { MedicineRepository } from '../../modules/prescriptions/repositories/medicine.repository';
 
 /**
  * Seeders Module
@@ -98,6 +114,13 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
       ClinicShift,
       ClinicShiftHour,
       ClinicRoom,
+      Appointment,
+      AppointmentPackage,
+      ServiceAppointment,
+      ERM,
+      EPrescription,
+      DetailEPrescription,
+      Medicine,
     ]),
     BlogsModule,
     SubscriptionsModule,
@@ -105,6 +128,8 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ServiceConfigsModule,
     ContractsModule,
     SchedulesModule,
+    PrescriptionsModule,
+    AppointmentsModule,
     HttpModule,
   ],
   providers: [
@@ -133,12 +158,17 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ClinicShiftSeederService,
     EmployeeScheduleSeederService,
     ClinicRoomEmployeeScheduleSeederService,
+    AppointmentSeederService,
+    ERMSeederService,
+    EPrescriptionSeederService,
+    EPrescriptionDetailSeederService,
     SeederOrchestratorService,
     KnowledgeBaseRepository,
     ClinicRoomRepository,
     ClinicShiftRepository,
     ClinicShiftHourRepository,
     EmployeeScheduleRepository,
+    MedicineRepository,
   ],
   exports: [
     AdminSeederService,
@@ -166,6 +196,10 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ClinicShiftSeederService,
     EmployeeScheduleSeederService,
     ClinicRoomEmployeeScheduleSeederService,
+    AppointmentSeederService,
+    ERMSeederService,
+    EPrescriptionSeederService,
+    EPrescriptionDetailSeederService,
     SeederOrchestratorService,
   ],
 })
