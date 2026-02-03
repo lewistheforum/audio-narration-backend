@@ -11,6 +11,7 @@
     "start:dev": "nodemon",
     "start:prod": "node dist/main",
     "build": "nest build",
+    "type-check": "npx tsc --noEmit --pretty",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:restart": "docker-compose restart",
@@ -26,6 +27,7 @@
     "script:generate-encryption-key": "ts-node -r tsconfig-paths/register src/common/scripts/generate-encryption-key.ts",
     "script:enable-vector": "ts-node -r tsconfig-paths/register src/common/scripts/enable-vector.ts",
     "script:check-seeders": "ts-node -r tsconfig-paths/register src/common/scripts/check-seeders.ts",
+    "script:clear-db": "ts-node -r tsconfig-paths/register src/common/scripts/clear-db.ts",
     "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db"
   },
   "nodemonConfig": {
