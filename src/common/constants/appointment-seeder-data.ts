@@ -170,6 +170,22 @@ export const PRESCRIPTION_CHECKOUT_NOTES = [
 ];
 
 /**
+ * Sample prescription notes for detail records
+ */
+export const PRESCRIPTION_NOTES = [
+  'Take after meals',
+  'Take on empty stomach',
+  'Avoid dairy products',
+  'Do not crush or chew',
+  'Store at room temperature',
+  'Shake well before use',
+  'May cause drowsiness',
+  'Complete full course',
+  'Take with plenty of water',
+  'Consult doctor if symptoms persist',
+];
+
+/**
  * Sample service codes for ERMs
  */
 export const SERVICE_CODES = [
