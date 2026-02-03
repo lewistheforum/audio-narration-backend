@@ -215,13 +215,13 @@ export class SeederOrchestratorService implements OnModuleInit {
         this.logger.log('✅ Seed data already exists.');
 
         // Ensure AI conversations are seeded even if other data exists
-        await this.aiConversationSeeder.seed();
+        // await this.aiConversationSeeder.seed();
         this.logger.log(
           '✅ AI Conversation seeding completed (Incremental update)',
         );
 
         // Ensure Knowledge Base is seeded/updated even if other data exists
-        await this.knowledgeBaseSeeder.seed();
+        // await this.knowledgeBaseSeeder.seed();
         this.logger.log(
           '✅ Knowledge Base seeding completed (Incremental update)',
         );
