@@ -133,7 +133,7 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly ermSeeder: ERMSeederService,
     private readonly ePrescriptionSeeder: EPrescriptionSeederService,
     private readonly ePrescriptionDetailSeeder: EPrescriptionDetailSeederService,
-  ) {}
+  ) { }
 
   /**
    * Check if seed data already exists
@@ -348,7 +348,7 @@ export class SeederOrchestratorService implements OnModuleInit {
 
       // Step 28: Seed E-Prescriptions (must run after appointments)
       await this.ePrescriptionSeeder.seed();
-      this.logger.log('✅ E-Prescription seeding completed');
+      this.logger.log('✅ E-Prescription seeding completed')
 
       // Step 29: Seed E-Prescription Details (must run after e-prescriptions)
       await this.ePrescriptionDetailSeeder.seed();
@@ -378,7 +378,8 @@ export class SeederOrchestratorService implements OnModuleInit {
     const errors: string[] = [];
 
     // Validate appointments
-    const appointmentValidation = await this.appointmentSeeder.validateAppointments();
+    const appointmentValidation =
+      await this.appointmentSeeder.validateAppointments();
     errors.push(...appointmentValidation.errors);
 
     // Validate ERMs
@@ -386,11 +387,13 @@ export class SeederOrchestratorService implements OnModuleInit {
     errors.push(...ermValidation.errors);
 
     // Validate e-prescriptions
-    const ePrescriptionValidation = await this.ePrescriptionSeeder.validateEPrescriptions();
+    const ePrescriptionValidation =
+      await this.ePrescriptionSeeder.validateEPrescriptions();
     errors.push(...ePrescriptionValidation.errors);
 
     // Validate e-prescription details
-    const ePrescriptionDetailValidation = await this.ePrescriptionDetailSeeder.validateEPrescriptionDetails();
+    const ePrescriptionDetailValidation =
+      await this.ePrescriptionDetailSeeder.validateEPrescriptionDetails();
     errors.push(...ePrescriptionDetailValidation.errors);
 
     if (errors.length > 0) {
