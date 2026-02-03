@@ -11,6 +11,7 @@ import {
   getRandomInt,
   getRandomItem,
   PRESCRIPTION_CHECKOUT_NOTES,
+  PRESCRIPTION_NOTES,
 } from '../constants/appointment-seeder-data';
 
 /**
@@ -61,7 +62,9 @@ export class EPrescriptionDetailSeederService {
       const medicines = await this.medicineRepository.findAllMedicines();
 
       if (medicines.length === 0) {
-        throw new Error('No medicines found. Please seed medicines first.');
+        this.logger.warn('No medicines found. Skipping e-prescription detail seeding.');
+        this.logger.warn('⚠️  Please run: pnpm run script:bulk-import-medicines');
+        return;
       }
 
       this.logger.log(`Found ${medicines.length} medicines`);
@@ -100,6 +103,8 @@ export class EPrescriptionDetailSeederService {
             ePrescriptionId: ePrescription._id,
             medicineId: medicine.id,
             checkOut,
+            quantity: getRandomInt(1, 30),
+            note: Math.random() > 0.5 ? getRandomItem(PRESCRIPTION_NOTES) : null,
           });
 
           await this.detailEPrescriptionRepository.save(detail);
