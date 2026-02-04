@@ -185,11 +185,19 @@ export class TransactionsService {
    */
   async createVerificationQr(clinicId: string): Promise<PaymentResponseDto> {
     // 1. Resolve Clinic Admin Info from Account ID
+    console.log('DEBUG: createVerificationQr - Input clinicId (Account ID):', clinicId);
+
     const clinicAdmin = await this.clinicAdminRepo.findOne({
       where: { accountId: clinicId },
     });
 
+    console.log('DEBUG: createVerificationQr - Found clinicAdmin:', clinicAdmin);
+
     if (!clinicAdmin) {
+      console.error('DEBUG: createVerificationQr - Clinic Admin NOT FOUND for accountId:', clinicId);
+      // Debug: Try to list all admins to see what is available
+      const allAdmins = await this.clinicAdminRepo.find({ take: 5 });
+      console.log('DEBUG: createVerificationQr - First 5 admins in DB:', JSON.stringify(allAdmins, null, 2));
       throw new NotFoundException('Clinic Admin Information not found');
     }
 
@@ -275,7 +283,7 @@ export class TransactionsService {
       existingTransaction.subAccount = payload.subAccount ?? undefined;
       existingTransaction.referenceCode = payload.referenceCode;
       existingTransaction.seepayTransactionId = payload.id?.toString();
-      existingTransaction.metadata = { callbackSignature: payload.signature ?? null };
+
 
       console.log('handleCallback Debug - Found Existing Transaction:', existingTransaction.id);
       console.log('handleCallback Debug - Transaction Type:', existingTransaction.transactionType?.name);
@@ -367,9 +375,7 @@ export class TransactionsService {
       referenceCode: payload.referenceCode,
       description: payload.description,
       seepayTransactionId: payload.id?.toString(),
-      metadata: {
-        callbackSignature: payload.signature ?? null,
-      },
+
     });
 
     const savedTransaction = await this.transactionRepository.save(transaction);

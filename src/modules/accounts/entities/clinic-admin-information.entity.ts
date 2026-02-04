@@ -109,8 +109,8 @@ export class ClinicAdminInformation {
   @Column({
     name: 'bank_name',
     type: 'text',
-    nullable: true,
-    transformer: encryptionTransformer,
+    nullable: true
+    // transformer: encryptionTransformer,
   })
   bankName?: string;
 
@@ -148,8 +148,7 @@ export class ClinicAdminInformation {
   @Column({
     name: 'sepay_va',
     type: 'text',
-    nullable: true,
-    transformer: encryptionTransformer,
+    nullable: true
   })
   sepayVa?: string;
 
