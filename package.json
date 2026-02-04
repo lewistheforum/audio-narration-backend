@@ -19,6 +19,7 @@
     "docker:ps": "docker-compose ps",
     "docker:clean": "docker-compose down -v && rmdir /s /q database\\postgres_data 2>nul || rm -rf database/postgres_data",
     "docker:setup": "docker-compose up -d && timeout /t 20 && pnpm run script:enable-vector",
+    "script:setup-database-vector": "pnpm run script:enable-vector",
     "script:schema-diff": "ts-node -r tsconfig-paths/register src/common/scripts/check-schema-diff.ts",
     "script:sync-local-db": "ts-node -r tsconfig-paths/register src/common/scripts/sync-local-db.ts",
     "script:analyze-excel": "ts-node -r tsconfig-paths/register src/common/scripts/analyze-excel.ts",
@@ -91,6 +92,7 @@
     "typeorm": "^0.3.27"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.2.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.1.6",
     "@types/bcrypt": "^5.0.2",

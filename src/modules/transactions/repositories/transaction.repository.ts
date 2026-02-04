@@ -32,10 +32,13 @@ export class TransactionRepository extends Repository<Transaction> {
             `SELECT t.*,
               cai.clinic_name AS clinic_name,
               ga.full_name  AS sender_full_name,
-              ga.dob        AS sender_dob
+              ga.dob        AS sender_dob,
+              ss.service_name AS service_name
        FROM transactions t
       LEFT JOIN clinic_admin_information cai ON cai._id = t.clinic_id
       LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
+      LEFT JOIN clinic_subcriptions_history csh ON csh._id = t.subcription_id
+      LEFT JOIN subcription_services ss ON ss._id = csh.service_id
        WHERE ${whereClause}
        ORDER BY t.transaction_date DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -81,10 +84,13 @@ export class TransactionRepository extends Repository<Transaction> {
               cai.clinic_name AS clinic_name,
               ga.full_name  AS sender_full_name,
               ga.gender     AS sender_gender,
-              ga.dob        AS sender_dob
+              ga.dob        AS sender_dob,
+              ss.service_name AS service_name
        FROM transactions t
       LEFT JOIN clinic_admin_information cai ON cai._id = t.clinic_id
       LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
+      LEFT JOIN clinic_subcriptions_history csh ON csh._id = t.subcription_id
+      LEFT JOIN subcription_services ss ON ss._id = csh.service_id
        WHERE t.deleted_at IS NULL AND t._id = $1`;
 
         if (clinicId) {
