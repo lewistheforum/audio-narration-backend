@@ -15,6 +15,11 @@ import { ClinicRoomRepository } from './repositories/clinic-room.repository';
 import { ClinicShiftRepository } from './repositories/clinic-shift.repository';
 import { ClinicShiftHourRepository } from './repositories/clinic-shift-hour.repository';
 import { EmployeeScheduleRepository } from './repositories/employee-schedule.repository';
+import { ClinicShiftHoursService } from './clinic-shift-hours.service';
+import { ClinicShiftHoursController } from './clinic-shift-hours.controller';
+
+import { ClinicShiftsService } from './clinic-shifts.service';
+import { ClinicShiftsController } from './clinic-shifts.controller';
 
 /**
  * Schedules Module
@@ -32,14 +37,25 @@ import { EmployeeScheduleRepository } from './repositories/employee-schedule.rep
       DoctorInformation,
     ]),
   ],
-  controllers: [SchedulesController],
+  controllers: [
+    SchedulesController,
+    ClinicShiftHoursController,
+    ClinicShiftsController
+  ],
   providers: [
     SchedulesService,
     ClinicRoomRepository,
     ClinicShiftRepository,
     ClinicShiftHourRepository,
     EmployeeScheduleRepository,
+    ClinicShiftHoursService,
+    ClinicShiftsService,
   ],
-  exports: [TypeOrmModule, SchedulesService],
+  exports: [
+    TypeOrmModule,
+    SchedulesService,
+    ClinicShiftHoursService,
+    ClinicShiftsService
+  ],
 })
 export class SchedulesModule { }

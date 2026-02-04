@@ -5,9 +5,12 @@ import { URLSearchParams } from 'url';
 import { Repository, Like } from 'typeorm';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType } from './entities';
-import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto } from './dto';
+import { RegistrationStatus } from '../subscriptions/enums';
+import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto, CreateSubscriptionTransactionDto } from './dto';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
+import { ClinicSubscriptionHistory } from '../subscriptions/entities/clinic-subscription-history.entity';
+import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 
 /**
  * Transactions Service
@@ -29,6 +32,10 @@ export class TransactionsService {
     private readonly transactionTypeRepo: Repository<TransactionType>,
     @InjectRepository(Appointment)
     private readonly appointmentRepository: Repository<Appointment>,
+    @InjectRepository(ClinicSubscriptionHistory)
+    private readonly clinicSubscriptionHistoryRepo: Repository<ClinicSubscriptionHistory>,
+    @InjectRepository(SubscriptionService)
+    private readonly subscriptionServiceRepo: Repository<SubscriptionService>,
     private readonly configService: ConfigService,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
@@ -37,6 +44,98 @@ export class TransactionsService {
     this.qrExpireMinutes = Number(
       this.configService.get<number>('SEEPAY_QR_EXPIRE_MINUTES') || 15,
     );
+  }
+
+  /**
+   * Create payment QR for a subscription
+   */
+  async createSubscriptionQr(dto: CreateSubscriptionTransactionDto): Promise<PaymentResponseDto> {
+    // 1. Get Subscription History
+    const subscriptionHistory = await this.clinicSubscriptionHistoryRepo.findOne({
+      where: { _id: dto.subscriptionId },
+    });
+
+    if (!subscriptionHistory) {
+      throw new NotFoundException('Subscription history not found');
+    }
+
+    // 2. Get Service Price to Calculate/Verify Amount
+    const service = await this.subscriptionServiceRepo.findOne({
+      where: { _id: subscriptionHistory.serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Subscription service not found');
+    }
+
+    // Calculate amount: price * (1 - discount/100)
+    const amount = Math.round(service.price * (1 - service.discount / 100));
+
+    // 3. Get Clinic Admin to resolve Seepay Config
+    // Subscription History stores clinicId (which is Account ID). 
+    // We need ClinicAdmin's _id to link Transaction and to find Seepay Config.
+    const clinicAdmin = await this.clinicAdminRepo.findOne({
+      where: { accountId: subscriptionHistory.clinicId },
+    });
+
+    if (!clinicAdmin) {
+      throw new NotFoundException('Clinic Admin Information not found');
+    }
+
+    const clinicAdminId = clinicAdmin._id;
+    const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
+
+    // 4. Create or Update Transaction
+    // Check if a transaction already exists for this subscription history
+    let transaction = await this.transactionRepository.findOne({
+      where: { subscriptionId: dto.subscriptionId },
+    });
+
+    if (!transaction) {
+      // Create new transaction
+      const transactionType = await this.transactionTypeRepo.findOne({
+        where: { name: Like('SUBSCRIPTION%') },
+      });
+
+      if (!transactionType) {
+        throw new NotFoundException('Transaction Type SUBSCRIPTION not found');
+      }
+
+      transaction = this.transactionRepository.create({
+        amount,
+        currency: 'VND',
+        status: PaymentStatus.PENDING,
+        clinicId: clinicAdminId,
+        subscriptionId: dto.subscriptionId,
+        transactionTypeId: transactionType._id,
+        description: `Payment for subscription ${service.serviceName}`,
+      });
+      transaction = await this.transactionRepository.save(transaction);
+    } else {
+      // Update existing transaction if amount changed or just to refresh
+      if (Number(transaction.amount) !== amount) {
+        transaction.amount = amount;
+        transaction = await this.transactionRepository.save(transaction);
+      }
+    }
+
+    // 5. Generate QR
+    // Use Transaction ID as description for callback mapping
+    const description = transaction.id;
+    const expiresAt = this.computeExpireTime();
+
+    const qrCodeUrl = this.buildQrUrl(amount, description, acc, bank);
+    const qrPayload = this.buildQrPayload(amount, description, acc, bank);
+
+    return new PaymentResponseDto({
+      id: transaction.id,
+      amount,
+      currency: 'VND',
+      status: transaction.status,
+      qrCodeUrl,
+      qrPayload,
+      expiresAt,
+    });
   }
 
   /**
@@ -195,6 +294,17 @@ export class TransactionsService {
           console.error('handleCallback Debug - No Clinic ID in verification transaction!');
         }
       }
+
+      // Logic for Subscription Status Update (Existing Transaction)
+      if (status === PaymentStatus.SUCCESS && existingTransaction.transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
+        if (existingTransaction.subscriptionId) {
+          console.log('handleCallback Debug - Updating Subscription Status for:', existingTransaction.subscriptionId);
+          await this.clinicSubscriptionHistoryRepo.update(
+            { _id: existingTransaction.subscriptionId },
+            { subscriptionStatus: RegistrationStatus.ACTIVE, subscriptionDate: new Date() }
+          );
+        }
+      }
       return new PaymentResponseDto({
         id: saved.id,
         amount: saved.amount,
@@ -212,23 +322,23 @@ export class TransactionsService {
       where: { _id: prescriptionId },
     });
 
+    if (!appointment) {
+      // STRICT MODE: If neither Transaction nor Appointment is found, REJECT the callback.
+      // We do not allow "blind" transactions based on amount/content guessing anymore.
+      console.error(`handleCallback Error - Reference ID ${prescriptionId} not found in Transaction or Appointment tables.`);
+      throw new NotFoundException('Transaction reference (Transaction ID or Appointment ID) not found');
+    }
+
     let clinicAdminId: string | undefined;
     if (appointment?.clinicId) {
       const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { accountId: appointment.clinicId } });
       clinicAdminId = clinicAdmin?._id;
-    } else {
-      const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { _id: prescriptionId } });
-      if (clinicAdmin) clinicAdminId = clinicAdmin._id;
     }
 
-    // Resolve Transaction Type
+    // Resolve Transaction Type (ONLINE for appointments)
     let typeName = 'ONLINE';
-    // Check if content explicitly signifies verification
-    const isVerificationContent = payload.content?.toUpperCase().includes('VERIFICATION');
 
-    if (isVerificationContent || (payload.transferAmount === 10_000 && !appointment)) {
-      typeName = 'VERIFICATION';
-    }
+    // Fallback logic for VERIFICATION based on amount/content is REMOVED.
 
     const transactionType = await this.transactionTypeRepo.findOne({
       where: { name: Like(typeName + '%') },
@@ -264,9 +374,32 @@ export class TransactionsService {
 
     const savedTransaction = await this.transactionRepository.save(transaction);
 
-    if (status === PaymentStatus.SUCCESS && payload.transferAmount === 10_000) {
-      // Verification payment: mark clinic verified by clinic-admin _id (stored in prescriptionId)
-      await this.clinicAdminRepo.update({ _id: prescriptionId }, { isVerify: true });
+    if (status === PaymentStatus.SUCCESS) {
+      if (payload.transferAmount === 10_000) {
+        // Verification payment: mark clinic verified by clinic-admin _id (stored in prescriptionId)
+        await this.clinicAdminRepo.update({ _id: prescriptionId }, { isVerify: true });
+      }
+
+      // Check if this is a SUBSCRIPTION payment
+      const transactionType = await this.transactionTypeRepo.findOne({
+        where: { _id: savedTransaction.transactionTypeId },
+      });
+
+      console.log('handleCallback Debug - Transaction Type Name:', transactionType?.name);
+      console.log('handleCallback Debug - Saved Transaction Subscription ID:', savedTransaction.subscriptionId);
+
+      if (transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
+        if (savedTransaction.subscriptionId) {
+          console.log('handleCallback Debug - Updating Subscription Status for:', savedTransaction.subscriptionId);
+          const updateResult = await this.clinicSubscriptionHistoryRepo.update(
+            { _id: savedTransaction.subscriptionId },
+            { subscriptionStatus: RegistrationStatus.ACTIVE, subscriptionDate: new Date() }
+          );
+          console.log('handleCallback Debug - Update Result:', updateResult);
+        } else {
+          console.warn('handleCallback Debug - Transaction has SUBSCRIPTION type but no subscriptionId');
+        }
+      }
     }
 
     return new PaymentResponseDto({
@@ -312,15 +445,20 @@ export class TransactionsService {
     if (!content) {
       return undefined;
     }
-    const uuidMatch = content.match(/([a-f0-9]{32})/i);
 
-    if (!uuidMatch) {
-      return undefined;
+    // Updated Regex to match standard UUID (8-4-4-4-12) or flat 32 hex chars
+    const standardUuidMatch = content.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    if (standardUuidMatch) {
+      return standardUuidMatch[1];
     }
 
-    const raw = uuidMatch[1];
+    const simpleUuidMatch = content.match(/([a-f0-9]{32})/i);
+    if (simpleUuidMatch) {
+      const raw = simpleUuidMatch[1];
+      return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
+    }
 
-    return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
+    return undefined;
   }
 
   private async resolveSepayConfig(
