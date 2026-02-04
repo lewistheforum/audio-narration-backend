@@ -1,5 +1,5 @@
-Step 1: pnpm run script:set-up-docker-container-database
-Step 2: pnpm run script:check-container-status
+Step 1: pnpm run docker:setup
+Step 2: pnpm run script:setup-database-vector
 Step 3: pnpm i
 Step 4: pnpm start:dev
 Step 5: pnpm run script:bulk-import-medicines (If first time init database for seeder: to import bulk medicine data)

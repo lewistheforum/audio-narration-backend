@@ -1,10 +1,16 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import axios from 'axios';
 import { FeedbackRepository } from './repositories';
 import { FeedbackType } from './enums';
 import { Feedback } from './entities/feedback.entity';
 import { CreateFeedbackClinicDto } from './dto/create-feedback-clinic.dto';
 import { CreateFeedbackDoctorDto } from './dto/create-feedback-doctor.dto';
+import { UpdateFeedbackDto } from './dto/update-feedback.dto';
 import { API } from '../../common/utils/ai-api';
 import { MESSAGES } from '../../common/message';
 
@@ -15,6 +21,7 @@ import { MESSAGES } from '../../common/message';
  * - Creating feedback for clinics and doctors
  * - Bad word detection using AI API
  * - Labeling feedback descriptions and images using AI
+ * - Updating feedback within time limit
  */
 @Injectable()
 export class FeedbackService {
@@ -40,15 +47,16 @@ export class FeedbackService {
     // Step 1: Check for bad words in description
     if (dto.description) {
       const detectionResult = await this.detectBadWords(dto.description);
-      if (detectionResult.is_toxic) {
+
+      if (detectionResult.data.is_toxic) {
         return {
           is_toxic: true,
-          detection: detectionResult,
+          detection: detectionResult.data,
         };
       }
     }
 
-    // Step 2: Create feedback entity
+    // Step 2: Create and save feedback entity immediately
     const feedback = this.feedbackRepository.createFeedback({
       appointmentId: dto.appointmentId,
       clinicId: dto.clinicId,
@@ -58,18 +66,13 @@ export class FeedbackService {
       type: FeedbackType.CLINIC,
     });
 
-    // Step 3: Label description if exists
-    if (dto.description) {
-      feedback.descriptionLabel = await this.labelDescription(dto.description);
-    }
+    const savedFeedback = await this.feedbackRepository.saveFeedback(feedback);
 
-    // Step 4: Label images if exist
-    if (dto.feedbackImages && dto.feedbackImages.length > 0) {
-      feedback.feedbackImagesLabel = await this.labelImages(dto.feedbackImages);
-    }
+    // Step 3: Run labeling in background (fire and forget)
+    this.runBackgroundLabeling(savedFeedback);
 
-    // Step 5: Save and return
-    return this.feedbackRepository.saveFeedback(feedback);
+    // Step 4: Return immediate result
+    return savedFeedback;
   }
 
   /**
@@ -101,7 +104,7 @@ export class FeedbackService {
       }
     }
 
-    // Step 2: Create feedback entity
+    // Step 2: Create and save feedback entity immediately
     const feedback = this.feedbackRepository.createFeedback({
       appointmentId: dto.appointmentId,
       clinicId: dto.clinicId,
@@ -112,18 +115,131 @@ export class FeedbackService {
       type: FeedbackType.DOCTOR,
     });
 
-    // Step 3: Label description if exists
-    if (dto.description) {
-      feedback.descriptionLabel = await this.labelDescription(dto.description);
+    const savedFeedback = await this.feedbackRepository.saveFeedback(feedback);
+
+    // Step 3: Run labeling in background (fire and forget)
+    this.runBackgroundLabeling(savedFeedback);
+
+    // Step 4: Return immediate result
+    return savedFeedback;
+  }
+
+  /**
+   * Update Feedback
+   *
+   * Updates an existing feedback entry.
+   * Enforces 3-day time limit for updates.
+   * Re-runs bad word detection and AI labeling if description/images change.
+   *
+   * @param id - Feedback UUID
+   * @param dto - UpdateFeedbackDto
+   * @returns Updated Feedback or detection result
+   * @throws NotFoundException if feedback not found
+   * @throws ForbiddenException if update time limit exceeded
+   */
+  async updateFeedback(
+    id: string,
+    dto: UpdateFeedbackDto,
+  ): Promise<Feedback | { is_toxic: true; detection: any }> {
+    const feedback = await this.feedbackRepository.findFeedbackById(id);
+
+    if (!feedback) {
+      throw new NotFoundException(`Feedback with ID ${id} not found`);
     }
 
-    // Step 4: Label images if exist
-    if (dto.feedbackImages && dto.feedbackImages.length > 0) {
-      feedback.feedbackImagesLabel = await this.labelImages(dto.feedbackImages);
+    // Check 3-day time limit
+    const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
+    const timeDiff = Date.now() - feedback.createdAt.getTime();
+
+    if (timeDiff > threeDaysInMillis) {
+      throw new ForbiddenException(
+        'Feedback can only be updated within 3 days of creation',
+      );
     }
 
-    // Step 5: Save and return
-    return this.feedbackRepository.saveFeedback(feedback);
+    // Update fields if provided
+    if (dto.rating !== undefined) {
+      feedback.rating = dto.rating;
+    }
+
+    if (dto.feedbackImages !== undefined) {
+      feedback.feedbackImages = dto.feedbackImages;
+    }
+
+    let descriptionChanged = false;
+    if (
+      dto.description !== undefined &&
+      dto.description !== feedback.description
+    ) {
+      // Check for bad words if description changed
+      if (dto.description) {
+        const detectionResult = await this.detectBadWords(dto.description);
+        if (detectionResult.data?.is_toxic) {
+          return {
+            is_toxic: true,
+            detection: detectionResult.data,
+          };
+        }
+      }
+      feedback.description = dto.description;
+      descriptionChanged = true;
+    }
+
+    const savedFeedback = await this.feedbackRepository.saveFeedback(feedback);
+
+    // Run background labeling if description or images changed
+    if (descriptionChanged || dto.feedbackImages !== undefined) {
+      this.runBackgroundLabeling(savedFeedback);
+    }
+
+    return savedFeedback;
+  }
+
+  /**
+   * Run Background Labeling
+   *
+   * Performs AI labeling for description and images in the background.
+   * Updates the feedback entity with results.
+   *
+   * @param feedback - The saved feedback entity
+   */
+  private async runBackgroundLabeling(feedback: Feedback) {
+    try {
+      const descriptionLabelPromise = feedback.description
+        ? this.labelDescription(feedback.description)
+        : Promise.resolve(null);
+
+      const imagesLabelPromise =
+        feedback.feedbackImages && feedback.feedbackImages.length > 0
+          ? this.labelImages(feedback.feedbackImages)
+          : Promise.resolve(null);
+
+      const [descriptionLabel, feedbackImagesLabel] = await Promise.all([
+        descriptionLabelPromise,
+        imagesLabelPromise,
+      ]);
+
+      let hasUpdates = false;
+
+      if (descriptionLabel) {
+        feedback.descriptionLabel = descriptionLabel;
+        hasUpdates = true;
+      }
+
+      if (feedbackImagesLabel) {
+        feedback.feedbackImagesLabel = feedbackImagesLabel;
+        hasUpdates = true;
+      }
+
+      if (hasUpdates) {
+        await this.feedbackRepository.saveFeedback(feedback);
+      }
+    } catch (error) {
+      console.error(
+        `Error in background labeling for feedback ${feedback._id}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 
   /**
@@ -161,7 +277,10 @@ export class FeedbackService {
       const response = await axios.post(API.AI.FEEDBACK_LABEL_DESCRIPTION, {
         text: text,
       });
-      return response.data.results?.map((result: any) => result.label) || [];
+
+      return (
+        response.data.data.results?.map((result: any) => result.label) || []
+      );
     } catch (error) {
       console.error('Error labeling description:', error.message);
       return null;
@@ -183,9 +302,10 @@ export class FeedbackService {
         const response = await axios.post(API.AI.FEEDBACK_LABEL_IMAGE, {
           image_url: imageUrl,
         });
+
         imageLabels.push({
-          url: imageUrl,
-          description: response.data.description,
+          // url: imageUrl,
+          description: response.data.data.description,
         });
       } catch (error) {
         console.error(`Error labeling image ${imageUrl}:`, error.message);

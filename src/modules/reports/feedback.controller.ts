@@ -8,11 +8,13 @@ import {
   Body,
   HttpCode,
   HttpStatus,
+  Put,
 } from '@nestjs/common';
 import { FeedbackResponseDto } from './dto/response-feedback.dto';
 import { FeedbackAIResponseDto } from './dto/response-ai-feedback.dto';
 import { CreateFeedbackClinicDto } from './dto/create-feedback-clinic.dto';
 import { CreateFeedbackDoctorDto } from './dto/create-feedback-doctor.dto';
+import { UpdateFeedbackDto } from './dto/update-feedback.dto';
 import { Feedback } from './entities/feedback.entity';
 
 /**
@@ -114,6 +116,50 @@ export class FeedbackController {
     @Body() dto: CreateFeedbackDoctorDto,
   ): Promise<FeedbackResponseDto | { is_toxic: true; detection: any }> {
     const result = await this.feedbackService.createFeedbackForDoctor(dto);
+
+    // Check if result is a toxic detection response
+    if ('is_toxic' in result && result.is_toxic) {
+      return result;
+    }
+
+    return new FeedbackResponseDto(result as Feedback);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update feedback' })
+  @ApiBody({ type: UpdateFeedbackDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Feedback updated successfully',
+    type: FeedbackResponseDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Toxic content detected - feedback not updated',
+    schema: {
+      type: 'object',
+      properties: {
+        is_toxic: { type: 'boolean', example: true },
+        detection: {
+          type: 'object',
+          description: 'Bad word detection result from AI',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Update time limit exceeded',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Feedback not found',
+  })
+  async updateFeedback(
+    @Param('id') id: string,
+    @Body() dto: UpdateFeedbackDto,
+  ): Promise<FeedbackResponseDto | { is_toxic: true; detection: any }> {
+    const result = await this.feedbackService.updateFeedback(id, dto);
 
     // Check if result is a toxic detection response
     if ('is_toxic' in result && result.is_toxic) {
