@@ -19,8 +19,17 @@ export class SubscriptionServiceRepository {
   /**
    * Find all subscription services
    */
-  async findAll(includeDeleted: boolean = false): Promise<SubscriptionService[]> {
+  async findAll(
+    includeDeleted: boolean = false,
+    status?: string,
+  ): Promise<SubscriptionService[]> {
+    const where: any = {};
+    if (status) {
+      where.status = status;
+    }
+
     return this.repository.find({
+      where,
       withDeleted: includeDeleted,
     });
   }

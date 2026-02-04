@@ -2,6 +2,7 @@
  * Shared constants for English subscription-related terms
  * Used across multiple seeders for consistent English subscription terminology
  */
+import { SubscriptionServiceStatus } from '../../modules/subscriptions/enums/subscription-service-status.enum';
 
 export const SUBSCRIPTION_SERVICES = [
   {
@@ -16,6 +17,7 @@ export const SUBSCRIPTION_SERVICES = [
       'Basic staff management',
     ],
     isPopular: false,
+    status: SubscriptionServiceStatus.ACTIVE,
     chartColor: '#6c757d',
   },
   {
@@ -32,6 +34,7 @@ export const SUBSCRIPTION_SERVICES = [
       'Statistical reports',
     ],
     isPopular: false,
+    status: SubscriptionServiceStatus.ACTIVE,
     chartColor: '#17a2b8',
   },
   {
@@ -50,6 +53,7 @@ export const SUBSCRIPTION_SERVICES = [
       'Payment gateway integration',
     ],
     isPopular: true,
+    status: SubscriptionServiceStatus.ACTIVE,
     chartColor: '#ffc107',
   },
   {
@@ -67,6 +71,7 @@ export const SUBSCRIPTION_SERVICES = [
       'Enhanced security',
     ],
     isPopular: false,
+    status: SubscriptionServiceStatus.INACTIVE,
     chartColor: '#28a745',
   },
 ];

@@ -5,7 +5,7 @@
  * This file contains all configurable values for generating realistic test data.
  */
 
-import { AppointmentStatus } from '../../modules/appointments/enums';
+import { AppointmentStatus, PaymentType } from '../../modules/appointments/enums';
 import { ERMRecordType, ERMStatus } from '../../modules/prescriptions/enums';
 
 // ============================================================================
@@ -214,11 +214,9 @@ export const APPOINTMENT_PACKAGE_STATUSES = [
 /**
  * Sample payment types
  */
-export const PAYMENT_TYPES = [
-  'CASH',
-  'CARD',
-  'TRANSFER',
-  'SEEPAY',
+export const PAYMENT_TYPES: PaymentType[] = [
+  PaymentType.ONLINE,
+  PaymentType.COD,
 ];
 
 // ============================================================================

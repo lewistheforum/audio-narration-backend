@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { SubscriptionServiceStatus } from '../enums/subscription-service-status.enum';
 
 /**
  * Subscription Service Response DTO
@@ -57,6 +58,13 @@ export class SubscriptionServiceResponseDto {
     example: true,
   })
   isPopular: boolean;
+
+  @ApiProperty({
+    description: 'Service status',
+    enum: SubscriptionServiceStatus,
+    example: SubscriptionServiceStatus.ACTIVE,
+  })
+  status: SubscriptionServiceStatus;
 
   @ApiProperty({
     description: 'Chart color for UI display',
