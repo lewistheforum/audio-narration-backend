@@ -5,7 +5,7 @@ import { URLSearchParams } from 'url';
 import { Repository, Like } from 'typeorm';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType } from './entities';
-import { SubscriptionStatus } from '../subscriptions/enums';
+import { RegistrationStatus } from '../subscriptions/enums';
 import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto, CreateSubscriptionTransactionDto } from './dto';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
@@ -301,7 +301,7 @@ export class TransactionsService {
           console.log('handleCallback Debug - Updating Subscription Status for:', existingTransaction.subscriptionId);
           await this.clinicSubscriptionHistoryRepo.update(
             { _id: existingTransaction.subscriptionId },
-            { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionDate: new Date() }
+            { subscriptionStatus: RegistrationStatus.ACTIVE, subscriptionDate: new Date() }
           );
         }
       }
@@ -393,7 +393,7 @@ export class TransactionsService {
           console.log('handleCallback Debug - Updating Subscription Status for:', savedTransaction.subscriptionId);
           const updateResult = await this.clinicSubscriptionHistoryRepo.update(
             { _id: savedTransaction.subscriptionId },
-            { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionDate: new Date() }
+            { subscriptionStatus: RegistrationStatus.ACTIVE, subscriptionDate: new Date() }
           );
           console.log('handleCallback Debug - Update Result:', updateResult);
         } else {
