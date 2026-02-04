@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubscriptionService } from './entities/subscription-service.entity';
 import { SubscriptionServiceRepository } from './repositories/subscription-service.repository';
 import { SubscriptionServiceResponseDto } from './dto';
+import { SubscriptionServiceStatus } from './enums/subscription-service-status.enum';
 
 /**
  * Subscription Services Service
@@ -34,8 +35,9 @@ export class SubscriptionServicesService {
   /**
    * Find All Subscription Services
    *
-   * Retrieves all subscription services from the system.
+   * Retrieves all active subscription services from the system.
    * Excludes soft-deleted records (deletedAt IS NULL).
+   * Filters by status = 'ACTIVE' by default.
    * Orders by createdAt DESC (newest first).
    *
    * Use Cases:
@@ -48,11 +50,14 @@ export class SubscriptionServicesService {
    * @example
    * ```typescript
    * const services = await subscriptionServicesService.findAll();
-   * // Returns array of services ordered by newest first
+   * // Returns array of active services ordered by newest first
    * ```
    */
   async findAll(): Promise<SubscriptionServiceResponseDto[]> {
-    const services = await this.subscriptionServiceRepository.findAll();
+    const services = await this.subscriptionServiceRepository.findAll(
+      false,
+      SubscriptionServiceStatus.ACTIVE,
+    );
     return services.map((service) =>
       this.toResponseDto(service),
     );
@@ -114,6 +119,7 @@ export class SubscriptionServicesService {
       discount: service.discount,
       serviceFunctions: service.serviceFunctions,
       isPopular: service.isPopular,
+      status: service.status,
       chartColor: service.chartColor,
       createdAt: service.createdAt,
       updatedAt: service.updatedAt,
