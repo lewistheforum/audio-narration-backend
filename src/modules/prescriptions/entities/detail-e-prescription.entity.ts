@@ -42,6 +42,12 @@ export class DetailEPrescription {
   @Column({ name: 'check_out', type: 'text', nullable: true })
   checkOut?: string;
 
+  @Column({ name: 'quantity', type: 'integer', nullable: true })
+  quantity?: number;
+
+  @Column({ name: 'note', type: 'text', nullable: true })
+  note?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

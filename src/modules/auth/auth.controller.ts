@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Put,
   Body,
   Get,
   UseGuards,
@@ -9,6 +10,7 @@ import {
   HttpStatus,
   Param,
   Res,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -20,6 +22,12 @@ import {
   ResendVerificationDto,
   VerifyResetPasswordDto,
 } from './dto';
+import {
+  CreateClinicManagerForRegistrationDto,
+  UploadLegalDocumentDto,
+  UpdateLegalDocumentsDto,
+  LegalDocumentResponseDto,
+} from '../accounts/dto';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -36,9 +44,10 @@ import { AccountsService } from '../accounts/accounts.service';
 import {
   CreateAccountDto,
   AccountResponseDto,
-  CreateClinicManagerDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
+  RegisterClinicAdminDto,
+  CheckRegistrationStatusResponseDto,
 } from '../accounts/dto';
 import { JwtAuthGuard } from './jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -55,7 +64,11 @@ import { AccountRole } from '../accounts/enums';
  */
 @ApiTags('Authentication')
 @Controller('auth')
-@ApiExtraModels(AccountResponseDto, LoginResponseDto)
+@ApiExtraModels(
+  AccountResponseDto,
+  LoginResponseDto,
+  CheckRegistrationStatusResponseDto,
+)
 export class AuthController {
   constructor(
     private authService: AuthService,
@@ -215,7 +228,7 @@ export class AuthController {
 
   /**
    * Reset Password with Code
-   * Resets user password using the code sent to their email
+   * Resets user password using code sent to their email
    * Public endpoint - no authentication required
    *
    * @param resetPasswordDto - Email, reset code, and new password
@@ -244,58 +257,120 @@ export class AuthController {
   }
 
   /**
-   * Clinic Manager Registration (Protected Endpoint - PATIENT Only)
-   * Allows PATIENT accounts who purchased clinic service to upgrade to CLINIC_MANAGER
-   * Manager can add staff, doctors, and manage clinic documents
+   * Check Clinic Admin Registration Status (Public)
    *
-   * Business Rule:
-   * - Only PATIENT role can create clinic manager account
-   * - PATIENT must have purchased clinic service (TODO: validate subscription/payment)
-   * - This upgrades the PATIENT account to CLINIC_MANAGER role
+   * Checks if an email has an in-progress clinic admin registration.
+   * Returns current registration status and next action for user.
    *
-   * @param req - Request object containing authenticated patient user
-   * @param createClinicManagerDto - Clinic manager registration data
-   * @returns Created clinic manager account
+   * Query Parameters:
+   * - email: Email address to check
+   *
+   * Business Rules:
+   * - Does NOT modify database
+   * - Returns status if email exists and has pending registration
+   * - Returns canStart: true if email doesn't exist or no pending registration
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Checking if user can start new registration
+   * - Checking if user can resume existing registration
+   * - Displaying appropriate UI based on registration status
+   *
+   * @param email - Email address to check
+   * @returns Registration status information
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved registration status
    */
-  @Post('register-clinic-manager')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  // @ApiBearerAuth('JWT-auth')
+  @Post('check-registration-status')
   @ApiOperation({
-    summary:
-      'Register clinic manager account (PATIENT only - requires clinic service purchase)',
+    summary: 'Check clinic admin registration status (Public)',
     description:
-      'Allows PATIENT who purchased clinic service to create clinic manager account with full permissions',
+      'Checks if an email has an in-progress clinic admin registration and returns current status',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiResponseData({
+    type: CheckRegistrationStatusResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Registration status retrieved successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  async checkRegistrationStatus(
+    @Body('email') email: string,
+  ): Promise<{ data: CheckRegistrationStatusResponseDto; message: string }> {
+    const status =
+      await this.AccountsService.checkRegistrationStatus(email);
+    return {
+      data: status,
+      message: 'Registration status retrieved successfully',
+    };
+  }
+
+  /**
+   * Register Clinic Admin (Public)
+   *
+   * Creates a complete clinic admin registration with account, profile, and subscription.
+   * Uses QueryRunner for transaction safety - all operations succeed or none do.
+   *
+   * Business Rules:
+   * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
+   * - Creates Account with CLINIC_ADMIN role and PENDING status
+   * - Creates ClinicAdminInformation with clinic details
+   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
+   * - Password is hashed with bcrypt before storage
+   *
+   * Request Body:
+   * - username: Username (required)
+   * - email: Email address (required)
+   * - password: Password (required, min 6 chars, 1 letter, 1 number)
+   * - phone: Phone number (optional)
+   * - clinicName: Clinic name (required)
+   * - description: Clinic description (optional)
+   * - specializedIn: Medical specializations (optional)
+   * - pros: Clinic pros/advantages (optional)
+   * - paraclinical: Paraclinical services (optional)
+   * - dob: Date of birth (optional)
+   * - profilePicture: Profile picture URL (optional)
+   * - serviceId: Subscription service ID (required)
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Initial clinic admin registration
+   * - Starting new clinic registration flow
+   *
+   * @param dto - Clinic admin registration data
+   * @returns Created account with subscription status
+   *
+   * @swagger
+   * @response 201 - Successfully registered clinic admin
+   * @response 409 - Email already exists or exceeds usage limit
+   * @response 400 - Validation error
+   */
+  @Post('register-clinic-admin')
+  @ApiOperation({
+    summary: 'Register clinic admin (Public)',
+    description:
+      'Creates a complete clinic admin registration with account, profile, and subscription',
   })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
-    message: 'Clinic manager account created successfully',
+    message: 'Clinic admin registered successfully',
   })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Missing or invalid token',
-  })
-  @ApiResponse({
-    status: 403,
-    description:
-      'Forbidden - Requires PATIENT role and clinic service purchase',
-  })
-  @ApiResponse({ status: 409, description: 'Email already exists' })
+  @ApiResponse({ status: 409, description: 'Email already exists or exceeds usage limit' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  async registerClinicManager(
-    @Req() req: any,
-    @Body() createClinicManagerDto: CreateClinicManagerDto,
+  async registerClinicAdmin(
+    @Body() dto: RegisterClinicAdminDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const patientId = req.user._id;
-    const manager = await this.AccountsService.createClinicManager(
-      patientId,
-      createClinicManagerDto,
-    );
+    const account = await this.AccountsService.registerClinicAdmin(dto);
     return {
-      data: manager,
-      message: 'Clinic manager account created successfully',
+      data: account,
+      message: 'Clinic admin registered successfully. Please configure your payment gateway to continue.',
     };
   }
 
@@ -400,4 +475,59 @@ export class AuthController {
       message: 'Doctor account created successfully',
     };
   }
+
+  /**
+   * Create Clinic Manager for Registration (Step 4A)
+   *
+   * Creates a clinic manager account for a clinic admin during registration flow.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Registration/subscription status must be PENDING_MANAGER_SETUP
+   * - Only one manager allowed for this clinic admin
+   * - Creates manager Account with CLINIC_MANAGER role and ACTIVE status
+   * - Creates ClinicManagerInformation entity
+   * - Links via parentId to the clinic admin account
+   * - Transitions status to PENDING_LEGAL_SETUP
+   *
+   * @param req - Request object containing authenticated user
+   * @param dto - Clinic manager registration data
+   * @returns Created clinic manager account
+   */
+  @Post('clinic-manager/initial-setup')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Create clinic manager for registration (Step 4A)',
+    description:
+      'Creates a clinic manager account for a clinic admin during registration flow. Transitions subscription status to PENDING_LEGAL_SETUP.',
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: MESSAGES.statusCode.created,
+    message: 'Clinic manager created successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or invalid status',
+  })
+  @ApiResponse({ status: 409, description: 'Email already exists or manager already exists' })
+  async createClinicManagerForRegistration(
+    @Req() req: any,
+    @Body() dto: CreateClinicManagerForRegistrationDto,
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const adminId = req.user._id;
+    const manager = await this.AccountsService.createClinicManagerForRegistration(
+      adminId,
+      dto,
+    );
+    return {
+      data: manager,
+      message: 'Clinic manager created successfully. Please upload legal documents to continue.',
+    };
+  }
+
 }

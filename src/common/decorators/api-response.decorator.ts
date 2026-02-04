@@ -3,16 +3,18 @@ import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
 import { ApiResponseDto } from '../dto/api-response.dto';
 
 interface ApiResponseOptions {
-  type: Type<unknown>;
+  type?: Type<unknown> | null;
   status: number;
   message: string;
   isArray?: boolean;
 }
 
 const createApiResponseSchema = (options: ApiResponseOptions) => {
-  const dataSchema = options.isArray
-    ? { type: 'array', items: { $ref: getSchemaPath(options.type) } }
-    : { $ref: getSchemaPath(options.type) };
+  const dataSchema = options.type
+    ? options.isArray
+      ? { type: 'array', items: { $ref: getSchemaPath(options.type) } }
+      : { $ref: getSchemaPath(options.type) }
+    : { type: 'null', nullable: true };
 
   return {
     schema: {
@@ -30,11 +32,16 @@ const createApiResponseSchema = (options: ApiResponseOptions) => {
   };
 };
 
-export const ApiResponseData = (options: ApiResponseOptions) =>
-  applyDecorators(
-    ApiExtraModels(ApiResponseDto, options.type),
+export const ApiResponseData = (options: ApiResponseOptions) => {
+  const extraModels = options.type
+    ? ApiExtraModels(ApiResponseDto, options.type)
+    : ApiExtraModels(ApiResponseDto);
+
+  return applyDecorators(
+    extraModels,
     ApiResponse({
       status: options.status,
       ...createApiResponseSchema(options),
     }),
   );
+};

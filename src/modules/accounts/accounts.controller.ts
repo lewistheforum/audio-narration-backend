@@ -34,14 +34,15 @@ import {
   AccountResponseDto,
   UpdatePasswordDto,
   BanAccountDto,
-  CreateClinicManagerDto,
   CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
   PublicDoctorInfo,
   PublicClinicInfo,
-  DoctorListResponseDto,
+  CancelRegistrationResponseDto,
+  CancelSubscriptionDto,
+  CancelSubscriptionResponseDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
@@ -360,150 +361,7 @@ export class AccountsController {
       message: 'Clinic details retrieved successfully',
     };
   }
-
-  /**
-   * Get All Doctors (Public)
-   *
-   * Retrieves a paginated list of all active doctors.
-   * Only returns accounts with role: DOCTOR and status: ACTIVE
-   * Excludes soft-deleted records (deletedAt is null)
-   *
-   * Query Parameters:
-   * - clinicId: Filter by parent clinic ID (optional)
-   * - gender: Filter by doctor gender - MALE | FEMALE | OTHER (optional)
-   * - page: Page number (default: 1)
-   * - limit: Items per page (default: 10)
-   *
-   * Response Format:
-   * - Returns DoctorListResponseDto with doctors array and pagination metadata
-   * - Combines data from accounts + doctor_information + clinic_manager_information tables
-   *
-   * Access Control:
-   * - Public endpoint (no authentication required)
-   *
-   * Use Cases:
-   * - Doctor directory listing
-   * - Doctor search results
-   * - Doctor browsing
-   *
-   * @param {number} page - Page number
-   * @param {number} limit - Items per page
-   * @param {string} [clinicId] - Filter by parent clinic ID
-   * @param {string} [gender] - Filter by doctor gender
-   * @returns {Promise<{data: DoctorListResponseDto, message: string}>} Doctors with pagination
-   *
-   * @swagger
-   * @response 200 - Successfully retrieved doctors
-   */
-  @Get('doctors')
-  @ApiOperation({ summary: 'Get all doctors with pagination and filters' })
-  @ApiQuery({
-    name: 'clinicId',
-    required: false,
-    type: String,
-    description: 'Filter by parent clinic ID',
-  })
-  @ApiQuery({
-    name: 'gender',
-    required: false,
-    type: String,
-    description: 'Filter by doctor gender (MALE | FEMALE | OTHER)',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page (default: 10)',
-  })
-  @ApiResponseData({
-    type: DoctorListResponseDto,
-    status: MESSAGES.statusCode.success,
-    message: 'Doctors list retrieved successfully',
-  })
-  async getAllDoctors(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('clinicId') clinicId?: string,
-    @Query('gender') gender?: string,
-  ): Promise<{ data: DoctorListResponseDto; message: string }> {
-    const result = await this.accountsService.findAllDoctors(
-      page,
-      limit,
-      clinicId,
-      gender,
-    );
-    return {
-      data: result,
-      message: 'Doctors list retrieved successfully',
-    };
-  }
-
-  /**
-   * Get All Employees by Clinic ID (Doctor + Staff)
-   *
-   * Retrieves all employees belonging to a specific clinic.
-   * Useful for contract creation dropdowns.
-   *
-   * Path Parameters:
-   * - clinicId: Clinic UUID
-   *
-   * Query Parameters:
-   * - role: Filter by role (DOCTOR | CLINIC_STAFF)
-   * - search: Search by name or username
-   *
-   * Response Format:
-   * - Returns array of Accounts
-   *
-   * @param {string} clinicId - Clinic UUID
-   * @param {AccountRole} [role] - Optional role filter
-   * @param {string} [search] - Optional search filter
-   * @returns {Promise<{data: Account[], message: string}>} List of employees
-   *
-   * @swagger
-   * @response 200 - Successfully retrieved employees
-   */
-  @Get('clinic/:clinicId/employees')
-  @ApiOperation({ summary: 'Get all employees (Doctor + Staff) of a clinic' })
-  @ApiQuery({
-    name: 'role',
-    required: false,
-    enum: AccountRole,
-    description: 'Filter by role (DOCTOR or CLINIC_STAFF)',
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    type: String,
-    description: 'Search by name or username',
-  })
-  @ApiResponseData({
-    type: AccountResponseDto,
-    status: MESSAGES.statusCode.success,
-    message: 'Employees retrieved successfully',
-    isArray: true,
-  })
-  async getEmployeesByClinic(
-    @Param('clinicId', ParseUUIDPipe) clinicId: string,
-    @Query('role') role?: AccountRole,
-    @Query('search') search?: string,
-  ): Promise<{ data: any[]; message: string }> {
-    const employees = await this.accountsService.findAllEmployeesByClinic(
-      clinicId,
-      role,
-      search,
-    );
-    return {
-      data: employees,
-      message: 'Employees retrieved successfully',
-    };
-  }
-
+  
   /**
    * Get Doctor Details by ID (Public)
    *
@@ -1215,6 +1073,265 @@ export class AccountsController {
     return {
       data: account,
       message: MESSAGES.successMessage.userUnbannedSuccess,
+    };
+  }
+
+  /**
+   * Cancel Pending Registration (Hard Delete)
+   *
+   * Cancels a pending clinic admin registration by performing a hard delete.
+   * This is an irreversible operation that completely removes all registration data.
+   *
+   * Business Rules:
+   * - Only CLINIC_ADMIN role can cancel their registration
+   * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
+   * - Cannot cancel if any SUCCESS transaction exists (payment already made)
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   *
+   * Deletion Order:
+   * 1. ClinicsLegalDocuments (linked to manager account)
+   * 2. ClinicManagerInformation + Account (manager)
+   * 3. Pending Transactions
+   * 4. ClinicSubscription
+   * 5. ClinicAdminInformation
+   * 6. Account (admin)
+   *
+   * @param {any} req - Request object containing authenticated user info
+   * @returns {Promise<CancelRegistrationResponseDto>} Cancellation result
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Registration cancelled successfully
+   * @response 400 - Cannot cancel registration with current status
+   * @response 403 - Forbidden - Not CLINIC_ADMIN role
+   * @response 404 - Subscription not found
+   */
+  @Delete('register/cancel-pending')
+  @ApiOperation({ summary: 'Cancel pending registration (hard delete)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiResponseData({
+    type: CancelRegistrationResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Registration cancelled successfully',
+  })
+  async cancelPendingRegistration(
+    @Request() req: any,
+  ): Promise<{ data: CancelRegistrationResponseDto; message: string }> {
+    const result = await this.accountsService.cancelPendingRegistration(req.user.accountId);
+    return { data: result, message: result.message };
+  }
+
+  /**
+   * Cancel Active Subscription (Churn)
+   *
+   * Cancels an active subscription by changing its status to NON_RENEWING.
+   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   *
+   * Business Rules:
+   * - Only CLINIC_ADMIN role can cancel their subscription
+   * - Subscription must be in ACTIVE status
+   *
+   * Effects:
+   * - Status changes to NON_RENEWING
+   * - Account remains fully functional until expirationDate
+   * - System will NOT renew automatically
+   * - After expirationDate passes, status transitions to EXPIRED
+   *
+   * @param {any} req - Request object containing authenticated user info
+   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Subscription cancelled successfully
+   * @response 400 - Cannot cancel subscription with current status
+   * @response 403 - Forbidden - Not CLINIC_ADMIN role
+   * @response 404 - Subscription not found
+   */
+  @Post('subscription/cancel')
+  @ApiOperation({ summary: 'Cancel active subscription (churn)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiResponseData({
+    type: CancelSubscriptionResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Subscription cancelled successfully',
+  })
+  async cancelSubscription(
+    @Request() req: any,
+    @Body() dto: CancelSubscriptionDto,
+  ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
+    const result = await this.accountsService.cancelSubscription(req.user.accountId, dto);
+    return { data: result, message: result.message };
+  }
+
+  /**
+   * Upload Legal Documents for Clinic Manager (Step 4B)
+   *
+   * Uploads legal documents for a specific clinic manager during registration flow.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   * - Docs stored per manager (FK to manager account)
+   * - Status transitions to PENDING_APPROVAL
+   * - verificationStatus transitions to PENDING_REVIEW
+   *
+   * @param req - Request object containing authenticated user
+   * @param managerAccountId - Clinic manager account UUID
+   * @param dto - Legal document data
+   * @returns Created legal documents
+   */
+  @Post('clinic-managers/:managerAccountId/legal-documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Upload legal documents for clinic manager (Step 4B)',
+    description:
+      'Uploads legal documents for a specific clinic manager. Transitions subscription status to PENDING_APPROVAL.',
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiResponseData({
+    type: Object,
+    status: MESSAGES.statusCode.created,
+    message: 'Legal documents uploaded successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or no ownership',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic manager not found' })
+  async uploadLegalDocumentsForManager(
+    @Request() req: any,
+    @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
+    @Body() dto: any,
+  ): Promise<{ data: any; message: string }> {
+    const clinicAdminId = req.user.accountId;
+    const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
+      clinicAdminId,
+      managerAccountId,
+      dto,
+    );
+    return {
+      data: legalDocs,
+      message: 'Legal documents uploaded successfully. Waiting for admin approval.',
+    };
+  }
+
+  /**
+   * Get Legal Documents for Clinic Manager
+   *
+   * Retrieves legal documents for a specific clinic manager.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   *
+   * @param req - Request object containing authenticated user
+   * @param managerAccountId - Clinic manager account UUID
+   * @returns Legal documents
+   */
+  @Get('clinic-managers/:managerAccountId/legal-documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get legal documents for clinic manager',
+    description:
+      'Retrieves legal documents for a specific clinic manager.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiResponseData({
+    type: Object,
+    status: MESSAGES.statusCode.success,
+    message: 'Legal documents retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or no ownership',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic manager not found' })
+  async getLegalDocumentsForManager(
+    @Request() req: any,
+    @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
+  ): Promise<{ data: any; message: string }> {
+    const clinicAdminId = req.user.accountId;
+    const legalDocs = await this.accountsService.getLegalDocumentsForManager(
+      clinicAdminId,
+      managerAccountId,
+    );
+    return {
+      data: legalDocs,
+      message: 'Legal documents retrieved successfully',
+    };
+  }
+
+  /**
+   * Update Legal Documents for Clinic Manager (Rejected Documents)
+   *
+   * Updates rejected legal documents for a specific clinic manager.
+   * This endpoint is used when documents have been rejected and need to be resubmitted.
+   *
+   * Business Rules:
+   * - Actor must have CLINIC_ADMIN role
+   * - Manager exists, has role CLINIC_MANAGER
+   * - Ownership: manager.parentId equals current admin account id
+   * - Documents must be in REJECTED status
+   * - verificationStatus transitions to PENDING_REVIEW
+   * - Subscription status transitions back to PENDING_APPROVAL
+   *
+   * @param req - Request object containing authenticated user
+   * @param managerAccountId - Clinic manager account UUID
+   * @param dto - Legal document data to update
+   * @returns Updated legal documents
+   */
+  @Put('clinic-managers/:managerAccountId/legal-documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Update legal documents for clinic manager (Rejected Documents)',
+    description:
+      'Updates rejected legal documents for a specific clinic manager. Transitions subscription status back to PENDING_APPROVAL.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiResponseData({
+    type: Object,
+    status: MESSAGES.statusCode.success,
+    message: 'Legal documents updated successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role or no ownership',
+  })
+  @ApiResponse({ status: 404, description: 'Clinic manager not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot update documents with current status',
+  })
+  async updateLegalDocumentsForManager(
+    @Request() req: any,
+    @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
+    @Body() dto: any,
+  ): Promise<{ data: any; message: string }> {
+    const clinicAdminId = req.user.accountId;
+    const legalDocs = await this.accountsService.updateLegalDocumentsForManager(
+      clinicAdminId,
+      managerAccountId,
+      dto,
+    );
+    return {
+      data: legalDocs,
+      message: 'Legal documents updated successfully. Waiting for admin approval.',
     };
   }
 }
