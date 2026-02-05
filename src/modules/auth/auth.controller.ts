@@ -338,12 +338,16 @@ export class AuthController {
    * Access Control:
    * - Public endpoint (no authentication required)
    *
+   * Registration Flow:
+   * - Step 2: Collects Initial Profile + Payment Data (including bank details)
+   * - Step 3: Reserved for Payment Verification and Confirmation (PATCH /account/clinic-admin/payment-config)
+   *
    * Use Cases:
    * - Initial clinic admin registration
    * - Starting new clinic registration flow
    *
-   * @param dto - Clinic admin registration data
-   * @returns Created account with subscription status
+   * @param dto - Clinic admin registration data (including bank configuration)
+   * @returns Created account with subscription status (PENDING_SEPAY_SETUP)
    *
    * @swagger
    * @response 201 - Successfully registered clinic admin
@@ -354,7 +358,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Register clinic admin (Public)',
     description:
-      'Creates a complete clinic admin registration with account, profile, and subscription',
+      'Creates a complete clinic admin registration with account, profile, payment configuration (bank details), and subscription in one step. Bank details are collected during initial registration (Step 2). The payment-config endpoint (Step 3) is available for verification and confirmation of the pre-filled bank details.',
   })
   @HttpCode(HttpStatus.CREATED)
   @ApiResponseData({
@@ -370,7 +374,7 @@ export class AuthController {
     const account = await this.AccountsService.registerClinicAdmin(dto);
     return {
       data: account,
-      message: 'Clinic admin registered successfully. Please configure your payment gateway to continue.',
+      message: 'Clinic admin registered successfully. Please create a clinic manager account to continue.',
     };
   }
 

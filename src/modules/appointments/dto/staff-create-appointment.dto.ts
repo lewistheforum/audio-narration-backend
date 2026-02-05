@@ -11,8 +11,10 @@ import {
   IsNumber,
   Min,
   ValidateNested,
+  IsEnum,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { PaymentType } from '../enums/payment-type.enum';
 
 /**
  * Service Item DTO
@@ -133,13 +135,14 @@ export class StaffCreateAppointmentDto {
   paymentStatus?: string;
 
   @ApiProperty({
-    description: 'Payment type (CASH, CARD, TRANSFER, etc.)',
-    example: 'CASH',
+    description: 'Payment type (online or cod)',
+    example: 'online',
     required: false,
+    enum: PaymentType,
   })
   @IsOptional()
-  @IsString({ message: 'Payment type must be a string' })
-  paymentType?: string;
+  @IsEnum(PaymentType, { message: 'Payment type must be either online or cod' })
+  paymentType?: PaymentType;
 
   @ApiProperty({
     description: 'Staff note or patient note for the appointment',

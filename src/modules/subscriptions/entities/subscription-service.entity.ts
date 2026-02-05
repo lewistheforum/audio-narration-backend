@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
+import { SubscriptionServiceStatus } from '../enums/subscription-service-status.enum';
 
 /**
  * SubscriptionService Entity
@@ -37,6 +38,14 @@ export class SubscriptionService {
 
   @Column({ name: 'is_popular', type: 'boolean', default: false })
   isPopular: boolean;
+
+  @Column({
+    name: 'status',
+    type: 'enum',
+    enum: SubscriptionServiceStatus,
+    default: SubscriptionServiceStatus.ACTIVE,
+  })
+  status: SubscriptionServiceStatus;
 
   @Column({ name: 'chart_color', type: 'text', nullable: true })
   chartColor?: string;

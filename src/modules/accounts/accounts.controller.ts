@@ -34,7 +34,6 @@ import {
   AccountResponseDto,
   UpdatePasswordDto,
   BanAccountDto,
-  CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
@@ -84,7 +83,6 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   AccountResponseDto,
   ClinicListResponseDto,
   ClinicDetailResponseDto,
-  CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
@@ -417,124 +415,6 @@ export class AccountsController {
     return this.accountsService.getPublicDoctorById(id);
   }
 
-  /**
-   * Get Clinic Admin Profile
-   *
-   * Retrieves the clinic admin profile information for a specific account.
-   * Only accounts with CLINIC_ADMIN role can have clinic admin profiles.
-   *
-   * Path Parameters:
-   * - id: Account UUID
-   *
-   * Response Format:
-   * - Returns ClinicAdminInformation entity with clinic admin profile data
-   *
-   * Access Control:
-   * - Requires JWT authentication
-   * - Available to CLINIC_ADMIN role
-   *
-   * Use Cases:
-   * - Viewing clinic admin profile
-   * - Displaying clinic admin information in dashboards
-   *
-   * @param {string} id - Account UUID
-   * @returns {Promise<{data: ClinicAdminInformation, message: string}>} Clinic admin profile data
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 200 - Successfully retrieved clinic admin profile
-   * @response 401 - Unauthorized - Missing or invalid JWT token
-   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
-   * @response 404 - Account not found or doesn't have CLINIC_ADMIN role
-   * @response 400 - Invalid UUID format
-   */
-  @Get('clinic-admin/:id/profile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get clinic admin profile by account ID' })
-  @ApiResponseData({
-    type: Object,
-    status: MESSAGES.statusCode.success,
-    message: 'Clinic admin profile retrieved successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Clinic admin profile not found' })
-  async getClinicAdminProfile(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.findClinicAdminProfile(id);
-    return {
-      data: profile,
-      message: 'Clinic admin profile retrieved successfully',
-    };
-  }
-
-  /**
-   * Create Clinic Admin Profile
-   *
-   * Creates a new clinic admin profile for an account.
-   * This endpoint is used to create the profile after the account is created.
-   *
-   * Path Parameters:
-   * - id: Account UUID
-   *
-   * Request Body:
-   * - clinicName: Clinic name (required)
-   * - description: Clinic description (optional)
-   * - specializedIn: Clinic specializations (optional)
-   * - pros: Clinic pros/advantages (optional)
-   * - paraclinical: Paraclinical services offered (optional)
-   * - dob: Date of birth (optional)
-   * - profilePicture: Profile picture URL (optional)
-   * - bankName: Bank name (optional)
-   * - bankNumber: Bank account number (optional)
-   * - bankBranch: Bank branch (optional)
-   * - sepayVa: SePay virtual account number (optional)
-   * - isVerify: Verification status (optional, default: false)
-   *
-   * Access Control:
-   * - Requires JWT authentication
-   * - Available to CLINIC_ADMIN role
-   *
-   * Use Cases:
-   * - Creating clinic admin profile after account creation
-   * - Initial profile setup
-   *
-   * @param {string} id - Account UUID
-   * @param {CreateClinicAdminProfileDto} dto - Clinic admin profile data
-   * @returns {Promise<{data: ClinicAdminInformation, message: string}>} Created clinic admin profile
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 201 - Successfully created clinic admin profile
-   * @response 401 - Unauthorized - Missing or invalid JWT token
-   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
-   * @response 404 - Account not found or doesn't have CLINIC_ADMIN role
-   */
-  @Post('clinic-admin/:id/profile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create clinic admin profile' })
-  @ApiResponseData({
-    type: Object,
-    status: MESSAGES.statusCode.success,
-    message: 'Clinic admin profile created successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Account not found' })
-  async createClinicAdminProfile(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CreateClinicAdminProfileDto,
-  ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.createClinicAdminProfile(
-      id,
-      dto,
-    );
-    return {
-      data: profile,
-      message: 'Clinic admin profile created successfully',
-    };
-  }
 
   /**
    * Get Account by ID

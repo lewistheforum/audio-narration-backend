@@ -11,6 +11,7 @@
     "start:dev": "nodemon",
     "start:prod": "node dist/main",
     "build": "nest build",
+    "type-check": "npx tsc --noEmit --pretty",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:restart": "docker-compose restart",
@@ -18,6 +19,7 @@
     "docker:ps": "docker-compose ps",
     "docker:clean": "docker-compose down -v && rmdir /s /q database\\postgres_data 2>nul || rm -rf database/postgres_data",
     "docker:setup": "docker-compose up -d && timeout /t 20 && pnpm run script:enable-vector",
+    "script:setup-database-vector": "pnpm run script:enable-vector",
     "script:schema-diff": "ts-node -r tsconfig-paths/register src/common/scripts/check-schema-diff.ts",
     "script:sync-local-db": "ts-node -r tsconfig-paths/register src/common/scripts/sync-local-db.ts",
     "script:analyze-excel": "ts-node -r tsconfig-paths/register src/common/scripts/analyze-excel.ts",
@@ -26,6 +28,7 @@
     "script:generate-encryption-key": "ts-node -r tsconfig-paths/register src/common/scripts/generate-encryption-key.ts",
     "script:enable-vector": "ts-node -r tsconfig-paths/register src/common/scripts/enable-vector.ts",
     "script:check-seeders": "ts-node -r tsconfig-paths/register src/common/scripts/check-seeders.ts",
+    "script:clear-db": "ts-node -r tsconfig-paths/register src/common/scripts/clear-db.ts",
     "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db"
   },
   "nodemonConfig": {
@@ -89,6 +92,7 @@
     "typeorm": "^0.3.27"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.2.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.1.6",
     "@types/bcrypt": "^5.0.2",
