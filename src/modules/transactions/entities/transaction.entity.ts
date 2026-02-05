@@ -102,7 +102,12 @@ export class Transaction {
   @Column({ name: 'transfer_amount', type: 'bigint', nullable: true })
   transferAmount?: number;
 
-  @Column({ name: 'transfer_type', type: 'enum', enum: PaymentDirection, nullable: true })
+  @Column({
+    name: 'transfer_type',
+    type: 'enum',
+    enum: PaymentDirection,
+    nullable: true,
+  })
   transferType?: PaymentDirection;
 
   @Column({ name: 'accumulated', type: 'bigint', nullable: true })
