@@ -19,6 +19,7 @@ import {
   PaymentResponseDto,
   SeepayCallbackDto,
   TransactionDetailDto,
+  CreateSubscriptionTransactionDto,
 } from './dto';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -70,6 +71,25 @@ export class TransactionsController {
     return {
       data: payment,
       message: 'Payment QR created successfully',
+    };
+  }
+
+  @Post('clinic/subscription-qr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tạo QR thanh toán cho đăng ký gói dịch vụ' })
+  @ApiResponseData({
+    type: PaymentResponseDto,
+    status: HttpStatus.CREATED,
+    message: 'Subscription QR created successfully',
+  })
+  async createSubscriptionQr(@Body() body: CreateSubscriptionTransactionDto) {
+    const payment = await this.transactionsService.createSubscriptionQr(body);
+    return {
+      data: payment,
+      message: 'Subscription QR created successfully',
     };
   }
 

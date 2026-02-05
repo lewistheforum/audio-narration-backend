@@ -122,8 +122,7 @@ export class Transaction {
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
 
-  @Column({ name: 'metadata', type: 'jsonb', nullable: true })
-  metadata?: Record<string, unknown>;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

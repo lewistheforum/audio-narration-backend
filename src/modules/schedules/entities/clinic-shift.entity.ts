@@ -10,6 +10,8 @@ import {
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ShiftType } from '../enums';
+import { ClinicShiftHour } from './clinic-shift-hour.entity';
+import { OneToMany } from 'typeorm';
 
 /**
  * ClinicShift Entity
@@ -45,4 +47,7 @@ export class ClinicShift {
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
   deletedAt?: Date;
+
+  @OneToMany(() => ClinicShiftHour, (hour) => hour.shift)
+  hours?: ClinicShiftHour[];
 }
