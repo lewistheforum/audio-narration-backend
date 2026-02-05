@@ -25,7 +25,6 @@ import {
   BanAccountDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
-  CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   RegisterClinicAdminDto,
   CheckRegistrationStatusResponseDto,
@@ -3002,87 +3001,6 @@ export class AccountsService {
     }
   }
 
-  /**
-   * Find Clinic Admin Profile by Account ID
-   *
-   * Retrieves the clinic admin profile information for a specific account.
-   * Only accounts with CLINIC_ADMIN role can have clinic admin profiles.
-   *
-   * Business Rules:
-   * - Account must have CLINIC_ADMIN role
-   * - Only returns profile if account exists and has CLINIC_ADMIN role
-   * - Returns null if profile not found
-   *
-   * @param {string} accountId - Account UUID
-   * @returns {Promise<ClinicAdminInformation | null>} Clinic admin profile or null
-   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
-   *
-   * @example
-   * ```typescript
-   * const profile = await accountsService.findClinicAdminProfile('account-uuid');
-   * if (profile) {
-   *   console.log(profile.clinicName);
-   * }
-   * ```
-   */
-  async findClinicAdminProfile(
-    accountId: string,
-  ): Promise<ClinicAdminInformation | null> {
-    const account = await this.findAccountEntityById(accountId);
-    this.validateClinicAdminRole(account);
-
-    return this.clinicAdminInfoRepository.findByAccountId(accountId);
-  }
-
-  /**
-   * Create Clinic Admin Profile
-   *
-   * Creates a new clinic admin profile for an account.
-   * This method is used to create the profile after the account is created.
-   *
-   * Business Rules:
-   * - Account must have CLINIC_ADMIN role
-   * - Profile is created with provided data
-   * - All fields are optional except clinicName
-   *
-   * @param {string} accountId - Account UUID
-   * @param {CreateClinicAdminProfileDto} dto - Clinic admin profile data
-   * @returns {Promise<ClinicAdminInformation>} Created clinic admin profile
-   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
-   *
-   * @example
-   * ```typescript
-   * const profile = await accountsService.createClinicAdminProfile('account-uuid', {
-   *   clinicName: 'City Medical Clinic',
-   *   description: 'A modern healthcare facility'
-   * });
-   * ```
-   */
-  async createClinicAdminProfile(
-    accountId: string,
-    dto: CreateClinicAdminProfileDto,
-  ): Promise<ClinicAdminInformation> {
-    const account = await this.findAccountEntityById(accountId);
-    this.validateClinicAdminRole(account);
-
-    const profile = this.clinicAdminInfoRepository.create({
-      accountId,
-      clinicName: dto.clinicName,
-      description: dto.description,
-      specializedIn: dto.specializedIn,
-      pros: dto.pros,
-      paraclinical: dto.paraclinical,
-      dob: dto.dob ? new Date(dto.dob) : undefined,
-      profilePicture: dto.profilePicture,
-      bankName: dto.bankName,
-      bankNumber: dto.bankNumber,
-      bankBranch: dto.bankBranch,
-      sepayVa: dto.sepayVa,
-      isVerify: dto.isVerify ?? false,
-    });
-
-    return this.clinicAdminInfoRepository.save(profile);
-  }
 
   /**
    * Update Clinic Admin Profile
