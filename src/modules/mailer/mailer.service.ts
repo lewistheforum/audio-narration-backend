@@ -573,4 +573,417 @@ export class MailerService {
 
     await transporter.sendMail(mailOptions);
   }
+
+  /**
+   * Send Clinic Admin Welcome Email
+   * Sends a welcome email after clinic admin registration, instructing to check Payment Configuration
+   */
+  async sendClinicAdminWelcomeEmail(
+    email: string,
+    clinicName?: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = clinicName || 'Clinic';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Welcome to Medicare - Clinic Registration Initiated',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img
+              alt="Medicare Logo"
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🏥 Welcome to Medicare!</h1>
+            <p style="font-size: 18px; margin: 0 0 10px 0;">
+              ${displayName}
+            </p>
+            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
+              Your clinic registration has been successfully initiated!
+            </p>
+          </div>
+          
+          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
+            <h2 style="color: #111827; margin: 0 0 20px 0;">What's Next?</h2>
+            
+            <div style="margin: 20px 0;">
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">1</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Configure Payment Settings</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Complete your payment configuration to proceed</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">2</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Create Clinic Manager Account</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Set up your clinic manager credentials</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start;">
+                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">3</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Upload Legal Documents</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Submit required documentation for verification</p>
+                </div>
+              </div>
+            </div>
+            
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px;">
+              <p style="margin: 0; color: #92400E; font-size: 14px;">
+                <strong>⚠️ Important:</strong> Please complete your Payment Configuration before proceeding with the next steps.
+              </p>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need help? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Clinic admin welcome email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send clinic admin welcome email:', error);
+      // Don't throw error - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Manager Credentials Email
+   * Sends generated credentials to Clinic Manager
+   */
+  async sendManagerCredentialsEmail(
+    managerEmail: string,
+    username: string,
+    password: string,
+    clinicName?: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = clinicName || 'Clinic';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: managerEmail,
+      subject: 'Your Clinic Manager Account Credentials - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img
+              alt="Medicare Logo"
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">👋 Welcome, Clinic Manager!</h1>
+            <p style="font-size: 18px; margin: 0 0 10px 0;">
+              ${displayName}
+            </p>
+            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
+              Your account has been created successfully!
+            </p>
+          </div>
+          
+          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
+            <h2 style="color: #111827; margin: 0 0 20px 0; text-align: center;">Your Login Credentials</h2>
+            
+            <div style="background: white; border: 2px solid #E5E7EB; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <div style="margin-bottom: 15px;">
+                <p style="margin: 0 0 5px 0; color: #6B7280; font-size: 14px; font-weight: 600;">Username:</p>
+                <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">${username}</p>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <p style="margin: 0 0 5px 0; color: #6B7280; font-size: 14px; font-weight: 600;">Password:</p>
+                <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">${password}</p>
+              </div>
+            </div>
+            
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px;">
+              <p style="margin: 0; color: #92400E; font-size: 14px;">
+                <strong>⚠️ Important:</strong> Please change your password after your first login for security purposes.
+              </p>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:5173'
+        }/login"
+               style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+              Login to Your Account
+            </a>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need help? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Manager credentials email sent to ${managerEmail}`);
+    } catch (error) {
+      console.error('❌ Failed to send manager credentials email:', error);
+      // Don't throw error - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Registration Approved Email
+   * Notifies admin of approval and requests payment
+   */
+  async sendRegistrationApprovedEmail(
+    adminEmail: string,
+    clinicName?: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = clinicName || 'Clinic';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: adminEmail,
+      subject: '🎉 Registration Approved - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img
+              alt="Medicare Logo"
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🎉 Registration Approved!</h1>
+            <p style="font-size: 18px; margin: 0 0 10px 0;">
+              ${displayName}
+            </p>
+            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
+              Your clinic registration has been approved by Medicare!
+            </p>
+          </div>
+          
+          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
+            <h2 style="color: #111827; margin: 0 0 20px 0;">Next Steps</h2>
+            
+            <div style="margin: 20px 0;">
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #10B981; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">✓</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Registration Approved</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Your clinic registration has been reviewed and approved</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start;">
+                <div style="background: #F59E0B; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">!</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Complete Payment</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Please complete your subscription payment to activate your clinic</p>
+                </div>
+              </div>
+            </div>
+            
+            <div style="background: #ECFDF5; border: 2px solid #10B981; border-radius: 8px; padding: 20px; margin-top: 20px;">
+              <h3 style="margin: 0 0 10px 0; color: #065F46; font-size: 16px;">Payment Required</h3>
+              <p style="margin: 0; color: #047857; font-size: 14px;">
+                Your clinic is ready to go! Please complete the payment process to activate your subscription and start using Medicare services.
+              </p>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:5173'
+        }/payment"
+               style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+              Complete Payment
+            </a>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need help? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Registration approved email sent to ${adminEmail}`);
+    } catch (error) {
+      console.error('❌ Failed to send registration approved email:', error);
+      // Don't throw error - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Registration Rejected Email
+   * Notifies admin of rejection with reason
+   */
+  async sendRegistrationRejectedEmail(
+    adminEmail: string,
+    reason: string,
+    clinicName?: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const displayName = clinicName || 'Clinic';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: adminEmail,
+      subject: 'Registration Update - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img
+              alt="Medicare Logo"
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">📋 Registration Update</h1>
+            <p style="font-size: 18px; margin: 0 0 10px 0;">
+              ${displayName}
+            </p>
+            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
+              Your registration requires attention
+            </p>
+          </div>
+          
+          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
+            <h2 style="color: #111827; margin: 0 0 20px 0;">Rejection Reason</h2>
+            
+            <div style="background: #FEF2F2; border: 2px solid #EF4444; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0; color: #7F1D1D; font-size: 16px; line-height: 1.6;">
+                ${reason}
+              </p>
+            </div>
+            
+            <h2 style="color: #111827; margin: 30px 0 20px 0;">What You Need To Do</h2>
+            
+            <div style="margin: 20px 0;">
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #EF4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">1</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Review the Reason</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Carefully review the reason for rejection above</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start; margin-bottom: 15px;">
+                <div style="background: #EF4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">2</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Update Documents</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Update your legal documents based on the feedback</p>
+                </div>
+              </div>
+              
+              <div style="display: flex; align-items: start;">
+                <div style="background: #EF4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">3</div>
+                <div>
+                  <h3 style="margin: 0 0 5px 0; color: #111827;">Resubmit for Review</h3>
+                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Submit your updated documents for re-verification</p>
+                </div>
+              </div>
+            </div>
+            
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px;">
+              <p style="margin: 0; color: #92400E; font-size: 14px;">
+                <strong>💡 Tip:</strong> If you have questions about the rejection reason, please contact our support team for clarification.
+              </p>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:5173'
+        }/documents"
+               style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+              Update Documents
+            </a>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need help? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Registration rejected email sent to ${adminEmail}`);
+    } catch (error) {
+      console.error('❌ Failed to send registration rejected email:', error);
+      // Don't throw error - email should be fire-and-forget
+    }
+  }
 }

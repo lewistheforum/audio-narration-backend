@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountsModule } from '../accounts/accounts.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { MailerModule } from '../mailer/mailer.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminRegistrationRepository } from './repositories/admin-registration.repository';
@@ -21,6 +22,7 @@ import { ClinicSubscription } from '../subscriptions/entities/clinic-subscriptio
  * Dependencies:
  * - AccountsModule: For accessing Account, ClinicAdminInformation, ClinicManagerInformation, ClinicsLegalDocuments entities and repositories
  * - SubscriptionsModule: For accessing ClinicSubscription entity and repository
+ * - MailerModule: For sending email notifications
  * - AuthModule: For JWT authentication and RBAC guards (imported via AccountsModule)
  */
 @Module({
@@ -34,6 +36,7 @@ import { ClinicSubscription } from '../subscriptions/entities/clinic-subscriptio
     ]),
     AccountsModule,
     SubscriptionsModule,
+    MailerModule,
   ],
   controllers: [AdminController],
   providers: [

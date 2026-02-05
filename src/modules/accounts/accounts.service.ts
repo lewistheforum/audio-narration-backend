@@ -3192,6 +3192,7 @@ export class AccountsService {
    * - Returns managerAccountId for legal document related statuses
    * - Returns notice for NON_RENEWING status
    * - Returns expirationDate for ACTIVE, NON_RENEWING, EXPIRED statuses
+   * - PENDING_SEPAY_SETUP is deprecated - bank config is now part of initial registration
    *
    * @param {string} email - Email address to check
    * @returns {Promise<CheckRegistrationStatusResponseDto>} Registration status information
@@ -3199,7 +3200,7 @@ export class AccountsService {
    * @example
    * ```typescript
    * const status = await accountsService.checkRegistrationStatus('admin@clinic.com');
-   * // Returns: { status: 'PENDING_SEPAY_SETUP', canResume: true, ... }
+   * // Returns: { status: 'PENDING_MANAGER_SETUP', canResume: true, ... }
    * ```
    */
   async checkRegistrationStatus(
@@ -3257,12 +3258,9 @@ export class AccountsService {
     let expirationDate: string | null = null;
 
     switch (status) {
-      case RegistrationStatus.PENDING_SEPAY_SETUP:
-        currentStep = 'STEP_3';
-        nextAction = 'Configure your payment gateway (Sepay)';
-        break;
+      // PENDING_SEPAY_SETUP is deprecated - bank config is now part of initial registration
       case RegistrationStatus.PENDING_MANAGER_SETUP:
-        currentStep = 'STEP_4';
+        currentStep = 'STEP_3';
         nextAction = 'Create clinic manager account';
         break;
       case RegistrationStatus.PENDING_LEGAL_SETUP:
@@ -3305,7 +3303,7 @@ export class AccountsService {
         }
         break;
       case RegistrationStatus.PENDING_PAYMENT:
-        currentStep = 'STEP_6';
+        currentStep = 'STEP_5';
         nextAction = 'Complete payment for subscription';
         break;
       case RegistrationStatus.ACTIVE:
@@ -3350,17 +3348,18 @@ export class AccountsService {
   /**
    * Register Clinic Admin (Transactional)
    *
-   * Creates a complete clinic admin registration with account, profile, and subscription.
+   * Creates a complete clinic admin registration with account, profile, payment config (bank details), and subscription.
    * Uses QueryRunner for transaction safety - all operations succeed or none do.
    *
    * Business Rules:
    * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
    * - Creates Account with CLINIC_ADMIN role and PENDING status
-   * - Creates ClinicAdminInformation with clinic details
-   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
+   * - Creates ClinicAdminInformation with clinic details AND bank configuration
+   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status (Step 2: Collects Initial Profile + Payment Data)
+   * - Bank fields (bankNumber, bankBranch) are encrypted via encryptionTransformer
    * - Password is hashed with bcrypt before storage
    *
-   * @param {RegisterClinicAdminDto} dto - Clinic admin registration data
+   * @param {RegisterClinicAdminDto} dto - Clinic admin registration data (including bank configuration)
    * @returns {Promise<AccountResponseDto>} Created account with subscription status
    * @throws {ConflictException} If email already exists or exceeds usage limit
    * @throws {BadRequestException} If validation fails
@@ -3373,6 +3372,10 @@ export class AccountsService {
    *   email: 'admin@clinic.com',
    *   password: 'AdminPass123',
    *   clinicName: 'City Medical Center',
+   *   bankName: 'Vietcombank',
+   *   bankNumber: '1234567890',
+   *   bankBranch: 'Ho Chi Minh City Branch',
+   *   sepayVa: '1900123456',
    *   serviceId: '550e8400-e29b-41d4-a716-446655440000'
    * });
    * ```
@@ -3422,7 +3425,7 @@ export class AccountsService {
 
       const savedAccount = await queryRunner.manager.save(account);
 
-      // Create ClinicAdminInformation entity
+      // Create ClinicAdminInformation entity (including bank configuration)
       const clinicAdminInfo = this.clinicAdminInfoRepository.create({
         accountId: savedAccount._id,
         clinicName: dto.clinicName,
@@ -3432,21 +3435,35 @@ export class AccountsService {
         paraclinical: dto.paraclinical,
         dob: dto.dob ? new Date(dto.dob) : undefined,
         profilePicture: dto.profilePicture,
+        // Bank configuration fields (formerly Step 3, now part of initial registration)
+        bankName: dto.bankName,
+        bankNumber: dto.bankNumber,
+        bankBranch: dto.bankBranch,
+        sepayVa: dto.sepayVa,
       });
 
       await queryRunner.manager.save(clinicAdminInfo);
 
-      // Create ClinicSubscription entity with PENDING_MANAGER_SETUP status
+      // Create ClinicSubscription entity with PENDING_SEPAY_SETUP status
+      // Step 2: Collects Initial Profile + Payment Data (including bank details)
+      // Step 3: Reserved for Payment Verification and Confirmation (PATCH /account/clinic-admin/payment-config)
       const clinicSubscription = this.clinicSubscriptionRepository.create({
         clinicId: savedAccount._id,
         serviceId: dto.serviceId,
-        subscriptionStatus: RegistrationStatus.PENDING_MANAGER_SETUP,
+        subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
         subscriptionDate: new Date(),
       });
 
       await queryRunner.manager.save(clinicSubscription);
 
       await queryRunner.commitTransaction();
+
+      // Send welcome email after successful transaction (fire-and-forget)
+      this.mailerService
+        .sendClinicAdminWelcomeEmail(dto.email, dto.clinicName)
+        .catch((error) => {
+          console.error('Failed to send clinic admin welcome email:', error);
+        });
 
       // Return complete account DTO with subscription status
       return new AccountResponseDto(savedAccount, null, null, null, null, null, clinicAdminInfo);
@@ -3577,6 +3594,22 @@ export class AccountsService {
       await queryRunner.manager.save(subscription);
 
       await queryRunner.commitTransaction();
+
+      // Send manager credentials email after successful transaction (fire-and-forget)
+      // Get clinic name from the clinic admin
+      const clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
+      const clinicName = clinicAdminInfo?.clinicName;
+
+      this.mailerService
+        .sendManagerCredentialsEmail(
+          dto.email,
+          savedManagerAccount.username,
+          defaultPassword,
+          clinicName,
+        )
+        .catch((error) => {
+          console.error('Failed to send manager credentials email:', error);
+        });
 
       // Return complete account DTO
       return new AccountResponseDto(savedManagerAccount, null, null, null, managerInfo);
@@ -3903,6 +3936,9 @@ export class AccountsService {
         MESSAGES.failMessage.pendingApprovalBlocked,
       );
     }
+
+    // Allow cancellation from PENDING_MANAGER_SETUP state (which now includes bank configuration)
+    // This ensures all newly created bank data is wiped if the user cancels before moving to manager setup
 
     // Check for forbidden statuses
     const forbiddenStatuses = [

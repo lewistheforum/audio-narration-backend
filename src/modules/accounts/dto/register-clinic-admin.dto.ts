@@ -14,14 +14,18 @@ import { Transform } from 'class-transformer';
 /**
  * Register Clinic Admin DTO
  *
- * Used for initial clinic admin registration with account + profile + subscription.
- * Creates Account, ClinicAdminInformation, and ClinicSubscription in one transaction.
+ * Used for initial clinic admin registration with account + profile + payment config + subscription.
+ * Creates Account, ClinicAdminInformation (including bank fields), and ClinicSubscription in one transaction.
  *
  * Password Requirements:
  * - Minimum 6 characters
  * - Maximum 50 characters
  * - Must contain at least one letter
  * - Must contain at least one number
+ *
+ * Bank Configuration:
+ * - Bank name, account number, branch, and SePay VA are now required as part of initial registration
+ * - These fields are stored in ClinicAdminInformation entity with encryption for sensitive data
  */
 export class RegisterClinicAdminDto {
   @ApiProperty({
@@ -153,4 +157,54 @@ export class RegisterClinicAdminDto {
   @IsNotEmpty({ message: 'Service ID is required' })
   @IsString({ message: 'Service ID must be a string' })
   serviceId: string;
+
+  // Bank configuration fields (formerly Step 3, now part of initial registration)
+
+  @ApiProperty({
+    description: 'Name of the bank for payment processing',
+    example: 'Vietcombank',
+    required: true,
+    maxLength: 255,
+  })
+  @IsNotEmpty({ message: 'Bank name is required' })
+  @IsString({ message: 'Bank name must be a string' })
+  @MaxLength(255, { message: 'Bank name must not exceed 255 characters' })
+  @Transform(({ value }) => value?.trim())
+  bankName: string;
+
+  @ApiProperty({
+    description: 'Bank account number for receiving payments',
+    example: '1234567890',
+    required: true,
+    maxLength: 50,
+  })
+  @IsNotEmpty({ message: 'Bank number is required' })
+  @IsString({ message: 'Bank number must be a string' })
+  @MaxLength(50, { message: 'Bank number must not exceed 50 characters' })
+  @Transform(({ value }) => value?.trim())
+  bankNumber: string;
+
+  @ApiProperty({
+    description: 'Branch location of the bank',
+    example: 'Ho Chi Minh City Branch',
+    required: true,
+    maxLength: 255,
+  })
+  @IsNotEmpty({ message: 'Bank branch is required' })
+  @IsString({ message: 'Bank branch must be a string' })
+  @MaxLength(255, { message: 'Bank branch must not exceed 255 characters' })
+  @Transform(({ value }) => value?.trim())
+  bankBranch: string;
+
+  @ApiProperty({
+    description: 'SePay virtual account number for payment processing',
+    example: '1900123456',
+    required: true,
+    maxLength: 50,
+  })
+  @IsNotEmpty({ message: 'SePay VA is required' })
+  @IsString({ message: 'SePay VA must be a string' })
+  @MaxLength(50, { message: 'SePay VA must not exceed 50 characters' })
+  @Transform(({ value }) => value?.trim())
+  sepayVa: string;
 }
