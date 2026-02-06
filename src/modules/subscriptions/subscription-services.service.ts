@@ -126,4 +126,92 @@ export class SubscriptionServicesService {
       priceAfterDiscount,
     };
   }
+
+  /**
+   * Check and Update Expired Subscriptions (TO BE IMPLEMENTED)
+   *
+   * This method should be implemented as either:
+   * 1. A scheduled cron job (recommended - runs automatically at intervals)
+   * 2. A lazy check (runs on authenticated requests)
+   *
+   * Business Rules:
+   * - Checks subscriptions with status ACTIVE or NON_RENEWING
+   * - Compares expirationDate with current timestamp
+   * - Transitions to EXPIRED if date has passed
+   * - Creates history record for the transition
+   * - No auto-renewal (manual renewal required)
+   *
+   * Logic:
+   * ```typescript
+   * IF (expirationDate < NOW) AND (status IN ['ACTIVE', 'NON_RENEWING']) THEN
+   *   1. Update ClinicSubscription.subscriptionStatus = EXPIRED
+   *   2. Create ClinicSubscriptionHistory record with status EXPIRED
+   *   3. Revoke user access immediately
+   * END IF
+   * ```
+   *
+   * Implementation Options:
+   *
+   * Option 1 - Cron Job (Recommended):
+   * ```typescript
+   * import { Cron, CronExpression } from '@nestjs/schedule';
+   *
+   * @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+   * async checkExpiredSubscriptions() {
+   *   const now = new Date();
+   *   const expiredSubscriptions = await this.clinicSubscriptionRepository.find({
+   *     where: [
+   *       { subscriptionStatus: RegistrationStatus.ACTIVE, expirationDate: LessThan(now) },
+   *       { subscriptionStatus: RegistrationStatus.NON_RENEWING, expirationDate: LessThan(now) }
+   *     ]
+   *   });
+   *
+   *   for (const subscription of expiredSubscriptions) {
+   *     subscription.subscriptionStatus = RegistrationStatus.EXPIRED;
+   *     await this.clinicSubscriptionRepository.save(subscription);
+   *
+   *     // Create history record
+   *     await this.clinicSubscriptionHistoryRepository.createHistoryRecord({
+   *       clinicId: subscription.clinicId,
+   *       serviceId: subscription.serviceId,
+   *       subscriptionDate: subscription.subscriptionDate,
+   *       expirationDate: subscription.expirationDate,
+   *       subscriptionStatus: RegistrationStatus.EXPIRED
+   *     });
+   *   }
+   * }
+   * ```
+   *
+   * Option 2 - Lazy Check (On Request):
+   * ```typescript
+   * async checkSubscriptionExpiration(subscription: ClinicSubscription) {
+   *   if ((subscription.subscriptionStatus === RegistrationStatus.ACTIVE ||
+   *        subscription.subscriptionStatus === RegistrationStatus.NON_RENEWING) &&
+   *       subscription.expirationDate < new Date()) {
+   *     subscription.subscriptionStatus = RegistrationStatus.EXPIRED;
+   *     await this.clinicSubscriptionRepository.save(subscription);
+   *
+   *     // Create history record
+   *     await this.clinicSubscriptionHistoryRepository.createHistoryRecord({
+   *       clinicId: subscription.clinicId,
+   *       serviceId: subscription.serviceId,
+   *       subscriptionDate: subscription.subscriptionDate,
+   *       expirationDate: subscription.expirationDate,
+   *       subscriptionStatus: RegistrationStatus.EXPIRED
+   *     });
+   *   }
+   * }
+   * ```
+   *
+   * History Logging:
+   * - ACTIVE -> EXPIRED: Natural expiration (user did nothing)
+   * - NON_RENEWING -> EXPIRED: Expiration after explicit cancellation
+   *
+   * @future-implementation
+   * @cron-job-candidate
+   */
+  // Placeholder for future implementation
+  // async checkExpiredSubscriptions(): Promise<void> {
+  //   // Implementation goes here
+  // }
 }

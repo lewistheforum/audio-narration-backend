@@ -966,7 +966,7 @@ export class AccountsController {
    * - Only CLINIC_ADMIN role can cancel their registration
    * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
    * - Cannot cancel if any SUCCESS transaction exists (payment already made)
-   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED (subscription already activated)
    *
    * Deletion Order:
    * 1. ClinicsLegalDocuments (linked to manager account)
@@ -1004,23 +1004,24 @@ export class AccountsController {
   }
 
   /**
-   * Cancel Active Subscription (Churn)
+   * Cancel Active Subscription (Churn / Soft Cancel)
    *
-   * Cancels an active subscription by changing its status to NON_RENEWING.
-   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   * Cancels an active subscription by changing status to NON_RENEWING.
+   * This is a soft cancellation - no data is deleted, user retains access until expirationDate.
    *
    * Business Rules:
    * - Only CLINIC_ADMIN role can cancel their subscription
    * - Subscription must be in ACTIVE status
+   * - Creates history record for churn analysis
    *
    * Effects:
    * - Status changes to NON_RENEWING
+   * - History record created in clinic_subscriptions_history
    * - Account remains fully functional until expirationDate
-   * - System will NOT renew automatically
    * - After expirationDate passes, status transitions to EXPIRED
    *
    * @param {any} req - Request object containing authenticated user info
-   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @param {CancelSubscriptionDto} dto - Optional cancellation reason
    * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
    *
    * @swagger
@@ -1031,7 +1032,7 @@ export class AccountsController {
    * @response 404 - Subscription not found
    */
   @Post('subscription/cancel')
-  @ApiOperation({ summary: 'Cancel active subscription (churn)' })
+  @ApiOperation({ summary: 'Cancel active subscription (soft cancel)' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_ADMIN)
@@ -1040,11 +1041,11 @@ export class AccountsController {
     status: MESSAGES.statusCode.success,
     message: 'Subscription cancelled successfully',
   })
-  async cancelSubscription(
+  async cancelActiveSubscription(
     @Request() req: any,
     @Body() dto: CancelSubscriptionDto,
   ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
-    const result = await this.accountsService.cancelSubscription(req.user.accountId, dto);
+    const result = await this.accountsService.cancelActiveSubscription(req.user.accountId, dto);
     return { data: result, message: result.message };
   }
 

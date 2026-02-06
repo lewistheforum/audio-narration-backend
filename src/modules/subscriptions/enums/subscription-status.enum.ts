@@ -49,16 +49,17 @@ export enum RegistrationStatus {
   ACTIVE = 'ACTIVE',
 
   /**
-   * LIFECYCLE END: Subscription duration ended.
-   * Status: Account service suspended or limited until renewal.
-   * Action: User needs to renew subscription.
-   */
-  EXPIRED = 'EXPIRED',
-
-  /**
    * LIFECYCLE CHURN: User cancelled the subscription while Active.
    * Status: Account remains fully functional (same as ACTIVE) until expirationDate.
    * Action: System will NOT renew automatically. Transitions to EXPIRED after date passes.
+   * History: Logged in clinic_subscriptions_history for churn analysis.
    */
   NON_RENEWING = 'NON_RENEWING',
+
+  /**
+   * LIFECYCLE END: Subscription duration ended.
+   * Status: Account service suspended or limited until renewal.
+   * Action: User needs to renew subscription manually (no auto-renewal).
+   */
+  EXPIRED = 'EXPIRED',
 }
