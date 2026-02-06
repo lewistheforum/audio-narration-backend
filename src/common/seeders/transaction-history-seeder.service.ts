@@ -11,7 +11,6 @@ import {
   PaymentStatus,
   PaymentDirection,
 } from '../../modules/transactions/entities/transaction.entity';
-import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
 
 @Injectable()
 export class TransactionHistorySeederService {
@@ -28,8 +27,6 @@ export class TransactionHistorySeederService {
     private readonly transactionTypeRepository: Repository<TransactionType>,
     @InjectRepository(SubscriptionService)
     private readonly subscriptionServiceRepository: Repository<SubscriptionService>,
-    @InjectRepository(ClinicAdminInformation)
-    private readonly clinicAdminInfoRepository: Repository<ClinicAdminInformation>,
   ) {}
 
   async seed(): Promise<void> {
@@ -81,20 +78,6 @@ export class TransactionHistorySeederService {
           const expirationDate = new Date(subscriptionDate);
           expirationDate.setMonth(expirationDate.getMonth() + 1); // Valid for 1 month
 
-          expirationDate.setMonth(expirationDate.getMonth() + 1); // Valid for 1 month
-
-          // Find Clinic Admin Info
-          const clinicAdminInfo = await this.clinicAdminInfoRepository.findOne({
-            where: { accountId: sub.clinicId },
-          });
-
-          if (!clinicAdminInfo) {
-            this.logger.warn(
-              `Clinic Admin Info not found for account ${sub.clinicId}`,
-            );
-            continue;
-          }
-
           // Create History Record
           const history = this.clinicSubscriptionHistoryRepository.create({
             clinicId: sub.clinicId,
@@ -109,7 +92,7 @@ export class TransactionHistorySeederService {
 
           // Create Transaction Record
           const transaction = this.transactionRepository.create({
-            clinicId: clinicAdminInfo._id,
+            clinicId: sub.clinicId, // Use Account ID from subscription
             subscriptionId: savedHistory._id,
             transactionTypeId: transactionType._id,
             amount: Math.round(Number(service.price)),

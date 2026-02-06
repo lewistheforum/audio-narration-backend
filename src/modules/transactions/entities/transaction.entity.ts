@@ -38,9 +38,9 @@ export class Transaction {
   @Column({ name: 'clinic_id', type: 'uuid', nullable: true })
   clinicId?: string;
 
-  @ManyToOne(() => ClinicAdminInformation, { onDelete: 'SET NULL' })
+  @ManyToOne(() => Account, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic?: ClinicAdminInformation;
+  clinic?: Account;
 
   @Column({ name: 'sender_account_id', type: 'uuid', nullable: true })
   senderAccountId?: string;
@@ -121,8 +121,6 @@ export class Transaction {
 
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
-
-
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
