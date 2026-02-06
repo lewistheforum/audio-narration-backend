@@ -6,6 +6,7 @@ import { ClinicSubscriptionHistory } from '../../modules/subscriptions/entities/
 import { Transaction } from '../../modules/transactions/entities/transaction.entity';
 import { TransactionType } from '../../modules/transactions/entities/transaction-type.entity';
 import { SubscriptionService } from '../../modules/subscriptions/entities/subscription-service.entity';
+import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
 import { RegistrationStatus } from '../../modules/subscriptions/enums';
 import {
   PaymentStatus,
@@ -27,6 +28,8 @@ export class TransactionHistorySeederService {
     private readonly transactionTypeRepository: Repository<TransactionType>,
     @InjectRepository(SubscriptionService)
     private readonly subscriptionServiceRepository: Repository<SubscriptionService>,
+    @InjectRepository(ClinicAdminInformation)
+    private readonly clinicAdminInformationRepository: Repository<ClinicAdminInformation>,
   ) {}
 
   async seed(): Promise<void> {
