@@ -13,6 +13,8 @@ import { ContractsModule } from '../../modules/contracts/contracts.module';
 import { SchedulesModule } from '../../modules/schedules/schedules.module';
 import { PrescriptionsModule } from '../../modules/prescriptions/prescriptions.module';
 import { AppointmentsModule } from '../../modules/appointments/appointments.module';
+import { TransactionsModule } from '../../modules/transactions/transactions.module';
+import { TransactionHistorySeederService } from './transaction-history-seeder.service';
 import { AdminSeederService } from './admin-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
 import { AccountSeederService } from './account-seeder.service';
@@ -68,6 +70,9 @@ import { EPrescription } from '../../modules/prescriptions/entities/e-prescripti
 import { DetailEPrescription } from '../../modules/prescriptions/entities/detail-e-prescription.entity';
 import { Medicine } from '../../modules/prescriptions/entities/medicine.entity';
 import { MedicineRepository } from '../../modules/prescriptions/repositories/medicine.repository';
+// Entities for Transaction History Seeder
+import { Transaction } from '../../modules/transactions/entities/transaction.entity';
+import { TransactionType } from '../../modules/transactions/entities/transaction-type.entity';
 
 /**
  * Seeders Module
@@ -121,6 +126,8 @@ import { MedicineRepository } from '../../modules/prescriptions/repositories/med
       EPrescription,
       DetailEPrescription,
       Medicine,
+      Transaction,
+      TransactionType,
     ]),
     BlogsModule,
     SubscriptionsModule,
@@ -130,6 +137,7 @@ import { MedicineRepository } from '../../modules/prescriptions/repositories/med
     SchedulesModule,
     PrescriptionsModule,
     AppointmentsModule,
+    TransactionsModule,
     HttpModule,
   ],
   providers: [
@@ -162,6 +170,7 @@ import { MedicineRepository } from '../../modules/prescriptions/repositories/med
     ERMSeederService,
     EPrescriptionSeederService,
     EPrescriptionDetailSeederService,
+    TransactionHistorySeederService,
     SeederOrchestratorService,
     KnowledgeBaseRepository,
     ClinicRoomRepository,
@@ -200,7 +209,8 @@ import { MedicineRepository } from '../../modules/prescriptions/repositories/med
     ERMSeederService,
     EPrescriptionSeederService,
     EPrescriptionDetailSeederService,
+    TransactionHistorySeederService,
     SeederOrchestratorService,
   ],
 })
-export class SeedersModule { }
+export class SeedersModule {}

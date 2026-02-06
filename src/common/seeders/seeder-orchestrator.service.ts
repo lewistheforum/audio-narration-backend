@@ -33,6 +33,7 @@ import { AppointmentSeederService } from './appointment-seeder.service';
 import { ERMSeederService } from './erm-seeder.service';
 import { EPrescriptionSeederService } from './e-prescription-seeder.service';
 import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder.service';
+import { TransactionHistorySeederService } from './transaction-history-seeder.service';
 
 /**
  * Seeder Orchestrator Service
@@ -90,6 +91,7 @@ import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder
  * 17. ClinicServiceCategorySeederService - Seeds ClinicServiceCategory records
  * 18. ClinicServiceSeederService - Seeds ClinicService records
  * 19. ClinicServiceConfigSeederService - Seeds ClinicServiceConfig records (not part of idempotency check)
+ * 20. TransactionHistorySeederService - Seeds Transaction and ClinicSubscriptionHistory records
  *
  * The orchestrator implements OnModuleInit and is the only seeder that runs automatically
  * during application startup. Individual seeder services expose public seed() methods
@@ -133,7 +135,8 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly ermSeeder: ERMSeederService,
     private readonly ePrescriptionSeeder: EPrescriptionSeederService,
     private readonly ePrescriptionDetailSeeder: EPrescriptionDetailSeederService,
-  ) { }
+    private readonly transactionHistorySeeder: TransactionHistorySeederService,
+  ) {}
 
   /**
    * Check if seed data already exists
@@ -348,13 +351,17 @@ export class SeederOrchestratorService implements OnModuleInit {
 
       // Step 28: Seed E-Prescriptions (must run after appointments)
       await this.ePrescriptionSeeder.seed();
-      this.logger.log('✅ E-Prescription seeding completed')
+      this.logger.log('✅ E-Prescription seeding completed');
 
       // Step 29: Seed E-Prescription Details (must run after e-prescriptions)
       await this.ePrescriptionDetailSeeder.seed();
       this.logger.log('✅ E-Prescription Detail seeding completed');
 
-      // Step 30: Validate seeded appointment data
+      // Step 30: Seed Transaction History
+      await this.transactionHistorySeeder.seed();
+      this.logger.log('✅ Transaction history seeding completed');
+
+      // Step 31: Validate seeded appointment data
       await this.validateAppointmentData();
       this.logger.log('✅ Appointment data validation completed');
 
