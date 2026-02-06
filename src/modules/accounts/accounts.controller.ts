@@ -34,7 +34,6 @@ import {
   AccountResponseDto,
   UpdatePasswordDto,
   BanAccountDto,
-  CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
@@ -84,7 +83,6 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   AccountResponseDto,
   ClinicListResponseDto,
   ClinicDetailResponseDto,
-  CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
@@ -417,124 +415,6 @@ export class AccountsController {
     return this.accountsService.getPublicDoctorById(id);
   }
 
-  /**
-   * Get Clinic Admin Profile
-   *
-   * Retrieves the clinic admin profile information for a specific account.
-   * Only accounts with CLINIC_ADMIN role can have clinic admin profiles.
-   *
-   * Path Parameters:
-   * - id: Account UUID
-   *
-   * Response Format:
-   * - Returns ClinicAdminInformation entity with clinic admin profile data
-   *
-   * Access Control:
-   * - Requires JWT authentication
-   * - Available to CLINIC_ADMIN role
-   *
-   * Use Cases:
-   * - Viewing clinic admin profile
-   * - Displaying clinic admin information in dashboards
-   *
-   * @param {string} id - Account UUID
-   * @returns {Promise<{data: ClinicAdminInformation, message: string}>} Clinic admin profile data
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 200 - Successfully retrieved clinic admin profile
-   * @response 401 - Unauthorized - Missing or invalid JWT token
-   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
-   * @response 404 - Account not found or doesn't have CLINIC_ADMIN role
-   * @response 400 - Invalid UUID format
-   */
-  @Get('clinic-admin/:id/profile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get clinic admin profile by account ID' })
-  @ApiResponseData({
-    type: Object,
-    status: MESSAGES.statusCode.success,
-    message: 'Clinic admin profile retrieved successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Clinic admin profile not found' })
-  async getClinicAdminProfile(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.findClinicAdminProfile(id);
-    return {
-      data: profile,
-      message: 'Clinic admin profile retrieved successfully',
-    };
-  }
-
-  /**
-   * Create Clinic Admin Profile
-   *
-   * Creates a new clinic admin profile for an account.
-   * This endpoint is used to create the profile after the account is created.
-   *
-   * Path Parameters:
-   * - id: Account UUID
-   *
-   * Request Body:
-   * - clinicName: Clinic name (required)
-   * - description: Clinic description (optional)
-   * - specializedIn: Clinic specializations (optional)
-   * - pros: Clinic pros/advantages (optional)
-   * - paraclinical: Paraclinical services offered (optional)
-   * - dob: Date of birth (optional)
-   * - profilePicture: Profile picture URL (optional)
-   * - bankName: Bank name (optional)
-   * - bankNumber: Bank account number (optional)
-   * - bankBranch: Bank branch (optional)
-   * - sepayVa: SePay virtual account number (optional)
-   * - isVerify: Verification status (optional, default: false)
-   *
-   * Access Control:
-   * - Requires JWT authentication
-   * - Available to CLINIC_ADMIN role
-   *
-   * Use Cases:
-   * - Creating clinic admin profile after account creation
-   * - Initial profile setup
-   *
-   * @param {string} id - Account UUID
-   * @param {CreateClinicAdminProfileDto} dto - Clinic admin profile data
-   * @returns {Promise<{data: ClinicAdminInformation, message: string}>} Created clinic admin profile
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 201 - Successfully created clinic admin profile
-   * @response 401 - Unauthorized - Missing or invalid JWT token
-   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
-   * @response 404 - Account not found or doesn't have CLINIC_ADMIN role
-   */
-  @Post('clinic-admin/:id/profile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create clinic admin profile' })
-  @ApiResponseData({
-    type: Object,
-    status: MESSAGES.statusCode.success,
-    message: 'Clinic admin profile created successfully',
-  })
-  @ApiResponse({ status: 404, description: 'Account not found' })
-  async createClinicAdminProfile(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CreateClinicAdminProfileDto,
-  ): Promise<{ data: any; message: string }> {
-    const profile = await this.accountsService.createClinicAdminProfile(
-      id,
-      dto,
-    );
-    return {
-      data: profile,
-      message: 'Clinic admin profile created successfully',
-    };
-  }
 
   /**
    * Get Account by ID
@@ -1086,7 +966,7 @@ export class AccountsController {
    * - Only CLINIC_ADMIN role can cancel their registration
    * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
    * - Cannot cancel if any SUCCESS transaction exists (payment already made)
-   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED (subscription already activated)
    *
    * Deletion Order:
    * 1. ClinicsLegalDocuments (linked to manager account)
@@ -1124,23 +1004,24 @@ export class AccountsController {
   }
 
   /**
-   * Cancel Active Subscription (Churn)
+   * Cancel Active Subscription (Churn / Soft Cancel)
    *
-   * Cancels an active subscription by changing its status to NON_RENEWING.
-   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   * Cancels an active subscription by changing status to NON_RENEWING.
+   * This is a soft cancellation - no data is deleted, user retains access until expirationDate.
    *
    * Business Rules:
    * - Only CLINIC_ADMIN role can cancel their subscription
    * - Subscription must be in ACTIVE status
+   * - Creates history record for churn analysis
    *
    * Effects:
    * - Status changes to NON_RENEWING
+   * - History record created in clinic_subscriptions_history
    * - Account remains fully functional until expirationDate
-   * - System will NOT renew automatically
    * - After expirationDate passes, status transitions to EXPIRED
    *
    * @param {any} req - Request object containing authenticated user info
-   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @param {CancelSubscriptionDto} dto - Optional cancellation reason
    * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
    *
    * @swagger
@@ -1151,7 +1032,7 @@ export class AccountsController {
    * @response 404 - Subscription not found
    */
   @Post('subscription/cancel')
-  @ApiOperation({ summary: 'Cancel active subscription (churn)' })
+  @ApiOperation({ summary: 'Cancel active subscription (soft cancel)' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_ADMIN)
@@ -1160,11 +1041,11 @@ export class AccountsController {
     status: MESSAGES.statusCode.success,
     message: 'Subscription cancelled successfully',
   })
-  async cancelSubscription(
+  async cancelActiveSubscription(
     @Request() req: any,
     @Body() dto: CancelSubscriptionDto,
   ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
-    const result = await this.accountsService.cancelSubscription(req.user.accountId, dto);
+    const result = await this.accountsService.cancelActiveSubscription(req.user.accountId, dto);
     return { data: result, message: result.message };
   }
 

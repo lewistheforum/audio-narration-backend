@@ -4,6 +4,8 @@ import { DataSource, QueryRunner } from 'typeorm';
 import { AdminRegistrationRepository } from './repositories/admin-registration.repository';
 import { ClinicsLegalDocumentsRepository } from '../accounts/repositories/clinics-legal-documents.repository';
 import { ClinicSubscriptionRepository } from '../subscriptions/repositories/clinic-subscription.repository';
+import { ClinicAdminInformationRepository } from '../accounts/repositories';
+import { MailerService } from '../mailer/mailer.service';
 import {
   RegistrationListResponseDto,
   RegistrationDetailResponseDto,
@@ -25,6 +27,8 @@ export class AdminService {
     private readonly adminRegistrationRepository: AdminRegistrationRepository,
     private readonly legalDocumentsRepository: ClinicsLegalDocumentsRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
+    private readonly clinicAdminInfoRepository: ClinicAdminInformationRepository,
+    private readonly mailerService: MailerService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -145,6 +149,18 @@ export class AdminService {
       await queryRunner.manager.save(ClinicSubscription, subscription);
 
       await queryRunner.commitTransaction();
+
+      // Send approval email after successful transaction (fire-and-forget)
+      // Get clinic name from the clinic admin
+      const clinicAdminInfo =
+        await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
+      const clinicName = clinicAdminInfo?.clinicName;
+
+      this.mailerService
+        .sendRegistrationApprovedEmail(clinicAdmin.email, clinicName)
+        .catch((error) => {
+          console.error('Failed to send registration approved email:', error);
+        });
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -160,6 +176,7 @@ export class AdminService {
    */
   async rejectRegistration(
     clinicAdminId: string,
+    reason: string,
   ): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -226,6 +243,18 @@ export class AdminService {
       await queryRunner.manager.save(ClinicSubscription, subscription);
 
       await queryRunner.commitTransaction();
+
+      // Send rejection email after successful transaction (fire-and-forget)
+      // Get clinic name from the clinic admin
+      const clinicAdminInfo =
+        await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
+      const clinicName = clinicAdminInfo?.clinicName;
+
+      this.mailerService
+        .sendRegistrationRejectedEmail(clinicAdmin.email, reason, clinicName)
+        .catch((error) => {
+          console.error('Failed to send registration rejected email:', error);
+        });
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

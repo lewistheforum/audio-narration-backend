@@ -25,7 +25,6 @@ import {
   BanAccountDto,
   CreateStaffByClinicManagerDto,
   CreateDoctorByClinicManagerDto,
-  CreateClinicAdminProfileDto,
   UpdateClinicAdminProfileDto,
   RegisterClinicAdminDto,
   CheckRegistrationStatusResponseDto,
@@ -68,6 +67,7 @@ import { generateVerificationCode } from 'src/common/utils/util';
 import { MailerService } from '../mailer/mailer.service';
 import {
   ClinicSubscriptionRepository,
+  ClinicSubscriptionHistoryRepository,
   SubscriptionServiceRepository,
 } from '../subscriptions/repositories';
 import {
@@ -146,6 +146,7 @@ export class AccountsService {
     private readonly addressRepository: AddressRepository,
     private readonly googleIframeRepository: GoogleIframeRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
+    private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
@@ -3002,87 +3003,6 @@ export class AccountsService {
     }
   }
 
-  /**
-   * Find Clinic Admin Profile by Account ID
-   *
-   * Retrieves the clinic admin profile information for a specific account.
-   * Only accounts with CLINIC_ADMIN role can have clinic admin profiles.
-   *
-   * Business Rules:
-   * - Account must have CLINIC_ADMIN role
-   * - Only returns profile if account exists and has CLINIC_ADMIN role
-   * - Returns null if profile not found
-   *
-   * @param {string} accountId - Account UUID
-   * @returns {Promise<ClinicAdminInformation | null>} Clinic admin profile or null
-   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
-   *
-   * @example
-   * ```typescript
-   * const profile = await accountsService.findClinicAdminProfile('account-uuid');
-   * if (profile) {
-   *   console.log(profile.clinicName);
-   * }
-   * ```
-   */
-  async findClinicAdminProfile(
-    accountId: string,
-  ): Promise<ClinicAdminInformation | null> {
-    const account = await this.findAccountEntityById(accountId);
-    this.validateClinicAdminRole(account);
-
-    return this.clinicAdminInfoRepository.findByAccountId(accountId);
-  }
-
-  /**
-   * Create Clinic Admin Profile
-   *
-   * Creates a new clinic admin profile for an account.
-   * This method is used to create the profile after the account is created.
-   *
-   * Business Rules:
-   * - Account must have CLINIC_ADMIN role
-   * - Profile is created with provided data
-   * - All fields are optional except clinicName
-   *
-   * @param {string} accountId - Account UUID
-   * @param {CreateClinicAdminProfileDto} dto - Clinic admin profile data
-   * @returns {Promise<ClinicAdminInformation>} Created clinic admin profile
-   * @throws {BadRequestException} If account does not have CLINIC_ADMIN role
-   *
-   * @example
-   * ```typescript
-   * const profile = await accountsService.createClinicAdminProfile('account-uuid', {
-   *   clinicName: 'City Medical Clinic',
-   *   description: 'A modern healthcare facility'
-   * });
-   * ```
-   */
-  async createClinicAdminProfile(
-    accountId: string,
-    dto: CreateClinicAdminProfileDto,
-  ): Promise<ClinicAdminInformation> {
-    const account = await this.findAccountEntityById(accountId);
-    this.validateClinicAdminRole(account);
-
-    const profile = this.clinicAdminInfoRepository.create({
-      accountId,
-      clinicName: dto.clinicName,
-      description: dto.description,
-      specializedIn: dto.specializedIn,
-      pros: dto.pros,
-      paraclinical: dto.paraclinical,
-      dob: dto.dob ? new Date(dto.dob) : undefined,
-      profilePicture: dto.profilePicture,
-      bankName: dto.bankName,
-      bankNumber: dto.bankNumber,
-      bankBranch: dto.bankBranch,
-      sepayVa: dto.sepayVa,
-      isVerify: dto.isVerify ?? false,
-    });
-
-    return this.clinicAdminInfoRepository.save(profile);
-  }
 
   /**
    * Update Clinic Admin Profile
@@ -3191,7 +3111,8 @@ export class AccountsService {
    * - Returns canStart: true if email doesn't exist or no pending registration
    * - Returns managerAccountId for legal document related statuses
    * - Returns notice for NON_RENEWING status
-   * - Returns expirationDate for ACTIVE, NON_RENEWING, EXPIRED statuses
+   * - Returns expirationDate for ACTIVE, NON_RENEWING, and EXPIRED statuses
+   * - PENDING_SEPAY_SETUP is deprecated - bank config is now part of initial registration
    *
    * @param {string} email - Email address to check
    * @returns {Promise<CheckRegistrationStatusResponseDto>} Registration status information
@@ -3199,7 +3120,7 @@ export class AccountsService {
    * @example
    * ```typescript
    * const status = await accountsService.checkRegistrationStatus('admin@clinic.com');
-   * // Returns: { status: 'PENDING_SEPAY_SETUP', canResume: true, ... }
+   * // Returns: { status: 'PENDING_MANAGER_SETUP', canResume: true, ... }
    * ```
    */
   async checkRegistrationStatus(
@@ -3257,12 +3178,9 @@ export class AccountsService {
     let expirationDate: string | null = null;
 
     switch (status) {
-      case RegistrationStatus.PENDING_SEPAY_SETUP:
-        currentStep = 'STEP_3';
-        nextAction = 'Configure your payment gateway (Sepay)';
-        break;
+      // PENDING_SEPAY_SETUP is deprecated - bank config is now part of initial registration
       case RegistrationStatus.PENDING_MANAGER_SETUP:
-        currentStep = 'STEP_4';
+        currentStep = 'STEP_3';
         nextAction = 'Create clinic manager account';
         break;
       case RegistrationStatus.PENDING_LEGAL_SETUP:
@@ -3305,7 +3223,7 @@ export class AccountsService {
         }
         break;
       case RegistrationStatus.PENDING_PAYMENT:
-        currentStep = 'STEP_6';
+        currentStep = 'STEP_5';
         nextAction = 'Complete payment for subscription';
         break;
       case RegistrationStatus.ACTIVE:
@@ -3315,17 +3233,17 @@ export class AccountsService {
           ? subscription.expirationDate.toISOString()
           : null;
         break;
-      case RegistrationStatus.EXPIRED:
+      case RegistrationStatus.NON_RENEWING:
         currentStep = 'COMPLETED';
-        nextAction = 'Renew your subscription';
+        nextAction = 'Access your dashboard (subscription will not renew)';
+        notice = 'Your subscription has been cancelled and will not renew automatically. Access retained until expiration date.';
         expirationDate = subscription.expirationDate
           ? subscription.expirationDate.toISOString()
           : null;
         break;
-      case RegistrationStatus.NON_RENEWING:
+      case RegistrationStatus.EXPIRED:
         currentStep = 'COMPLETED';
-        nextAction = 'Access your dashboard (subscription will not renew)';
-        notice = 'Your subscription will not renew automatically';
+        nextAction = 'Renew your subscription';
         expirationDate = subscription.expirationDate
           ? subscription.expirationDate.toISOString()
           : null;
@@ -3350,17 +3268,18 @@ export class AccountsService {
   /**
    * Register Clinic Admin (Transactional)
    *
-   * Creates a complete clinic admin registration with account, profile, and subscription.
+   * Creates a complete clinic admin registration with account, profile, payment config (bank details), and subscription.
    * Uses QueryRunner for transaction safety - all operations succeed or none do.
    *
    * Business Rules:
    * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
    * - Creates Account with CLINIC_ADMIN role and PENDING status
-   * - Creates ClinicAdminInformation with clinic details
-   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
+   * - Creates ClinicAdminInformation with clinic details AND bank configuration
+   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status (Step 2: Collects Initial Profile + Payment Data)
+   * - Bank fields (bankNumber, bankBranch) are encrypted via encryptionTransformer
    * - Password is hashed with bcrypt before storage
    *
-   * @param {RegisterClinicAdminDto} dto - Clinic admin registration data
+   * @param {RegisterClinicAdminDto} dto - Clinic admin registration data (including bank configuration)
    * @returns {Promise<AccountResponseDto>} Created account with subscription status
    * @throws {ConflictException} If email already exists or exceeds usage limit
    * @throws {BadRequestException} If validation fails
@@ -3373,6 +3292,10 @@ export class AccountsService {
    *   email: 'admin@clinic.com',
    *   password: 'AdminPass123',
    *   clinicName: 'City Medical Center',
+   *   bankName: 'Vietcombank',
+   *   bankNumber: '1234567890',
+   *   bankBranch: 'Ho Chi Minh City Branch',
+   *   sepayVa: '1900123456',
    *   serviceId: '550e8400-e29b-41d4-a716-446655440000'
    * });
    * ```
@@ -3422,7 +3345,7 @@ export class AccountsService {
 
       const savedAccount = await queryRunner.manager.save(account);
 
-      // Create ClinicAdminInformation entity
+      // Create ClinicAdminInformation entity (including bank configuration)
       const clinicAdminInfo = this.clinicAdminInfoRepository.create({
         accountId: savedAccount._id,
         clinicName: dto.clinicName,
@@ -3432,21 +3355,35 @@ export class AccountsService {
         paraclinical: dto.paraclinical,
         dob: dto.dob ? new Date(dto.dob) : undefined,
         profilePicture: dto.profilePicture,
+        // Bank configuration fields (formerly Step 3, now part of initial registration)
+        bankName: dto.bankName,
+        bankNumber: dto.bankNumber,
+        bankBranch: dto.bankBranch,
+        sepayVa: dto.sepayVa,
       });
 
       await queryRunner.manager.save(clinicAdminInfo);
 
-      // Create ClinicSubscription entity with PENDING_MANAGER_SETUP status
+      // Create ClinicSubscription entity with PENDING_SEPAY_SETUP status
+      // Step 2: Collects Initial Profile + Payment Data (including bank details)
+      // Step 3: Reserved for Payment Verification and Confirmation (PATCH /account/clinic-admin/payment-config)
       const clinicSubscription = this.clinicSubscriptionRepository.create({
         clinicId: savedAccount._id,
         serviceId: dto.serviceId,
-        subscriptionStatus: RegistrationStatus.PENDING_MANAGER_SETUP,
+        subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
         subscriptionDate: new Date(),
       });
 
       await queryRunner.manager.save(clinicSubscription);
 
       await queryRunner.commitTransaction();
+
+      // Send welcome email after successful transaction (fire-and-forget)
+      this.mailerService
+        .sendClinicAdminWelcomeEmail(dto.email, dto.clinicName)
+        .catch((error) => {
+          console.error('Failed to send clinic admin welcome email:', error);
+        });
 
       // Return complete account DTO with subscription status
       return new AccountResponseDto(savedAccount, null, null, null, null, null, clinicAdminInfo);
@@ -3577,6 +3514,22 @@ export class AccountsService {
       await queryRunner.manager.save(subscription);
 
       await queryRunner.commitTransaction();
+
+      // Send manager credentials email after successful transaction (fire-and-forget)
+      // Get clinic name from the clinic admin
+      const clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
+      const clinicName = clinicAdminInfo?.clinicName;
+
+      this.mailerService
+        .sendManagerCredentialsEmail(
+          dto.email,
+          savedManagerAccount.username,
+          defaultPassword,
+          clinicName,
+        )
+        .catch((error) => {
+          console.error('Failed to send manager credentials email:', error);
+        });
 
       // Return complete account DTO
       return new AccountResponseDto(savedManagerAccount, null, null, null, managerInfo);
@@ -3861,7 +3814,7 @@ export class AccountsService {
    * - Only CLINIC_ADMIN role can cancel their registration
    * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
    * - Cannot cancel if any SUCCESS transaction exists (payment already made)
-   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED (subscription already activated)
    *
    * Deletion Order (respects foreign key constraints):
    * 1. ClinicsLegalDocuments (linked to manager account)
@@ -3903,6 +3856,9 @@ export class AccountsService {
         MESSAGES.failMessage.pendingApprovalBlocked,
       );
     }
+
+    // Allow cancellation from PENDING_MANAGER_SETUP state (which now includes bank configuration)
+    // This ensures all newly created bank data is wiped if the user cancels before moving to manager setup
 
     // Check for forbidden statuses
     const forbiddenStatuses = [
@@ -3983,31 +3939,34 @@ export class AccountsService {
   }
 
   /**
-   * Cancel Active Subscription (Churn)
+   * Cancel Active Subscription (Churn / Soft Cancel)
    *
-   * Cancels an active subscription by changing its status to NON_RENEWING.
-   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   * Cancels an active subscription by changing status to NON_RENEWING.
+   * This is a soft cancellation - no data is deleted, user retains access until expirationDate.
    *
    * Business Rules:
    * - Only CLINIC_ADMIN role can cancel their subscription
    * - Subscription must be in ACTIVE status
+   * - Creates history record for churn analysis
+   * - User retains full access until expirationDate
+   * - System will NOT auto-renew after expiration
    *
    * Effects:
    * - Status changes to NON_RENEWING
+   * - History record created in clinic_subscriptions_history
    * - Account remains fully functional until expirationDate
-   * - System will NOT renew automatically
    * - After expirationDate passes, status transitions to EXPIRED
    *
    * @param {string} accountId - Clinic admin account UUID
-   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @param {CancelSubscriptionDto} dto - Optional cancellation reason
    * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
    * @throws {ForbiddenException} If account is not CLINIC_ADMIN
    * @throws {NotFoundException} If subscription not found
    * @throws {BadRequestException} If subscription is not ACTIVE
    */
-  async cancelSubscription(
+  async cancelActiveSubscription(
     accountId: string,
-    dto: CancelSubscriptionDto,
+    dto?: { reason?: string },
   ): Promise<CancelSubscriptionResponseDto> {
     // Get account
     const account = await this.findAccountEntityById(accountId);
@@ -4027,7 +3986,7 @@ export class AccountsService {
     // Check if status is ACTIVE
     if (subscription.subscriptionStatus !== RegistrationStatus.ACTIVE) {
       throw new BadRequestException(
-        MESSAGES.failMessage.subscriptionNotActive,
+        'Can only cancel subscriptions with ACTIVE status',
       );
     }
 
@@ -4035,8 +3994,17 @@ export class AccountsService {
     subscription.subscriptionStatus = RegistrationStatus.NON_RENEWING;
     await this.clinicSubscriptionRepository.save(subscription);
 
+    // Create history record for churn analysis
+    await this.clinicSubscriptionHistoryRepository.createHistoryRecord({
+      clinicId: accountId,
+      serviceId: subscription.serviceId,
+      subscriptionDate: subscription.subscriptionDate,
+      expirationDate: subscription.expirationDate,
+      subscriptionStatus: RegistrationStatus.NON_RENEWING,
+    });
+
     return {
-      message: MESSAGES.successMessage.subscriptionCancelled,
+      message: 'Subscription cancelled successfully. Access retained until expiration date.',
       newStatus: RegistrationStatus.NON_RENEWING,
     };
   }

@@ -128,7 +128,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() dto: AdminApprovalDto,
   ): Promise<{ data: null; message: string }> {
-    await this.adminService.rejectRegistration(id);
+    await this.adminService.rejectRegistration(id, dto.reason || 'No reason provided');
     return {
       data: null,
       message: 'Registration rejected successfully',

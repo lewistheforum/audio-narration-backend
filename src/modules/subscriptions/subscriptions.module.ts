@@ -7,6 +7,7 @@ import {
 } from './entities';
 import {
   ClinicSubscriptionRepository,
+  ClinicSubscriptionHistoryRepository,
   SubscriptionServiceRepository,
 } from './repositories';
 import { SubscriptionServicesController } from './subscription-services.controller';
@@ -28,12 +29,14 @@ import { SubscriptionServicesService } from './subscription-services.service';
   controllers: [SubscriptionServicesController],
   providers: [
     ClinicSubscriptionRepository,
+    ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
     SubscriptionServicesService,
   ],
   exports: [
     TypeOrmModule,
     ClinicSubscriptionRepository,
+    ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
   ],
 })
