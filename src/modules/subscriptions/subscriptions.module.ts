@@ -12,6 +12,7 @@ import {
 } from './repositories';
 import { SubscriptionServicesController } from './subscription-services.controller';
 import { SubscriptionServicesService } from './subscription-services.service';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * Subscriptions Module
@@ -25,6 +26,7 @@ import { SubscriptionServicesService } from './subscription-services.service';
       ClinicSubscription,
       ClinicSubscriptionHistory,
     ]),
+    AuthModule,
   ],
   controllers: [SubscriptionServicesController],
   providers: [

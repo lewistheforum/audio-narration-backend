@@ -1,8 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubscriptionService } from './entities/subscription-service.entity';
 import { SubscriptionServiceRepository } from './repositories/subscription-service.repository';
-import { SubscriptionServiceResponseDto } from './dto';
+import {
+  SubscriptionServiceResponseDto,
+  SubscriptionResponseDto,
+  SubscriptionHistoryResponseDto,
+  SubscriptionHistoryItemDto,
+} from './dto';
 import { SubscriptionServiceStatus } from './enums/subscription-service-status.enum';
+import { ClinicSubscriptionRepository } from './repositories/clinic-subscription.repository';
+import { ClinicSubscriptionHistoryRepository } from './repositories/clinic-subscription-history.repository';
+import { MESSAGES } from 'src/common/message';
 
 /**
  * Subscription Services Service
@@ -30,6 +38,8 @@ import { SubscriptionServiceStatus } from './enums/subscription-service-status.e
 export class SubscriptionServicesService {
   constructor(
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
+    private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
+    private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
   ) {}
 
   /**
@@ -214,4 +224,204 @@ export class SubscriptionServicesService {
   // async checkExpiredSubscriptions(): Promise<void> {
   //   // Implementation goes here
   // }
+
+  /**
+   * Get Current Subscription for Clinic Admin
+   *
+   * Retrieves the current active subscription for the logged-in clinic admin.
+   * Joins with subscription_services table to return full service details.
+   * Filters by clinic_id (which matches the user's account _id).
+   *
+   * Business Rules:
+   * - Query: clinic_subscriptions WHERE clinic_id = :currentUserId
+   * - Excludes soft-deleted records (deletedAt IS NULL)
+   * - Returns 404 if no subscription found
+   * - Joins with subscription_services table for service details
+   *
+   * Security:
+   * - User can only view their own subscription
+   * - Data is automatically filtered by logged-in user's ID
+   * - Protected by @Roles(Role.CLINIC_ADMIN) and JwtAuthGuard
+   *
+   * @param {string} clinicId - Clinic account UUID (from JWT token)
+   * @returns {Promise<SubscriptionResponseDto>} Current subscription with service details
+   * @throws {NotFoundException} If no subscription found for this clinic
+   *
+   * @example
+   * ```typescript
+   * const subscription = await subscriptionServicesService.getCurrentSubscription(user._id);
+   * // Returns current subscription with service details
+   * ```
+   */
+  async getCurrentSubscription(
+    clinicId: string,
+  ): Promise<SubscriptionResponseDto> {
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicId);
+
+    if (!subscription) {
+      throw new NotFoundException(MESSAGES.failMessage.subscriptionNotFound);
+    }
+
+    // Fetch service details
+    const service = await this.subscriptionServiceRepository.findById(
+      subscription.serviceId,
+    );
+
+    if (!service) {
+      throw new NotFoundException('Subscription service not found');
+    }
+
+    return this.toSubscriptionResponseDto(subscription, service);
+  }
+
+  /**
+   * Get Subscription History for Clinic Admin
+   *
+   * Retrieves paginated subscription history for the logged-in clinic admin.
+   * Joins with subscription_services table to return service details.
+   * Filters by clinic_id and orders by created_at DESC (newest first).
+   *
+   * Business Rules:
+   * - Query: clinic_subscriptions_history WHERE clinic_id = :currentUserId
+   * - Excludes soft-deleted records (deletedAt IS NULL)
+   * - Pagination: page and limit parameters
+   * - Ordering: created_at DESC (newest first)
+   * - Joins with subscription_services table for service details
+   *
+   * Security:
+   * - User can only view their own history
+   * - Data is automatically filtered by logged-in user's ID
+   * - Protected by @Roles(Role.CLINIC_ADMIN) and JwtAuthGuard
+   *
+   * Pagination:
+   * - Default page: 1
+   * - Default limit: 10
+   * - Returns: data, page, limit, total, totalPages
+   *
+   * @param {string} clinicId - Clinic account UUID (from JWT token)
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Records per page (default: 10)
+   * @returns {Promise<SubscriptionHistoryResponseDto>} Paginated subscription history
+   *
+   * @example
+   * ```typescript
+   * const history = await subscriptionServicesService.getSubscriptionHistory(user._id, 1, 10);
+   * // Returns paginated history with service details
+   * ```
+   */
+  async getSubscriptionHistory(
+    clinicId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<SubscriptionHistoryResponseDto> {
+    const skip = (page - 1) * limit;
+
+    // Get total count
+    const [historyRecords, total] =
+      await this.clinicSubscriptionHistoryRepository.findAndCount({
+        where: { clinicId },
+        order: { createdAt: 'DESC' },
+        skip,
+        take: limit,
+      });
+
+    // Fetch service details for each history record
+    const historyWithServices = await Promise.all(
+      historyRecords.map(async (record) => {
+        const service = await this.subscriptionServiceRepository.findById(
+          record.serviceId,
+        );
+        return this.toSubscriptionHistoryItemDto(record, service);
+      }),
+    );
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: historyWithServices,
+      page,
+      limit,
+      total,
+      totalPages,
+    };
+  }
+
+  /**
+   * Transform ClinicSubscription and SubscriptionService to Response DTO
+   *
+   * Maps entity fields to DTO format.
+   * Combines subscription and service data into a single flat DTO.
+   * Calculates price after discount.
+   *
+   * @param {ClinicSubscription} subscription - Clinic subscription entity
+   * @param {SubscriptionService} service - Subscription service entity
+   * @returns {SubscriptionResponseDto} Response DTO
+   *
+   * @private
+   */
+  private toSubscriptionResponseDto(
+    subscription: any,
+    service: SubscriptionService,
+  ): SubscriptionResponseDto {
+    const priceAfterDiscount =
+      service.price - (service.price * service.discount) / 100;
+
+    return {
+      id: subscription._id,
+      clinicId: subscription.clinicId,
+      serviceId: service._id,
+      serviceName: service.serviceName,
+      serviceCode: service.code,
+      serviceDescription: service.description,
+      servicePrice: service.price,
+      serviceDiscount: service.discount,
+      servicePriceAfterDiscount: priceAfterDiscount,
+      serviceFunctions: service.serviceFunctions,
+      subscriptionDate: subscription.subscriptionDate,
+      expirationDate: subscription.expirationDate,
+      subscriptionStatus: subscription.subscriptionStatus,
+      createdAt: subscription.createdAt,
+      updatedAt: subscription.updatedAt,
+    };
+  }
+
+  /**
+   * Transform ClinicSubscriptionHistory and SubscriptionService to History Item DTO
+   *
+   * Maps entity fields to DTO format.
+   * Combines history record and service data into a single flat DTO.
+   * Calculates price after discount.
+   *
+   * @param {ClinicSubscriptionHistory} record - History record entity
+   * @param {SubscriptionService} service - Subscription service entity
+   * @returns {SubscriptionHistoryItemDto} History item DTO
+   *
+   * @private
+   */
+  private toSubscriptionHistoryItemDto(
+    record: any,
+    service: SubscriptionService | null,
+  ): SubscriptionHistoryItemDto {
+    const priceAfterDiscount = service
+      ? service.price - (service.price * service.discount) / 100
+      : 0;
+
+    return {
+      id: record._id,
+      clinicId: record.clinicId,
+      serviceId: record.serviceId,
+      serviceName: service?.serviceName || 'Unknown Service',
+      serviceCode: service?.code || 'N/A',
+      serviceDescription: service?.description,
+      servicePrice: service?.price || 0,
+      serviceDiscount: service?.discount || 0,
+      servicePriceAfterDiscount: priceAfterDiscount,
+      serviceFunctions: service?.serviceFunctions,
+      subscriptionDate: record.subscriptionDate,
+      expirationDate: record.expirationDate,
+      subscriptionStatus: record.subscriptionStatus,
+      createdAt: record.createdAt,
+    };
+  }
 }
