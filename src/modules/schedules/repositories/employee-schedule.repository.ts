@@ -30,6 +30,8 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       from?: string;
       to?: string;
       employeeId?: string;
+      roomId?: string;
+      shiftId?: string;
     },
   ): Promise<EmployeeSchedule[]> {
     const queryBuilder = this.createQueryBuilder('schedule')
@@ -60,6 +62,14 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       queryBuilder.andWhere('schedule.employeeId = :employeeId', {
         employeeId: options.employeeId,
       });
+    }
+
+    if (options.roomId) {
+      queryBuilder.andWhere('rooms._id = :roomId', { roomId: options.roomId });
+    }
+
+    if (options.shiftId) {
+      queryBuilder.andWhere('schedule.clinicShiftId = :shiftId', { shiftId: options.shiftId });
     }
 
     return queryBuilder
@@ -134,7 +144,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
    * @returns Map of appointmentId to clinic rooms array
    */
   async findClinicRoomsForMultipleAppointments(
-    appointmentData: Array<{ 
+    appointmentData: Array<{
       appointmentId: string;
       doctorShiftHourId: string | null;
       doctorId: string | null;
@@ -147,7 +157,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
     // Filter only appointments with doctor_shift_hour_id
     const validAppointments = appointmentData.filter(a => a.doctorShiftHourId && a.doctorId);
-    
+
     if (validAppointments.length === 0) {
       return new Map();
     }
@@ -155,7 +165,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     // Build OR conditions for each appointment
     // Filter by work_date to get the correct room for that specific day
     const conditions = validAppointments
-      .map((_, index) => 
+      .map((_, index) =>
         `(a._id = :aptId${index} AND a.doctor_shift_hour_id = :shiftHourId${index} AND es.employee_id = :doctorId${index} AND es.work_date = a.appointment_date)`
       )
       .join(' OR ');
