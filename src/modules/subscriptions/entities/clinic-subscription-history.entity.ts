@@ -50,10 +50,10 @@ export class ClinicSubscriptionHistory {
   @JoinColumn({ name: 'transaction_id' })
   transaction?: Transaction;
 
-  @Column({ name: 'subscription_date', type: 'timestamptz' })
+  @Column({ name: 'subscription_date', type: 'timestamptz', nullable: true })
   subscriptionDate: Date;
 
-  @Column({ name: 'expiration_date', type: 'timestamptz' })
+  @Column({ name: 'expiration_date', type: 'timestamptz', nullable: true })
   expirationDate: Date;
 
   @Column({

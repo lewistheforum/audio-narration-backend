@@ -62,4 +62,5 @@ export enum RegistrationStatus {
    * Action: User needs to renew subscription manually (no auto-renewal).
    */
   EXPIRED = 'EXPIRED',
+
 }

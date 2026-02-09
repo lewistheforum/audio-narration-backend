@@ -7,6 +7,8 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
+  Body,
+  Post,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,6 +23,7 @@ import {
   SubscriptionServiceResponseDto,
   SubscriptionResponseDto,
   SubscriptionHistoryResponseDto,
+  CreateSubscriptionRequestDto,
 } from './dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { MESSAGES } from 'src/common/message';
@@ -59,7 +62,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 export class SubscriptionServicesController {
   constructor(
     private readonly subscriptionServicesService: SubscriptionServicesService,
-  ) {}
+  ) { }
 
   /**
    * Get All Subscription Services
@@ -310,4 +313,5 @@ export class SubscriptionServicesController {
       message: MESSAGES.successMessage.subscriptionHistoryFetchedSuccess,
     };
   }
+
 }

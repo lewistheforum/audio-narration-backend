@@ -4,11 +4,13 @@ import {
   SubscriptionService,
   ClinicSubscription,
   ClinicSubscriptionHistory,
+  ClinicSubscriptionRenewalQueue,
 } from './entities';
 import {
   ClinicSubscriptionRepository,
   ClinicSubscriptionHistoryRepository,
   SubscriptionServiceRepository,
+  ClinicSubscriptionRenewalQueueRepository,
 } from './repositories';
 import { SubscriptionServicesController } from './subscription-services.controller';
 import { SubscriptionServicesService } from './subscription-services.service';
@@ -25,6 +27,7 @@ import { AuthModule } from '../auth/auth.module';
       SubscriptionService,
       ClinicSubscription,
       ClinicSubscriptionHistory,
+      ClinicSubscriptionRenewalQueue,
     ]),
     forwardRef(() => AuthModule),
   ],
@@ -33,6 +36,7 @@ import { AuthModule } from '../auth/auth.module';
     ClinicSubscriptionRepository,
     ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
+    ClinicSubscriptionRenewalQueueRepository,
     SubscriptionServicesService,
   ],
   exports: [
@@ -40,6 +44,8 @@ import { AuthModule } from '../auth/auth.module';
     ClinicSubscriptionRepository,
     ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
+    ClinicSubscriptionRenewalQueueRepository,
+    SubscriptionServicesService,
   ],
 })
-export class SubscriptionsModule {}
+export class SubscriptionsModule { }
