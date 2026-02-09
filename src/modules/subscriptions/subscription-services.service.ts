@@ -360,9 +360,11 @@ export class SubscriptionServicesService {
    *
    * @param {string} subscriptionId - ID of the ClinicSubscription record
    * @param {string} targetServiceId - Optional ID of the new service (if changing/upgrading)
+   * @param {string} transactionId - Optional ID of the transaction for history linking
+   * @param {number} duration - Duration in months (default 1)
    */
-  async handleSubscriptionPaymentSuccess(subscriptionId: string, targetServiceId?: string, transactionId?: string): Promise<void> {
-    console.log(`[DEBUG] handleSubscriptionPaymentSuccess called. SubID: ${subscriptionId}, TargetServiceID: ${targetServiceId}, TxID: ${transactionId}`);
+  async handleSubscriptionPaymentSuccess(subscriptionId: string, targetServiceId?: string, transactionId?: string, duration: number = 1): Promise<void> {
+    console.log(`[DEBUG] handleSubscriptionPaymentSuccess called. SubID: ${subscriptionId}, TargetServiceID: ${targetServiceId}, TxID: ${transactionId}, Duration: ${duration}`);
 
     // 1. Get Subscription
     const subscription = await this.clinicSubscriptionRepository.findById(subscriptionId);
@@ -374,12 +376,12 @@ export class SubscriptionServicesService {
     const serviceIdToActivate = targetServiceId || subscription.serviceId;
     console.log(`[DEBUG] Service ID resolved for activation: ${serviceIdToActivate}`);
 
-    // 3. Get Service Details (for duration)
+    // 3. Get Service Details (for name)
     const service = await this.subscriptionServiceRepository.findById(serviceIdToActivate);
     if (!service) throw new NotFoundException('Service not found');
 
-    // Default duration: 12 months
-    const DURATION_MONTHS = 12;
+    // Use duration from parameter (passed from transaction content)
+    const DURATION_MONTHS = duration;
 
     const now = new Date();
 

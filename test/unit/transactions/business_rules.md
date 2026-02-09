@@ -123,3 +123,17 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 *   **Validate Đầu Vào**: Số tiền cho đơn thuốc lấy từ DB, không tin tưởng client input.
 *   **Quyền Manager**: `CLINIC_MANAGER` khi dùng các API subscription sẽ tự động resolve ra ID của `CLINIC_ADMIN` cha để đảm bảo gói được áp dụng đúng tài khoản phòng khám.
 *   **Chữ Ký**: SePay callbacks được bảo vệ bởi `SeepayAuthGuard` (Kiểm tra Authorization header).
+
+---
+
+## 6. Quy Tắc Điều Hướng Tài Khoản Nhận Tiền
+
+| Loại Giao Dịch | Tài Khoản Nhận | Nguồn Cấu Hình |
+| :--- | :--- | :--- |
+| **Thanh toán Đơn thuốc** | Phòng Khám | `ClinicAdminInformation.sepayVa` |
+| **Xác minh Phòng khám** | Phòng Khám | `ClinicAdminInformation.sepayVa` |
+| **Mua/Gia hạn/Đổi Gói (Subscription)** | **Công ty** | `process.env.SEEPAY_ACC`, `process.env.SEEPAY_BANK` |
+
+> [!IMPORTANT]
+> Nếu thiếu cấu hình ENV (`SEEPAY_ACC`, `SEEPAY_BANK`), các API Subscription sẽ trả về lỗi `400 BadRequest`.
+
