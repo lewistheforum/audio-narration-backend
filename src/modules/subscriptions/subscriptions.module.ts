@@ -1,17 +1,20 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   SubscriptionService,
   ClinicSubscription,
   ClinicSubscriptionHistory,
+  ClinicSubscriptionRenewalQueue,
 } from './entities';
 import {
   ClinicSubscriptionRepository,
   ClinicSubscriptionHistoryRepository,
   SubscriptionServiceRepository,
+  ClinicSubscriptionRenewalQueueRepository,
 } from './repositories';
 import { SubscriptionServicesController } from './subscription-services.controller';
 import { SubscriptionServicesService } from './subscription-services.service';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * Subscriptions Module
@@ -24,13 +27,16 @@ import { SubscriptionServicesService } from './subscription-services.service';
       SubscriptionService,
       ClinicSubscription,
       ClinicSubscriptionHistory,
+      ClinicSubscriptionRenewalQueue,
     ]),
+    forwardRef(() => AuthModule),
   ],
   controllers: [SubscriptionServicesController],
   providers: [
     ClinicSubscriptionRepository,
     ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
+    ClinicSubscriptionRenewalQueueRepository,
     SubscriptionServicesService,
   ],
   exports: [
@@ -38,6 +44,8 @@ import { SubscriptionServicesService } from './subscription-services.service';
     ClinicSubscriptionRepository,
     ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
+    ClinicSubscriptionRenewalQueueRepository,
+    SubscriptionServicesService,
   ],
 })
-export class SubscriptionsModule {}
+export class SubscriptionsModule { }

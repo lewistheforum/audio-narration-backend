@@ -78,7 +78,7 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
 
     ]),
     forwardRef(() => MailerModule),
-    SubscriptionsModule,
+    forwardRef(() => SubscriptionsModule),
     forwardRef(() => TransactionsModule),
   ],
   controllers: [AccountsController],

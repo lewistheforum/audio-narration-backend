@@ -74,6 +74,9 @@ const successMessage = {
   // Cancellation
   registrationCancelled: 'Registration cancelled successfully',
   subscriptionCancelled: 'Subscription cancelled successfully',
+  // Subscription
+  subscriptionFetchedSuccess: 'Subscription fetched successfully',
+  subscriptionHistoryFetchedSuccess: 'Subscription history fetched successfully',
   // Feedback
   feedbackCreatedSuccess: 'Feedback created successfully',
 };
@@ -191,6 +194,9 @@ const failMessage = {
     'Cannot cancel registration after successful payment',
   invalidStatus: 'Cannot cancel registration with current status',
   subscriptionNotActive: 'Only active subscriptions can be cancelled',
+  // Subscription Errors
+  subscriptionNotFound: 'No active subscription found for your clinic',
+  subscriptionHistoryNotFound: 'No subscription history found',
   // Feedback Errors
   feedbackToxicContent: 'Feedback contains inappropriate content',
   feedbackNotFound: 'Feedback not found',

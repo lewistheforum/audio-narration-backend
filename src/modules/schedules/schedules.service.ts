@@ -362,6 +362,8 @@ export class SchedulesService {
                 from: query.from,
                 to: query.to,
                 employeeId: filterEmployeeId,
+                roomId: query.roomId,
+                shiftId: query.shiftId,
             })
         );
     }

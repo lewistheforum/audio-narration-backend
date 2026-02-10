@@ -38,4 +38,22 @@ export class GetSchedulesDto {
     @IsOptional()
     @IsUUID('4', { message: 'Invalid Employee ID format' })
     employeeId?: string;
+
+    @ApiProperty({
+        description: 'Filter by Room ID',
+        example: 'uuid-room-id',
+        required: false,
+    })
+    @IsOptional()
+    @IsUUID('4', { message: 'Invalid Room ID format' })
+    roomId?: string;
+
+    @ApiProperty({
+        description: 'Filter by Shift ID',
+        example: 'uuid-shift-id',
+        required: false,
+    })
+    @IsOptional()
+    @IsUUID('4', { message: 'Invalid Shift ID format' })
+    shiftId?: string;
 }

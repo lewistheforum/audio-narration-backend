@@ -3,8 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClinicShiftHour } from './entities/clinic-shift-hour.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
-import { CreateClinicShiftHourDto } from './dto/create-clinic-shift-hour.dto';
-import { UpdateClinicShiftHourDto } from './dto/update-clinic-shift-hour.dto';
+
 import { ConfigureShiftDto } from './dto/configure-shift.dto';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole } from '../accounts/enums';
@@ -39,38 +38,7 @@ export class ClinicShiftHoursService {
         return user._id; // Fallback
     }
 
-    async create(user: any, createDto: CreateClinicShiftHourDto) {
-        const clinicId = await this.resolveClinicId(user);
-        if (!clinicId) throw new ForbiddenException('Cannot resolve clinic ID');
 
-        // Validate Shift belongs to Clinic
-        const shift = await this.shiftRepository.findOne({
-            where: { _id: createDto.shiftId, clinicId }
-        });
-
-        if (!shift) {
-            throw new NotFoundException('Clinic Shift not found or access denied');
-        }
-
-        // Parse hours
-        const startParts = createDto.startHour.split(':').map(Number);
-        const endParts = createDto.endHour.split(':').map(Number);
-        const startVal = startParts[0] * 60 + startParts[1];
-        const endVal = endParts[0] * 60 + endParts[1];
-
-        if (startVal >= endVal) {
-            throw new BadRequestException('Start hour must be before end hour');
-        }
-
-        const newHour = this.shiftHourRepository.create({
-            shiftId: createDto.shiftId,
-            startHour: createDto.startHour,
-            endHour: createDto.endHour,
-            limit: createDto.limit,
-        });
-
-        return this.shiftHourRepository.save(newHour);
-    }
 
     async findAll(user: any, shiftId: string) {
         const clinicId = await this.resolveClinicId(user);
@@ -87,28 +55,7 @@ export class ClinicShiftHoursService {
         });
     }
 
-    async update(user: any, id: string, updateDto: UpdateClinicShiftHourDto) {
-        const clinicId = await this.resolveClinicId(user);
 
-        const hour = await this.shiftHourRepository.findOne({
-            where: { _id: id },
-            relations: ['shift']
-        });
-
-        if (!hour) throw new NotFoundException('Shift Hour not found');
-
-        // Check ownership
-        if (hour.shift.clinicId !== clinicId) {
-            throw new ForbiddenException('Access denied');
-        }
-
-        if (updateDto.startHour && updateDto.endHour) {
-            // Validate time...
-        }
-
-        Object.assign(hour, updateDto);
-        return this.shiftHourRepository.save(hour);
-    }
 
     async remove(user: any, id: string) {
         const clinicId = await this.resolveClinicId(user);
@@ -193,29 +140,73 @@ export class ClinicShiftHoursService {
     /**
      * Get Configuration History
      */
-    async getHistory(user: any, shiftId: string) {
+    /**
+     * Get Configuration History by Shift Type
+     */
+    async getHistory(user: any, shiftType: string) {
         const clinicId = await this.resolveClinicId(user);
 
-        // Validate Shift
-        const shift = await this.shiftRepository.findOne({
-            where: { _id: shiftId, clinicId }
+        // Find ALL shifts of this type for the clinic
+        const shifts = await this.shiftRepository.find({
+            where: {
+                clinicId,
+                shift: shiftType as any // Cast to ShiftType or let existing string validation handle it? ideally validate
+            },
+            select: ['_id', 'shift'] // Select shift
         });
-        if (!shift) throw new NotFoundException('Clinic Shift not found');
 
-        // Fetch all slots including deleted ones
-        const allSlots = await this.shiftHourRepository.find({
-            where: { shiftId },
-            withDeleted: true,
-            order: { createdAt: 'DESC' }
-        });
+        if (!shifts.length) return [];
+
+        const shiftIds = shifts.map(s => s._id);
+
+        // Fetch all slots for THESE shifts including deleted ones
+        // We can't use 'shiftId' in where clause directly if it's multiple. 
+        // Need In operator.
+        // Importing In from typeorm is needed. 
+        // But wait, In is not imported. 
+        // I will add the import or use a query builder if 'In' is missing. 
+        // Let's check imports first or assume I can add it.
+        // Actually, let's use a workaround or add the import in a separate block if needed.
+        // Assuming In is exported from 'typeorm' which is commonly used.
+        // I'll check imports at top of file. 
+
+        // Wait, I can't check imports mid-edit easily. 
+        // I'll assume I need to update imports too.
+
+        // Let's assume I will update imports in another chunk or this one if top of file is visible.
+        // Top of file imports: import { Repository } from 'typeorm';
+        // I need to change that.
+
+        // FETCHING DATA
+        // Since I can't easily rely on 'In' without checking/adding import, I can loop or use query builder.
+        // const allSlots = await this.shiftHourRepository.createQueryBuilder('hour')
+        //    .where('hour.shiftId IN (:...ids)', { ids: shiftIds })
+        //    .withDeleted()
+        //    .orderBy('hour.createdAt', 'DESC')
+        //    .getMany();
+
+        const allSlots = await this.shiftHourRepository.createQueryBuilder('hour')
+            .where('hour.shiftId IN (:...ids)', { ids: shiftIds })
+            .withDeleted() // Important for history
+            .orderBy('hour.createdAt', 'DESC')
+            .getMany();
 
         if (!allSlots.length) return [];
 
-        // Group by CreatedAt (approximate to seconds to handle batch inserts)
+        // Group by CreatedAt + ShiftId (To distinguish different configs)
+        // Actually, config is per shift. 
+        // If two shifts were configured at same second, they are distinct configs.
+        // Key should probably include shiftId just to be safe, 
+        // BUT user wants to see "Morning" history. 
+        // If I group by createdAt only, and I configured Morning 1 and Morning 2 at exact same time, they merge?
+        // Unlikely to be EXACT ms, but possible in batch.
+        // Better to group by logic: A config is a set of slots with same createdAt AND same shiftId.
+
         const groups = new Map<string, ClinicShiftHour[]>();
 
         allSlots.forEach(slot => {
-            const key = slot.createdAt.toISOString();
+            // Key: timestamp_shiftId
+            const key = `${slot.createdAt.toISOString()}_${slot.shiftId}`;
             if (!groups.has(key)) {
                 groups.set(key, []);
             }
@@ -235,18 +226,28 @@ export class ClinicShiftHoursService {
 
             // Calculate Step
             const [startH, startM] = firstSlot.startHour.split(':').map(Number);
-            const [endH, endM] = firstSlot.endHour.split(':').map(Number);
+            const [endH, endM] = firstSlot.endHour.split(':').map(Number); // first slot step calculation
+
+            // Wait, step is (slotEnd - slotStart). 
+            // In the previous code: stepMins = endMins - startMins (of the first slot)
+            // Correct.
+
             const startMins = startH * 60 + startM;
             const endMins = endH * 60 + endM;
             const stepMins = endMins - startMins;
             const stepHours = stepMins / 60;
 
+            // Find matching shift to get name
+            const matchingShift = shifts.find(s => s._id === firstSlot.shiftId);
+
             history.push({
-                configId: key,
+                shiftId: firstSlot.shiftId, // Optional: let user know which shift this was
+                shiftName: matchingShift ? matchingShift.shift : null,
+                // configId: key, // maybe not needed for user
                 createdAt: firstSlot.createdAt,
                 startHour: firstSlot.startHour,
-                endHour: lastSlot.endHour,
-                step: parseFloat(stepHours.toFixed(2)), // Return Step in Hours
+                endHour: lastSlot.endHour, // The very last slot's end time determines the Shift End Time
+                step: parseFloat(stepHours.toFixed(2)),
                 limit: firstSlot.limit
             });
         });
