@@ -327,19 +327,30 @@ describe('TransactionsService', () => {
         });
 
         describe('createRenewalQr', () => {
-            it('should throw BadRequest if subscription is ACTIVE and not expired', async () => {
+            it('should ALLOW renewal even if subscription is ACTIVE and not expired', async () => {
                 const futureDate = new Date();
                 futureDate.setFullYear(futureDate.getFullYear() + 1);
 
                 clinicSubscriptionRepo.findOne.mockResolvedValue({
                     _id: 'sub-1',
                     clinicId: 'clinic-1',
+                    serviceId: 'service-1',
                     subscriptionStatus: RegistrationStatus.ACTIVE,
                     expirationDate: futureDate,
                 });
 
-                await expect(service.createRenewalQr('clinic-1'))
-                    .rejects.toThrow(BadRequestException);
+                const mockTransaction = { id: 'tx-renew', amount: 500000, status: PaymentStatus.PENDING };
+                jest.spyOn(service, 'handleRenewalTransaction').mockResolvedValue(mockTransaction);
+                jest.spyOn(service, 'generateQrResponse').mockResolvedValue({
+                    id: 'tx-renew',
+                    amount: 500000,
+                    qrCodeUrl: 'https://qr.seepay.vn/COMPANY_ACC_123/MB/500000',
+                } as any);
+
+                const result = await service.createRenewalQr('clinic-1');
+
+                expect(result.id).toBe('tx-renew');
+                expect(result.qrCodeUrl).toContain('COMPANY_ACC_123');
             });
 
             it('should allow renewal if subscription is EXPIRED', async () => {
@@ -365,6 +376,50 @@ describe('TransactionsService', () => {
                 expect(result.qrCodeUrl).toContain('COMPANY_ACC_123');
             });
 
+            it('should renew with duration = 12 if current subscription is 12 months', async () => {
+                const startDate = new Date('2023-01-01T00:00:00Z');
+                const expirationDate = new Date('2024-01-01T00:00:00Z'); // 1 year diff
+
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                    serviceId: 'service-1',
+                    subscriptionStatus: RegistrationStatus.ACTIVE,
+                    subscriptionDate: startDate,
+                    expirationDate: expirationDate,
+                });
+
+                // Mock service price = 100k/month
+                subscriptionServiceRepo.findOne.mockResolvedValue({
+                    _id: 'service-1',
+                    price: 100000,
+                    serviceName: 'Pro Plan',
+                });
+
+                // Expect amount = 100k * 12 = 1.2M
+                const expectedAmount = 100000 * 12;
+
+                const mockTransaction = { id: 'tx-renew', amount: expectedAmount, status: PaymentStatus.PENDING };
+
+                // Spy on createOrUpdateTransaction to check arguments
+                jest.spyOn(service, 'createOrUpdateTransaction').mockResolvedValue(mockTransaction);
+                jest.spyOn(service, 'generateQrResponse').mockResolvedValue({
+                    id: 'tx-renew',
+                    amount: expectedAmount,
+                    qrCodeUrl: 'https://qr.seepay.vn/COMPANY_ACC_123/MB/1200000',
+                } as any);
+
+                await service.createRenewalQr('clinic-1');
+
+                // Verify createOrUpdateTransaction was called with duration=12 in content
+                expect(service.createOrUpdateTransaction).toHaveBeenCalledWith(
+                    expect.anything(),
+                    expectedAmount,
+                    JSON.stringify({ duration: 12 }),
+                    expect.stringContaining('12 months')
+                );
+            });
+
             it('should allow renewal if subscription is NON_RENEWING', async () => {
                 const pastDate = new Date();
                 pastDate.setDate(pastDate.getDate() - 1);
@@ -374,19 +429,22 @@ describe('TransactionsService', () => {
                     clinicId: 'clinic-1',
                     serviceId: 'service-1',
                     subscriptionStatus: RegistrationStatus.NON_RENEWING,
-                    expirationDate: pastDate,
+                    subscriptionDate: new Date('2023-01-01'),
+                    expirationDate: pastDate, // Mock expired
                 });
 
-                const mockTransaction = { id: 'tx-renew', amount: 500000, status: PaymentStatus.PENDING };
-                jest.spyOn(service, 'handleRenewalTransaction').mockResolvedValue(mockTransaction);
-                jest.spyOn(service, 'generateQrResponse').mockResolvedValue({
-                    id: 'tx-renew',
-                    amount: 500000,
-                    qrCodeUrl: 'https://qr.seepay.vn/COMPANY_ACC_123/MB/500000',
-                } as any);
+                // Mock service
+                subscriptionServiceRepo.findOne.mockResolvedValue({
+                    _id: 'service-1',
+                    price: 100000,
+                    serviceName: 'Pro Plan',
+                });
+
+                // Mock Transaction
+                jest.spyOn(service, 'createOrUpdateTransaction').mockResolvedValue({ id: 'tx-renew', amount: 100000 });
+                jest.spyOn(service, 'generateQrResponse').mockResolvedValue({ id: 'tx-renew' } as any);
 
                 const result = await service.createRenewalQr('clinic-1');
-
                 expect(result.id).toBe('tx-renew');
             });
         });
