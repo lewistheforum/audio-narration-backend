@@ -115,7 +115,8 @@ export class TransactionsController {
       clinicId = user.parentId;
     }
 
-    const payment = await this.transactionsService.createNewSubscriptionQr(clinicId, body.serviceId);
+    const duration = body.duration || 1;
+    const payment = await this.transactionsService.createNewSubscriptionQr(clinicId, body.serviceId, duration);
     return {
       data: payment,
       message: 'New Subscription QR created successfully',
@@ -163,7 +164,8 @@ export class TransactionsController {
       clinicId = user.parentId;
     }
 
-    const payment = await this.transactionsService.createPackageChangeQr(clinicId, body.targetServiceId);
+    const duration = body.duration || 1;
+    const payment = await this.transactionsService.createPackageChangeQr(clinicId, body.targetServiceId, duration);
     return {
       data: payment,
       message: 'Package Change QR created successfully',
