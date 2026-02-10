@@ -1,14 +1,38 @@
-import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  UseGuards,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+  Body,
+  Post,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiExtraModels,
+  ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { SubscriptionServicesService } from './subscription-services.service';
-import { SubscriptionServiceResponseDto } from './dto';
+import {
+  SubscriptionServiceResponseDto,
+  SubscriptionResponseDto,
+  SubscriptionHistoryResponseDto,
+  CreateSubscriptionRequestDto,
+} from './dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { MESSAGES } from 'src/common/message';
+import { JwtAuthGuard } from '../auth/jwt.strategy';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { User } from '../../common/decorators/user.decorator';
+import { AccountRole } from '../accounts/enums/account-role.enum';
+import { Account } from '../accounts/entities/accounts.entity';
 
 /**
  * Subscription Services Controller
@@ -29,12 +53,16 @@ import { MESSAGES } from 'src/common/message';
  * @tags Subscription Services
  */
 @ApiTags('Subscription Services')
-@ApiExtraModels(SubscriptionServiceResponseDto)
-@Controller('subscription/services')
+@ApiExtraModels(
+  SubscriptionServiceResponseDto,
+  SubscriptionResponseDto,
+  SubscriptionHistoryResponseDto,
+)
+@Controller('subscription')
 export class SubscriptionServicesController {
   constructor(
     private readonly subscriptionServicesService: SubscriptionServicesService,
-  ) {}
+  ) { }
 
   /**
    * Get All Subscription Services
@@ -61,7 +89,7 @@ export class SubscriptionServicesController {
    * @swagger
    * @response 200 - Successfully retrieved subscription services
    */
-  @Get()
+  @Get('services')
   @ApiOperation({ summary: 'Get all subscription services' })
   @ApiResponseData({
     type: SubscriptionServiceResponseDto,
@@ -107,7 +135,7 @@ export class SubscriptionServicesController {
    * @response 200 - Successfully retrieved subscription service
    * @response 404 - Subscription service not found
    */
-  @Get(':id')
+  @Get('services/:id')
   @ApiOperation({ summary: 'Get subscription service by ID' })
   @ApiResponseData({
     type: SubscriptionServiceResponseDto,
@@ -124,4 +152,166 @@ export class SubscriptionServicesController {
       message: 'Subscription service retrieved successfully',
     };
   }
+
+  /**
+   * Get Current Subscription (Clinic Admin Only)
+   *
+   * Retrieves the current active subscription for the logged-in clinic admin.
+   * Returns subscription details including service information.
+   *
+   * Security:
+   * - Requires JWT authentication
+   * - Requires CLINIC_ADMIN role
+   * - User can only view their own subscription
+   * - Data is automatically filtered by logged-in user's ID (clinic_id = user._id)
+   *
+   * Response Format:
+   * - Returns SubscriptionResponseDto with full subscription and service details
+   * - Includes: service name, price, discount, features, subscription dates, status
+   *
+   * Use Cases:
+   * - Clinic admin dashboard
+   * - View current subscription status
+   * - Check expiration date
+   *
+   * @param {Account} user - Logged-in user from JWT token
+   * @returns {Promise<{data: SubscriptionResponseDto, message: string}>} Current subscription details
+   * @throws {NotFoundException} If no subscription found for this clinic
+   * @throws {UnauthorizedException} If not authenticated
+   * @throws {ForbiddenException} If not CLINIC_ADMIN role
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Successfully retrieved subscription
+   * @response 401 - Unauthorized - Missing or invalid JWT token
+   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
+   * @response 404 - No subscription found
+   */
+  @Get('clinic/me/current')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get current subscription (Clinic Admin only)',
+    description:
+      'Retrieves the current active subscription for the logged-in clinic admin with full service details',
+  })
+  @ApiResponseData({
+    type: SubscriptionResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Subscription fetched successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role',
+  })
+  @ApiResponse({ status: 404, description: 'No subscription found' })
+  async getCurrentSubscription(
+    @User() user: Account,
+  ): Promise<{ data: SubscriptionResponseDto; message: string }> {
+    const subscription =
+      await this.subscriptionServicesService.getCurrentSubscription(user._id);
+    return {
+      data: subscription,
+      message: MESSAGES.successMessage.subscriptionFetchedSuccess,
+    };
+  }
+
+  /**
+   * Get Subscription History (Clinic Admin Only)
+   *
+   * Retrieves paginated subscription history for the logged-in clinic admin.
+   * Returns historical subscription records including service information.
+   * Ordered by newest first (created_at DESC).
+   *
+   * Security:
+   * - Requires JWT authentication
+   * - Requires CLINIC_ADMIN role
+   * - User can only view their own history
+   * - Data is automatically filtered by logged-in user's ID (clinic_id = user._id)
+   *
+   * Query Parameters:
+   * - page: Page number (default: 1)
+   * - limit: Records per page (default: 10)
+   *
+   * Response Format:
+   * - Returns SubscriptionHistoryResponseDto with pagination metadata
+   * - Includes: data[], page, limit, total, totalPages
+   * - Each record includes: service name, price, dates, status
+   *
+   * Use Cases:
+   * - View past subscriptions
+   * - Audit subscription changes
+   * - Track subscription history
+   *
+   * @param {Account} user - Logged-in user from JWT token
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Records per page (default: 10)
+   * @returns {Promise<{data: SubscriptionHistoryResponseDto, message: string}>} Paginated subscription history
+   * @throws {UnauthorizedException} If not authenticated
+   * @throws {ForbiddenException} If not CLINIC_ADMIN role
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Successfully retrieved subscription history
+   * @response 401 - Unauthorized - Missing or invalid JWT token
+   * @response 403 - Forbidden - Requires CLINIC_ADMIN role
+   */
+  @Get('clinic/me/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get subscription history (Clinic Admin only)',
+    description:
+      'Retrieves paginated subscription history for the logged-in clinic admin with pagination support',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Records per page (default: 10)',
+    example: 10,
+  })
+  @ApiResponseData({
+    type: SubscriptionHistoryResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Subscription history fetched successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires CLINIC_ADMIN role',
+  })
+  async getSubscriptionHistory(
+    @User() user: Account,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ): Promise<{ data: SubscriptionHistoryResponseDto; message: string }> {
+    const history =
+      await this.subscriptionServicesService.getSubscriptionHistory(
+        user._id,
+        page,
+        limit,
+      );
+    return {
+      data: history,
+      message: MESSAGES.successMessage.subscriptionHistoryFetchedSuccess,
+    };
+  }
+
 }

@@ -4,3 +4,4 @@ export * from './payment-history-response.dto';
 export * from './seepay-callback.dto';
 export * from './transaction-detail.dto';
 export * from './create-subscription-transaction.dto';
+export * from './subscription-payment.dto';

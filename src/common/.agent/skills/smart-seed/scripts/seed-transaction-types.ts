@@ -1,7 +1,7 @@
 import { DataSource } from 'typeorm';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../../../../src/app.module';
-import { TransactionType } from '../../../../src/modules/transactions/entities/transaction-type.entity';
+import { AppModule } from '../../../../../app.module';
+import { TransactionType } from '../../../../../modules/transactions/entities/transaction-type.entity';
 
 async function bootstrap() {
     const app = await NestFactory.createApplicationContext(AppModule);

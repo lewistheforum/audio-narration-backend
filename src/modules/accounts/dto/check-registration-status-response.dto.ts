@@ -61,7 +61,7 @@ export class CheckRegistrationStatusResponseDto {
 
   @ApiProperty({
     description: 'Optional notice message for statuses like NON_RENEWING',
-    example: 'Your subscription will not renew automatically',
+    example: 'Your subscription has been cancelled and will not renew automatically',
     required: false,
     nullable: true,
   })

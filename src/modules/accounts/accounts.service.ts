@@ -67,6 +67,7 @@ import { generateVerificationCode } from 'src/common/utils/util';
 import { MailerService } from '../mailer/mailer.service';
 import {
   ClinicSubscriptionRepository,
+  ClinicSubscriptionHistoryRepository,
   SubscriptionServiceRepository,
 } from '../subscriptions/repositories';
 import {
@@ -145,6 +146,7 @@ export class AccountsService {
     private readonly addressRepository: AddressRepository,
     private readonly googleIframeRepository: GoogleIframeRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
+    private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
@@ -3109,7 +3111,7 @@ export class AccountsService {
    * - Returns canStart: true if email doesn't exist or no pending registration
    * - Returns managerAccountId for legal document related statuses
    * - Returns notice for NON_RENEWING status
-   * - Returns expirationDate for ACTIVE, NON_RENEWING, EXPIRED statuses
+   * - Returns expirationDate for ACTIVE, NON_RENEWING, and EXPIRED statuses
    * - PENDING_SEPAY_SETUP is deprecated - bank config is now part of initial registration
    *
    * @param {string} email - Email address to check
@@ -3231,17 +3233,17 @@ export class AccountsService {
           ? subscription.expirationDate.toISOString()
           : null;
         break;
-      case RegistrationStatus.EXPIRED:
+      case RegistrationStatus.NON_RENEWING:
         currentStep = 'COMPLETED';
-        nextAction = 'Renew your subscription';
+        nextAction = 'Access your dashboard (subscription will not renew)';
+        notice = 'Your subscription has been cancelled and will not renew automatically. Access retained until expiration date.';
         expirationDate = subscription.expirationDate
           ? subscription.expirationDate.toISOString()
           : null;
         break;
-      case RegistrationStatus.NON_RENEWING:
+      case RegistrationStatus.EXPIRED:
         currentStep = 'COMPLETED';
-        nextAction = 'Access your dashboard (subscription will not renew)';
-        notice = 'Your subscription will not renew automatically';
+        nextAction = 'Renew your subscription';
         expirationDate = subscription.expirationDate
           ? subscription.expirationDate.toISOString()
           : null;
@@ -3812,7 +3814,7 @@ export class AccountsService {
    * - Only CLINIC_ADMIN role can cancel their registration
    * - Cannot cancel if status is PENDING_APPROVAL (documents under review)
    * - Cannot cancel if any SUCCESS transaction exists (payment already made)
-   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED
+   * - Cannot cancel if status is ACTIVE, NON_RENEWING, or EXPIRED (subscription already activated)
    *
    * Deletion Order (respects foreign key constraints):
    * 1. ClinicsLegalDocuments (linked to manager account)
@@ -3937,31 +3939,34 @@ export class AccountsService {
   }
 
   /**
-   * Cancel Active Subscription (Churn)
+   * Cancel Active Subscription (Churn / Soft Cancel)
    *
-   * Cancels an active subscription by changing its status to NON_RENEWING.
-   * The account remains fully functional until expirationDate, then transitions to EXPIRED.
+   * Cancels an active subscription by changing status to NON_RENEWING.
+   * This is a soft cancellation - no data is deleted, user retains access until expirationDate.
    *
    * Business Rules:
    * - Only CLINIC_ADMIN role can cancel their subscription
    * - Subscription must be in ACTIVE status
+   * - Creates history record for churn analysis
+   * - User retains full access until expirationDate
+   * - System will NOT auto-renew after expiration
    *
    * Effects:
    * - Status changes to NON_RENEWING
+   * - History record created in clinic_subscriptions_history
    * - Account remains fully functional until expirationDate
-   * - System will NOT renew automatically
    * - After expirationDate passes, status transitions to EXPIRED
    *
    * @param {string} accountId - Clinic admin account UUID
-   * @param {CancelSubscriptionDto} dto - Cancellation data with optional reason
+   * @param {CancelSubscriptionDto} dto - Optional cancellation reason
    * @returns {Promise<CancelSubscriptionResponseDto>} Cancellation result
    * @throws {ForbiddenException} If account is not CLINIC_ADMIN
    * @throws {NotFoundException} If subscription not found
    * @throws {BadRequestException} If subscription is not ACTIVE
    */
-  async cancelSubscription(
+  async cancelActiveSubscription(
     accountId: string,
-    dto: CancelSubscriptionDto,
+    dto?: { reason?: string },
   ): Promise<CancelSubscriptionResponseDto> {
     // Get account
     const account = await this.findAccountEntityById(accountId);
@@ -3981,7 +3986,7 @@ export class AccountsService {
     // Check if status is ACTIVE
     if (subscription.subscriptionStatus !== RegistrationStatus.ACTIVE) {
       throw new BadRequestException(
-        MESSAGES.failMessage.subscriptionNotActive,
+        'Can only cancel subscriptions with ACTIVE status',
       );
     }
 
@@ -3989,8 +3994,17 @@ export class AccountsService {
     subscription.subscriptionStatus = RegistrationStatus.NON_RENEWING;
     await this.clinicSubscriptionRepository.save(subscription);
 
+    // Create history record for churn analysis
+    await this.clinicSubscriptionHistoryRepository.createHistoryRecord({
+      clinicId: accountId,
+      serviceId: subscription.serviceId,
+      subscriptionDate: subscription.subscriptionDate,
+      expirationDate: subscription.expirationDate,
+      subscriptionStatus: RegistrationStatus.NON_RENEWING,
+    });
+
     return {
-      message: MESSAGES.successMessage.subscriptionCancelled,
+      message: 'Subscription cancelled successfully. Access retained until expiration date.',
       newStatus: RegistrationStatus.NON_RENEWING,
     };
   }

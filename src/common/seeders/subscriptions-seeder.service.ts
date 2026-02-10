@@ -175,8 +175,12 @@ export class SubscriptionsSeederService {
         const expirationDate = new Date(subscriptionDate);
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
-        // Randomly select a status for history (expired or cancelled)
-        const status = Math.random() > 0.5 ? RegistrationStatus.EXPIRED : RegistrationStatus.NON_RENEWING;
+        // Randomly select between EXPIRED and NON_RENEWING for historical records
+        // NON_RENEWING: User explicitly cancelled (churn)
+        // EXPIRED: Natural expiration (no cancellation)
+        const status = Math.random() > 0.7 
+          ? RegistrationStatus.NON_RENEWING 
+          : RegistrationStatus.EXPIRED;
 
         // Create clinic subscription history
         const historyRecord = this.clinicSubscriptionHistoryRepository.create({

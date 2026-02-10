@@ -9,8 +9,9 @@ import { RegistrationStatus } from '../subscriptions/enums';
 import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto, CreateSubscriptionTransactionDto } from './dto';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
-import { ClinicSubscriptionHistory } from '../subscriptions/entities/clinic-subscription-history.entity';
+import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
+import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
 
 /**
  * Transactions Service
@@ -32,11 +33,12 @@ export class TransactionsService {
     private readonly transactionTypeRepo: Repository<TransactionType>,
     @InjectRepository(Appointment)
     private readonly appointmentRepository: Repository<Appointment>,
-    @InjectRepository(ClinicSubscriptionHistory)
-    private readonly clinicSubscriptionHistoryRepo: Repository<ClinicSubscriptionHistory>,
+    @InjectRepository(ClinicSubscription)
+    private readonly clinicSubscriptionRepo: Repository<ClinicSubscription>,
     @InjectRepository(SubscriptionService)
     private readonly subscriptionServiceRepo: Repository<SubscriptionService>,
     private readonly configService: ConfigService,
+    private readonly subscriptionServicesService: SubscriptionServicesService,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
@@ -46,57 +48,287 @@ export class TransactionsService {
     );
   }
 
+
+
   /**
    * Create payment QR for a subscription
    */
   async createSubscriptionQr(dto: CreateSubscriptionTransactionDto): Promise<PaymentResponseDto> {
-    // 1. Get Subscription History
-    const subscriptionHistory = await this.clinicSubscriptionHistoryRepo.findOne({
+    // 1. Get Subscription (Source of Truth)
+    const subscription = await this.clinicSubscriptionRepo.findOne({
       where: { _id: dto.subscriptionId },
     });
 
-    if (!subscriptionHistory) {
-      throw new NotFoundException('Subscription history not found');
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found');
     }
 
-    // 2. Get Service Price to Calculate/Verify Amount
+    let transaction: any;
+
+    // 2. Delegate to Specific Handlers (SOLID Principle)
+    if (dto.serviceId && dto.serviceId !== subscription.serviceId) {
+      // Case A: Package Change (Upgrade/Downgrade)
+      transaction = await this.handlePackageChangeTransaction(
+        subscription,
+        dto.serviceId,
+      );
+    } else {
+      // Case B: Renewal (Same Package)
+      transaction = await this.handleRenewalTransaction(subscription);
+    }
+
+    // 3. Generate QR for the Created/Found Transaction (Use SYSTEM CONFIG for Subscriptions)
+    const { acc, bank } = { acc: this.seepayAccount, bank: this.seepayBank };
+
+    if (!acc || !bank) {
+      throw new BadRequestException('System SePay configuration is missing (SEEPAY_ACC, SEEPAY_BANK)');
+    }
+
+    const description = transaction.id;
+    const expiresAt = this.computeExpireTime();
+
+    const qrCodeUrl = this.buildQrUrl(
+      transaction.amount,
+      description,
+      acc,
+      bank,
+    );
+    const qrPayload = this.buildQrPayload(
+      transaction.amount,
+      description,
+      acc,
+      bank,
+    );
+
+    return new PaymentResponseDto({
+      id: transaction.id,
+      amount: transaction.amount,
+      currency: 'VND',
+      status: transaction.status,
+      qrCodeUrl,
+      qrPayload,
+      expiresAt,
+    });
+  }
+
+  /**
+   * Create Renewal QR
+   * Wrapper for handleRenewalTransaction to be used by Controller
+   * Renewal always uses 1 month duration by default
+   * @param clinicId Clinic ID
+   */
+  async createRenewalQr(clinicId: string): Promise<PaymentResponseDto> {
+    const subscription = await this.clinicSubscriptionRepo.findOne({
+      where: { clinicId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found for this clinic');
+    }
+
+    const now = new Date();
+    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
+    const isNotExpired = subscription.expirationDate && new Date(subscription.expirationDate) > now;
+
+    if (isActive && isNotExpired) {
+      throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
+    }
+
+    const transaction = await this.handleRenewalTransaction(subscription);
+    return this.generateQrResponse(subscription, transaction);
+  }
+
+  /**
+   * Create New Subscription QR (Onboarding)
+   * Intended for "Buy New" flow (e.g., first payment)
+   * @param clinicId Clinic ID
+   * @param serviceId Target service ID
+   * @param duration Duration in months (default 1, max 12)
+   */
+  async createNewSubscriptionQr(clinicId: string, serviceId: string, duration: number = 1): Promise<PaymentResponseDto> {
+    // 1. Get or Create Subscription (Source of Truth)
+    let subscription = await this.clinicSubscriptionRepo.findOne({
+      where: { clinicId },
+    });
+
+    // Case A: Subscription does not exist (New Clinic) -> Create PENDING
+    if (!subscription) {
+      console.log(`[createNewSubscriptionQr] Creating new subscription record for clinic ${clinicId}`);
+      subscription = this.clinicSubscriptionRepo.create({
+        clinicId,
+        serviceId, // Set initial service intent
+        subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP, // Default status
+        subscriptionDate: new Date(),
+        expirationDate: new Date(), // Expired by default until paid
+      });
+      subscription = await this.clinicSubscriptionRepo.save(subscription);
+    }
+
+    // Case B: Exist but Active & Valid (User mistake?)
+    const now = new Date();
+    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
+    const isNotExpired = subscription.expirationDate && new Date(subscription.expirationDate) > now;
+
+    if (isActive && isNotExpired) {
+      throw new BadRequestException('Current subscription is still active. Please use "Renew" or "Change Package" features.');
+    }
+
+    // Case C: Exist but Expired/Pending -> Allow "New" Subscription logic
+    const transaction = await this.handlePackageChangeTransaction(
+      subscription,
+      serviceId,
+      duration
+    );
+
+    return this.generateQrResponse(subscription, transaction);
+  }
+
+  /**
+   * Create Package Change QR
+   * Wrapper for handlePackageChangeTransaction to be used by Controller
+   * @param clinicId Clinic ID
+   * @param targetServiceId Target service ID
+   * @param duration Duration in months (default 1, max 12)
+   */
+  async createPackageChangeQr(clinicId: string, targetServiceId: string, duration: number = 1): Promise<PaymentResponseDto> {
+    const subscription = await this.clinicSubscriptionRepo.findOne({
+      where: { clinicId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found for this clinic');
+    }
+
+    const transaction = await this.handlePackageChangeTransaction(subscription, targetServiceId, duration);
+    return this.generateQrResponse(subscription, transaction);
+  }
+
+  /**
+   * Helper to generate QR Response from Transaction
+   */
+  async generateQrResponse(subscription: ClinicSubscription, transaction: any): Promise<PaymentResponseDto> {
+    // USE SYSTEM CONFIG FOR SUBSCRIPTIONS (Company Account)
+    const { acc, bank } = { acc: this.seepayAccount, bank: this.seepayBank };
+
+    if (!acc || !bank) {
+      throw new BadRequestException('System SePay configuration is missing (SEEPAY_ACC, SEEPAY_BANK)');
+    }
+
+    const description = transaction.id;
+    const expiresAt = this.computeExpireTime();
+
+    const qrCodeUrl = this.buildQrUrl(
+      transaction.amount,
+      description,
+      acc,
+      bank,
+    );
+    const qrPayload = this.buildQrPayload(
+      transaction.amount,
+      description,
+      acc,
+      bank,
+    );
+
+    return new PaymentResponseDto({
+      id: transaction.id,
+      amount: transaction.amount,
+      currency: 'VND',
+      status: transaction.status,
+      qrCodeUrl,
+      qrPayload,
+      expiresAt,
+    });
+  }
+
+  /**
+   * Handle Package Change Transaction Logic
+   * @param subscription Current subscription
+   * @param targetServiceId Target service ID
+   * @param duration Duration in months (default 1)
+   */
+  async handlePackageChangeTransaction(
+    subscription: ClinicSubscription,
+    targetServiceId: string,
+    duration: number = 1,
+  ): Promise<any> {
+    // 1. Get Target Service
     const service = await this.subscriptionServiceRepo.findOne({
-      where: { _id: subscriptionHistory.serviceId },
+      where: { _id: targetServiceId },
     });
+    if (!service) throw new NotFoundException('Target service not found');
 
-    if (!service) {
-      throw new NotFoundException('Subscription service not found');
-    }
+    // 2. Calculate Amount: price * duration (NO discount)
+    const amount = service.price * duration;
 
-    // Calculate amount: price * (1 - discount/100)
-    const amount = Math.round(service.price * (1 - service.discount / 100));
-
-    // 3. Get Clinic Admin to resolve Seepay Config
-    // Subscription History stores clinicId (which is Account ID). 
-    // We need ClinicAdmin's _id to link Transaction and to find Seepay Config.
-    const clinicAdmin = await this.clinicAdminRepo.findOne({
-      where: { accountId: subscriptionHistory.clinicId },
-    });
-
-    if (!clinicAdmin) {
-      throw new NotFoundException('Clinic Admin Information not found');
-    }
-
-    const clinicAdminId = clinicAdmin._id;
-    const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
+    // 3. Create Transaction Content (store targetServiceId AND duration for later processing)
+    const content = JSON.stringify({ targetServiceId, duration });
 
     // 4. Create or Update Transaction
-    // Check if a transaction already exists for this subscription history
+    return this.createOrUpdateTransaction(
+      subscription,
+      amount,
+      content,
+      `Upgrade/Downgrade to ${service.serviceName} (${duration} tháng)`,
+    );
+  }
+
+  /**
+   * Handle Renewal Transaction Logic
+   * Renewal always uses 1 month duration
+   * @param subscription Current subscription
+   */
+  async handleRenewalTransaction(
+    subscription: ClinicSubscription,
+  ): Promise<any> {
+    // 1. Get Current Service
+    const service = await this.subscriptionServiceRepo.findOne({
+      where: { _id: subscription.serviceId },
+    });
+    if (!service) throw new NotFoundException('Current service not found');
+
+    // 2. Calculate Amount: price only (NO discount, 1 month)
+    const amount = service.price;
+
+    // 3. Content (renewal uses duration = 1)
+    const content = JSON.stringify({ duration: 1 });
+
+    // 4. Create or Update Transaction
+    return this.createOrUpdateTransaction(
+      subscription,
+      amount,
+      content,
+      `Renewal for ${service.serviceName}`,
+    );
+  }
+
+  /**
+   * Universal Helper to Create/Update Payment Transaction
+   */
+  async createOrUpdateTransaction(
+    subscription: ClinicSubscription,
+    amount: number,
+    content: string,
+    description: string,
+  ): Promise<any> {
+    // Get Clinic Admin ID
+    const clinicAdmin = await this.clinicAdminRepo.findOne({
+      where: { accountId: subscription.clinicId },
+    });
+    if (!clinicAdmin) throw new NotFoundException('Clinic Admin not found');
+
+    // Check for pending transaction
     let transaction = await this.transactionRepository.findOne({
-      where: { subscriptionId: dto.subscriptionId },
+      where: {
+        subscriptionId: subscription._id,
+        status: PaymentStatus.PENDING,
+      },
     });
 
     if (!transaction) {
-      // Create new transaction
       const transactionType = await this.transactionTypeRepo.findOne({
         where: { name: Like('SUBSCRIPTION%') },
       });
-
       if (!transactionType) {
         throw new NotFoundException('Transaction Type SUBSCRIPTION not found');
       }
@@ -105,37 +337,21 @@ export class TransactionsService {
         amount,
         currency: 'VND',
         status: PaymentStatus.PENDING,
-        clinicId: clinicAdminId,
-        subscriptionId: dto.subscriptionId,
+        clinicId: clinicAdmin._id,
+        subscriptionId: subscription._id,
+        content,
         transactionTypeId: transactionType._id,
-        description: `Payment for subscription ${service.serviceName}`,
+        description,
       });
       transaction = await this.transactionRepository.save(transaction);
     } else {
-      // Update existing transaction if amount changed or just to refresh
-      if (Number(transaction.amount) !== amount) {
-        transaction.amount = amount;
-        transaction = await this.transactionRepository.save(transaction);
-      }
+      // Update existing
+      transaction.amount = amount;
+      transaction.content = content;
+      transaction.description = description;
+      transaction = await this.transactionRepository.save(transaction);
     }
-
-    // 5. Generate QR
-    // Use Transaction ID as description for callback mapping
-    const description = transaction.id;
-    const expiresAt = this.computeExpireTime();
-
-    const qrCodeUrl = this.buildQrUrl(amount, description, acc, bank);
-    const qrPayload = this.buildQrPayload(amount, description, acc, bank);
-
-    return new PaymentResponseDto({
-      id: transaction.id,
-      amount,
-      currency: 'VND',
-      status: transaction.status,
-      qrCodeUrl,
-      qrPayload,
-      expiresAt,
-    });
+    return transaction;
   }
 
   /**
@@ -276,7 +492,7 @@ export class TransactionsService {
       existingTransaction.transactionDate = new Date(payload.transactionDate);
       existingTransaction.accountNumber = payload.accountNumber;
       existingTransaction.code = payload.code;
-      existingTransaction.content = payload.content;
+      // existingTransaction.content = payload.content; // FIX: Don't overwrite metadata
       existingTransaction.transferType = payload.transferType;
       existingTransaction.transferAmount = payload.transferAmount;
       existingTransaction.accumulated = payload.accumulated;
@@ -307,9 +523,26 @@ export class TransactionsService {
       if (status === PaymentStatus.SUCCESS && existingTransaction.transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
         if (existingTransaction.subscriptionId) {
           console.log('handleCallback Debug - Updating Subscription Status for:', existingTransaction.subscriptionId);
-          await this.clinicSubscriptionHistoryRepo.update(
-            { _id: existingTransaction.subscriptionId },
-            { subscriptionStatus: RegistrationStatus.ACTIVE, subscriptionDate: new Date() }
+
+          // Extract targetServiceId and duration from content if available
+          let targetServiceId: string | undefined;
+          let duration: number = 1;
+          if (saved.content) {
+            try {
+              const contentObj = JSON.parse(saved.content);
+              targetServiceId = contentObj.targetServiceId;
+              duration = contentObj.duration || 1;
+            } catch (e) {
+              console.warn('Failed to parse transaction content:', e);
+            }
+          }
+
+          // Delegate to SubscriptionServicesService to handle renewal/activation logic
+          await this.subscriptionServicesService.handleSubscriptionPaymentSuccess(
+            existingTransaction.subscriptionId,
+            targetServiceId,
+            saved.id, // PASS TRANSACTION ID HERE
+            duration  // PASS DURATION HERE
           );
         }
       }
@@ -367,7 +600,7 @@ export class TransactionsService {
       transactionDate: new Date(payload.transactionDate),
       accountNumber: payload.accountNumber,
       code: payload.code,
-      content: payload.content,
+      // content: payload.content, // EXISTING BUG: This overwrites our JSON metadata (targetServiceId) with the raw bank transfer message.
       transferType: payload.transferType,
       transferAmount: payload.transferAmount,
       accumulated: payload.accumulated,
@@ -397,11 +630,33 @@ export class TransactionsService {
       if (transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
         if (savedTransaction.subscriptionId) {
           console.log('handleCallback Debug - Updating Subscription Status for:', savedTransaction.subscriptionId);
-          const updateResult = await this.clinicSubscriptionHistoryRepo.update(
-            { _id: savedTransaction.subscriptionId },
-            { subscriptionStatus: RegistrationStatus.ACTIVE, subscriptionDate: new Date() }
+
+          // Extract targetServiceId and duration from content if available
+          let targetServiceId: string | undefined;
+          let duration: number = 1;
+          if (savedTransaction.content) {
+            console.log('[DEBUG] Processing content for Target Service ID and Duration:', savedTransaction.content);
+            try {
+              const contentObj = JSON.parse(savedTransaction.content);
+              targetServiceId = contentObj.targetServiceId;
+              duration = contentObj.duration || 1;
+              console.log('[DEBUG] Found targetServiceId:', targetServiceId, 'duration:', duration);
+            } catch (e) {
+              console.warn('[DEBUG] Failed to parse transaction content:', e);
+            }
+          } else {
+            console.log('[DEBUG] No content found in transaction');
+          }
+
+          console.log(`[DEBUG] Delegating to SubscriptionService. handleSubscriptionPaymentSuccess(subId=${savedTransaction.subscriptionId}, targetId=${targetServiceId}, duration=${duration})`);
+
+          // Delegate to SubscriptionServicesService to handle renewal/activation logic
+          await this.subscriptionServicesService.handleSubscriptionPaymentSuccess(
+            savedTransaction.subscriptionId,
+            targetServiceId,
+            savedTransaction.id, // Pass Transaction ID to link history
+            duration // Pass Duration for end date calculation
           );
-          console.log('handleCallback Debug - Update Result:', updateResult);
         } else {
           console.warn('handleCallback Debug - Transaction has SUBSCRIPTION type but no subscriptionId');
         }
@@ -560,6 +815,7 @@ export class TransactionsService {
     accountNumber?: string;
     transferType?: string;
     transferAmount?: number;
+    accumulated?: number;
   }> {
     const row = await this.transactionRepository.findDetailById(id, clinicId);
 
@@ -585,6 +841,10 @@ export class TransactionsService {
       accountNumber: row.account_number,
       transferType: row.transfer_type,
       transferAmount: row.transfer_amount,
+      accumulated: row.accumulated, // Added missing property assignment from original raw query used in other methods but relying on findDetailById returning it
+      // Actually findDetailById returns IGetTransactionDetailResult which has accumulated? Let's check if I missed it in my manual re-write.
+      // previous implementation had accumulated.
+      // Checking interface...
     };
   }
 

@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { SubscriptionService } from './subscription-service.entity';
+import { Transaction } from '../../transactions/entities/transaction.entity';
 import { RegistrationStatus } from '../enums';
 
 /**
@@ -40,10 +41,19 @@ export class ClinicSubscriptionHistory {
   @JoinColumn({ name: 'service_id' })
   service?: SubscriptionService;
 
-  @Column({ name: 'subscription_date', type: 'timestamptz' })
+  @Column({ name: 'transaction_id', type: 'uuid', nullable: true })
+  transactionId?: string;
+
+  @ManyToOne(() => Transaction, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'transaction_id' })
+  transaction?: Transaction;
+
+  @Column({ name: 'subscription_date', type: 'timestamptz', nullable: true })
   subscriptionDate: Date;
 
-  @Column({ name: 'expiration_date', type: 'timestamptz' })
+  @Column({ name: 'expiration_date', type: 'timestamptz', nullable: true })
   expirationDate: Date;
 
   @Column({

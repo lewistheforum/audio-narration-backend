@@ -1,7 +1,7 @@
 import { DataSource, EntityMetadata, Repository } from 'typeorm';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
-import { AppModule } from '../../../../src/app.module';
+import { AppModule } from '../../../../../app.module';
 
 // Command line arguments parsing
 const args = process.argv.slice(2);
@@ -68,24 +68,66 @@ async function recursiveSeed(dataSource: DataSource, metadata: EntityMetadata, d
     for (const relation of metadata.relations) {
         // Chỉ quan tâm ManyToOne hoặc OneToOne (Owning side)
         if (!relation.isManyToOne && !relation.isOneToOne) continue;
+        if (!relation.joinColumns || relation.joinColumns.length === 0) continue; // Not owning side
 
         const relatedRepo = dataSource.getRepository(relation.type);
+        const joinColumn = relation.joinColumns[0];
 
-        // Chiến thuật: "Pick Existing" (Lấy random 1 dòng có sẵn)
-        const existing = await relatedRepo.createQueryBuilder('e')
-            .orderBy('RANDOM()')
-            .limit(1)
-            .getOne();
+        // Check uniqueness: explicitly OneToOne OR the join column has a unique constraint
+        // Cast to any because isUnique might not be in the strict type definition but exists at runtime/metadata args
+        const isUnique = relation.isOneToOne || (joinColumn as any).isUnique;
 
-        if (existing) {
-            data[relation.propertyName] = existing;
+        let selectedRelationValue = null;
+
+        if (isUnique) {
+            // UNIQUE RELATION STRATEGY: Find Unused or Create New
+            // console.log(`   🔒 Handling Unique Relation: ${metadata.tableName} -> ${relation.inverseEntityMetadata.tableName}`);
+
+            // Tìm các record ở bảng quan hệ mà CHƯA được dùng bởi bảng hiện tại
+            const targetTableName = metadata.tableName;
+            const relatedTableName = relation.inverseEntityMetadata.tableName;
+            const fkColumnName = joinColumn.databaseName;
+            const relatedPrimaryKey = relation.inverseEntityMetadata.primaryColumns[0].databaseName;
+            const relatedPrimaryKeyProp = relation.inverseEntityMetadata.primaryColumns[0].propertyName;
+
+            // SubQuery để tìm các ID đã bị chiếm
+            const subQuery = dataSource
+                .createQueryBuilder()
+                .select(fkColumnName)
+                .from(targetTableName, 't')
+                .where(`${fkColumnName} IS NOT NULL`);
+
+            const unusedRecord = await relatedRepo.createQueryBuilder('r')
+                .where(`r.${relatedPrimaryKey} NOT IN (${subQuery.getQuery()})`)
+                .orderBy('RANDOM()')
+                .getOne();
+
+            if (unusedRecord) {
+                selectedRelationValue = unusedRecord;
+                // console.log(`   ✅ Found unused ${relatedTableName} ID: ${unusedRecord[relation.inverseEntityMetadata.primaryColumns[0].propertyName]}`);
+            } else {
+                console.log(`   ⚠️ No unused record found in '${relatedTableName}'. Recursively creating new unique dependency...`);
+                const newData = await recursiveSeed(dataSource, relation.inverseEntityMetadata, depth + 1);
+                selectedRelationValue = await relatedRepo.save(newData);
+            }
+
         } else {
-            // Chiến thuật: "Create New" (Đệ quy tạo mới)
-            console.log(`   ⚠️ Table '${relation.inverseEntityMetadata.tableName}' empty. Recursively creating dependency...`);
-            const newData = await recursiveSeed(dataSource, relation.inverseEntityMetadata, depth + 1);
-            const savedDependency = await relatedRepo.save(newData);
-            data[relation.propertyName] = savedDependency;
+            // STANDARD RELATION STRATEGY: Random Existing or Create New
+            const existing = await relatedRepo.createQueryBuilder('e')
+                .orderBy('RANDOM()')
+                .limit(1)
+                .getOne();
+
+            if (existing) {
+                selectedRelationValue = existing;
+            } else {
+                console.log(`   ⚠️ Table '${relation.inverseEntityMetadata.tableName}' empty. Recursively creating dependency...`);
+                const newData = await recursiveSeed(dataSource, relation.inverseEntityMetadata, depth + 1);
+                selectedRelationValue = await relatedRepo.save(newData);
+            }
         }
+
+        data[relation.propertyName] = selectedRelationValue;
     }
 
     return data;
@@ -109,10 +151,16 @@ function generateFakeData(column: any): any {
     if (type === 'uuid') return faker.string.uuid();
     if (type === 'boolean') return faker.datatype.boolean();
     if (type === 'date' || type === 'timestamptz') return faker.date.recent();
-    if (type === 'int' || type === 'integer' || type === 'bigint') return faker.number.int({ max: 100 });
+    if (type === 'int' || type === 'integer' || type === 'bigint' || type === 'smallint' || type === 'tinyint') return faker.number.int({ max: 100 });
 
     // Fix: Handle numeric/decimal types explicitly
     if (type === 'numeric' || type === 'decimal' || type === 'float' || type === 'double') return faker.number.int({ min: 0, max: 10000 });
+
+    // Fix: Handle JSON types
+    if (type === 'json' || type === 'jsonb') return { mock_key: faker.lorem.word(), mock_value: faker.number.int() };
+
+    // Fix: Handle Text/String types with more appropriate data
+    if (type === 'text') return faker.lorem.paragraph();
 
     // Fix: Handle Enums
     if (type === 'enum' && column.enum) {
