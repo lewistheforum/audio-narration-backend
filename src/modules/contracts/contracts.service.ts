@@ -173,6 +173,18 @@ export class ContractsService {
         let contractInfo = await this.clinicContractInfoRepository.findByContractId(packageId);
 
         if (contractInfo) {
+            // Check status to enforce locking
+            if (contractInfo.contractStatus === ContractStatus.PENDING_MANAGER_SIGNATURE ||
+                contractInfo.contractStatus === ContractStatus.CURRENT) {
+                throw new BadRequestException('Cannot edit contract information after employee has signed.');
+            }
+
+            // If file was uploaded but not signed, reset to DRAFT to force re-upload with new terms
+            if (contractInfo.contractStatus === ContractStatus.PENDING_SIGNATURE) {
+                contractInfo.contractStatus = ContractStatus.DRAFT;
+                contractInfo.contractFile = null; // Clear file as terms changed
+            }
+
             // Update existing
             Object.assign(contractInfo, dto);
             return this.clinicContractInfoRepository.save(contractInfo);
@@ -300,6 +312,16 @@ export class ContractsService {
             contractInfo.contractStatus = ContractStatus.PENDING_MANAGER_SIGNATURE;
             await this.clinicContractInfoRepository.save(contractInfo);
 
+            // Notify Manager
+            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicId);
+            if (manager && manager.email) {
+                await this.mailerService.sendContractSignedNotificationToManager(
+                    manager.email,
+                    userAccount.username || 'Employee',
+                    contractId
+                );
+            }
+
         } else if (contractPackage.clinicId === userId) {
             // --- MANAGER SIGNING ---
 
@@ -334,6 +356,16 @@ export class ContractsService {
             // Final Status
             contractInfo.contractStatus = ContractStatus.CURRENT;
             await this.clinicContractInfoRepository.save(contractInfo);
+
+            // Notify Employee
+            if (employeeAccount && employeeAccount.email) {
+                await this.mailerService.sendContractCompletedNotificationToEmployee(
+                    employeeAccount.email,
+                    userAccount.username || 'Manager',
+                    contractId,
+                    contractInfo.contractFile
+                );
+            }
         } else {
             throw new UnauthorizedException('User is not a party in this contract');
         }
