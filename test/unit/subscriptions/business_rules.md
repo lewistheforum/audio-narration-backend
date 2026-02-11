@@ -83,3 +83,66 @@ Hệ thống xử lý dựa trên trạng thái hiện tại của gói đăng k
     -   Hệ thống cần chuyển trạng thái sang `EXPIRED`.
     -   Ghi log vào lịch sử.
     -   Chặn quyền truy cập của User.
+
+---
+
+## 6. Quy Tắc Cập Nhật Gói Phổ Biến (Popular Service)
+*Method: `updatePopularServices()`*
+
+### 6.1. Mục Đích
+-   Tự động xác định gói dịch vụ phổ biến nhất dựa trên số lượng đăng ký đang hoạt động.
+-   Giúp người dùng dễ dàng nhận biết gói được chọn nhiều nhất trên hệ thống.
+
+### 6.2. Quy Tắc Nghiệp Vụ
+
+#### **BR-01: Chỉ một gói được đánh dấu phổ biến**
+-   Tại bất kỳ thời điểm nào, **chỉ có duy nhất 1 service** có `is_popular = true`.
+-   Tất cả các service còn lại phải có `is_popular = false`.
+
+#### **BR-02: Tiêu chí xác định gói phổ biến**
+-   Đếm số lượng `ClinicSubscription` có `subscriptionStatus = ACTIVE` nhóm theo `serviceId`.
+-   Service có **số lượng đăng ký ACTIVE cao nhất** sẽ được set `is_popular = true`.
+-   Nếu có nhiều service có cùng số lượng cao nhất → Chọn service được trả về đầu tiên (theo thứ tự query).
+
+#### **BR-03: Xử lý khi không có subscription ACTIVE**
+-   Nếu không có subscription nào đang ACTIVE → Reset tất cả service về `is_popular = false`.
+-   Không có service nào được đánh dấu phổ biến.
+
+#### **BR-04: Thời điểm trigger**
+-   **Tự động kích hoạt** sau khi một subscription chuyển sang trạng thái `ACTIVE` (thanh toán thành công).
+-   Được gọi trong method `handleSubscriptionPaymentSuccess()` sau khi:
+    -   Cập nhật subscription status → ACTIVE
+    -   Tạo history record
+
+### 6.3. Logic Implementation
+
+```typescript
+1. Query: COUNT(ClinicSubscription) WHERE status = ACTIVE GROUP BY serviceId ORDER BY COUNT DESC
+2. IF result is empty:
+     → Reset all services: is_popular = false
+3. ELSE:
+     → Get first record (highest count)
+     → Reset all services: is_popular = false
+     → Set target service: is_popular = true
+```
+
+### 6.4. Edge Cases
+
+| Tình Huống | Xử Lý | Kết Quả |
+| :--- | :--- | :--- |
+| Không có subscription ACTIVE nào | Reset all `is_popular = false` | Không có service nào popular |
+| Chỉ có 1 service có ACTIVE subscription | Set service đó `is_popular = true` | Service đó là popular |
+| Nhiều services, 1 service có count cao nhất | Set service đó `is_popular = true` | Service có count cao nhất là popular |
+| 2 services có cùng count cao nhất | Chọn service đầu tiên trong query result | Service đầu tiên là popular |
+| Service đang popular bị giảm count | Tính toán lại, có thể chuyển sang service khác | Popular flag được cập nhật động |
+
+### 6.5. Performance Considerations
+-   Sử dụng `QueryBuilder` với aggregate function (COUNT) để tối ưu.
+-   Không load toàn bộ data vào memory.
+-   Update bằng bulk operations (reset all, then set one).
+
+### 6.6. Testing Requirements
+-   ✅ Test case: Không có ACTIVE subscription
+-   ✅ Test case: 1 service có ACTIVE subscription
+-   ✅ Test case: Nhiều services, verify chỉ 1 service popular
+-   ✅ Test case: Verify service có count cao nhất được chọn
