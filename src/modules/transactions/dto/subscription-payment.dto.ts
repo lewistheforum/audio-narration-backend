@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsUUID, IsOptional, IsInt, Min, Max } from 'class-validator';
 
 export class CreateNewSubscriptionDto {
     @ApiProperty({
@@ -9,10 +9,22 @@ export class CreateNewSubscriptionDto {
     @IsNotEmpty()
     @IsUUID()
     serviceId: string;
+
+    @ApiProperty({
+        example: 1,
+        description: 'Thời hạn gói (tháng). Mặc định 1 = 1 tháng, 12 = 1 năm',
+        default: 1,
+        required: false,
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(12)
+    duration?: number = 1;
 }
 
 export class RenewSubscriptionDto {
-    // Empty DTO - subscriptionId is inferred from token
+    // Empty DTO - uses current subscription's duration/service
 }
 
 export class ChangePackageDto {
@@ -23,4 +35,17 @@ export class ChangePackageDto {
     @IsNotEmpty()
     @IsUUID()
     targetServiceId: string;
+
+    @ApiProperty({
+        example: 1,
+        description: 'Thời hạn gói mới (tháng). Mặc định 1 = 1 tháng, 12 = 1 năm',
+        default: 1,
+        required: false,
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(12)
+    duration?: number = 1;
 }
+

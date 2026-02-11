@@ -61,7 +61,7 @@ export class ContractsController {
     @ApiOperation({ summary: 'Create a new contract package (Step 1)' })
     @ApiResponse({ status: 201, description: 'Contract package created successfully' })
     async createPackage(@Body() dto: CreateContractPackageDto, @Req() req) {
-        const clinicId = req.user._id;
+        const clinicId = req.user.parentId || req.user._id;
         return this.contractsService.createPackage(dto, clinicId);
     }
 

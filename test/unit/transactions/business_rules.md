@@ -48,10 +48,19 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
 
 #### B. Gia Hạn (`POST /transactions/subscription/renew`)
 *   **Logic**:
-    -   **Validate Nghiêm ngặt**: Nếu Gói đang `ACTIVE` **VÀ** chưa hết hạn (`expirationDate > now`) -> **Từ chối** (Báo lỗi BadRequest).
-    -   Chỉ cho phép gia hạn nếu gói đã hết hạn hoặc trạng thái hủy gia hạn (Non-renewing).
-    -   Tạo/Cập nhật Transaction `PENDING`.
-    -   **Metadata Nội dung**: Lưu `{}` (JSON rỗng) để biểu thị "Gia hạn gói hiện tại".
+    -   Cho phép gia hạn nếu gói đó vẫn còn hạn, đã hết hạn, hoặc Non-renewing.
+    -   Tạo Transaction ở trạng thái `PENDING`.
+    -   **Metadata Nội dung**: Lưu `{"duration": ...}` để xử lý sau khi thanh toán.
+- **Quy tắc mới (Logic Queue):**
+    - Hệ thống cho phép gọi API `/renew` bất cứ lúc nào (kể cả khi gói đang ACTIVE).
+    - **Logic Xử lý:**
+        - **Thời hạn (Duration):** Hệ thống sẽ tính toán dựa trên thời hạn của gói hiện tại (Subscription Date -> Expiration Date). Ví dụ: Gói hiện tại 12 tháng -> Gia hạn 12 tháng.
+        - **Khi thanh toán thành công:**
+             - Tạo bản ghi mới trong `ClinicSubscriptionRenewalQueue`.
+             - `targetStartDate` = `currentExpirationDate` (nối tiếp).
+             - `targetEndDate` = `targetStartDate` + Duration (tương ứng với gói hiện tại).
+             - Status lịch sử: `QUEUED_FOR_RENEWAL`.
+    - **Lợi ích:** Phòng khám có thể gia hạn trước, đảm bảo không bị gián đoạn dịch vụ.
 
 #### C. Đổi Gói (`POST /transactions/subscription/change-package`)
 *   **Logic**:
@@ -123,3 +132,17 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 *   **Validate Đầu Vào**: Số tiền cho đơn thuốc lấy từ DB, không tin tưởng client input.
 *   **Quyền Manager**: `CLINIC_MANAGER` khi dùng các API subscription sẽ tự động resolve ra ID của `CLINIC_ADMIN` cha để đảm bảo gói được áp dụng đúng tài khoản phòng khám.
 *   **Chữ Ký**: SePay callbacks được bảo vệ bởi `SeepayAuthGuard` (Kiểm tra Authorization header).
+
+---
+
+## 6. Quy Tắc Điều Hướng Tài Khoản Nhận Tiền
+
+| Loại Giao Dịch | Tài Khoản Nhận | Nguồn Cấu Hình |
+| :--- | :--- | :--- |
+| **Thanh toán Đơn thuốc** | Phòng Khám | `ClinicAdminInformation.sepayVa` |
+| **Xác minh Phòng khám** | Phòng Khám | `ClinicAdminInformation.sepayVa` |
+| **Mua/Gia hạn/Đổi Gói (Subscription)** | **Công ty** | `process.env.SEEPAY_ACC`, `process.env.SEEPAY_BANK` |
+
+> [!IMPORTANT]
+> Nếu thiếu cấu hình ENV (`SEEPAY_ACC`, `SEEPAY_BANK`), các API Subscription sẽ trả về lỗi `400 BadRequest`.
+

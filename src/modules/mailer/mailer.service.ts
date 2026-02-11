@@ -733,7 +733,135 @@ export class MailerService {
   }
 
   /**
-   * Send Manager Credentials Email
+   * Send Contract Signed Notification to Manager
+   * Notifies the manager that an employee has signed the contract
+   */
+  async sendContractSignedNotificationToManager(
+    email: string,
+    employeeName: string,
+    contractId: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const contractCode = contractId.substring(0, 8).toUpperCase();
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: `Action Required: Employee Signed Contract #${contractCode}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #eff6ff; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #1e40af; margin: 0 0 20px 0;">✍️ Contract Signed</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 20px 0;">
+              Employee <strong>${employeeName}</strong> has signed the contract <strong>#${contractCode}</strong>.
+            </p>
+            
+            <div style="margin: 30px 0;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/contracts/${contractId}" 
+                 style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                Review & Sign Now
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 0;">
+              Please review and countersign to finalize the agreement.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Manager notification sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send manager notification:', error);
+    }
+  }
+
+  /**
+   * Send Contract Completed Notification to Employee
+   * Notifies the employee that the contract is fully signed and active
+   */
+  async sendContractCompletedNotificationToEmployee(
+    email: string,
+    managerName: string,
+    contractId: string,
+    fileUrl: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const contractCode = contractId.substring(0, 8).toUpperCase();
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: `Contract #${contractCode} is Now Active`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #f0fdf4; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #166534; margin: 0 0 20px 0;">🎉 Contract Finalized</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 20px 0;">
+              Your contract <strong>#${contractCode}</strong> has been signed by <strong>${managerName}</strong> and is now <strong>ACTIVE</strong>.
+            </p>
+            
+            <div style="margin: 30px 0;">
+              <a href="${fileUrl}" 
+                 style="background: #166534; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                Download Signed Contract
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 0;">
+              A copy of the signed document is available at the link above.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Employee completed notification sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send employee notification:', error);
+    }
+  }
+
+  /**
    * Sends generated credentials to Clinic Manager
    */
   async sendManagerCredentialsEmail(
@@ -1490,8 +1618,8 @@ export class MailerService {
     context: PlanChangeContext,
   ): Promise<void> {
     const transporter = this.mailTransport();
-    const isUpgrade = context.newPlan.toLowerCase().includes('premium') || 
-                      context.newPlan.toLowerCase().includes('pro');
+    const isUpgrade = context.newPlan.toLowerCase().includes('premium') ||
+      context.newPlan.toLowerCase().includes('pro');
     const changeType = isUpgrade ? 'Upgrade' : 'Change';
     const icon = isUpgrade ? '⬆️' : '🔄';
 

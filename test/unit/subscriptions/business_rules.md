@@ -28,61 +28,96 @@ Enum `RegistrationStatus` định nghĩa vòng đời của một tài khoản p
 
 ---
 
-## 3. Quy Tắc Xử Lý Thanh Toán Thành Công
-*Method: `handleSubscriptionPaymentSuccess(subscriptionId, targetServiceId, transactionId)`*
+## 3. Duration-Based Pricing (Tính Giá Theo Thời Lượng)
 
-Hệ thống xử lý dựa trên trạng thái hiện tại của gói đăng ký.
+### 3.1. Công Thức Tính Giá
+```
+amount = service.price × duration
+```
 
-### 3.1. Ngày Giờ & Múi Giờ (QUAN TRỌNG)
+| Parameter | Mô Tả | Giới Hạn |
+|:----------|:------|:---------|
+| `duration` | Số tháng đăng ký | 1 - 12 (mặc định: 1) |
+| `price` | Giá gói/tháng | Từ `subscription_services` |
+
+### 3.2. Lưu Trữ Duration
+Duration được lưu trong `transaction.content` dưới dạng JSON:
+```json
+{ "duration": 2, "targetServiceId": "uuid" }
+```
+
+### 3.3. API Endpoints
+
+| Endpoint | Duration Required | Mặc Định |
+|:---------|:------------------|:---------|
+| `POST /subscription/new` | Optional | 1 tháng |
+| `POST /subscription/renew` | **Không có** | 1 tháng (fixed) |
+| `POST /subscription/change-package` | Optional | 1 tháng |
+
+---
+
+## 4. Quy Tắc Xử Lý Thanh Toán Thành Công
+*Method: `handleSubscriptionPaymentSuccess(subscriptionId, targetServiceId, transactionId, duration)`*
+
+### 4.1. Ngày Giờ & Múi Giờ (QUAN TRỌNG)
 -   Hệ thống lưu trữ thời gian dưới dạng UTC (`timestamptz`).
--   **Yêu cầu nghiệp vụ**: Thời gian `00:00:00` và `23:59:59` phải khớp với **Giờ Việt Nam (UTC+7)**.
-    -   **Start Date**: Được tính là đầu ngày (`00:00:00`) theo giờ VN. Lưu vào DB dưới dạng `00:00:00 Z` (UTC) để giữ nguyên con số hiển thị.
-    -   **End Date**: Được tính là cuối ngày (`23:59:59.999`) theo giờ VN. Lưu vào DB dưới dạng `23:59:59.999 Z`.
+-   **Start Date**: `00:00:00 Z` (UTC) - Đầu ngày.
+-   **End Date**: `23:59:59.999 Z` (UTC) - Cuối ngày.
 
-### 3.2. Luồng Kích Hoạt Ngay (Immediate Activation)
-*Áp dụng khi Subscription đang là: Mới, Hết hạn (`EXPIRED`) hoặc Đã hủy (`NON_RENEWING`).*
+### 4.2. Luồng Kích Hoạt Ngay (Immediate Activation)
+*Áp dụng khi: Subscription đang Mới, `EXPIRED` hoặc `NON_RENEWING`.*
 
-1.  **Cập nhật Trạng thái**: Chuyển ngay sang `ACTIVE`.
-2.  **Cập nhật Dịch vụ**: Set `serviceId` thành gói mới (nếu có `targetServiceId`).
-3.  **Tính Ngày**:
-    -   `startDate` = Ngày hiện tại (00:00:00 VN).
-    -   `expirationDate` = `startDate` + Duration (12 tháng) - 1 giây (để về 23:59:59).
-4.  **Lưu Lịch Sử**: Tạo record trong `ClinicSubscriptionHistory` với trạng thái `ACTIVE` và liên kết `transactionId`.
+```
+startDate = TODAY (00:00:00 UTC)
+endDate = startDate + duration months - 1 day (23:59:59 UTC)
+```
 
-### 3.3. Luồng Hàng Đợi (Queue) - Dùng khi đang ACTIVE
-*Áp dụng khi Subscription đang `ACTIVE` và User muốn gia hạn/đổi gói trước hạn.*
+**Ví dụ với duration = 2:**
+| Start Date | End Date |
+|:-----------|:---------|
+| 2025-02-10 00:00:00Z | 2025-04-09 23:59:59Z |
 
-1.  **Không kích hoạt ngay**: Giữ nguyên trạng thái `ACTIVE` của gói hiện tại.
-2.  **Tính Ngày Chuyển Đổi**:
-    -   `targetStartDate`: Là ngày liền sau ngày hết hạn hiện tại (`Current Expiration + 1s` -> 00:00:00 hôm sau).
-    -   `targetEndDate`: `targetStartDate` + Duration.
-3.  **Lưu Hàng Đợi**: Tạo/Cập nhật record trong `ClinicSubscriptionRenewalQueue`.
-4.  **Lưu Lịch Sử**: Tạo ngay record `ClinicSubscriptionHistory` (Future Active) để ghi nhận giao dịch đã thành công.
-5.  **Cơ chế kích hoạt**: Cần một **Cron Job** (Chạy hàng ngày) quét bảng Queue để apply gói mới khi đến ngày `targetStartDate`.
+### 4.3. Luồng Hàng Đợi (Queue) - Dùng khi đang ACTIVE
+*Áp dụng khi: Subscription đang `ACTIVE` và User gia hạn/đổi gói trước hạn.*
 
----
+```
+targetStartDate = currentExpirationDate + 1 day (00:00:00 UTC)
+targetEndDate = targetStartDate + duration months - 1 day (23:59:59 UTC)
+```
 
-## 4. Quy Tắc Truy Vấn & Bảo Mật
+**Ví dụ với duration = 2, current expiry = June 30:**
+| targetStartDate | targetEndDate |
+|:----------------|:--------------|
+| 2025-07-01 00:00:00Z | 2025-08-31 23:59:59Z |
 
-### 4.1. Lấy Thông Tin Gói (`getCurrentSubscription`)
--   Luôn lọc theo `clinicId` (lấy từ Token người dùng).
--   Chỉ trả về gói chưa bị soft-delete.
--   Join với bảng `subscription_services` để trả về chi tiết tên gói, giá, v.v.
-
-### 4.2. Lấy Lịch Sử (`getSubscriptionHistory`)
--   Phân trang (Default: page 1, limit 10).
--   Sắp xếp: Mới nhất trước (`createdAt DESC`).
--   Chỉ xem được lịch sử của chính phòng khám đó.
+**Queue Record:**
+- Mỗi clinic chỉ có **1 queue record** (UNIQUE constraint).
+- Nếu đã có → **Update** thay vì create mới.
 
 ---
 
-## 5. Xử Lý Hết Hạn (Expiration Logic)
-*(Hiện tại chưa có Cron Job tự động, logic dự kiến)*
+## 5. Bảng Tham Chiếu
 
--   Khi `expirationDate < NOW` và trạng thái đang `ACTIVE`:
-    -   Hệ thống cần chuyển trạng thái sang `EXPIRED`.
-    -   Ghi log vào lịch sử.
-    -   Chặn quyền truy cập của User.
+### ClinicSubscriptionRenewalQueue
+
+| Column | Type | Description |
+|:-------|:-----|:------------|
+| `_id` | UUID | Primary key |
+| `clinic_id` | UUID | UNIQUE - 1 clinic = 1 queue |
+| `next_service_id` | UUID | Gói sẽ kích hoạt |
+| `target_start_date` | timestamptz | Ngày bắt đầu gói mới |
+| `target_end_date` | timestamptz | Ngày kết thúc gói mới |
+
+---
+
+## 6. Xử Lý Hết Hạn (Expiration Logic)
+*(Cần Cron Job)*
+
+Khi `expirationDate < NOW` và trạng thái đang `ACTIVE`:
+1. Kiểm tra Queue có record không → Apply nếu có.
+2. Chuyển trạng thái sang `EXPIRED`.
+3. Ghi log vào lịch sử.
+
 
 ---
 
