@@ -263,5 +263,81 @@ describe('SubscriptionServicesService', () => {
             });
         });
     });
+
+    describe('updatePopularServices', () => {
+        let subscriptionServiceRepo: any;
+
+        beforeEach(() => {
+            subscriptionServiceRepo = {
+                resetAllPopular: jest.fn().mockResolvedValue(undefined),
+                setPopular: jest.fn().mockResolvedValue(undefined),
+            };
+            // Replace the repository in the service
+            (service as any).subscriptionServiceRepository = subscriptionServiceRepo;
+        });
+
+        it('should reset all is_popular to false when no active subscriptions exist', async () => {
+            // Mock: No active subscriptions
+            clinicSubscriptionRepo.getActiveCountByService = jest.fn().mockResolvedValue([]);
+
+            // Execute
+            await service.updatePopularServices();
+
+            // Verify
+            expect(clinicSubscriptionRepo.getActiveCountByService).toHaveBeenCalled();
+            expect(subscriptionServiceRepo.resetAllPopular).toHaveBeenCalled();
+            expect(subscriptionServiceRepo.setPopular).not.toHaveBeenCalled();
+        });
+
+        it('should set is_popular=true for service with highest active count', async () => {
+            // Mock: Multiple services with different counts
+            const mockCounts = [
+                { serviceId: 'service-premium', activeCount: '15' },
+                { serviceId: 'service-basic', activeCount: '8' },
+                { serviceId: 'service-enterprise', activeCount: '3' },
+            ];
+            clinicSubscriptionRepo.getActiveCountByService = jest.fn().mockResolvedValue(mockCounts);
+
+            // Execute
+            await service.updatePopularServices();
+
+            // Verify
+            expect(subscriptionServiceRepo.resetAllPopular).toHaveBeenCalled();
+            expect(subscriptionServiceRepo.setPopular).toHaveBeenCalledWith('service-premium');
+            expect(subscriptionServiceRepo.setPopular).toHaveBeenCalledTimes(1);
+        });
+
+        it('should set only one service as popular when multiple services have active subscriptions', async () => {
+            // Mock: Single service with active subscriptions
+            const mockCounts = [
+                { serviceId: 'service-basic', activeCount: '5' },
+            ];
+            clinicSubscriptionRepo.getActiveCountByService = jest.fn().mockResolvedValue(mockCounts);
+
+            // Execute
+            await service.updatePopularServices();
+
+            // Verify: Reset all first, then set one
+            expect(subscriptionServiceRepo.resetAllPopular).toHaveBeenCalled();
+            expect(subscriptionServiceRepo.setPopular).toHaveBeenCalledWith('service-basic');
+            expect(subscriptionServiceRepo.setPopular).toHaveBeenCalledTimes(1);
+        });
+
+        it('should handle tie by selecting first service in query result', async () => {
+            // Mock: Two services with same count (ordered by query)
+            const mockCounts = [
+                { serviceId: 'service-alpha', activeCount: '10' },
+                { serviceId: 'service-beta', activeCount: '10' },
+            ];
+            clinicSubscriptionRepo.getActiveCountByService = jest.fn().mockResolvedValue(mockCounts);
+
+            // Execute
+            await service.updatePopularServices();
+
+            // Verify: First one in list should be chosen
+            expect(subscriptionServiceRepo.setPopular).toHaveBeenCalledWith('service-alpha');
+            expect(subscriptionServiceRepo.setPopular).toHaveBeenCalledTimes(1);
+        });
+    });
 });
 

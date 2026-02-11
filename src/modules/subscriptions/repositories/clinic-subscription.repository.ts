@@ -144,4 +144,20 @@ export class ClinicSubscriptionRepository {
     });
     return count > 0;
   }
+
+  /**
+   * Get active subscription counts grouped by serviceId
+   * Returns array of { serviceId, activeCount } ordered by count DESC
+   */
+  async getActiveCountByService(): Promise<Array<{ serviceId: string; activeCount: string }>> {
+    return this.repository
+      .createQueryBuilder('cs')
+      .select('cs.service_id', 'serviceId')
+      .addSelect('COUNT(*)', 'activeCount')
+      .where('cs.subscription_status = :status', { status: 'ACTIVE' })
+      .andWhere('cs.deleted_at IS NULL')
+      .groupBy('cs.service_id')
+      .orderBy('COUNT(*)', 'DESC')
+      .getRawMany();
+  }
 }

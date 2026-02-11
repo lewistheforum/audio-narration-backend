@@ -131,7 +131,8 @@ export class TransactionsService {
     const isNotExpired = subscription.expirationDate && new Date(subscription.expirationDate) > now;
 
     if (isActive && isNotExpired) {
-      throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
+      // throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
+      console.log('Allowing renewal for active subscription: Queueing logic will apply on payment success.');
     }
 
     const transaction = await this.handleRenewalTransaction(subscription);
@@ -287,18 +288,35 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Current service not found');
 
-    // 2. Calculate Amount: price only (NO discount, 1 month)
-    const amount = service.price;
+    // 3. Calculate Duration from current subscription dates
+    // If user bought 12 months, renew for 12 months.
+    const startDate = new Date(subscription.subscriptionDate);
+    const expirationDate = new Date(subscription.expirationDate);
 
-    // 3. Content (renewal uses duration = 1)
-    const content = JSON.stringify({ duration: 1 });
+    // Calculate months difference
+    let duration = (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
+    duration -= startDate.getMonth();
+    duration += expirationDate.getMonth();
+
+    // Round to handle edge cases (e.g. Feb 28 to Feb 28 next year)
+    // If days difference is significant, adjust. But simple month diff is usually enough for billing.
+    // Ensure duration is at least 1
+    duration = duration <= 0 ? 1 : duration;
+
+    console.log(`[DEBUG] Calculated renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`);
+
+    // 2. Calculate Amount: price * duration (NO discount)
+    const amount = service.price * duration;
+
+    // 3. Content
+    const content = JSON.stringify({ duration });
 
     // 4. Create or Update Transaction
     return this.createOrUpdateTransaction(
       subscription,
       amount,
       content,
-      `Renewal for ${service.serviceName}`,
+      `Renewal for ${service.serviceName} (${duration} months)`,
     );
   }
 
@@ -311,6 +329,9 @@ export class TransactionsService {
     content: string,
     description: string,
   ): Promise<any> {
+    // Ensure amount is integer (remove decimals like .00)
+    const safeAmount = Math.round(Number(amount));
+
     // Get Clinic Admin ID
     const clinicAdmin = await this.clinicAdminRepo.findOne({
       where: { accountId: subscription.clinicId },
@@ -334,7 +355,7 @@ export class TransactionsService {
       }
 
       transaction = this.transactionRepository.create({
-        amount,
+        amount: safeAmount,
         currency: 'VND',
         status: PaymentStatus.PENDING,
         clinicId: clinicAdmin._id,
@@ -346,7 +367,7 @@ export class TransactionsService {
       transaction = await this.transactionRepository.save(transaction);
     } else {
       // Update existing
-      transaction.amount = amount;
+      transaction.amount = safeAmount;
       transaction.content = content;
       transaction.description = description;
       transaction = await this.transactionRepository.save(transaction);

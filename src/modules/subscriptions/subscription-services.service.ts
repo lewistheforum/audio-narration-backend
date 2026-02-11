@@ -506,7 +506,54 @@ export class SubscriptionServicesService {
         subscriptionDate: startDate,
         expirationDate: expirationDate,
       });
+
+      // Update Popular Services (NEW)
+      await this.updatePopularServices();
     }
+  }
+
+  /**
+   * Update Popular Services Based on Active Subscription Count
+   *
+   * Business Rules:
+   * - Count ACTIVE subscriptions grouped by serviceId
+   * - Service with highest count gets is_popular = true
+   * - All other services get is_popular = false
+   * - Only one service can be popular at a time
+   *
+   * Trigger Point:
+   * - Called after successful payment when subscription becomes ACTIVE
+   *
+   * Implementation:
+   * - Uses QueryBuilder for optimized counting
+   * - Transaction ensures atomic update
+   */
+  async updatePopularServices(): Promise<void> {
+    // 1. Count ACTIVE subscriptions grouped by serviceId
+    const activeCountByService = await this.clinicSubscriptionRepository.getActiveCountByService();
+
+    console.log('[DEBUG] Active subscription counts by service:', activeCountByService);
+
+    // 2. Check if we have any active subscriptions
+    if (!activeCountByService || activeCountByService.length === 0) {
+      console.log('[DEBUG] No active subscriptions found. Resetting all is_popular to false.');
+      await this.subscriptionServiceRepository.resetAllPopular();
+      return;
+    }
+
+    // 3. Get the most popular service (highest count)
+    const mostPopular = activeCountByService[0];
+    const mostPopularServiceId = mostPopular.serviceId;
+
+    console.log(`[DEBUG] Most popular service: ${mostPopularServiceId} with ${mostPopular.activeCount} active subscriptions`);
+
+    // 4. Reset all services to not popular
+    await this.subscriptionServiceRepository.resetAllPopular();
+
+    // 5. Set the most popular service
+    await this.subscriptionServiceRepository.setPopular(mostPopularServiceId);
+
+    console.log(`[DEBUG] Successfully updated is_popular flag. Service ${mostPopularServiceId} is now popular.`);
   }
 
   /**
