@@ -63,7 +63,7 @@ export interface PlanChangeContext {
 
 @Injectable()
 export class MailerService {
-  constructor(private readonly configService: ConfigService) { }
+  constructor(private readonly configService: ConfigService) {}
 
   mailTransport(): nodemailer.Transporter {
     const transporter = nodemailer.createTransport({
@@ -76,6 +76,191 @@ export class MailerService {
       },
     });
     return transporter;
+  }
+
+  /**
+   * Send Account Warning Email
+   */
+  async sendAccountWarningEmail(
+    email: string,
+    name: string,
+    reason: string,
+    strikes: number,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '⚠️ Account Warning - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #FFFBEB; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FCD34D;">
+            <h1 style="color: #D97706; margin: 0 0 20px 0;">⚠️ Account Warning</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Hi ${name},
+            </p>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Your account has received a warning. This is strike <strong>${strikes}/3</strong>.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
+              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">Reason:</p>
+              <p style="margin: 5px 0 0 0; color: #111827;">${reason}</p>
+            </div>
+
+            <p style="color: #DC2626; font-size: 14px; margin: 20px 0 0 0; font-weight: 600;">
+              Please note that accumulating 3 strikes will result in a permanent ban.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Warning email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send warning email:', error);
+    }
+  }
+
+  /**
+   * Send Account Banned Email
+   */
+  async sendAccountBannedEmail(
+    email: string,
+    name: string,
+    reason: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '🚫 Account Banned - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FECACA;">
+            <h1 style="color: #DC2626; margin: 0 0 20px 0;">🚫 Account Suspended</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Hi ${name},
+            </p>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Your account has been permanently banned due to multiple violations (3/3 strikes).
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
+              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">Reason:</p>
+              <p style="margin: 5px 0 0 0; color: #111827;">${reason}</p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              If you believe this is a mistake, please contact our support team.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Ban email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send ban email:', error);
+    }
+  }
+
+  /**
+   * Send Account Unbanned Email
+   */
+  async sendAccountUnbannedEmail(email: string, name: string): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '✅ Account Restored - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #BBF7D0;">
+            <h1 style="color: #166534; margin: 0 0 20px 0;">✅ Account Restored</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Hi ${name},
+            </p>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Great news! Your account has been reactivated and your ban strikes have been reset.
+            </p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              Please ensure you follow our community guidelines to maintain your active status.
+            </p>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
+                 style="background: #166534; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+                Login Now
+              </a>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Unban email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send unban email:', error);
+    }
   }
 
   /**
@@ -367,9 +552,10 @@ export class MailerService {
             </div>
             
             <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') ||
-        'http://localhost:5173'
-        }" 
+              <a href="${
+                this.configService.get<string>('FRONTEND_URL') ||
+                'http://localhost:5173'
+              }" 
                  style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
                 Get Started
               </a>
@@ -923,9 +1109,10 @@ export class MailerService {
           </div>
           
           <div style="text-align: center; margin-top: 30px;">
-            <a href="${this.configService.get<string>('FRONTEND_URL') ||
-        'http://localhost:5173'
-        }/login"
+            <a href="${
+              this.configService.get<string>('FRONTEND_URL') ||
+              'http://localhost:5173'
+            }/login"
                style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
               Login to Your Account
             </a>
@@ -1024,9 +1211,10 @@ export class MailerService {
           </div>
           
           <div style="text-align: center; margin-top: 30px;">
-            <a href="${this.configService.get<string>('FRONTEND_URL') ||
-        'http://localhost:5173'
-        }/payment"
+            <a href="${
+              this.configService.get<string>('FRONTEND_URL') ||
+              'http://localhost:5173'
+            }/payment"
                style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
               Complete Payment
             </a>
@@ -1141,9 +1329,10 @@ export class MailerService {
           </div>
           
           <div style="text-align: center; margin-top: 30px;">
-            <a href="${this.configService.get<string>('FRONTEND_URL') ||
-        'http://localhost:5173'
-        }/documents"
+            <a href="${
+              this.configService.get<string>('FRONTEND_URL') ||
+              'http://localhost:5173'
+            }/documents"
                style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
               Update Documents
             </a>

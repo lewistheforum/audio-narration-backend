@@ -13,8 +13,6 @@ import {
   UseGuards,
   Request,
   Query,
-  Req,
-  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -90,7 +88,7 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   PublicClinicInfo,
 )
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) { }
+  constructor(private readonly accountsService: AccountsService) {}
 
   @Post(':id/keys/generate')
   // @UseGuards(JwtAuthGuard, RolesGuard)
@@ -102,10 +100,9 @@ export class AccountsController {
     const data = await this.accountsService.generateUserKeys(id);
     return {
       message: 'Digital signature keys generated successfully',
-      data
+      data,
     };
   }
-
 
   /**
    * Get All Accounts (Admin Only)
@@ -222,7 +219,7 @@ export class AccountsController {
   }
 
   /**
-   * Get All Clinics (Public)
+   * Get All Clinics Manager (Admin)
    *
    * Retrieves a paginated list of all active clinics.
    * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
@@ -237,7 +234,7 @@ export class AccountsController {
    * - Combines data from accounts + clinic_manager_information + addresses tables
    *
    * Access Control:
-   * - Public endpoint (no authentication required)
+   * - Admin endpoint (authentication required)
    *
    * Use Cases:
    * - Clinic directory listing
@@ -291,14 +288,104 @@ export class AccountsController {
     status: MESSAGES.statusCode.success,
     message: 'Clinics retrieved successfully',
   })
-  async getAllClinics(
+  async getAllClinicsManager(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('search') search?: string,
     @Query('province') province?: string,
     @Query('specialty') specialty?: string,
   ): Promise<{ data: ClinicListResponseDto; message: string }> {
-    const result = await this.accountsService.findAllClinics(
+    const result = await this.accountsService.findAllClinicsManager(
+      page,
+      limit,
+      search,
+      province,
+      specialty,
+    );
+    return {
+      data: result,
+      message: 'Clinics retrieved successfully',
+    };
+  }
+
+  /**
+   * Get All Clinics Admin (Admin)
+   *
+   * Retrieves a paginated list of all active clinics.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Query Parameters:
+   * - page: Page number (default: 1)
+   * - limit: Items per page (default: 10)
+   *
+   * Response Format:
+   * - Returns ClinicListResponseDto with clinics array and pagination metadata
+   * - Combines data from accounts + clinic_manager_information + addresses tables
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Clinic directory listing
+   * - Clinic search results
+   * - Clinic browsing
+   *
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @returns {Promise<{data: ClinicListResponseDto, message: string}>} Clinics with pagination
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved clinics
+   */
+  @Get('clinics-admin')
+  @ApiOperation({
+    summary: 'Get all clinics with pagination, search and filters',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description:
+      'Search keyword to match clinic name or description (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'province',
+    required: false,
+    type: String,
+    description: 'Filter clinics by province name or code',
+  })
+  @ApiQuery({
+    name: 'specialty',
+    required: false,
+    type: String,
+    description: 'Filter clinics by medical specialization',
+  })
+  @ApiResponseData({
+    type: ClinicListResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Clinics retrieved successfully',
+  })
+  async getAllClinicsAdmin(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string,
+    @Query('province') province?: string,
+    @Query('specialty') specialty?: string,
+  ): Promise<{ data: ClinicListResponseDto; message: string }> {
+    const result = await this.accountsService.findAllClinicsAdmin(
       page,
       limit,
       search,
@@ -359,7 +446,7 @@ export class AccountsController {
       message: 'Clinic details retrieved successfully',
     };
   }
-  
+
   /**
    * Get Doctor Details by ID (Public)
    *
@@ -414,7 +501,6 @@ export class AccountsController {
   ): Promise<PublicDoctorDetailData> {
     return this.accountsService.getPublicDoctorById(id);
   }
-
 
   /**
    * Get Account by ID
@@ -999,7 +1085,9 @@ export class AccountsController {
   async cancelPendingRegistration(
     @Request() req: any,
   ): Promise<{ data: CancelRegistrationResponseDto; message: string }> {
-    const result = await this.accountsService.cancelPendingRegistration(req.user.accountId);
+    const result = await this.accountsService.cancelPendingRegistration(
+      req.user.accountId,
+    );
     return { data: result, message: result.message };
   }
 
@@ -1045,7 +1133,10 @@ export class AccountsController {
     @Request() req: any,
     @Body() dto: CancelSubscriptionDto,
   ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
-    const result = await this.accountsService.cancelActiveSubscription(req.user.accountId, dto);
+    const result = await this.accountsService.cancelActiveSubscription(
+      req.user.accountId,
+      dto,
+    );
     return { data: result, message: result.message };
   }
 
@@ -1101,7 +1192,8 @@ export class AccountsController {
     );
     return {
       data: legalDocs,
-      message: 'Legal documents uploaded successfully. Waiting for admin approval.',
+      message:
+        'Legal documents uploaded successfully. Waiting for admin approval.',
     };
   }
 
@@ -1125,8 +1217,7 @@ export class AccountsController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get legal documents for clinic manager',
-    description:
-      'Retrieves legal documents for a specific clinic manager.',
+    description: 'Retrieves legal documents for a specific clinic manager.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiResponseData({
@@ -1212,7 +1303,8 @@ export class AccountsController {
     );
     return {
       data: legalDocs,
-      message: 'Legal documents updated successfully. Waiting for admin approval.',
+      message:
+        'Legal documents updated successfully. Waiting for admin approval.',
     };
   }
 }

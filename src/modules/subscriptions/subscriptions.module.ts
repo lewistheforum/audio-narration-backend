@@ -37,10 +37,7 @@ import { MailerModule } from '../mailer/mailer.module';
     forwardRef(() => AuthModule),
     MailerModule,
   ],
-  controllers: [
-    SubscriptionServicesController,
-    SubscriptionInternalController,
-  ],
+  controllers: [SubscriptionServicesController, SubscriptionInternalController],
   providers: [
     ClinicSubscriptionRepository,
     ClinicSubscriptionHistoryRepository,
@@ -59,4 +56,4 @@ import { MailerModule } from '../mailer/mailer.module';
     SubscriptionCronService,
   ],
 })
-export class SubscriptionsModule { }
+export class SubscriptionsModule {}

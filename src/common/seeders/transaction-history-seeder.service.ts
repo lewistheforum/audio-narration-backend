@@ -96,7 +96,7 @@ export class TransactionHistorySeederService {
           // Create Transaction Record
           const transaction = this.transactionRepository.create({
             clinicId: sub.clinicId, // Use Account ID from subscription
-            subscriptionId: savedHistory._id,
+            subscriptionId: sub._id, // Link to the actual Subscription, not History
             transactionTypeId: transactionType._id,
             amount: Math.round(Number(service.price)),
             currency: 'VND',
@@ -108,7 +108,12 @@ export class TransactionHistorySeederService {
             gateway: 'SEPAY', // Assuming generic gateway
           });
 
-          await this.transactionRepository.save(transaction);
+          const savedTransaction =
+            await this.transactionRepository.save(transaction);
+
+          // Update History with Transaction ID
+          savedHistory.transactionId = savedTransaction.id;
+          await this.clinicSubscriptionHistoryRepository.save(savedHistory);
         }
       }
 

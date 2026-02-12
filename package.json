@@ -29,7 +29,8 @@
     "script:enable-vector": "ts-node -r tsconfig-paths/register src/common/scripts/enable-vector.ts",
     "script:check-seeders": "ts-node -r tsconfig-paths/register src/common/scripts/check-seeders.ts",
     "script:clear-db": "ts-node -r tsconfig-paths/register src/common/scripts/clear-db.ts",
-    "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db"
+    "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db",
+    "script:detailed-build": "ts-node -r tsconfig-paths/register src/common/scripts/detailed-build.ts"
   },
   "nodemonConfig": {
     "watch": [
