@@ -2,6 +2,65 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+/**
+ * ============================================================================
+ * SUBSCRIPTION EMAIL INTERFACES
+ * ============================================================================
+ */
+
+/**
+ * Context for warning emails (7-day or 1-day warnings)
+ */
+export interface WarningEmailContext {
+  clinicName: string;
+  planName: string;
+  expirationDate: string; // Formatted date string
+  renewalLink: string;
+}
+
+/**
+ * Context for reassurance emails (renewal already scheduled)
+ */
+export interface ReassuranceEmailContext {
+  clinicName: string;
+  currentPlan: string;
+  nextPlan: string;
+  renewalDate: string; // Formatted date string
+}
+
+/**
+ * Context for subscription expired email
+ */
+export interface ExpiredEmailContext {
+  clinicName: string;
+  planName: string;
+  expirationDate: string; // Formatted date string
+  renewalLink: string;
+}
+
+/**
+ * Context for renewal success email
+ */
+export interface RenewalSuccessContext {
+  clinicName: string;
+  planName: string;
+  startDate: string; // Formatted date string
+  endDate: string; // Formatted date string
+  transactionId: string;
+  invoiceLink: string;
+}
+
+/**
+ * Context for plan change success email
+ */
+export interface PlanChangeContext {
+  clinicName: string;
+  oldPlan: string;
+  newPlan: string;
+  startDate: string; // Formatted date string
+  endDate: string; // Formatted date string
+}
+
 @Injectable()
 export class MailerService {
   constructor(private readonly configService: ConfigService) {}
@@ -860,7 +919,135 @@ export class MailerService {
   }
 
   /**
-   * Send Manager Credentials Email
+   * Send Contract Signed Notification to Manager
+   * Notifies the manager that an employee has signed the contract
+   */
+  async sendContractSignedNotificationToManager(
+    email: string,
+    employeeName: string,
+    contractId: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const contractCode = contractId.substring(0, 8).toUpperCase();
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: `Action Required: Employee Signed Contract #${contractCode}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #eff6ff; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #1e40af; margin: 0 0 20px 0;">✍️ Contract Signed</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 20px 0;">
+              Employee <strong>${employeeName}</strong> has signed the contract <strong>#${contractCode}</strong>.
+            </p>
+            
+            <div style="margin: 30px 0;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/contracts/${contractId}" 
+                 style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                Review & Sign Now
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 0;">
+              Please review and countersign to finalize the agreement.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Manager notification sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send manager notification:', error);
+    }
+  }
+
+  /**
+   * Send Contract Completed Notification to Employee
+   * Notifies the employee that the contract is fully signed and active
+   */
+  async sendContractCompletedNotificationToEmployee(
+    email: string,
+    managerName: string,
+    contractId: string,
+    fileUrl: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const contractCode = contractId.substring(0, 8).toUpperCase();
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: `Contract #${contractCode} is Now Active`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #f0fdf4; border-radius: 10px; padding: 30px; text-align: center;">
+            <h1 style="color: #166534; margin: 0 0 20px 0;">🎉 Contract Finalized</h1>
+            <p style="color: #6B7280; font-size: 16px; margin: 0 0 20px 0;">
+              Your contract <strong>#${contractCode}</strong> has been signed by <strong>${managerName}</strong> and is now <strong>ACTIVE</strong>.
+            </p>
+            
+            <div style="margin: 30px 0;">
+              <a href="${fileUrl}" 
+                 style="background: #166534; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                Download Signed Contract
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 0;">
+              A copy of the signed document is available at the link above.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Employee completed notification sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send employee notification:', error);
+    }
+  }
+
+  /**
    * Sends generated credentials to Clinic Manager
    */
   async sendManagerCredentialsEmail(
@@ -1173,6 +1360,575 @@ export class MailerService {
     } catch (error) {
       console.error('❌ Failed to send registration rejected email:', error);
       // Don't throw error - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * ============================================================================
+   * SUBSCRIPTION SWEEPER EMAIL METHODS
+   * ============================================================================
+   */
+
+  /**
+   * Send Subscription Warning Email (7-day or 1-day)
+   * Alerts clinic that subscription is expiring soon and action is required
+   */
+  async sendSubscriptionWarning(
+    to: string,
+    type: '7_DAYS' | '1_DAY',
+    context: WarningEmailContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const isUrgent = type === '1_DAY';
+    const daysText = isUrgent ? '1 Day' : '7 Days';
+    const urgentFlag = isUrgent ? '🚨 URGENT: ' : '';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to,
+      subject: `${urgentFlag}Your Medicare Subscription Expires in ${daysText}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: ${isUrgent ? '#FEF2F2' : '#FFF7ED'}; border-radius: 10px; padding: 30px; border-left: 4px solid ${isUrgent ? '#DC2626' : '#F59E0B'};">
+            <h1 style="color: ${isUrgent ? '#DC2626' : '#F59E0B'}; margin: 0 0 20px 0; font-size: 24px;">
+              ${isUrgent ? '🚨 URGENT ACTION REQUIRED' : '⏰ Subscription Reminder'}
+            </h1>
+            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
+              Hi <strong>${context.clinicName}</strong>,
+            </p>
+            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
+              Your Medicare subscription (<strong>${context.planName}</strong>) will expire in <strong style="color: ${isUrgent ? '#DC2626' : '#F59E0B'};">${daysText}</strong>.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="color: #6B7280; font-size: 14px;">Current Plan:</span>
+                <strong style="color: #111827; font-size: 16px;">${context.planName}</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6B7280; font-size: 14px;">Expiration Date:</span>
+                <strong style="color: ${isUrgent ? '#DC2626' : '#F59E0B'}; font-size: 16px;">${context.expirationDate}</strong>
+              </div>
+            </div>
+            
+            ${isUrgent ? `
+              <div style="background: #FEE2E2; border: 2px solid #DC2626; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                <p style="color: #991B1B; font-size: 14px; margin: 0; font-weight: 600;">
+                  ⚠️ Your subscription expires TOMORROW! Renew now to avoid service interruption.
+                </p>
+              </div>
+            ` : `
+              <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0;">
+                <p style="color: #92400E; font-size: 14px; margin: 0;">
+                  💡 <strong>Tip:</strong> Renew now to ensure uninterrupted access to your Medicare services.
+                </p>
+              </div>
+            `}
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${context.renewalLink}"
+                 style="background: ${isUrgent ? '#DC2626' : '#F59E0B'}; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
+                ${isUrgent ? 'Renew Now' : 'Renew Subscription'}
+              </a>
+            </div>
+          </div>
+          
+          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Why Renew?</h3>
+            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+              <li>Maintain uninterrupted access to all features</li>
+              <li>Continue managing patient appointments seamlessly</li>
+              <li>Keep your clinic data secure and accessible</li>
+              <li>Receive ongoing support from our team</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need help? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Subscription warning (${type}) email sent to ${to}`);
+    } catch (error) {
+      console.error(`❌ Failed to send subscription warning (${type}) email:`, error);
+      // Don't throw - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Subscription Reassurance Email (7-day or 1-day)
+   * Informs clinic that renewal is already scheduled and no action is needed
+   */
+  async sendSubscriptionReassurance(
+    to: string,
+    type: '7_DAYS' | '1_DAY',
+    context: ReassuranceEmailContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const daysText = type === '1_DAY' ? 'Tomorrow' : 'in 7 Days';
+    const activationText = type === '1_DAY' ? 'tomorrow at midnight' : `on ${context.renewalDate}`;
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to,
+      subject: `✅ Your Medicare Subscription Renews ${daysText}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; border-left: 4px solid #10B981;">
+            <h1 style="color: #10B981; margin: 0 0 20px 0; font-size: 24px;">
+              ✅ Your Renewal is Scheduled
+            </h1>
+            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
+              Hi <strong>${context.clinicName}</strong>,
+            </p>
+            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
+              Good news! Your Medicare subscription renewal is already scheduled. No action needed from your side.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D1FAE5;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <span style="color: #6B7280; font-size: 14px;">Current Plan:</span>
+                <strong style="color: #111827; font-size: 16px;">${context.currentPlan}</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <span style="color: #6B7280; font-size: 14px;">Next Plan:</span>
+                <strong style="color: #10B981; font-size: 16px;">${context.nextPlan}</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6B7280; font-size: 14px;">Activates:</span>
+                <strong style="color: #059669; font-size: 16px;">${activationText}</strong>
+              </div>
+            </div>
+            
+            <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
+              <p style="color: #065F46; font-size: 14px; margin: 0;">
+                🎉 <strong>Automatic Renewal:</strong> Your subscription will seamlessly continue with zero downtime.
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription"
+                 style="background: #10B981; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
+                View Subscription Details
+              </a>
+            </div>
+          </div>
+          
+          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">What Happens Next?</h3>
+            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+              <li>Your new subscription will activate automatically</li>
+              <li>You'll continue to have uninterrupted access</li>
+              <li>All your data and settings will remain intact</li>
+              <li>We'll send you a confirmation once the renewal is complete</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Questions? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Subscription reassurance (${type}) email sent to ${to}`);
+    } catch (error) {
+      console.error(`❌ Failed to send subscription reassurance (${type}) email:`, error);
+      // Don't throw - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Subscription Expired Email
+   * Notifies clinic that their subscription has ended
+   */
+  async sendSubscriptionExpired(
+    to: string,
+    context: ExpiredEmailContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to,
+      subject: '❌ Your Medicare Subscription Has Expired',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; border-left: 4px solid #DC2626;">
+            <h1 style="color: #DC2626; margin: 0 0 20px 0; font-size: 24px;">
+              ⚠️ Subscription Expired
+            </h1>
+            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
+              Hi <strong>${context.clinicName}</strong>,
+            </p>
+            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
+              Your Medicare subscription (<strong>${context.planName}</strong>) has expired as of <strong>${context.expirationDate}</strong>.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 2px solid #FEE2E2;">
+              <h3 style="color: #DC2626; margin: 0 0 15px 0; font-size: 16px;">Services No Longer Available:</h3>
+              <ul style="color: #6B7280; font-size: 14px; margin: 0; padding-left: 20px;">
+                <li>Patient appointment management</li>
+                <li>Medical record access</li>
+                <li>Clinic dashboard features</li>
+                <li>Staff and doctor management</li>
+                <li>Reporting and analytics</li>
+              </ul>
+            </div>
+            
+            <div style="background: #FEE2E2; border: 2px solid #DC2626; border-radius: 8px; padding: 15px; margin: 20px 0;">
+              <p style="color: #991B1B; font-size: 14px; margin: 0; font-weight: 600;">
+                🔒 Your account is now in limited access mode. Renew to restore full functionality.
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${context.renewalLink}"
+                 style="background: #DC2626; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
+                Renew Subscription Now
+              </a>
+            </div>
+          </div>
+          
+          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Renew Today to:</h3>
+            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+              <li>Restore full access to all Medicare features</li>
+              <li>Resume managing patient appointments</li>
+              <li>Access your clinic data and reports</li>
+              <li>Continue providing quality healthcare services</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Need assistance? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Subscription expired email sent to ${to}`);
+    } catch (error) {
+      console.error('❌ Failed to send subscription expired email:', error);
+      // Don't throw - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Renewal Success Email
+   * Confirms successful automatic renewal of the same subscription plan
+   */
+  async sendRenewalSuccess(
+    to: string,
+    context: RenewalSuccessContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to,
+      subject: '✅ Your Medicare Subscription Has Been Renewed',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; border-left: 4px solid #10B981;">
+            <h1 style="color: #10B981; margin: 0 0 20px 0; font-size: 24px;">
+              🎉 Subscription Renewed Successfully!
+            </h1>
+            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
+              Hi <strong>${context.clinicName}</strong>,
+            </p>
+            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
+              Great news! Your Medicare subscription has been successfully renewed. Your services continue uninterrupted.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D1FAE5;">
+              <h3 style="color: #111827; margin: 0 0 15px 0; font-size: 16px;">Renewal Details</h3>
+              <div style="border-bottom: 1px solid #E5E7EB; padding-bottom: 10px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="color: #6B7280; font-size: 14px;">Subscription Plan:</span>
+                  <strong style="color: #111827; font-size: 15px;">${context.planName}</strong>
+                </div>
+              </div>
+              <div style="border-bottom: 1px solid #E5E7EB; padding-bottom: 10px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="color: #6B7280; font-size: 14px;">Start Date:</span>
+                  <strong style="color: #111827; font-size: 15px;">${context.startDate}</strong>
+                </div>
+              </div>
+              <div style="border-bottom: 1px solid #E5E7EB; padding-bottom: 10px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="color: #6B7280; font-size: 14px;">Expiration Date:</span>
+                  <strong style="color: #10B981; font-size: 15px;">${context.endDate}</strong>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="color: #6B7280; font-size: 14px;">Transaction ID:</span>
+                  <code style="background: #F3F4F6; padding: 4px 8px; border-radius: 4px; font-size: 13px; color: #111827;">${context.transactionId}</code>
+                </div>
+              </div>
+            </div>
+            
+            <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
+              <p style="color: #065F46; font-size: 14px; margin: 0;">
+                ✅ <strong>All Services Active:</strong> You have full access to all Medicare features until ${context.endDate}.
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${context.invoiceLink}"
+                 style="background: #10B981; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px; margin-right: 10px;">
+                View Invoice
+              </a>
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription"
+                 style="background: #6B7280; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
+                Manage Subscription
+              </a>
+            </div>
+          </div>
+          
+          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Thank You for Choosing Medicare</h3>
+            <p style="color: #6B7280; font-size: 14px; margin: 10px 0;">
+              We're committed to providing you with the best healthcare management platform. Your continued trust means everything to us!
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Questions? Reach out at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Renewal success email sent to ${to}`);
+    } catch (error) {
+      console.error('❌ Failed to send renewal success email:', error);
+      // Don't throw - email should be fire-and-forget
+    }
+  }
+
+  /**
+   * Send Plan Change Success Email
+   * Confirms successful subscription plan change (upgrade or downgrade)
+   */
+  async sendPlanChangeSuccess(
+    to: string,
+    context: PlanChangeContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const isUpgrade = context.newPlan.toLowerCase().includes('premium') ||
+      context.newPlan.toLowerCase().includes('pro');
+    const changeType = isUpgrade ? 'Upgrade' : 'Change';
+    const icon = isUpgrade ? '⬆️' : '🔄';
+
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to,
+      subject: `${icon} Your Medicare Subscription Plan Has Changed`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: ${isUpgrade ? '#F0F9FF' : '#F0FDF4'}; border-radius: 10px; padding: 30px; border-left: 4px solid ${isUpgrade ? '#0284C7' : '#10B981'};">
+            <h1 style="color: ${isUpgrade ? '#0284C7' : '#10B981'}; margin: 0 0 20px 0; font-size: 24px;">
+              ${icon} Subscription Plan ${changeType} Successful!
+            </h1>
+            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
+              Hi <strong>${context.clinicName}</strong>,
+            </p>
+            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
+              Your subscription plan has been successfully updated. ${isUpgrade ? 'Enjoy your enhanced features!' : 'Your new plan is now active.'}
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid ${isUpgrade ? '#BAE6FD' : '#D1FAE5'};">
+              <h3 style="color: #111827; margin: 0 0 15px 0; font-size: 16px;">Plan Change Details</h3>
+              
+              <div style="background: #FEF2F2; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                <div style="text-align: center;">
+                  <span style="color: #6B7280; font-size: 12px; text-transform: uppercase; font-weight: 600;">Previous Plan</span>
+                  <div style="color: #DC2626; font-size: 18px; font-weight: bold; margin-top: 5px;">${context.oldPlan}</div>
+                </div>
+              </div>
+              
+              <div style="text-align: center; margin: 10px 0;">
+                <span style="font-size: 24px;">${isUpgrade ? '⬆️' : '➡️'}</span>
+              </div>
+              
+              <div style="background: ${isUpgrade ? '#DBEAFE' : '#D1FAE5'}; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                <div style="text-align: center;">
+                  <span style="color: #065F46; font-size: 12px; text-transform: uppercase; font-weight: 600;">New Plan</span>
+                  <div style="color: ${isUpgrade ? '#0284C7' : '#10B981'}; font-size: 18px; font-weight: bold; margin-top: 5px;">${context.newPlan}</div>
+                </div>
+              </div>
+              
+              <div style="border-top: 1px solid #E5E7EB; padding-top: 15px; margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <span style="color: #6B7280; font-size: 14px;">Start Date:</span>
+                  <strong style="color: #111827; font-size: 15px;">${context.startDate}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="color: #6B7280; font-size: 14px;">Next Renewal:</span>
+                  <strong style="color: ${isUpgrade ? '#0284C7' : '#10B981'}; font-size: 15px;">${context.endDate}</strong>
+                </div>
+              </div>
+            </div>
+            
+            ${isUpgrade ? `
+              <div style="background: #DBEAFE; border-left: 4px solid #0284C7; padding: 15px; margin: 20px 0;">
+                <p style="color: #075985; font-size: 14px; margin: 0;">
+                  🎉 <strong>Congratulations!</strong> You now have access to premium features and enhanced capabilities.
+                </p>
+              </div>
+            ` : `
+              <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
+                <p style="color: #065F46; font-size: 14px; margin: 0;">
+                  ✅ <strong>Plan Updated:</strong> Your new subscription plan is now active.
+                </p>
+              </div>
+            `}
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription"
+                 style="background: ${isUpgrade ? '#0284C7' : '#10B981'}; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
+                ${isUpgrade ? 'Explore New Features' : 'View Subscription'}
+              </a>
+            </div>
+          </div>
+          
+          ${isUpgrade ? `
+            <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+              <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">What's New in Your Plan?</h3>
+              <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+                <li>Access to advanced analytics and reporting</li>
+                <li>Priority customer support</li>
+                <li>Enhanced data storage capacity</li>
+                <li>Additional customization options</li>
+              </ul>
+            </div>
+          ` : ''}
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
+              Questions about your new plan? Contact us at
+              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Plan change success email sent to ${to}`);
+    } catch (error) {
+      console.error('❌ Failed to send plan change success email:', error);
+      // Don't throw - email should be fire-and-forget
     }
   }
 }

@@ -40,17 +40,7 @@ export class ClinicShiftsService {
         const clinicId = await this.resolveClinicId(user);
         if (!clinicId) throw new ForbiddenException('Cannot resolve clinic ID');
 
-        // Check if shift already exists for this clinic
-        const existing = await this.shiftRepository.findOne({
-            where: {
-                clinicId,
-                shift: createDto.shift
-            }
-        });
 
-        if (existing) {
-            throw new ConflictException(`Shift ${createDto.shift} already exists for this clinic`);
-        }
 
         const newShift = this.shiftRepository.create({
             clinicId,

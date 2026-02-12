@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription Renewed</title>
+</head>
+
+<body style="margin: 0; padding: 0; background-color: #F7FCFF; font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <!-- Logo -->
+        <div style="text-align: center; margin-bottom: 30px;">
+            <img alt="Medicare Logo" style="width: 150px; height: auto;"
+                src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png" />
+        </div>
+
+        <!-- Main Content -->
+        <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; border-left: 4px solid #10B981;">
+            <h1 style="color: #10B981; margin: 0 0 20px 0; font-size: 24px;">
+                🎉 Subscription Renewed Successfully!
+            </h1>
+            <p style="color: #0B1F2A; font-size: 16px; margin: 0 0 15px 0;">
+                Hi <strong>{{clinicName}}</strong>,
+            </p>
+            <p style="color: #475569; font-size: 16px; margin: 0 0 20px 0;">
+                Great news! Your Medicare subscription has been successfully renewed. Your services continue
+                uninterrupted.
+            </p>
+
+            <!-- Details Box -->
+            <div
+                style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D4ECF6;">
+                <h3 style="color: #0B1F2A; margin: 0 0 15px 0; font-size: 16px;">Renewal Details</h3>
+                <div style="border-bottom: 1px solid #D4ECF6; padding-bottom: 10px; margin-bottom: 10px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #64748B; font-size: 14px;">Subscription Plan:</span>
+                        <strong style="color: #0B1F2A; font-size: 15px;">{{planName}}</strong>
+                    </div>
+                </div>
+                <div style="border-bottom: 1px solid #D4ECF6; padding-bottom: 10px; margin-bottom: 10px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #64748B; font-size: 14px;">Start Date:</span>
+                        <strong style="color: #0B1F2A; font-size: 15px;">{{startDate}}</strong>
+                    </div>
+                </div>
+                <div style="border-bottom: 1px solid #D4ECF6; padding-bottom: 10px; margin-bottom: 10px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #64748B; font-size: 14px;">Expiration Date:</span>
+                        <strong style="color: #10B981; font-size: 15px;">{{endDate}}</strong>
+                    </div>
+                </div>
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748B; font-size: 14px;">Transaction ID:</span>
+                        <code
+                            style="background: #F3F4F6; padding: 4px 8px; border-radius: 4px; font-size: 13px; color: #0B1F2A;">{{transactionId}}</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success Box -->
+            <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
+                <p style="color: #065F46; font-size: 14px; margin: 0;">
+                    ✅ <strong>All Services Active:</strong> You have full access to all Medicare features until
+                    {{endDate}}.
+                </p>
+            </div>
+
+            <!-- CTA Buttons -->
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="{{invoiceLink}}"
+                    style="background: #5CB6D3; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px; margin-right: 10px; margin-bottom: 10px;">
+                    View Invoice
+                </a>
+                <a href="http://localhost:5173/subscription"
+                    style="background: #64748B; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px; margin-bottom: 10px;">
+                    Manage Subscription
+                </a>
+            </div>
+        </div>
+
+        <!-- Thank You Section -->
+        <div style="background: #EAF6FB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #0B1F2A; margin: 0 0 10px 0; font-size: 16px;">Thank You for Choosing Medicare</h3>
+            <p style="color: #475569; font-size: 14px; margin: 10px 0;">
+                We're committed to providing you with the best healthcare management platform. Your continued trust
+                means everything to us!
+            </p>
+        </div>
+
+        <!-- Contact -->
+        <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #64748B; font-size: 14px; margin: 0 0 10px 0;">
+                Questions? Reach out at
+                <a href="mailto:support@medicare.com"
+                    style="color: #1D4ED8; text-decoration: none;">support@medicare.com</a>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #D4ECF6;">
+            <p style="color: #64748B; font-size: 12px; margin: 0;">
+                © 2026 Medicare. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

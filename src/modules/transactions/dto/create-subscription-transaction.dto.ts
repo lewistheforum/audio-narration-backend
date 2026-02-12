@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID, IsNotEmpty } from 'class-validator';
+import { ApiProperty, ApiHideProperty } from '@nestjs/swagger';
+import { IsUUID, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateSubscriptionTransactionDto {
     @ApiProperty({
@@ -9,4 +9,9 @@ export class CreateSubscriptionTransactionDto {
     @IsNotEmpty()
     @IsUUID()
     subscriptionId: string;
+
+    @ApiHideProperty()
+    @IsOptional()
+    @IsUUID()
+    serviceId?: string;
 }
