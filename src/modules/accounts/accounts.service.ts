@@ -1750,6 +1750,107 @@ export class AccountsService {
   }
 
   /**
+   * Validate Clinic Subscription Status
+   *
+   * Validates that clinic-related roles have an active subscription before allowing login.
+   * This method enforces subscription-based access control for clinic accounts.
+   *
+   * Hierarchy Resolution:
+   * - CLINIC_ADMIN: Direct subscription check (user owns subscription)
+   * - CLINIC_MANAGER: Parent is CLINIC_ADMIN (1 level up)
+   * - CLINIC_STAFF/DOCTOR: Grandparent is CLINIC_ADMIN (2 levels up: Manager -> Admin)
+   *
+   * Allowed Subscription Statuses:
+   * - ACTIVE: Full subscription access
+   * - NON_RENEWING: Cancelled but still valid until expiration
+   *
+   * Blocked Statuses:
+   * - EXPIRED: Subscription period ended
+   * - PENDING_*: Registration not completed
+   * - REJECTED: Registration rejected
+   *
+   * @param {Account} account - The account attempting to log in
+   * @throws {ForbiddenException} If subscription is not active or has expired
+   *
+   * @example
+   * ```typescript
+   * const account = await accountsService.findByEmail(email);
+   * await accountsService.validateClinicSubscription(account);
+   * ```
+   */
+  async validateClinicSubscription(account: Account): Promise<void> {
+    const clinicRoles = [
+      AccountRole.CLINIC_ADMIN,
+      AccountRole.CLINIC_MANAGER,
+      AccountRole.CLINIC_STAFF,
+      AccountRole.DOCTOR,
+    ];
+
+    // Skip validation for non-clinic roles
+    if (!clinicRoles.includes(account.role)) {
+      return;
+    }
+
+    let clinicAdminId: string;
+
+    // Determine the root CLINIC_ADMIN based on role hierarchy
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      // Direct subscription check
+      clinicAdminId = account._id;
+    } else if (account.role === AccountRole.CLINIC_MANAGER) {
+      // Parent is CLINIC_ADMIN
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Clinic subscription validation failed: No parent account found.',
+        );
+      }
+      clinicAdminId = account.parentId;
+    } else {
+      // CLINIC_STAFF or DOCTOR: Parent is Manager, Grandparent is Admin
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Clinic subscription validation failed: No parent account found.',
+        );
+      }
+
+      const parentAccount = await this.accountRepository.findAccountById(
+        account.parentId,
+      );
+
+      if (!parentAccount || !parentAccount.parentId) {
+        throw new ForbiddenException(
+          'Clinic subscription validation failed: Invalid account hierarchy.',
+        );
+      }
+
+      clinicAdminId = parentAccount.parentId;
+    }
+
+    // Retrieve subscription record for the clinic admin
+    const subscription = await this.clinicSubscriptionRepository.findByClinicId(
+      clinicAdminId,
+    );
+
+    if (!subscription) {
+      throw new ForbiddenException(
+        'Clinic subscription not found. Please contact support.',
+      );
+    }
+
+    // Validate subscription status
+    const allowedStatuses = [
+      RegistrationStatus.ACTIVE,
+      RegistrationStatus.NON_RENEWING,
+    ];
+
+    if (!allowedStatuses.includes(subscription.subscriptionStatus)) {
+      throw new ForbiddenException(
+        'Clinic subscription is not active or has expired.',
+      );
+    }
+  }
+
+  /**
    * Find Account by Email
    *
    * Retrieves an account by email address. Used for authentication and email uniqueness validation.

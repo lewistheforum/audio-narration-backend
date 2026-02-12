@@ -57,6 +57,9 @@ export class AuthService {
     // Check if user account is banned or inactive
     this.AccountsService.validateAccountAccess(user);
 
+    // Check clinic subscription status for clinic-related roles
+    await this.AccountsService.validateClinicSubscription(user);
+
     const payload = { sub: user._id, email: user.email, role: user.role };
     this.socketGatewayService.markUserOnline(String(user._id));
 
@@ -159,6 +162,9 @@ export class AuthService {
 
       // Check if user account is banned or inactive
       this.AccountsService.validateAccountAccess(user);
+
+      // Check clinic subscription status for clinic-related roles
+      await this.AccountsService.validateClinicSubscription(user);
 
       const payload = { sub: userId, email: userEmail, role: user.role };
       const accessToken = this.jwtService.sign(payload);
