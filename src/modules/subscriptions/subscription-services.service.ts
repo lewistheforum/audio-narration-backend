@@ -1,8 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubscriptionService } from './entities/subscription-service.entity';
 import { SubscriptionServiceRepository } from './repositories/subscription-service.repository';
-import { SubscriptionServiceResponseDto } from './dto';
+import {
+  SubscriptionServiceResponseDto,
+  CreateSubscriptionServiceDto,
+  UpdateSubscriptionServiceDto,
+} from './dto';
 import { SubscriptionServiceStatus } from './enums/subscription-service-status.enum';
+import { DataSource } from 'typeorm';
 
 /**
  * Subscription Services Service
@@ -30,6 +35,7 @@ import { SubscriptionServiceStatus } from './enums/subscription-service-status.e
 export class SubscriptionServicesService {
   constructor(
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -56,11 +62,9 @@ export class SubscriptionServicesService {
   async findAll(): Promise<SubscriptionServiceResponseDto[]> {
     const services = await this.subscriptionServiceRepository.findAll(
       false,
-      SubscriptionServiceStatus.ACTIVE,
+      // SubscriptionServiceStatus.ACTIVE,
     );
-    return services.map((service) =>
-      this.toResponseDto(service),
-    );
+    return services.map((service) => this.toResponseDto(service));
   }
 
   /**
@@ -86,12 +90,104 @@ export class SubscriptionServicesService {
    */
   async findOne(id: string): Promise<SubscriptionServiceResponseDto> {
     const service = await this.subscriptionServiceRepository.findById(id);
-    
+
     if (!service) {
       throw new NotFoundException('Subscription service not found');
     }
-    
+
     return this.toResponseDto(service);
+  }
+
+  /**
+   * Create Subscription Service
+   *
+   * Creates a new subscription service (plan).
+   *
+   * @param {CreateSubscriptionServiceDto} createDto - Data for new service
+   * @returns {Promise<SubscriptionServiceResponseDto>} Created service details
+   */
+  async create(
+    createDto: CreateSubscriptionServiceDto,
+  ): Promise<SubscriptionServiceResponseDto> {
+    const service = this.subscriptionServiceRepository.create(createDto);
+    const savedService = await this.subscriptionServiceRepository.save(service);
+    return this.toResponseDto(savedService);
+  }
+
+  /**
+   * Update Subscription Service
+   *
+   * Updates an existing subscription service.
+   *
+   * @param {string} id - Service UUID
+   * @param {UpdateSubscriptionServiceDto} updateDto - Data to update
+   * @returns {Promise<SubscriptionServiceResponseDto>} Updated service details
+   * @throws {NotFoundException} If service not found
+   */
+  async update(
+    id: string,
+    updateDto: UpdateSubscriptionServiceDto,
+  ): Promise<SubscriptionServiceResponseDto> {
+    const service = await this.subscriptionServiceRepository.findById(id);
+
+    if (!service) {
+      throw new NotFoundException('Subscription service not found');
+    }
+
+    // Merge updates
+    const updatedService = await this.subscriptionServiceRepository.save({
+      ...service,
+      ...updateDto,
+    });
+
+    return this.toResponseDto(updatedService);
+  }
+
+  /**
+   * Remove Subscription Service
+   *
+   * Soft deletes a subscription service.
+   *
+   * @param {string} id - Service UUID
+   * @returns {Promise<void>}
+   * @throws {NotFoundException} If service not found
+   */
+  async remove(id: string): Promise<void> {
+    const exists = await this.subscriptionServiceRepository.existsById(id);
+
+    if (!exists) {
+      throw new NotFoundException('Subscription service not found');
+    }
+
+    await this.subscriptionServiceRepository.softDelete(id);
+  }
+
+  async getClinicUsageStatistics(patientId: string) {
+    const query = `
+      SELECT 
+          cai.clinic_name AS "clinicName",
+          cmi.clinic_branch_name AS "branchName",
+          COUNT(app._id)::int AS "appointmentCount"
+      FROM 
+          appointments app
+      JOIN 
+          clinic_manager_information cmi ON cmi.account_id = app.clinic_id
+      JOIN 
+          accounts a ON a._id = cmi.account_id
+      JOIN 
+          clinic_admin_information cai ON cai.account_id = a.parent_id
+      WHERE 
+          app.patient_id = $1
+          AND app.deleted_at IS NULL
+          AND cmi.deleted_at IS NULL
+          AND a.deleted_at IS NULL
+          AND cai.deleted_at IS NULL
+      GROUP BY 
+          cai.clinic_name, 
+          cmi.clinic_branch_name;
+    `;
+
+    return this.dataSource.query(query, [patientId]);
   }
 
   /**
@@ -108,8 +204,9 @@ export class SubscriptionServicesService {
   private toResponseDto(
     service: SubscriptionService,
   ): SubscriptionServiceResponseDto {
-    const priceAfterDiscount = service.price - (service.price * service.discount / 100);
-    
+    const priceAfterDiscount =
+      service.price - (service.price * service.discount) / 100;
+
     return {
       id: service._id,
       serviceName: service.serviceName,

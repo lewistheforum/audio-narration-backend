@@ -1,4 +1,15 @@
-import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -6,7 +17,12 @@ import {
   ApiExtraModels,
 } from '@nestjs/swagger';
 import { SubscriptionServicesService } from './subscription-services.service';
-import { SubscriptionServiceResponseDto } from './dto';
+import {
+  SubscriptionServiceResponseDto,
+  CreateSubscriptionServiceDto,
+  UpdateSubscriptionServiceDto,
+  ClinicUsageStatisticsDto,
+} from './dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { MESSAGES } from 'src/common/message';
 
@@ -30,7 +46,7 @@ import { MESSAGES } from 'src/common/message';
  */
 @ApiTags('Subscription Services')
 @ApiExtraModels(SubscriptionServiceResponseDto)
-@Controller('subscription/services')
+@Controller('subscription')
 export class SubscriptionServicesController {
   constructor(
     private readonly subscriptionServicesService: SubscriptionServicesService,
@@ -122,6 +138,120 @@ export class SubscriptionServicesController {
     return {
       data: service,
       message: 'Subscription service retrieved successfully',
+    };
+  }
+
+  /**
+   * Create Subscription Service
+   *
+   * Creates a new subscription service (plan).
+   *
+   * @param {CreateSubscriptionServiceDto} createDto - Data for new service
+   * @returns {Promise<{data: SubscriptionServiceResponseDto, message: string}>} Created service details
+   *
+   * @swagger
+   * @response 201 - Successfully created subscription service
+   */
+  @Post()
+  @ApiOperation({ summary: 'Create subscription service' })
+  @ApiResponseData({
+    type: SubscriptionServiceResponseDto,
+    status: MESSAGES.statusCode.created,
+    message: 'Subscription service created successfully',
+  })
+  async create(
+    @Body() createDto: CreateSubscriptionServiceDto,
+  ): Promise<{ data: SubscriptionServiceResponseDto; message: string }> {
+    const service = await this.subscriptionServicesService.create(createDto);
+    return {
+      data: service,
+      message: 'Subscription service created successfully',
+    };
+  }
+
+  /**
+   * Update Subscription Service
+   *
+   * Updates an existing subscription service.
+   *
+   * @param {string} id - Subscription service UUID
+   * @param {UpdateSubscriptionServiceDto} updateDto - Data to update
+   * @returns {Promise<{data: SubscriptionServiceResponseDto, message: string}>} Updated service details
+   * @throws {NotFoundException} If subscription service not found
+   *
+   * @swagger
+   * @response 200 - Successfully updated subscription service
+   * @response 404 - Subscription service not found
+   */
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update subscription service' })
+  @ApiResponseData({
+    type: SubscriptionServiceResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Subscription service updated successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Subscription service not found' })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateDto: UpdateSubscriptionServiceDto,
+  ): Promise<{ data: SubscriptionServiceResponseDto; message: string }> {
+    const service = await this.subscriptionServicesService.update(
+      id,
+      updateDto,
+    );
+    return {
+      data: service,
+      message: 'Subscription service updated successfully',
+    };
+  }
+
+  /**
+   * Remove Subscription Service
+   *
+   * Soft deletes a subscription service.
+   *
+   * @param {string} id - Subscription service UUID
+   * @returns {Promise<{message: string}>} Success message
+   * @throws {NotFoundException} If subscription service not found
+   *
+   * @swagger
+   * @response 200 - Successfully deleted subscription service
+   * @response 404 - Subscription service not found
+   */
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete subscription service' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription service deleted successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Subscription service not found' })
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ message: string }> {
+    await this.subscriptionServicesService.remove(id);
+    return {
+      message: 'Subscription service deleted successfully',
+    };
+  }
+
+  @Get('statistics/clinic-usage/:patientId')
+  @ApiOperation({ summary: 'Get clinic usage statistics for a patient' })
+  @ApiResponseData({
+    type: ClinicUsageStatisticsDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Clinic usage statistics retrieved successfully',
+    isArray: true,
+  })
+  async getClinicUsageStatistics(
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+  ) {
+    const data =
+      await this.subscriptionServicesService.getClinicUsageStatistics(
+        patientId,
+      );
+    return {
+      data,
+      message: 'Clinic usage statistics retrieved successfully',
     };
   }
 }

@@ -38,6 +38,7 @@ import { SubscriptionServicesService } from './subscription-services.service';
     ClinicSubscriptionRepository,
     ClinicSubscriptionHistoryRepository,
     SubscriptionServiceRepository,
+    SubscriptionServicesService,
   ],
 })
 export class SubscriptionsModule {}

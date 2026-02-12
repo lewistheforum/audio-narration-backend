@@ -41,7 +41,7 @@ export class AccountRepository {
   constructor(
     @InjectRepository(Account)
     private readonly accountRepository: Repository<Account>,
-  ) { }
+  ) {}
 
   /**
    * Find All Accounts
@@ -423,10 +423,15 @@ export class AccountRepository {
       )
       .leftJoinAndSelect('account.addresses', 'address')
       .leftJoinAndSelect('account.parent', 'parentAccount')
-      .leftJoinAndSelect('parentAccount.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect(
+        'parentAccount.clinicAdminInformation',
+        'clinicAdminInfo',
+      )
       .where('account.role = :role', { role })
       .andWhere('account.status = :status', { status })
-      .andWhere('parentAccount.role = :parentRole', { parentRole: AccountRole.CLINIC_ADMIN });
+      .andWhere('parentAccount.role = :parentRole', {
+        parentRole: AccountRole.CLINIC_ADMIN,
+      });
 
     // Apply search filter (ILIKE on clinicName AND description from parent's clinic admin info)
     if (search) {
@@ -446,17 +451,58 @@ export class AccountRepository {
 
     // Apply specialty filter (JSONB containment query on specializedIn from parent's clinic admin info)
     if (specialty) {
-      queryBuilder.andWhere(
-        'clinicAdminInfo.specializedIn @> :specialty',
-        { specialty: JSON.stringify([specialty]) },
-      );
+      queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
+        specialty: JSON.stringify([specialty]),
+      });
     }
 
     // Apply pagination and ordering
-    queryBuilder
-      .skip(skip)
-      .take(take)
-      .orderBy('account.createdAt', 'DESC');
+    queryBuilder.skip(skip).take(take).orderBy('account.createdAt', 'DESC');
+
+    return queryBuilder.getManyAndCount();
+  }
+
+  async findClinicsAdminWithFilters(
+    role: AccountRole,
+    status: AccountStatus,
+    skip: number = 0,
+    take: number = 10,
+    search?: string,
+    province?: string,
+    specialty?: string,
+  ): Promise<[Account[], number]> {
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect('account.addresses', 'address')
+      .where('account.role = :role', { role })
+      .andWhere('account.status = :status', { status });
+
+    // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
+    if (search) {
+      queryBuilder.andWhere(
+        '(clinicAdminInfo.clinicName ILIKE :search OR clinicAdminInfo.description ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Apply province filter (exact match on provinceName OR province)
+    if (province) {
+      queryBuilder.andWhere(
+        '(address.provinceName = :province OR address.province = :province)',
+        { province },
+      );
+    }
+
+    // Apply specialty filter (JSONB containment query on specializedIn from clinic admin info)
+    if (specialty) {
+      queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
+        specialty: JSON.stringify([specialty]),
+      });
+    }
+
+    // Apply pagination and ordering
+    queryBuilder.skip(skip).take(take).orderBy('account.createdAt', 'DESC');
 
     return queryBuilder.getManyAndCount();
   }
@@ -547,10 +593,7 @@ export class AccountRepository {
     }
 
     // Apply pagination and ordering
-    queryBuilder
-      .skip(skip)
-      .take(take)
-      .orderBy('account.createdAt', 'DESC');
+    queryBuilder.skip(skip).take(take).orderBy('account.createdAt', 'DESC');
 
     const [accounts, total] = await queryBuilder.getManyAndCount();
 
@@ -633,11 +676,16 @@ export class AccountRepository {
     // Join with general_accounts for fullName search
     queryBuilder.leftJoinAndSelect('account.generalAccount', 'generalAccount');
     // Join with specific info tables for more detailed search if needed (optional)
-    queryBuilder.leftJoinAndSelect('account.clinicStaffInformation', 'staffInfo');
+    queryBuilder.leftJoinAndSelect(
+      'account.clinicStaffInformation',
+      'staffInfo',
+    );
     queryBuilder.leftJoinAndSelect('account.doctorInformation', 'doctorInfo');
 
     queryBuilder.where('account.parentId = :clinicId', { clinicId });
-    queryBuilder.andWhere('account.status = :status', { status: AccountStatus.ACTIVE });
+    queryBuilder.andWhere('account.status = :status', {
+      status: AccountStatus.ACTIVE,
+    });
     queryBuilder.andWhere('account.deletedAt IS NULL');
 
     // Filter by Role

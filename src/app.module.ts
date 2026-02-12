@@ -23,6 +23,7 @@ import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AiModule } from './modules/ai/ai.module';
 import { SeedersModule } from './common/seeders/seeders.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { PatientsModule } from './modules/accounts/api-patients/patients.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
 
 @Module({
@@ -65,6 +66,7 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     AiModule,
     SeedersModule,
     AdminModule,
+    PatientsModule,
   ],
   controllers: [],
   providers: [],
