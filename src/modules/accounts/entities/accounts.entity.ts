@@ -19,6 +19,8 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
+import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
+import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
 
 /**
  * Account Entity
@@ -61,10 +63,14 @@ export class Account {
    *
    * One-to-one relation with clinic_manager_information table for CLINIC_MANAGER accounts
    */
-  @OneToOne(() => ClinicManagerInformation, (clinicManager) => clinicManager.account, {
-    nullable: true,
-    cascade: true,
-  })
+  @OneToOne(
+    () => ClinicManagerInformation,
+    (clinicManager) => clinicManager.account,
+    {
+      nullable: true,
+      cascade: true,
+    },
+  )
   clinicManagerInformation?: ClinicManagerInformation;
 
   /**
@@ -72,10 +78,14 @@ export class Account {
    *
    * One-to-one relation with clinic_admin_information table for CLINIC_ADMIN accounts
    */
-  @OneToOne(() => ClinicAdminInformation, (clinicAdmin) => clinicAdmin.account, {
-    nullable: true,
-    cascade: true,
-  })
+  @OneToOne(
+    () => ClinicAdminInformation,
+    (clinicAdmin) => clinicAdmin.account,
+    {
+      nullable: true,
+      cascade: true,
+    },
+  )
   clinicAdminInformation?: ClinicAdminInformation;
 
   /**
@@ -115,6 +125,18 @@ export class Account {
     cascade: true,
   })
   blogs?: Blog[];
+
+  /**
+   * Clinic Subscription Relation
+   */
+  @OneToOne(() => ClinicSubscription, (subscription) => subscription.clinic)
+  subscription?: ClinicSubscription;
+
+  /**
+   * Legal Documents Relation
+   */
+  @OneToOne(() => ClinicsLegalDocuments, (legalDocs) => legalDocs.account)
+  legalDocuments?: ClinicsLegalDocuments;
 
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;

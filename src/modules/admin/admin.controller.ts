@@ -70,9 +70,9 @@ export class AdminController {
    *
    * Returns paginated list of clinic registrations awaiting admin approval
    */
-  @Get('registrations')
+  @Get('/registrations-legal-documents')
   @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Get all pending clinic registrations' })
+  @ApiOperation({ summary: 'Get all clinic registrations' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiResponseData({
@@ -84,7 +84,7 @@ export class AdminController {
     @Query('page', ParseIntPipe, new DefaultValuePipe(1)) page: number,
     @Query('limit', ParseIntPipe, new DefaultValuePipe(10)) limit: number,
   ): Promise<{ data: RegistrationListResponseDto; message: string }> {
-    const result = await this.adminService.getPendingApprovals(page, limit);
+    const result = await this.adminService.getAllRegistrations(page, limit);
     return {
       data: result,
       message: 'Registrations retrieved successfully',
@@ -96,7 +96,7 @@ export class AdminController {
    *
    * Returns full registration details for a specific clinic
    */
-  @Get('registrations/:id')
+  @Get('/registrations-legal-documents/:id')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get registration details by clinic admin ID' })
   @ApiResponseData({
@@ -119,7 +119,7 @@ export class AdminController {
    *
    * Approves the legal documents and transitions subscription to PENDING_PAYMENT
    */
-  @Post('registrations/:id/approve')
+  @Post('/registrations-legal-documents/:id/approve')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Approve a clinic registration' })
   @ApiResponseData({
@@ -142,7 +142,7 @@ export class AdminController {
    *
    * Rejects the legal documents and stores rejection reason
    */
-  @Post('registrations/:id/reject')
+  @Post('/registrations-legal-documents/:id/reject')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Reject a clinic registration' })
   @ApiResponseData({

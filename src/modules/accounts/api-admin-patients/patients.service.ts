@@ -6,6 +6,8 @@ import { Appointment } from '../../appointments/entities/appointment.entity';
 import { PatientAppointmentStatisticsDto } from './dto/patient-appointment-statistics.dto';
 import { AccountRole } from '../enums/account-role.enum';
 import { AccountStatus } from '../enums/account-status.enum';
+import { BanType } from '../enums/ban-type.enum';
+import { BanHistory } from '../entities/ban-history.entity';
 import { PatientResponseDto } from './dto/patient-response.dto';
 import { MailerService } from '../../mailer/mailer.service';
 
@@ -16,6 +18,8 @@ export class PatientsService {
     private readonly accountRepository: Repository<Account>,
     @InjectRepository(Appointment)
     private readonly appointmentRepository: Repository<Appointment>,
+    @InjectRepository(BanHistory)
+    private readonly banHistoryRepository: Repository<BanHistory>,
     private readonly mailerService: MailerService,
   ) {}
 
@@ -145,6 +149,16 @@ export class PatientsService {
     }
 
     const savedAccount = await this.accountRepository.save(account);
+
+    // Create Ban History
+    const banHistory = this.banHistoryRepository.create({
+      accountId: savedAccount._id,
+      banCounts: savedAccount.banCounts,
+      type: savedAccount.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
+      banDescription: banDescription,
+    });
+    await this.banHistoryRepository.save(banHistory);
+
     return new PatientResponseDto(savedAccount);
   }
 
@@ -171,6 +185,30 @@ export class PatientsService {
     }
 
     const savedAccount = await this.accountRepository.save(account);
+
+    // Create Unban History
+    const banHistory = this.banHistoryRepository.create({
+      accountId: savedAccount._id,
+      banCounts: 0,
+      type: BanType.UNBANNED,
+    });
+    await this.banHistoryRepository.save(banHistory);
+
     return new PatientResponseDto(savedAccount);
+  }
+
+  async getBanHistory(patientId: string): Promise<BanHistory[]> {
+    const patient = await this.accountRepository.findOne({
+      where: { _id: patientId, role: AccountRole.PATIENT },
+    });
+
+    if (!patient) {
+      throw new NotFoundException(`Patient with ID ${patientId} not found.`);
+    }
+
+    return this.banHistoryRepository.find({
+      where: { accountId: patientId },
+      order: { createdAt: 'DESC' },
+    });
   }
 }
