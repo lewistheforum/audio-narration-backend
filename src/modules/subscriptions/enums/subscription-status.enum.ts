@@ -28,13 +28,6 @@ export enum RegistrationStatus {
   PENDING_APPROVAL = 'PENDING_APPROVAL',
 
   /**
-   * STEP 4 FAIL: Admin rejected the registration.
-   * Status: Documents invalid or insufficient info.
-   * Action: User needs to update documents/manager info and resubmit (Back to PENDING_APPROVAL).
-   */
-  REJECTED = 'REJECTED',
-
-  /**
    * STEP 5 START: Admin approved.
    * Status: Registration approved, but Subscription fee is not paid yet.
    * Action: User needs to make payment for the selected service package.

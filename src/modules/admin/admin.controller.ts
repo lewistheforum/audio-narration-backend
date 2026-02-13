@@ -6,15 +6,12 @@ import {
   Query,
   Body,
   UseGuards,
-  ParseIntPipe,
-  DefaultValuePipe,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
@@ -26,9 +23,7 @@ import { AdminService } from './admin.service';
 import { AdminStatisticsService } from './admin-statistics.service';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import {
-  RegistrationListResponseDto,
   RegistrationDetailResponseDto,
-  AdminApprovalDto,
   YearQueryDto,
   MonthQueryDto,
   ServiceYearQueryDto,
@@ -42,6 +37,14 @@ import {
   ClinicSpendingResponseDto,
   ClinicTransactionLogResponseDto,
   LongestUsingClinicsResponseDto,
+  PaginationQueryDto,
+  PendingLegalDocumentsResponseDto,
+  ApprovedLegalDocumentsResponseDto,
+  RejectedLegalDocumentsResponseDto,
+  NotSubmittedLegalDocumentsResponseDto,
+  RejectRegistrationDto,
+  ApprovalSuccessResponseDto,
+  RejectionSuccessResponseDto,
 } from './dto';
 
 /**
@@ -52,9 +55,9 @@ import {
  * - View dashboard statistics
  */
 @Controller('admin')
-// @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiTags('Admin')
-// @ApiBearerAuth('JWT-auth')
+@ApiBearerAuth('JWT-auth')
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
@@ -62,34 +65,124 @@ export class AdminController {
   ) {}
 
   // ============================================
-  // Registration Management Endpoints
+  // Legal Documents Management Endpoints (Refactored)
   // ============================================
 
   /**
-   * Get all pending registrations
+   * Get pending legal documents
    *
-   * Returns paginated list of clinic registrations awaiting admin approval
+   * Returns paginated list of legal documents with status PENDING_REVIEW
    */
-  @Get('/registrations-legal-documents')
+  @Get('legal-documents/pending')
   @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Get all clinic registrations' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiOperation({ summary: 'Get pending legal documents (PENDING_REVIEW)' })
   @ApiResponseData({
-    type: RegistrationListResponseDto,
+    type: PendingLegalDocumentsResponseDto,
     status: 200,
-    message: 'Registrations retrieved successfully',
+    message: 'Pending legal documents retrieved successfully',
   })
-  async getRegistrations(
-    @Query('page', ParseIntPipe, new DefaultValuePipe(1)) page: number,
-    @Query('limit', ParseIntPipe, new DefaultValuePipe(10)) limit: number,
-  ): Promise<{ data: RegistrationListResponseDto; message: string }> {
-    const result = await this.adminService.getAllRegistrations(page, limit);
+  async getPendingLegalDocuments(
+    @Query() query: PaginationQueryDto,
+  ): Promise<{ data: PendingLegalDocumentsResponseDto; message: string }> {
+    const result = await this.adminService.getPendingLegalDocuments(
+      query.page,
+      query.limit,
+      query.sortBy,
+      query.sortOrder,
+    );
     return {
       data: result,
-      message: 'Registrations retrieved successfully',
+      message: 'Pending legal documents retrieved successfully',
     };
   }
+
+  /**
+   * Get approved legal documents
+   *
+   * Returns paginated list of legal documents with status APPROVED
+   */
+  @Get('legal-documents/approved')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Get approved legal documents (APPROVED)' })
+  @ApiResponseData({
+    type: ApprovedLegalDocumentsResponseDto,
+    status: 200,
+    message: 'Approved legal documents retrieved successfully',
+  })
+  async getApprovedLegalDocuments(
+    @Query() query: PaginationQueryDto,
+  ): Promise<{ data: ApprovedLegalDocumentsResponseDto; message: string }> {
+    const result = await this.adminService.getApprovedLegalDocuments(
+      query.page,
+      query.limit,
+      query.sortBy,
+      query.sortOrder,
+    );
+    return {
+      data: result,
+      message: 'Approved legal documents retrieved successfully',
+    };
+  }
+
+  /**
+   * Get rejected legal documents
+   *
+   * Returns paginated list of legal documents with status REJECTED
+   */
+  @Get('legal-documents/rejected')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Get rejected legal documents (REJECTED)' })
+  @ApiResponseData({
+    type: RejectedLegalDocumentsResponseDto,
+    status: 200,
+    message: 'Rejected legal documents retrieved successfully',
+  })
+  async getRejectedLegalDocuments(
+    @Query() query: PaginationQueryDto,
+  ): Promise<{ data: RejectedLegalDocumentsResponseDto; message: string }> {
+    const result = await this.adminService.getRejectedLegalDocuments(
+      query.page,
+      query.limit,
+      query.sortBy,
+      query.sortOrder,
+    );
+    return {
+      data: result,
+      message: 'Rejected legal documents retrieved successfully',
+    };
+  }
+
+  /**
+   * Get not submitted registrations
+   *
+   * Returns paginated list of registrations with legal documents NOT_SUBMITTED
+   */
+  @Get('legal-documents/not-submitted')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Get not submitted registrations (NOT_SUBMITTED)' })
+  @ApiResponseData({
+    type: NotSubmittedLegalDocumentsResponseDto,
+    status: 200,
+    message: 'Not submitted registrations retrieved successfully',
+  })
+  async getNotSubmittedRegistrations(
+    @Query() query: PaginationQueryDto,
+  ): Promise<{ data: NotSubmittedLegalDocumentsResponseDto; message: string }> {
+    const result = await this.adminService.getNotSubmittedRegistrations(
+      query.page,
+      query.limit,
+      query.sortBy,
+      query.sortOrder,
+    );
+    return {
+      data: result,
+      message: 'Not submitted registrations retrieved successfully',
+    };
+  }
+
+  // ============================================
+  // Registration Management Endpoints (Legacy - Keep for backward compatibility)
+  // ============================================
 
   /**
    * Get registration details by ID
@@ -115,54 +208,49 @@ export class AdminController {
   }
 
   /**
-   * Approve a clinic registration
+   * Approve a clinic registration by subscription ID
    *
    * Approves the legal documents and transitions subscription to PENDING_PAYMENT
    */
-  @Post('/registrations-legal-documents/:id/approve')
+  @Post('registrations/:subscriptionId/approve')
   @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Approve a clinic registration' })
+  @ApiOperation({ summary: 'Approve a clinic registration by subscription ID' })
+  @ApiParam({ name: 'subscriptionId', type: 'string', description: 'Subscription ID (UUID)' })
   @ApiResponseData({
-    type: null,
+    type: ApprovalSuccessResponseDto,
     status: 200,
     message: 'Registration approved successfully',
   })
-  async approveRegistration(
-    @Param('id') id: string,
-  ): Promise<{ data: null; message: string }> {
-    await this.adminService.approveRegistration(id);
-    return {
-      data: null,
-      message: 'Registration approved successfully',
-    };
+  async approveRegistrationBySubscriptionId(
+    @Param('subscriptionId', ParseUUIDPipe) subscriptionId: string,
+  ): Promise<ApprovalSuccessResponseDto> {
+    return await this.adminService.approveRegistrationBySubscriptionId(subscriptionId);
   }
 
   /**
-   * Reject a clinic registration
+   * Reject a clinic registration by subscription ID
    *
    * Rejects the legal documents and stores rejection reason
+   * IMPORTANT: Reverts subscription status to PENDING_LEGAL_SETUP (not REJECTED)
    */
-  @Post('/registrations-legal-documents/:id/reject')
+  @Post('registrations/:subscriptionId/reject')
   @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Reject a clinic registration' })
+  @ApiOperation({ summary: 'Reject a clinic registration by subscription ID' })
+  @ApiParam({ name: 'subscriptionId', type: 'string', description: 'Subscription ID (UUID)' })
+  @ApiBody({ type: RejectRegistrationDto })
   @ApiResponseData({
-    type: null,
+    type: RejectionSuccessResponseDto,
     status: 200,
     message: 'Registration rejected successfully',
   })
-  async rejectRegistration(
-    @Param('id') id: string,
-    @Body() dto: AdminApprovalDto,
-  ): Promise<{ data: null; message: string }> {
-    await this.adminService.rejectRegistration(
-      id,
-      dto.reason || 'No reason provided',
-    );
-    return {
-      data: null,
-      message: 'Registration rejected successfully',
-    };
+  async rejectRegistrationBySubscriptionId(
+    @Param('subscriptionId', ParseUUIDPipe) subscriptionId: string,
+    @Body() dto: RejectRegistrationDto,
+  ): Promise<RejectionSuccessResponseDto> {
+    return await this.adminService.rejectRegistrationBySubscriptionId(subscriptionId, dto.reason);
   }
+
+
 
   // ============================================
   // Statistics Endpoints
