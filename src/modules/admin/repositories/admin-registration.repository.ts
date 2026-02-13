@@ -39,46 +39,30 @@ export class AdminRegistrationRepository {
   ) {}
 
   /**
-   * Find pending approvals with pagination
+   * Find all registrations with pagination
    *
-   * Returns clinic admin accounts with PENDING_APPROVAL status
+   * Returns clinic admin accounts with their registration status
    */
-  async findPendingApprovals(
+  async findAllRegistrations(
     page: number,
     limit: number,
   ): Promise<[RegistrationListItemDto[], number]> {
     const skip = (page - 1) * limit;
 
-    // Query to find clinic admin accounts with pending approval status
+    // Query to find clinic admin accounts
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.children', 'childAccounts')
-      .leftJoinAndSelect('childAccounts.clinicManagerInformation', 'clinicManagerInfo')
-      .leftJoinAndSelect('childAccounts.clinicManagerInformation', 'managerInfo')
-      .leftJoin(
-        'clinic_subcriptions',
-        'subscription',
-        'subscription.clinic_id = account._id',
+      .leftJoinAndSelect(
+        'childAccounts.clinicManagerInformation',
+        'clinicManagerInfo',
       )
+      // New relation: subscription
+      .leftJoinAndSelect('account.subscription', 'subscription')
+      .leftJoinAndSelect('account.legalDocuments', 'legalDocs')
       .where('account.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('subscription.subscription_status = :status', {
-        status: RegistrationStatus.PENDING_APPROVAL,
-      })
-      .leftJoin(
-        'clinics_legal_documents',
-        'legalDocs',
-        'legalDocs.account_id = childAccounts._id',
-      )
-      .addSelect([
-        'account._id',
-        'account.email',
-        'account.phone',
-        'account.createdAt',
-        'clinicAdminInfo.clinicName',
-        'legalDocs.verificationStatus',
-        'subscription.subscriptionStatus',
-      ])
+      // Use logical ordering: pending first, then by date
       .orderBy('account.createdAt', 'DESC')
       .skip(skip)
       .take(limit);
@@ -87,23 +71,23 @@ export class AdminRegistrationRepository {
 
     // Map to DTOs
     const items: RegistrationListItemDto[] = accounts.map((account) => {
-      const subscription = account.children?.find(
-        (child) =>
-          child.clinicManagerInformation &&
-          child.clinicManagerInformation.accountId === child._id,
-      );
+      // Status comes from subscription or default to PENDING_SEPAY_SETUP
+      const status =
+        account.subscription?.subscriptionStatus ||
+        RegistrationStatus.PENDING_SEPAY_SETUP;
 
-      const legalDocs = subscription?.clinicManagerInformation
-        ? null
-        : null;
+      // Legal docs status comes from the relation
+      const legalDocsStatus =
+        account.legalDocuments?.verificationStatus ||
+        LegalDocumentVerificationStatus.NOT_SUBMITTED;
 
       return {
         clinicAdminId: account._id,
         clinicName: account.clinicAdminInformation?.clinicName || '',
         email: account.email,
         phone: account.phone || '',
-        legalDocsStatus: legalDocs?.verificationStatus || 'NOT_SUBMITTED',
-        status: RegistrationStatus.PENDING_APPROVAL,
+        legalDocsStatus: legalDocsStatus,
+        status: status,
         submittedAt: account.createdAt,
       };
     });

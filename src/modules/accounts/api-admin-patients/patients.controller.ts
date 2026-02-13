@@ -14,6 +14,7 @@ import { PatientsService } from './patients.service';
 import { PatientResponseDto } from './dto/patient-response.dto';
 import { PatientAppointmentStatisticsDto } from './dto/patient-appointment-statistics.dto';
 import { BanPatientDto } from './dto/ban-patient.dto';
+import { BanHistory } from '../entities/ban-history.entity';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -86,5 +87,17 @@ export class PatientsController {
   @ApiResponse({ status: 404, description: 'Patient not found' })
   async unbanPatient(@Param('id', ParseUUIDPipe) id: string) {
     return this.patientsService.unbanPatient(id);
+  }
+
+  @Get(':id/ban-history')
+  @ApiOperation({ summary: 'Get patient ban history' })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient ban history',
+    type: [BanHistory],
+  })
+  @ApiResponse({ status: 404, description: 'Patient not found' })
+  async getBanHistory(@Param('id', ParseUUIDPipe) id: string) {
+    return this.patientsService.getBanHistory(id);
   }
 }

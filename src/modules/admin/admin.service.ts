@@ -38,16 +38,16 @@ export class AdminService {
   ) {}
 
   /**
-   * Get pending approvals with pagination
+   * Get all registrations with pagination
    *
-   * Returns paginated list of clinic registrations awaiting approval
+   * Returns paginated list of clinic registrations
    */
-  async getPendingApprovals(
+  async getAllRegistrations(
     page: number = 1,
     limit: number = 10,
   ): Promise<RegistrationListResponseDto> {
     const [registrations, total] =
-      await this.adminRegistrationRepository.findPendingApprovals(page, limit);
+      await this.adminRegistrationRepository.findAllRegistrations(page, limit);
 
     const totalPages = Math.ceil(total / limit);
 
@@ -73,7 +73,9 @@ export class AdminService {
     clinicAdminId: string,
   ): Promise<RegistrationDetailResponseDto> {
     const registration =
-      await this.adminRegistrationRepository.findRegistrationById(clinicAdminId);
+      await this.adminRegistrationRepository.findRegistrationById(
+        clinicAdminId,
+      );
 
     if (!registration) {
       throw new NotFoundException('Registration not found');
@@ -95,7 +97,9 @@ export class AdminService {
     try {
       // Find the clinic admin account
       const clinicAdmin =
-        await this.adminRegistrationRepository.findClinicAdminById(clinicAdminId);
+        await this.adminRegistrationRepository.findClinicAdminById(
+          clinicAdminId,
+        );
 
       if (!clinicAdmin) {
         throw new NotFoundException('Clinic admin account not found');
@@ -121,7 +125,10 @@ export class AdminService {
       }
 
       // Validate current status is PENDING_REVIEW
-      if (legalDocs.verificationStatus !== LegalDocumentVerificationStatus.PENDING_REVIEW) {
+      if (
+        legalDocs.verificationStatus !==
+        LegalDocumentVerificationStatus.PENDING_REVIEW
+      ) {
         throw new BadRequestException(
           'Legal documents are not in PENDING_REVIEW status',
         );
@@ -138,7 +145,9 @@ export class AdminService {
       }
 
       // Validate current subscription status is PENDING_APPROVAL
-      if (subscription.subscriptionStatus !== RegistrationStatus.PENDING_APPROVAL) {
+      if (
+        subscription.subscriptionStatus !== RegistrationStatus.PENDING_APPROVAL
+      ) {
         throw new BadRequestException(
           'Subscription is not in PENDING_APPROVAL status',
         );
@@ -189,7 +198,9 @@ export class AdminService {
     try {
       // Find the clinic admin account
       const clinicAdmin =
-        await this.adminRegistrationRepository.findClinicAdminById(clinicAdminId);
+        await this.adminRegistrationRepository.findClinicAdminById(
+          clinicAdminId,
+        );
 
       if (!clinicAdmin) {
         throw new NotFoundException('Clinic admin account not found');
@@ -215,7 +226,10 @@ export class AdminService {
       }
 
       // Validate current status is PENDING_REVIEW
-      if (legalDocs.verificationStatus !== LegalDocumentVerificationStatus.PENDING_REVIEW) {
+      if (
+        legalDocs.verificationStatus !==
+        LegalDocumentVerificationStatus.PENDING_REVIEW
+      ) {
         throw new BadRequestException(
           'Legal documents are not in PENDING_REVIEW status',
         );
@@ -232,7 +246,9 @@ export class AdminService {
       }
 
       // Validate current subscription status is PENDING_APPROVAL
-      if (subscription.subscriptionStatus !== RegistrationStatus.PENDING_APPROVAL) {
+      if (
+        subscription.subscriptionStatus !== RegistrationStatus.PENDING_APPROVAL
+      ) {
         throw new BadRequestException(
           'Subscription is not in PENDING_APPROVAL status',
         );
