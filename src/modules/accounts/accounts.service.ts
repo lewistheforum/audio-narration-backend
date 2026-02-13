@@ -1837,7 +1837,51 @@ export class AccountsService {
       );
     }
 
-    // Validate subscription status
+    // Role-specific validation logic
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      // CLINIC_ADMIN: Allow all statuses EXCEPT EXPIRED
+      if (subscription.subscriptionStatus === RegistrationStatus.EXPIRED) {
+        throw new ForbiddenException('Subscription expired');
+      }
+      // All other statuses (PENDING_*, ACTIVE, NON_RENEWING) are allowed
+      return;
+    }
+
+    if (account.role === AccountRole.CLINIC_MANAGER) {
+      // CLINIC_MANAGER: Two conditions must be met:
+      // 1. Parent subscription must be ACTIVE or NON_RENEWING
+      // 2. Manager's legal documents must be APPROVED
+
+      // Check parent subscription status
+      const allowedParentStatuses = [
+        RegistrationStatus.ACTIVE,
+        RegistrationStatus.NON_RENEWING,
+      ];
+
+      if (!allowedParentStatuses.includes(subscription.subscriptionStatus)) {
+        throw new ForbiddenException(
+          'Account is not ready or clinic is not active',
+        );
+      }
+
+      // Check legal documents verification status
+      const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        account._id,
+      );
+
+      if (
+        !legalDocs ||
+        legalDocs.verificationStatus !== LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          'Account is not ready or clinic is not active',
+        );
+      }
+
+      return;
+    }
+
+    // CLINIC_STAFF or DOCTOR: Validate parent subscription is ACTIVE or NON_RENEWING
     const allowedStatuses = [
       RegistrationStatus.ACTIVE,
       RegistrationStatus.NON_RENEWING,
@@ -3403,20 +3447,6 @@ export class AccountsService {
           };
         }
         break;
-      case RegistrationStatus.REJECTED:
-        currentStep = 'STEP_4';
-        nextAction = 'Update legal documents and resubmit';
-        if (!managerAccountId) {
-          return {
-            status,
-            currentStep,
-            nextAction,
-            canResume: false,
-            message:
-              'Registration data is inconsistent. Please contact support.',
-          };
-        }
-        break;
       case RegistrationStatus.PENDING_PAYMENT:
         currentStep = 'STEP_5';
         nextAction = 'Complete payment for subscription';
@@ -3804,7 +3834,7 @@ export class AccountsService {
       );
     }
 
-    // Step 4: Validate subscription status is PENDING_LEGAL_SETUP or REJECTED
+    // Step 4: Validate subscription status is PENDING_LEGAL_SETUP
     const subscription =
       await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
     if (!subscription) {
@@ -3812,8 +3842,7 @@ export class AccountsService {
     }
     if (
       subscription.subscriptionStatus !==
-        RegistrationStatus.PENDING_LEGAL_SETUP &&
-      subscription.subscriptionStatus !== RegistrationStatus.REJECTED
+        RegistrationStatus.PENDING_LEGAL_SETUP
     ) {
       throw new ForbiddenException(
         `Cannot upload legal documents. Current status: ${subscription.subscriptionStatus}`,
@@ -3976,15 +4005,15 @@ export class AccountsService {
       );
     }
 
-    // Step 5: Validate subscription status is REJECTED
+    // Step 5: Validate subscription status is PENDING_LEGAL_SETUP
     const subscription =
       await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
     if (!subscription) {
       throw new NotFoundException('Clinic subscription not found');
     }
-    if (subscription.subscriptionStatus !== RegistrationStatus.REJECTED) {
+    if (subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP) {
       throw new BadRequestException(
-        `Cannot update legal documents. Current status: ${subscription.subscriptionStatus}. Expected: ${RegistrationStatus.REJECTED}`,
+        `Cannot update legal documents. Current status: ${subscription.subscriptionStatus}. Expected: PENDING_LEGAL_SETUP`,
       );
     }
 

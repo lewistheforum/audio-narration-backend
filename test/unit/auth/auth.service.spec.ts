@@ -272,7 +272,124 @@ describe('AuthService', () => {
                 jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
             });
 
-            it('should block CLINIC_MANAGER when subscription is EXPIRED', async () => {
+            // CLINIC_ADMIN Tests: Block ONLY EXPIRED status
+            it('should block CLINIC_ADMIN when subscription is EXPIRED', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    _id: 'admin-123',
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+                accountsService.validateClinicSubscription.mockRejectedValue(
+                    new ForbiddenException('Subscription expired'),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+                await expect(service.login(loginDto)).rejects.toThrow('Subscription expired');
+            });
+
+            it('should allow CLINIC_ADMIN login when subscription is PENDING_SEPAY_SETUP', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    _id: 'admin-123',
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+                expect(accountsService.validateClinicSubscription).toHaveBeenCalledWith(mockAdmin);
+            });
+
+            it('should allow CLINIC_ADMIN login when subscription is PENDING_MANAGER_SETUP', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    _id: 'admin-123',
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+            });
+
+            it('should allow CLINIC_ADMIN login when subscription is PENDING_LEGAL_SETUP', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    _id: 'admin-123',
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+            });
+
+            it('should allow CLINIC_ADMIN login when subscription is PENDING_APPROVAL', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    _id: 'admin-123',
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+            });
+
+            it('should allow CLINIC_ADMIN login when subscription is PENDING_PAYMENT', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    _id: 'admin-123',
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+            });
+
+            // CLINIC_MANAGER Tests: Block if parent subscription not ACTIVE/NON_RENEWING OR legal docs not APPROVED
+            it('should block CLINIC_MANAGER when parent subscription is EXPIRED', async () => {
                 const loginDto = { email: 'manager@clinic.com', password: 'password123' };
 
                 const mockManager = createMockAccount({
@@ -282,16 +399,107 @@ describe('AuthService', () => {
 
                 accountsService.findByEmail.mockResolvedValue(mockManager);
                 accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Clinic subscription is not active or has expired.'),
+                    new ForbiddenException('Account is not ready or clinic is not active'),
                 );
 
                 // Execute & Verify
                 await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
                 await expect(service.login(loginDto)).rejects.toThrow(
-                    'Clinic subscription is not active or has expired.',
+                    'Account is not ready or clinic is not active',
                 );
             });
 
+            it('should block CLINIC_MANAGER when parent subscription is PENDING_APPROVAL', async () => {
+                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+
+                const mockManager = createMockAccount({
+                    role: AccountRole.CLINIC_MANAGER,
+                    parentId: 'admin-123',
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockManager);
+                accountsService.validateClinicSubscription.mockRejectedValue(
+                    new ForbiddenException('Account is not ready or clinic is not active'),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+            });
+
+            it('should block CLINIC_MANAGER when legal documents are PENDING_REVIEW', async () => {
+                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+
+                const mockManager = createMockAccount({
+                    role: AccountRole.CLINIC_MANAGER,
+                    parentId: 'admin-123',
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockManager);
+                accountsService.validateClinicSubscription.mockRejectedValue(
+                    new ForbiddenException('Account is not ready or clinic is not active'),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+            });
+
+            it('should block CLINIC_MANAGER when legal documents are NOT_SUBMITTED', async () => {
+                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+
+                const mockManager = createMockAccount({
+                    role: AccountRole.CLINIC_MANAGER,
+                    parentId: 'admin-123',
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockManager);
+                accountsService.validateClinicSubscription.mockRejectedValue(
+                    new ForbiddenException('Account is not ready or clinic is not active'),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+            });
+
+            it('should allow CLINIC_MANAGER login when parent subscription is ACTIVE and legal docs are APPROVED', async () => {
+                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+
+                const mockManager = createMockAccount({
+                    role: AccountRole.CLINIC_MANAGER,
+                    parentId: 'admin-123',
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockManager);
+                // validateClinicSubscription passes (no rejection)
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+                expect(accountsService.validateClinicSubscription).toHaveBeenCalledWith(mockManager);
+            });
+
+            it('should allow CLINIC_MANAGER login when parent subscription is NON_RENEWING and legal docs are APPROVED', async () => {
+                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+
+                const mockManager = createMockAccount({
+                    role: AccountRole.CLINIC_MANAGER,
+                    parentId: 'admin-123',
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockManager);
+                // validateClinicSubscription passes
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+            });
+
+            // CLINIC_STAFF and DOCTOR tests
             it('should block CLINIC_STAFF when subscription is PENDING_PAYMENT', async () => {
                 const loginDto = { email: 'staff@clinic.com', password: 'password123' };
 
@@ -309,7 +517,7 @@ describe('AuthService', () => {
                 await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
             });
 
-            it('should block DOCTOR when subscription is REJECTED', async () => {
+            it('should block DOCTOR when subscription is EXPIRED', async () => {
                 const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
 
                 const mockDoctor = createMockAccount({
@@ -318,77 +526,6 @@ describe('AuthService', () => {
                 });
 
                 accountsService.findByEmail.mockResolvedValue(mockDoctor);
-                accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Clinic subscription is not active or has expired.'),
-                );
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-                await expect(service.login(loginDto)).rejects.toThrow(
-                    'Clinic subscription is not active or has expired.',
-                );
-            });
-
-            it('should block CLINIC_ADMIN when subscription is PENDING_SEPAY_SETUP', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
-
-                const mockAdmin = createMockAccount({
-                    _id: 'admin-123',
-                    role: AccountRole.CLINIC_ADMIN,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockAdmin);
-                accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Clinic subscription is not active or has expired.'),
-                );
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-            });
-
-            it('should block CLINIC_ADMIN when subscription is PENDING_MANAGER_SETUP', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
-
-                const mockAdmin = createMockAccount({
-                    _id: 'admin-123',
-                    role: AccountRole.CLINIC_ADMIN,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockAdmin);
-                accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Clinic subscription is not active or has expired.'),
-                );
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-            });
-
-            it('should block CLINIC_ADMIN when subscription is PENDING_LEGAL_SETUP', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
-
-                const mockAdmin = createMockAccount({
-                    _id: 'admin-123',
-                    role: AccountRole.CLINIC_ADMIN,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockAdmin);
-                accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Clinic subscription is not active or has expired.'),
-                );
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-            });
-
-            it('should block CLINIC_ADMIN when subscription is PENDING_APPROVAL', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
-
-                const mockAdmin = createMockAccount({
-                    _id: 'admin-123',
-                    role: AccountRole.CLINIC_ADMIN,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockAdmin);
                 accountsService.validateClinicSubscription.mockRejectedValue(
                     new ForbiddenException('Clinic subscription is not active or has expired.'),
                 );
