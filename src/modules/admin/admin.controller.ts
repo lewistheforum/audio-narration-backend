@@ -6,15 +6,12 @@ import {
   Query,
   Body,
   UseGuards,
-  ParseIntPipe,
-  DefaultValuePipe,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
@@ -26,9 +23,7 @@ import { AdminService } from './admin.service';
 import { AdminStatisticsService } from './admin-statistics.service';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import {
-  RegistrationListResponseDto,
   RegistrationDetailResponseDto,
-  AdminApprovalDto,
   YearQueryDto,
   MonthQueryDto,
   ServiceYearQueryDto,
@@ -190,33 +185,6 @@ export class AdminController {
   // ============================================
 
   /**
-   * Get all pending registrations
-   *
-   * Returns paginated list of clinic registrations awaiting admin approval
-   * @deprecated Use GET /admin/legal-documents/pending instead
-   */
-  @Get('/registrations-legal-documents')
-  @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Get all clinic registrations' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiResponseData({
-    type: RegistrationListResponseDto,
-    status: 200,
-    message: 'Registrations retrieved successfully',
-  })
-  async getRegistrations(
-    @Query('page', ParseIntPipe, new DefaultValuePipe(1)) page: number,
-    @Query('limit', ParseIntPipe, new DefaultValuePipe(10)) limit: number,
-  ): Promise<{ data: RegistrationListResponseDto; message: string }> {
-    const result = await this.adminService.getAllRegistrations(page, limit);
-    return {
-      data: result,
-      message: 'Registrations retrieved successfully',
-    };
-  }
-
-  /**
    * Get registration details by ID
    *
    * Returns full registration details for a specific clinic
@@ -282,57 +250,7 @@ export class AdminController {
     return await this.adminService.rejectRegistrationBySubscriptionId(subscriptionId, dto.reason);
   }
 
-  /**
-   * Approve a clinic registration (Legacy)
-   *
-   * Approves the legal documents and transitions subscription to PENDING_PAYMENT
-   * @deprecated Use POST /admin/registrations/:subscriptionId/approve instead
-   */
-  @Post('registrations/:id/approve')
-  @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Approve a clinic registration (DEPRECATED - use subscription ID endpoint)' })
-  @ApiResponseData({
-    type: null,
-    status: 200,
-    message: 'Registration approved successfully',
-  })
-  async approveRegistration(
-    @Param('id') id: string,
-  ): Promise<{ data: null; message: string }> {
-    await this.adminService.approveRegistration(id);
-    return {
-      data: null,
-      message: 'Registration approved successfully',
-    };
-  }
 
-  /**
-   * Reject a clinic registration (Legacy)
-   *
-   * Rejects the legal documents and stores rejection reason
-   * @deprecated Use POST /admin/registrations/:subscriptionId/reject instead
-   */
-  @Post('/registrations-legal-documents/:id/reject')
-  @Roles(AccountRole.ADMIN)
-  @ApiOperation({ summary: 'Reject a clinic registration (DEPRECATED - use subscription ID endpoint)' })
-  @ApiResponseData({
-    type: null,
-    status: 200,
-    message: 'Registration rejected successfully',
-  })
-  async rejectRegistration(
-    @Param('id') id: string,
-    @Body() dto: AdminApprovalDto,
-  ): Promise<{ data: null; message: string }> {
-    await this.adminService.rejectRegistration(
-      id,
-      dto.reason || 'No reason provided',
-    );
-    return {
-      data: null,
-      message: 'Registration rejected successfully',
-    };
-  }
 
   // ============================================
   // Statistics Endpoints

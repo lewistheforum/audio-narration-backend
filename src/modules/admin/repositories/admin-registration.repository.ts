@@ -9,7 +9,6 @@ import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscrip
 import { AccountRole } from '../../accounts/enums/account-role.enum';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 import {
-  RegistrationListItemDto,
   RegistrationDetailResponseDto,
   ClinicAdminInfoDto,
   ClinicManagerInfoDto,
@@ -37,63 +36,6 @@ export class AdminRegistrationRepository {
     @InjectRepository(ClinicSubscription)
     private readonly clinicSubscriptionRepository: Repository<ClinicSubscription>,
   ) {}
-
-  /**
-   * Find all registrations with pagination
-   *
-   * Returns clinic admin accounts with their registration status
-   */
-  async findAllRegistrations(
-    page: number,
-    limit: number,
-  ): Promise<[RegistrationListItemDto[], number]> {
-    const skip = (page - 1) * limit;
-
-    // Query to find clinic admin accounts
-    const queryBuilder = this.accountRepository
-      .createQueryBuilder('account')
-      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.children', 'childAccounts')
-      .leftJoinAndSelect(
-        'childAccounts.clinicManagerInformation',
-        'clinicManagerInfo',
-      )
-      // New relation: subscription
-      .leftJoinAndSelect('account.subscription', 'subscription')
-      .leftJoinAndSelect('account.legalDocuments', 'legalDocs')
-      .where('account.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      // Use logical ordering: pending first, then by date
-      .orderBy('account.createdAt', 'DESC')
-      .skip(skip)
-      .take(limit);
-
-    const [accounts, total] = await queryBuilder.getManyAndCount();
-
-    // Map to DTOs
-    const items: RegistrationListItemDto[] = accounts.map((account) => {
-      // Status comes from subscription or default to PENDING_SEPAY_SETUP
-      const status =
-        account.subscription?.subscriptionStatus ||
-        RegistrationStatus.PENDING_SEPAY_SETUP;
-
-      // Legal docs status comes from the relation
-      const legalDocsStatus =
-        account.legalDocuments?.verificationStatus ||
-        LegalDocumentVerificationStatus.NOT_SUBMITTED;
-
-      return {
-        clinicAdminId: account._id,
-        clinicName: account.clinicAdminInformation?.clinicName || '',
-        email: account.email,
-        phone: account.phone || '',
-        legalDocsStatus: legalDocsStatus,
-        status: status,
-        submittedAt: account.createdAt,
-      };
-    });
-
-    return [items, total];
-  }
 
   /**
    * Find registration details by clinic admin ID
