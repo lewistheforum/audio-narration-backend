@@ -6,6 +6,7 @@ import { Account } from '../entities/accounts.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
 import { ClinicManagerInformation } from '../entities/clinic_manager_information.entity';
 import { ClinicAdminInformation } from '../entities/clinic-admin-information.entity';
+import { BanHistory } from '../entities/ban-history.entity';
 
 import { MailerModule } from '../../mailer/mailer.module';
 
@@ -16,6 +17,7 @@ import { MailerModule } from '../../mailer/mailer.module';
       Appointment,
       ClinicManagerInformation,
       ClinicAdminInformation,
+      BanHistory,
     ]),
     MailerModule,
   ],
