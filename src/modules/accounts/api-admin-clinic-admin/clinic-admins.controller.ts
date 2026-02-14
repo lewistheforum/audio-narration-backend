@@ -8,8 +8,15 @@ import {
   DefaultValuePipe,
   Post,
   Body,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ClinicAdminsService } from './clinic-admins.service';
 import {
   ClinicAdminResponseDto,
@@ -22,13 +29,18 @@ import {
 import { ClinicAdminClinicServiceDto } from './dto/clinic-admin-clinic-service.dto';
 import { BanClinicAdminDto } from './dto/ban-clinic-admin.dto';
 
+import { JwtAuthGuard } from '../../auth/jwt.strategy';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+
 /**
  * ClinicAdminsController
  *
  * Admin-facing endpoints for managing and viewing clinic admin accounts
  */
-@ApiTags('Clinic Admins')
+@ApiTags('Clinic Admin')
 @Controller('clinic-admins')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT-auth')
 export class ClinicAdminsController {
   constructor(private readonly clinicAdminsService: ClinicAdminsService) {}
 
