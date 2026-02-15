@@ -190,12 +190,23 @@ export class AdminRegistrationRepository {
     const queryBuilder = this.legalDocumentsRepository
       .createQueryBuilder('legalDocs')
       .leftJoinAndSelect('legalDocs.account', 'managerAccount')
-      .leftJoin('accounts', 'adminAccount', 'adminAccount._id = managerAccount.parent_id')
+      .leftJoin(
+        'accounts',
+        'adminAccount',
+        'adminAccount._id = managerAccount.parent_id',
+      )
       .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
-      .leftJoin('clinic_subcriptions', 'subscription', 'subscription.clinic_id = adminAccount._id')
-      .where('legalDocs.verification_status = :status', { status: 'PENDING_REVIEW' })
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
+      .where('legalDocs.verification_status = :status', {
+        status: 'PENDING_REVIEW',
+      })
       .select([
-        'legalDocs._id as "id"',
+        'adminAccount._id as "id"',
+        'legalDocs._id as "legalDocumentId"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
         'managerAccount.email as "managerEmail"',
@@ -204,14 +215,19 @@ export class AdminRegistrationRepository {
         'legalDocs.business_license as "businessLicense"',
         'legalDocs.created_at as "submittedAt"',
       ])
-      .orderBy(`legalDocs.${sortBy === 'clinicName' ? 'created_at' : sortBy}`, sortOrder)
+      .orderBy(
+        `legalDocs.${sortBy === 'clinicName' ? 'created_at' : sortBy}`,
+        sortOrder,
+      )
       .offset(skip)
       .limit(limit);
 
     const [data, total] = await Promise.all([
       queryBuilder.getRawMany(),
       this.legalDocumentsRepository.count({
-        where: { verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW },
+        where: {
+          verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW,
+        },
       }),
     ]);
 
@@ -232,19 +248,31 @@ export class AdminRegistrationRepository {
     const queryBuilder = this.legalDocumentsRepository
       .createQueryBuilder('legalDocs')
       .leftJoinAndSelect('legalDocs.account', 'managerAccount')
-      .leftJoin('accounts', 'adminAccount', 'adminAccount._id = managerAccount.parent_id')
+      .leftJoin(
+        'accounts',
+        'adminAccount',
+        'adminAccount._id = managerAccount.parent_id',
+      )
       .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
-      .leftJoin('clinic_subcriptions', 'subscription', 'subscription.clinic_id = adminAccount._id')
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('legalDocs.verification_status = :status', { status: 'APPROVED' })
       .select([
-        'legalDocs._id as "id"',
+        'adminAccount._id as "id"',
+        'legalDocs._id as "legalDocumentId"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.updated_at as "approvedAt"',
       ])
-      .orderBy(`legalDocs.${sortBy === 'clinicName' ? 'updated_at' : sortBy}`, sortOrder)
+      .orderBy(
+        `legalDocs.${sortBy === 'clinicName' ? 'updated_at' : sortBy}`,
+        sortOrder,
+      )
       .offset(skip)
       .limit(limit);
 
@@ -272,12 +300,21 @@ export class AdminRegistrationRepository {
     const queryBuilder = this.legalDocumentsRepository
       .createQueryBuilder('legalDocs')
       .leftJoinAndSelect('legalDocs.account', 'managerAccount')
-      .leftJoin('accounts', 'adminAccount', 'adminAccount._id = managerAccount.parent_id')
+      .leftJoin(
+        'accounts',
+        'adminAccount',
+        'adminAccount._id = managerAccount.parent_id',
+      )
       .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
-      .leftJoin('clinic_subcriptions', 'subscription', 'subscription.clinic_id = adminAccount._id')
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('legalDocs.verification_status = :status', { status: 'REJECTED' })
       .select([
-        'legalDocs._id as "id"',
+        'adminAccount._id as "id"',
+        'legalDocs._id as "legalDocumentId"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
         'managerAccount.email as "managerEmail"',
@@ -285,7 +322,10 @@ export class AdminRegistrationRepository {
         'legalDocs.rejection_reason as "rejectionReason"',
         'legalDocs.updated_at as "rejectedAt"',
       ])
-      .orderBy(`legalDocs.${sortBy === 'clinicName' ? 'updated_at' : sortBy}`, sortOrder)
+      .orderBy(
+        `legalDocs.${sortBy === 'clinicName' ? 'updated_at' : sortBy}`,
+        sortOrder,
+      )
       .offset(skip)
       .limit(limit);
 
@@ -315,20 +355,35 @@ export class AdminRegistrationRepository {
       .createQueryBuilder('adminAccount')
       .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
       .leftJoin('adminAccount.children', 'managerAccount')
-      .leftJoin('clinics_legal_documents', 'legalDocs', 'legalDocs.account_id = managerAccount._id')
-      .leftJoin('clinic_subcriptions', 'subscription', 'subscription.clinic_id = adminAccount._id')
+      .leftJoin(
+        'clinics_legal_documents',
+        'legalDocs',
+        'legalDocs.account_id = managerAccount._id',
+      )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('adminAccount.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('(legalDocs.verification_status = :status OR legalDocs._id IS NULL)', {
-        status: 'NOT_SUBMITTED',
-      })
+      .andWhere(
+        '(legalDocs.verification_status = :status OR legalDocs._id IS NULL)',
+        {
+          status: 'NOT_SUBMITTED',
+        },
+      )
       .select([
+        'adminAccount._id as "id"',
         'clinicInfo.clinic_name as "clinicName"',
         'adminAccount.email as "adminEmail"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.created_at as "registrationDate"',
         'subscription.subscription_status as "currentStatus"',
       ])
-      .orderBy(`adminAccount.${sortBy === 'clinicName' ? 'created_at' : sortBy}`, sortOrder)
+      .orderBy(
+        `adminAccount.${sortBy === 'clinicName' ? 'created_at' : sortBy}`,
+        sortOrder,
+      )
       .offset(skip)
       .limit(limit);
 
@@ -338,7 +393,8 @@ export class AdminRegistrationRepository {
     const enrichedData = data.map((item) => ({
       ...item,
       daysSinceRegistration: Math.floor(
-        (Date.now() - new Date(item.registrationDate).getTime()) / (1000 * 60 * 60 * 24),
+        (Date.now() - new Date(item.registrationDate).getTime()) /
+          (1000 * 60 * 60 * 24),
       ),
     }));
 
@@ -346,11 +402,18 @@ export class AdminRegistrationRepository {
     const countQuery = this.accountRepository
       .createQueryBuilder('adminAccount')
       .leftJoin('adminAccount.children', 'managerAccount')
-      .leftJoin('clinics_legal_documents', 'legalDocs', 'legalDocs.account_id = managerAccount._id')
+      .leftJoin(
+        'clinics_legal_documents',
+        'legalDocs',
+        'legalDocs.account_id = managerAccount._id',
+      )
       .where('adminAccount.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('(legalDocs.verification_status = :status OR legalDocs._id IS NULL)', {
-        status: 'NOT_SUBMITTED',
-      });
+      .andWhere(
+        '(legalDocs.verification_status = :status OR legalDocs._id IS NULL)',
+        {
+          status: 'NOT_SUBMITTED',
+        },
+      );
 
     const total = await countQuery.getCount();
 
