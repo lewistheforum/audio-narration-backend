@@ -25,6 +25,7 @@ import { SeedersModule } from './common/seeders/seeders.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PatientsModule } from './modules/accounts/api-admin-patients/patients.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
+import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/clinic-admins.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     SeedersModule,
     AdminModule,
     PatientsModule,
+    ClinicAdminsModule,
   ],
   controllers: [],
   providers: [],
