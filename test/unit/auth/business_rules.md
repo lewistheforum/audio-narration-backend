@@ -18,11 +18,11 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và logic xác thự
 ### 2.1. Quy Trình Xác Thực
 ```
 1. Validate Email & Password
-2. Check Account Status (BAN, PENDING, INACTIVE, DELETED, EXPIRED, REFILL)
+2. Check Account Status (BAN, DELETED only - UNVERIFIED allowed)
 3. Check Clinic Subscription Status (For clinic roles only)
 4. Generate JWT Token
 5. Mark User Online
-6. Return User Data
+6. Return User Data with Conditional Message
 ```
 
 ### 2.2. Thứ Tự Ưu Tiên Validation
@@ -40,17 +40,20 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và logic xác thự
 ### 3.1. Account Status Enum
 | Status | Description | Exception | Message |
 |:-------|:------------|:----------|:--------|
-| `ACTIVE` | ✅ Hoạt động bình thường | - | - |
+| `ACTIVE` | ✅ Hoạt động bình thường | - | "User logged in successfully" |
+| `UNVERIFIED` | ⚠️ Chưa xác thực email (Cho phép đăng nhập) | - | "Login successful. Please verify your email address to access full features." |
 | `BAN` | ❌ Tài khoản bị cấm | `ForbiddenException` | "Your account has been banned." |
-| `PENDING` | ❌ Chờ xác thực email | `UnauthorizedException` | "Email verification required." |
-| `INACTIVE` | ❌ Tài khoản bị vô hiệu hóa | `UnauthorizedException` | "Your account is inactive." |
 | `DELETED` | ❌ Tài khoản đã xóa | `UnauthorizedException` | "Your account has been deleted." |
-| `EXPIRED` | ❌ Thuê bao hết hạn | `ForbiddenException` | "Your subscription has expired." |
-| `REFILL` | ❌ Cần nạp tiền | `ForbiddenException` | "Your account needs a refill." |
 
 ### 3.2. Quy Tắc Ngắt Luồng
--   **BR-01**: Nếu Account Status ≠ `ACTIVE` → Dừng ngay, không check Subscription.
+-   **BR-01**: Chỉ `BAN` và `DELETED` status sẽ chặn đăng nhập. `UNVERIFIED` và `ACTIVE` được phép.
 -   **BR-02**: Account Status check được gọi **trước** Subscription check.
+-   **BR-03**: `UNVERIFIED` status cho phép đăng nhập nhưng trả về message cảnh báo.
+
+### 3.3. Message Logic (NEW)
+-   **BR-04**: Response message phụ thuộc vào Account Status:
+    -   `ACTIVE` → "User logged in successfully"
+    -   `UNVERIFIED` → "Login successful. Please verify your email address to access full features."
 
 ---
 
@@ -166,9 +169,10 @@ blockedStatuses = [
 
 ### 6.2. BR-08: Token Generation Timing
 -   Token chỉ được generate **sau khi** tất cả validation passed.
+-   Token **vẫn được** generate cho `UNVERIFIED` users (với message khác).
 -   Token **không** được generate nếu:
     -   Password sai
-    -   Account Status blocked
+    -   Account Status = `BAN` hoặc `DELETED`
     -   Subscription blocked
 
 ---
@@ -188,21 +192,24 @@ JWT Token Generated → Mark Online → Return Response
 
 ## 8. Error Handling Matrix
 
+### 8.1. Error Scenarios
 | Scenario | Exception | HTTP Status | Message Pattern |
 |:---------|:----------|:------------|:----------------|
 | Wrong Password | `UnauthorizedException` | 401 | "Invalid credentials" |
 | User Not Found | `UnauthorizedException` | 401 | "Invalid credentials" |
 | Account BAN | `ForbiddenException` | 403 | "banned" |
-| Account PENDING | `UnauthorizedException` | 401 | "verification required" |
-| Account INACTIVE | `UnauthorizedException` | 401 | "inactive" |
 | Account DELETED | `UnauthorizedException` | 401 | "deleted" |
-| Account EXPIRED | `ForbiddenException` | 403 | "expired" |
-| Account REFILL | `ForbiddenException` | 403 | "refill" |
 | Subscription EXPIRED | `ForbiddenException` | 403 | "not active or has expired" |
 | Subscription PENDING_* | `ForbiddenException` | 403 | "not active or has expired" |
 | No Parent | `ForbiddenException` | 403 | "No parent account found" |
 | Invalid Hierarchy | `ForbiddenException` | 403 | "Invalid account hierarchy" |
 | No Subscription | `ForbiddenException` | 403 | "subscription not found" |
+
+### 8.2. Success Scenarios with Conditional Messages
+| Scenario | Exception | HTTP Status | Message |
+|:---------|:----------|:------------|:--------|
+| Account ACTIVE | - | 200 | "User logged in successfully" |
+| Account UNVERIFIED | - | 200 | "Login successful. Please verify your email address to access full features." |
 
 ---
 
@@ -212,12 +219,13 @@ JWT Token Generated → Mark Online → Return Response
 ```
 1. findByEmail(email)
 2. bcrypt.compare(password, hash)
-3. validateAccountAccess(account)        // Account status check
+3. validateAccountAccess(account)        // Account status check (BAN/DELETED only)
 4. validateClinicSubscription(account)   // Subscription check (clinic roles)
-5. jwtService.sign(payload)              // Generate token
-6. socketGatewayService.markUserOnline() // Mark online
-7. findGeneralAccountByUserId()          // Get profile data
-8. Return { accessToken, userId, user }
+5. Determine message (ACTIVE vs UNVERIFIED) // NEW
+6. jwtService.sign(payload)              // Generate token
+7. socketGatewayService.markUserOnline() // Mark online
+8. findGeneralAccountByUserId()          // Get profile data
+9. Return { data: { accessToken, userId, user }, message }
 ```
 
 ### 9.2. Short-Circuit Behaviors
@@ -232,10 +240,12 @@ If password invalid → Throw immediately
 
 #### **BR-11: Early Exit on Account Status Fail**
 ```
-If account status blocked → Throw immediately
+If account status = BAN or DELETED → Throw immediately
   → Skip subscription check
   → Skip token generation
   → Skip mark online
+
+Note: UNVERIFIED status does NOT trigger early exit
 ```
 
 #### **BR-12: Early Exit on Subscription Fail**
@@ -272,6 +282,14 @@ If subscription blocked → Throw immediately
 -   No `parentId` required.
 -   No subscription lookup.
 
+### 10.5. UNVERIFIED Status Handling (NEW)
+-   **BR-17**: Users with `UNVERIFIED` status CAN login.
+-   Token is generated normally.
+-   Different success message returned: "Login successful. Please verify your email address to access full features."
+-   Use Cases:
+    -   New user registration (email not verified yet)
+    -   Existing user changed email (status reverted to UNVERIFIED)
+
 ---
 
 ## 11. Testing Requirements
@@ -281,6 +299,8 @@ If subscription blocked → Throw immediately
 - ✅ CLINIC_ADMIN login with NON_RENEWING subscription
 - ✅ PATIENT login (bypass subscription)
 - ✅ ADMIN login (bypass subscription)
+- ✅ UNVERIFIED users login with warning message (NEW)
+- ✅ ACTIVE users login with standard message (NEW)
 
 ### 11.2. Subscription Guard Coverage
 - ✅ Block all PENDING_* statuses
@@ -290,11 +310,23 @@ If subscription blocked → Throw immediately
 - ✅ Block when hierarchy invalid
 
 ### 11.3. Account Status Coverage
-- ✅ Block BAN, PENDING, INACTIVE, DELETED, EXPIRED, REFILL
+- ✅ Block BAN and DELETED only (UPDATED)
+- ✅ Allow UNVERIFIED users (NEW)
 - ✅ Verify exception types (401 vs 403)
 - ✅ Verify error messages
+- ✅ Verify conditional success messages (NEW)
 
-### 11.4. Integration Flow Coverage
+### 11.4. UNVERIFIED Status Coverage (NEW)
+- ✅ Allow UNVERIFIED user to login and return token
+- ✅ Return warning message for UNVERIFIED status
+- ✅ Return standard message for ACTIVE status
+- ✅ Call validateClinicSubscription for UNVERIFIED clinic users
+- ✅ Mark UNVERIFIED user as online
+- ✅ Generate JWT with correct payload for UNVERIFIED
+- ✅ Fetch general account data for UNVERIFIED
+- ✅ Validate account access (BAN/DELETED) for UNVERIFIED
+
+### 11.5. Integration Flow Coverage
 - ✅ Verify execution order
 - ✅ Verify short-circuit behaviors
 - ✅ Verify no side effects on failure

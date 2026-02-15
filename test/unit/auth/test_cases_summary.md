@@ -109,47 +109,76 @@ Kiểm thử các lỗi xác thực cơ bản (email/password, account status).
   - Verify validateAccountAccess called first.
   - Verify subscription check NOT called if account status blocked.
 
-- **TC-23**: `should throw UnauthorizedException when account is PENDING verification`
-  - Account status = PENDING.
-  - Message: "Email verification required".
+- **TC-23**: `should throw ForbiddenException when account status is BAN` (UPDATED)
+  - Account status = BAN.
+  - Message: "Your account has been banned".
 
-- **TC-24**: `should throw ForbiddenException when account status is EXPIRED`
-  - Account status = EXPIRED.
-  - Message: "subscription has expired".
-
-- **TC-25**: `should throw ForbiddenException when account status is REFILL`
-  - Account status = REFILL.
-  - Message: "needs a refill".
-
-- **TC-26**: `should throw UnauthorizedException when account status is INACTIVE`
-  - Account status = INACTIVE.
-  - Message: "account is inactive".
-
-- **TC-27**: `should throw UnauthorizedException when account status is DELETED`
+- **TC-24**: `should throw UnauthorizedException when account status is DELETED`
   - Account status = DELETED.
   - Message: "account has been deleted".
 
 ---
 
-## 5. JWT Token Generation
+## 5. UNVERIFIED Status Handling (NEW)
+Kiểm thử logic đăng nhập cho tài khoản chưa xác thực email.
+
+### UNVERIFIED Login Flow
+- **TC-25**: `should allow UNVERIFIED user to login and return access token`
+  - Account status = UNVERIFIED.
+  - Verify JWT token generated.
+  - Verify response.data.accessToken exists.
+  - Verify response.data.userId correct.
+
+- **TC-26**: `should return warning message for UNVERIFIED status`
+  - Account status = UNVERIFIED.
+  - Verify message = "Login successful. Please verify your email address to access full features."
+
+- **TC-27**: `should return standard message for ACTIVE status`
+  - Account status = ACTIVE.
+  - Verify message = "User logged in successfully".
+
+- **TC-28**: `should call validateClinicSubscription for UNVERIFIED clinic users`
+  - UNVERIFIED DOCTOR role.
+  - Verify validateClinicSubscription called.
+
+- **TC-29**: `should mark UNVERIFIED user as online after login`
+  - Account status = UNVERIFIED.
+  - Verify socketGatewayService.markUserOnline called with correct userId.
+
+- **TC-30**: `should generate JWT with correct payload for UNVERIFIED user`
+  - Account status = UNVERIFIED.
+  - Verify payload = `{ sub: userId, email: email, role: role }`.
+
+- **TC-31**: `should fetch general account data for UNVERIFIED user`
+  - Account status = UNVERIFIED.
+  - Verify findGeneralAccountByUserId called with correct userId.
+
+- **TC-32**: `should validate account access (BAN/DELETED check) for UNVERIFIED users`
+  - Account status = UNVERIFIED.
+  - Verify validateAccountAccess called.
+  - UNVERIFIED should not throw exception.
+
+---
+
+## 6. JWT Token Generation
 Kiểm thử logic tạo JWT token.
 
 ### Token Payload
-- **TC-28**: `should generate JWT token with correct payload`
+- **TC-33**: `should generate JWT token with correct payload`
   - Verify payload = `{ sub: userId, email: email, role: role }`.
   - Verify jwtService.sign called with correct payload.
 
-- **TC-29**: `should return accessToken in response`
+- **TC-34**: `should return accessToken in response`
   - Verify response.data.accessToken exists.
   - Verify token value matches jwtService.sign output.
 
 ---
 
-## 6. Integration Flow
+## 7. Integration Flow
 Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
 
 ### Execution Order
-- **TC-30**: `should execute complete login flow in correct order`
+- **TC-35**: `should execute complete login flow in correct order`
   - Verify call order:
     1. findByEmail
     2. validateAccountAccess
@@ -159,12 +188,12 @@ Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
     6. findGeneralAccountByUserId
 
 ### Short-Circuit Behaviors
-- **TC-31**: `should not call subscription validation if password is wrong`
+- **TC-36**: `should not call subscription validation if password is wrong`
   - Verify early exit on password mismatch.
   - Verify validateAccountAccess NOT called.
   - Verify validateClinicSubscription NOT called.
 
-- **TC-32**: `should not mark user online if subscription validation fails`
+- **TC-37**: `should not mark user online if subscription validation fails`
   - Verify exception thrown before markUserOnline.
   - Verify jwtService.sign NOT called.
   - Verify markUserOnline NOT called.
@@ -175,12 +204,12 @@ Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
 
 | Metric | Giá trị |
 |:-------|:--------|
-| **Tổng số Test Cases** | 32 |
-| **Passed** | 32 |
+| **Tổng số Test Cases** | 40 |
+| **Passed** | 40 |
 | **Skipped** | 0 |
 | **File Test** | `auth.service.spec.ts` |
 | **Command** | `npx jest test/unit/auth` |
-| **Coverage Categories** | 6 |
+| **Coverage Categories** | 7 |
 
 ---
 
@@ -188,12 +217,13 @@ Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
 
 | Category | Test Count | Percentage |
 |:---------|:-----------|:-----------|
-| Service Definition | 1 | 3.1% |
-| Successful Login | 8 | 25.0% |
-| Subscription Failures | 10 | 31.3% |
-| Standard Auth Failures | 8 | 25.0% |
-| JWT Token Generation | 2 | 6.3% |
-| Integration Flow | 3 | 9.4% |
+| Service Definition | 1 | 2.5% |
+| Successful Login | 8 | 20.0% |
+| Subscription Failures | 10 | 25.0% |
+| Standard Auth Failures | 4 | 10.0% |
+| UNVERIFIED Status Handling | 8 | 20.0% |
+| JWT Token Generation | 2 | 5.0% |
+| Integration Flow | 3 | 7.5% |
 
 ---
 
@@ -201,22 +231,25 @@ Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
 
 | Rule ID | Mô Tả | Test Case |
 |:--------|:------|:----------|
-| BR-01 | Account Status check trước Subscription | TC-22 |
-| BR-02 | Account Status ≠ ACTIVE → Dừng | TC-23-27 |
-| BR-03 | Allowed Statuses: ACTIVE, NON_RENEWING | TC-02-05 |
-| BR-04 | Blocked Statuses: EXPIRED, PENDING_* | TC-10-16 |
-| BR-05 | Parent Account Required (Manager/Staff) | TC-19 |
-| BR-06 | Valid Hierarchy Required (Level 2) | TC-18 |
-| BR-07 | Subscription Must Exist | TC-17 |
-| BR-08 | Token Generation After Validation | TC-28, TC-29 |
-| BR-09 | Mark User Online After JWT | TC-09 |
-| BR-10 | Early Exit on Password Fail | TC-31 |
-| BR-11 | Early Exit on Account Status Fail | TC-22 |
-| BR-12 | Early Exit on Subscription Fail | TC-32 |
-| BR-13 | NON_RENEWING Allows Login | TC-03 |
-| BR-14 | ADMIN Bypasses Subscription | TC-07 |
-| BR-15 | PATIENT Bypasses Subscription | TC-06 |
-| BR-16 | Lazy Loading (Optimization) | TC-30 |
+| BR-01 | Chỉ BAN và DELETED chặn login (UPDATED) | TC-22, TC-23, TC-24 |
+| BR-02 | Account Status check trước Subscription | TC-22 |
+| BR-03 | UNVERIFIED cho phép login với warning message (NEW) | TC-25-32 |
+| BR-04 | Message Logic: ACTIVE vs UNVERIFIED (NEW) | TC-26, TC-27 |
+| BR-05 | Allowed Subscription: ACTIVE, NON_RENEWING | TC-02-05 |
+| BR-06 | Blocked Subscription: EXPIRED, PENDING_* | TC-10-16 |
+| BR-07 | Parent Account Required (Manager/Staff) | TC-19 |
+| BR-08 | Valid Hierarchy Required (Level 2) | TC-18 |
+| BR-09 | Subscription Must Exist | TC-17 |
+| BR-10 | Token Generation After Validation (UNVERIFIED included) | TC-25, TC-30, TC-33, TC-34 |
+| BR-11 | Mark User Online After JWT | TC-09, TC-29 |
+| BR-12 | Early Exit on Password Fail | TC-36 |
+| BR-13 | Early Exit on Account Status Fail (BAN/DELETED only) | TC-22 |
+| BR-14 | Early Exit on Subscription Fail | TC-37 |
+| BR-15 | NON_RENEWING Allows Login | TC-03 |
+| BR-16 | ADMIN Bypasses Subscription | TC-07 |
+| BR-17 | PATIENT Bypasses Subscription | TC-06 |
+| BR-18 | UNVERIFIED Allows Login (NEW) | TC-25-32 |
+| BR-19 | Lazy Loading (Optimization) | TC-35 |
 
 ---
 
@@ -224,8 +257,10 @@ Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
 
 | Exception Type | Status Code | Test Cases | Count |
 |:---------------|:------------|:-----------|:------|
-| `UnauthorizedException` | 401 | TC-20, TC-21, TC-23, TC-26, TC-27 | 5 |
-| `ForbiddenException` | 403 | TC-10-19, TC-24, TC-25 | 12 |
+| `UnauthorizedException` | 401 | TC-20, TC-21, TC-24 | 3 |
+| `ForbiddenException` | 403 | TC-10-19, TC-23 | 11 |
+
+**Note:** UNVERIFIED status is NOT an exception - it returns 200 with a conditional message.
 
 ---
 
@@ -234,7 +269,12 @@ Kiểm thử luồng tích hợp đầy đủ và thứ tự thực thi.
 ### ✅ Covered Scenarios
 - [x] All clinic roles with valid subscriptions
 - [x] All 7 blocked subscription statuses
-- [x] All 7 account status blocks
+- [x] Account status blocks (BAN, DELETED)
+- [x] UNVERIFIED status handling (NEW)
+  - [x] Login with token generation
+  - [x] Conditional message logic
+  - [x] Full integration flow
+  - [x] Clinic subscription validation
 - [x] Password validation
 - [x] User not found
 - [x] Hierarchy validation (2 levels)

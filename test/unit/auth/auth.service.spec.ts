@@ -632,78 +632,6 @@ describe('AuthService', () => {
                 expect(accountsService.validateClinicSubscription).not.toHaveBeenCalled();
             });
 
-            it('should throw UnauthorizedException when account is PENDING verification', async () => {
-                const loginDto = { email: 'pending@example.com', password: 'password123' };
-
-                const mockPendingUser = createMockAccount({
-                    status: AccountStatus.PENDING,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockPendingUser);
-                accountsService.validateAccountAccess.mockImplementation(() => {
-                    throw new UnauthorizedException('Email verification required. Please verify your email to activate your account.');
-                });
-                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
-                await expect(service.login(loginDto)).rejects.toThrow('Email verification required');
-            });
-
-            it('should throw ForbiddenException when account status is EXPIRED', async () => {
-                const loginDto = { email: 'expired@example.com', password: 'password123' };
-
-                const mockExpiredUser = createMockAccount({
-                    status: AccountStatus.EXPIRED,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockExpiredUser);
-                accountsService.validateAccountAccess.mockImplementation(() => {
-                    throw new ForbiddenException('Your subscription has expired. Please renew your subscription to continue.');
-                });
-                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-                await expect(service.login(loginDto)).rejects.toThrow('subscription has expired');
-            });
-
-            it('should throw ForbiddenException when account status is REFILL', async () => {
-                const loginDto = { email: 'refill@example.com', password: 'password123' };
-
-                const mockRefillUser = createMockAccount({
-                    status: AccountStatus.REFILL,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockRefillUser);
-                accountsService.validateAccountAccess.mockImplementation(() => {
-                    throw new ForbiddenException('Your account needs a refill. Please refill your subscription to continue.');
-                });
-                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-                await expect(service.login(loginDto)).rejects.toThrow('needs a refill');
-            });
-
-            it('should throw UnauthorizedException when account status is INACTIVE', async () => {
-                const loginDto = { email: 'inactive@example.com', password: 'password123' };
-
-                const mockInactiveUser = createMockAccount({
-                    status: AccountStatus.INACTIVE,
-                });
-
-                accountsService.findByEmail.mockResolvedValue(mockInactiveUser);
-                accountsService.validateAccountAccess.mockImplementation(() => {
-                    throw new UnauthorizedException('Your account is inactive. Please contact support for assistance.');
-                });
-                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
-
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
-                await expect(service.login(loginDto)).rejects.toThrow('account is inactive');
-            });
-
             it('should throw UnauthorizedException when account status is DELETED', async () => {
                 const loginDto = { email: 'deleted@example.com', password: 'password123' };
 
@@ -720,6 +648,159 @@ describe('AuthService', () => {
                 // Execute & Verify
                 await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
                 await expect(service.login(loginDto)).rejects.toThrow('account has been deleted');
+            });
+        });
+
+        describe('Case: UNVERIFIED Status Handling', () => {
+            beforeEach(() => {
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+            });
+
+            it('should allow UNVERIFIED user to login and return access token', async () => {
+                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+
+                const mockUnverifiedUser = createMockAccount({
+                    _id: 'unverified-user-123',
+                    email: 'unverified@example.com',
+                    status: AccountStatus.UNVERIFIED,
+                    role: AccountRole.PATIENT,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedUser);
+                accountsService.validateAccountAccess.mockReturnValue(undefined); // Should not throw
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify - token should be generated
+                expect(result).toBeDefined();
+                expect(result.data).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+                expect(result.data.userId).toBe('unverified-user-123');
+                expect(result.data.user).toBeDefined();
+            });
+
+            it('should return warning message for UNVERIFIED status', async () => {
+                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+
+                const mockUnverifiedUser = createMockAccount({
+                    status: AccountStatus.UNVERIFIED,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedUser);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify - message should be the unverified warning
+                expect(result.message).toBe('Login successful. Please verify your email address to access full features.');
+            });
+
+            it('should return standard message for ACTIVE status', async () => {
+                const loginDto = { email: 'active@example.com', password: 'password123' };
+
+                const mockActiveUser = createMockAccount({
+                    status: AccountStatus.ACTIVE,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockActiveUser);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify - message should be the standard login success
+                expect(result.message).toBe('User logged in successfully');
+            });
+
+            it('should call validateClinicSubscription for UNVERIFIED clinic users', async () => {
+                const loginDto = { email: 'unverified-doctor@clinic.com', password: 'password123' };
+
+                const mockUnverifiedDoctor = createMockAccount({
+                    status: AccountStatus.UNVERIFIED,
+                    role: AccountRole.DOCTOR,
+                    parentId: 'manager-123',
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedDoctor);
+
+                // Execute
+                await service.login(loginDto);
+
+                // Verify - subscription validation should still happen
+                expect(accountsService.validateClinicSubscription).toHaveBeenCalledWith(mockUnverifiedDoctor);
+            });
+
+            it('should mark UNVERIFIED user as online after login', async () => {
+                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+
+                const mockUnverifiedUser = createMockAccount({
+                    _id: 'unverified-user-123',
+                    status: AccountStatus.UNVERIFIED,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedUser);
+
+                // Execute
+                await service.login(loginDto);
+
+                // Verify - should be marked online
+                expect(socketGatewayService.markUserOnline).toHaveBeenCalledWith('unverified-user-123');
+            });
+
+            it('should generate JWT with correct payload for UNVERIFIED user', async () => {
+                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+
+                const mockUnverifiedUser = createMockAccount({
+                    _id: 'unverified-456',
+                    email: 'unverified@example.com',
+                    role: AccountRole.PATIENT,
+                    status: AccountStatus.UNVERIFIED,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedUser);
+
+                // Execute
+                await service.login(loginDto);
+
+                // Verify - JWT payload should be correct
+                expect(jwtService.sign).toHaveBeenCalledWith({
+                    sub: 'unverified-456',
+                    email: 'unverified@example.com',
+                    role: AccountRole.PATIENT,
+                });
+            });
+
+            it('should fetch general account data for UNVERIFIED user', async () => {
+                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+
+                const mockUnverifiedUser = createMockAccount({
+                    _id: 'unverified-789',
+                    status: AccountStatus.UNVERIFIED,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedUser);
+
+                // Execute
+                await service.login(loginDto);
+
+                // Verify - general account should be fetched
+                expect(accountsService.findGeneralAccountByUserId).toHaveBeenCalledWith('unverified-789');
+            });
+
+            it('should validate account access (BAN/DELETED check) for UNVERIFIED users', async () => {
+                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+
+                const mockUnverifiedUser = createMockAccount({
+                    status: AccountStatus.UNVERIFIED,
+                });
+
+                accountsService.findByEmail.mockResolvedValue(mockUnverifiedUser);
+
+                // Execute
+                await service.login(loginDto);
+
+                // Verify - validateAccountAccess should still be called
+                expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockUnverifiedUser);
             });
         });
 
