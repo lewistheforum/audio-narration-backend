@@ -3,7 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums';
+import { LegalDocumentVerificationStatus } from '../../modules/accounts/enums/legal-document-verification-status.enum';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { ClinicsLegalDocumentsRepository } from '../../modules/accounts/repositories/clinics-legal-documents.repository';
 import { ClinicSubscription } from '../../modules/subscriptions/entities/clinic-subscription.entity';
 import { ClinicSubscriptionHistory } from '../../modules/subscriptions/entities/clinic-subscription-history.entity';
 import { SubscriptionService } from '../../modules/subscriptions/entities/subscription-service.entity';
@@ -18,10 +20,17 @@ import { SubscriptionServiceRepository } from '../../modules/subscriptions/repos
  *
  * Seeding Rules:
  * - clinicId must be taken from Account records where role = CLINIC_ADMIN
- * - Create 1-2 ClinicSubscription records per CLINIC_ADMIN account
+ * - Create 1 ClinicSubscription record per CLINIC_ADMIN account
+ * - Subscription status is aligned with legal document verification status of CLINIC_MANAGER
  * - Create 0-2 ClinicSubscriptionHistory records per CLINIC_ADMIN account
  * - Distribute records across clinic admins evenly (round-robin)
  * - Must be idempotent (re-run safe)
+ *
+ * Status Alignment Logic:
+ * - Legal Doc: NOT_SUBMITTED → Subscription: PENDING_LEGAL_SETUP
+ * - Legal Doc: PENDING_REVIEW → Subscription: PENDING_APPROVAL
+ * - Legal Doc: APPROVED → Subscription: PENDING_PAYMENT or ACTIVE
+ * - Legal Doc: REJECTED → Subscription: PENDING_LEGAL_SETUP
  *
  * Idempotent: Uses check-then-insert pattern by clinicId
  */
@@ -33,6 +42,7 @@ export class SubscriptionsSeederService {
     private readonly accountRepository: AccountRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
+    private readonly clinicsLegalDocumentsRepository: ClinicsLegalDocumentsRepository,
     @InjectRepository(ClinicSubscriptionHistory)
     private readonly clinicSubscriptionHistoryRepository: Repository<ClinicSubscriptionHistory>,
   ) {}
@@ -89,7 +99,8 @@ export class SubscriptionsSeederService {
   /**
    * Seed ClinicSubscription records
    *
-   * Creates 1-2 ClinicSubscription records per CLINIC_ADMIN account
+   * Creates 1 ClinicSubscription record per CLINIC_ADMIN account
+   * Subscription status is aligned with legal document verification status
    */
   private async seedClinicSubscriptions(
     clinicAdmins: Account[],
@@ -112,18 +123,48 @@ export class SubscriptionsSeederService {
       const serviceIndex = createdCount % subscriptionServices.length;
       const service = subscriptionServices[serviceIndex];
 
+      // Get the first CLINIC_MANAGER for this CLINIC_ADMIN
+      const clinicManagers = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
+          accounts.filter(
+            (acc) =>
+              acc.role === AccountRole.CLINIC_MANAGER &&
+              acc.parentId === clinicAdmin._id,
+          ),
+        );
+
+      // Determine subscription status based on legal document status
+      let subscriptionStatus = RegistrationStatus.PENDING_MANAGER_SETUP;
+
+      if (clinicManagers.length > 0) {
+        // Get legal document for the first clinic manager
+        const legalDoc =
+          await this.clinicsLegalDocumentsRepository.findByAccountId(
+            clinicManagers[0]._id,
+          );
+
+        if (legalDoc) {
+          subscriptionStatus = this.mapLegalStatusToSubscriptionStatus(
+            legalDoc.verificationStatus,
+          );
+        } else {
+          subscriptionStatus = RegistrationStatus.PENDING_LEGAL_SETUP;
+        }
+      }
+
       // Calculate subscription and expiration dates
       const subscriptionDate = new Date();
       const expirationDate = new Date();
       expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
-      // Create clinic subscription
+      // Create clinic subscription with aligned status
       const clinicSubscription = this.clinicSubscriptionRepository.create({
         clinicId: clinicAdmin._id,
         serviceId: service._id,
         subscriptionDate,
         expirationDate,
-        subscriptionStatus: RegistrationStatus.ACTIVE,
+        subscriptionStatus,
       });
 
       await this.clinicSubscriptionRepository.save(clinicSubscription);
@@ -206,5 +247,38 @@ export class SubscriptionsSeederService {
    */
   private getRandomInt(min: number, max: number): number {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  /**
+   * Map legal document verification status to subscription registration status
+   *
+   * Alignment Logic:
+   * - NOT_SUBMITTED → PENDING_LEGAL_SETUP (user needs to upload documents)
+   * - PENDING_REVIEW → PENDING_APPROVAL (waiting for admin to review)
+   * - APPROVED → PENDING_PAYMENT (70%) or ACTIVE (30%) (documents approved, needs payment or already paid)
+   * - REJECTED → PENDING_LEGAL_SETUP (needs to resubmit documents)
+   */
+  private mapLegalStatusToSubscriptionStatus(
+    legalStatus: LegalDocumentVerificationStatus,
+  ): RegistrationStatus {
+    switch (legalStatus) {
+      case LegalDocumentVerificationStatus.NOT_SUBMITTED:
+        return RegistrationStatus.PENDING_LEGAL_SETUP;
+
+      case LegalDocumentVerificationStatus.PENDING_REVIEW:
+        return RegistrationStatus.PENDING_APPROVAL;
+
+      case LegalDocumentVerificationStatus.APPROVED:
+        // 70% PENDING_PAYMENT, 30% ACTIVE
+        return Math.random() < 0.7
+          ? RegistrationStatus.PENDING_PAYMENT
+          : RegistrationStatus.ACTIVE;
+
+      case LegalDocumentVerificationStatus.REJECTED:
+        return RegistrationStatus.PENDING_LEGAL_SETUP;
+
+      default:
+        return RegistrationStatus.PENDING_LEGAL_SETUP;
+    }
   }
 }

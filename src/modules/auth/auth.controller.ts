@@ -99,8 +99,8 @@ export class AuthController {
   async login(
     @Body() loginDto: LoginDto,
   ): Promise<{ data: any; message: string }> {
-    const tokenData = await this.authService.login(loginDto);
-    return { data: tokenData, message: MESSAGES.successMessage.loginSuccess };
+    const result = await this.authService.login(loginDto);
+    return { data: result.data, message: result.message };
   }
 
   /**

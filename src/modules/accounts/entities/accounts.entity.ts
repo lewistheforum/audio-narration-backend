@@ -168,7 +168,7 @@ export class Account {
     name: 'status',
     type: 'enum',
     enum: AccountStatus,
-    default: AccountStatus.PENDING,
+    default: AccountStatus.UNVERIFIED,
   })
   status: AccountStatus;
 

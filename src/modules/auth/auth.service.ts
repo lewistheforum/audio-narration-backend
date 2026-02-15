@@ -19,6 +19,7 @@ import {
 } from './dto';
 import { randomBytes } from 'crypto';
 import { CodeVerificationRepository } from '../accounts/repositories';
+import { AccountStatus } from '../accounts/enums/account-status.enum';
 
 /**
  * Authentication Service
@@ -39,6 +40,7 @@ export class AuthService {
    * - Checks user status (bans, inactive accounts)
    * - Returns JWT token with user ID, email, role, and complete user info
    * - Marks user as online via socket gateway
+   * - Returns conditional message based on account status (ACTIVE vs UNVERIFIED)
    */
   async login(loginDto: LoginDto): Promise<{
     data: {
@@ -46,6 +48,7 @@ export class AuthService {
       userId: string;
       user: AccountResponseDto;
     };
+    message: string;
   }> {
     const { email, password } = loginDto;
     const user = await this.AccountsService.findByEmail(email);
@@ -54,7 +57,7 @@ export class AuthService {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
-    // Check if user account is banned or inactive
+    // Check if user account is banned or deleted (UNVERIFIED is allowed)
     this.AccountsService.validateAccountAccess(user);
 
     // Check clinic subscription status for clinic-related roles
@@ -68,12 +71,18 @@ export class AuthService {
       user._id,
     );
 
+    // Determine message based on account status
+    const message = user.status === AccountStatus.UNVERIFIED
+      ? MESSAGES.successMessage.loginSuccessUnverified
+      : MESSAGES.successMessage.loginSuccess;
+
     return {
       data: {
         accessToken: this.jwtService.sign(payload),
         userId: user._id,
         user: new AccountResponseDto(user, generalAccount),
       },
+      message,
     };
   }
 

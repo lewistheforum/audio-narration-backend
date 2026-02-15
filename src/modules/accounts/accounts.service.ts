@@ -432,7 +432,7 @@ export class AccountsService {
       password: hashedPassword,
       phone: createAccountDto.phone,
       role: AccountRole.PATIENT,
-      status: AccountStatus.PENDING,
+      status: AccountStatus.UNVERIFIED,
     });
 
     const savedAccount = await this.accountRepository.saveAccount(account);
@@ -629,7 +629,7 @@ export class AccountsService {
 
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
-      account.status = AccountStatus.PENDING; // Require re-verification
+      account.status = AccountStatus.ACTIVE; // Keep account active
       emailChanged = true;
     }
 
@@ -1711,20 +1711,6 @@ export class AccountsService {
       throw new ForbiddenException('Your account has been banned.');
     }
 
-    // PENDING: Throw 401 Unauthorized - email verification required
-    if (account.status === AccountStatus.PENDING) {
-      throw new UnauthorizedException(
-        'Email verification required. Please verify your email to activate your account.',
-      );
-    }
-
-    // INACTIVE: Throw 401 Unauthorized - account suspended
-    if (account.status === AccountStatus.INACTIVE) {
-      throw new UnauthorizedException(
-        'Your account is inactive. Please contact support for assistance.',
-      );
-    }
-
     // DELETED: Throw 401 Unauthorized - account deleted
     if (account.status === AccountStatus.DELETED) {
       throw new UnauthorizedException(
@@ -1732,21 +1718,7 @@ export class AccountsService {
       );
     }
 
-    // EXPIRED: Throw 403 Forbidden - subscription expired
-    if (account.status === AccountStatus.EXPIRED) {
-      throw new ForbiddenException(
-        'Your subscription has expired. Please renew your subscription to continue.',
-      );
-    }
-
-    // REFILL: Throw 403 Forbidden - subscription refill required
-    if (account.status === AccountStatus.REFILL) {
-      throw new ForbiddenException(
-        'Your account needs a refill. Please refill your subscription to continue.',
-      );
-    }
-
-    // ACTIVE: Allow access (no exception thrown)
+    // UNVERIFIED and ACTIVE: Allow access (no exception thrown)
   }
 
   /**
@@ -2033,7 +2005,10 @@ export class AccountsService {
 
     // Mark email as verified and activate account
     account.isEmailVerified = true;
-    account.status = AccountStatus.ACTIVE;
+    // Update account status from UNVERIFIED to ACTIVE
+    if (account.status === AccountStatus.UNVERIFIED) {
+      account.status = AccountStatus.ACTIVE;
+    }
     await this.accountRepository.saveAccount(account);
 
     // Get general account for firstName/lastName (split fullName)
@@ -2420,7 +2395,7 @@ export class AccountsService {
         password: hashedPassword,
         phone: dto.phone,
         role: AccountRole.PATIENT,
-        status: AccountStatus.PENDING,
+        status: AccountStatus.ACTIVE,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -2582,14 +2557,14 @@ export class AccountsService {
       );
 
       // Step 4: Create Account entity with CLINIC_STAFF role
-      // Following 2-step registration pattern: Create PENDING account first
+      // Following 2-step registration pattern: Create ACTIVE account first
       const account = this.accountRepository.createAccount({
         username: dto.email.split('@')[0],
         email: dto.email,
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.CLINIC_STAFF,
-        status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
+        status: AccountStatus.ACTIVE, // Account is active by default
         isEmailVerified: false, // Staff must verify themselves
       });
 
@@ -2686,7 +2661,7 @@ export class AccountsService {
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.DOCTOR,
-        status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
+        status: AccountStatus.ACTIVE, // Account is active by default
         isEmailVerified: false, // Doctor must verify themselves
       });
 
@@ -3564,7 +3539,7 @@ export class AccountsService {
         password: hashedPassword,
         phone: dto.phone,
         role: AccountRole.CLINIC_ADMIN,
-        status: AccountStatus.PENDING,
+        status: AccountStatus.ACTIVE,
         isEmailVerified: false,
         isOAuthUser: false,
       });

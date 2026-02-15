@@ -27,6 +27,7 @@ const successMessage = {
   userRestoredSuccess: 'User restored successfully',
   // Authentication
   loginSuccess: 'User logged in successfully',
+  loginSuccessUnverified: 'Login successful. Please verify your email address to access full features.',
   googleLoginSuccess: 'Google login successful',
   paymentCreateSuccess: 'Payment QR created successfully',
   paymentUpdateSuccess: 'Payment status updated successfully',
