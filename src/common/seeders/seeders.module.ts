@@ -50,6 +50,7 @@ import { AppointmentSeederService } from './appointment-seeder.service';
 import { ERMSeederService } from './erm-seeder.service';
 import { EPrescriptionSeederService } from './e-prescription-seeder.service';
 import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder.service';
+import { ReportSeederService } from './report-seeder.service';
 
 // Entities for KnowledgeBaseSeeder
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
@@ -190,6 +191,7 @@ import { TransactionType } from '../../modules/transactions/entities/transaction
     ClinicShiftHourRepository,
     EmployeeScheduleRepository,
     MedicineRepository,
+    ReportSeederService,
   ],
   exports: [
     AdminSeederService,
@@ -223,6 +225,7 @@ import { TransactionType } from '../../modules/transactions/entities/transaction
     EPrescriptionDetailSeederService,
     TransactionHistorySeederService,
     SeederOrchestratorService,
+    ReportSeederService,
   ],
 })
 export class SeedersModule {}

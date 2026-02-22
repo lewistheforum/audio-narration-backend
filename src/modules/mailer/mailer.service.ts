@@ -2142,4 +2142,147 @@ export class MailerService {
       // Don't throw - email should be fire-and-forget
     }
   }
+
+  /**
+   * Send Stale Registration Deleted Email
+   *
+   * Notifies a clinic admin that their incomplete registration data
+   * has been removed after 6 months of inactivity.
+   */
+  async sendStaleRegistrationDeletedEmail(
+    email: string,
+    clinicName: string,
+    status: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '🗑️ Incomplete Registration Data Removed - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #FEF3C7; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FCD34D;">
+            <h1 style="color: #92400E; margin: 0 0 20px 0;">🗑️ Registration Data Removed</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Hi${clinicName ? ' ' + clinicName : ''},
+            </p>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Your subscription registration has been in <strong>${status}</strong> status for over 6 months without any updates. As part of our data maintenance, the previously saved registration information has been removed.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
+              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">What does this mean?</p>
+              <ul style="color: #111827; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+                <li>All previously saved registration data has been deleted</li>
+                <li>This includes clinic information, legal documents, and manager details</li>
+                <li>If you wish to subscribe, you will need to register again from scratch</li>
+              </ul>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              If you'd like to re-register, please visit our platform and start a new subscription.
+            </p>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
+                 style="background: #92400E; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+                Re-Register Now
+              </a>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error(
+        '❌ Failed to send stale registration deleted email:',
+        error,
+      );
+      throw error; // Re-throw so caller can track failure
+    }
+  }
+
+  /**
+   * Send Report Response Email
+   *
+   * Notifies a user that their report has been reviewed and responded to.
+   */
+  async sendReportResponseEmail(
+    email: string,
+    name: string,
+    responseDescription: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare Support',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Update on Your Report - Medicare',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Medicare Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F8FAFC; border-radius: 10px; padding: 30px; border: 1px solid #E2E8F0;">
+            <h1 style="color: #0F172A; margin: 0 0 20px 0;">Report Update</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Hi ${name},
+            </p>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Thank you for taking the time to submit a report. Our team has reviewed it and provided the following response:
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
+              <p style="margin: 0; color: #111827; line-height: 1.5;">${responseDescription.replace(/\\n/g, '<br>')}</p>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              If you have any further questions or concerns, please feel free to reply to this email or contact our support team.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Medicare. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Report response email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send report response email:', error);
+      throw error;
+    }
+  }
 }

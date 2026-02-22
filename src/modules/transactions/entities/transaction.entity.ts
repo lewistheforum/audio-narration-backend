@@ -8,10 +8,9 @@ import {
   JoinColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
+import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
 import { TransactionType } from './transaction-type.entity';
 import { Account } from '../../accounts/entities/accounts.entity';
-import { ClinicAdminInformation } from '../../accounts/entities/clinic-admin-information.entity';
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
@@ -55,11 +54,11 @@ export class Transaction {
   @Column({ name: 'subcription_id', type: 'uuid', nullable: true })
   subscriptionId?: string;
 
-  @ManyToOne(() => ClinicSubscription, {
+  @ManyToOne(() => ClinicSubscriptionHistory, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'subcription_id' })
-  subscription?: ClinicSubscription;
+  subscription?: ClinicSubscriptionHistory;
   @Column({ name: 'transaction_type_id', type: 'uuid', nullable: true })
   transactionTypeId?: string;
 

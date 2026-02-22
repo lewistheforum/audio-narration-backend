@@ -85,26 +85,17 @@ export class AccountSeederService {
     private readonly googleIframeRepository: GoogleIframeRepository,
   ) {}
 
-  /**
-   * Seed all account types in the correct order
-   *
-   * This method is called by SeederOrchestratorService during application bootstrap.
-   */
-  async seed(): Promise<void> {
+  async seedBaseAccounts(): Promise<void> {
     try {
-      this.logger.log('Starting to seed accounts...');
+      this.logger.log(
+        'Starting to seed base accounts (Admins, Managers, Patients)...',
+      );
 
       // Step 1: Seed CLINIC_ADMIN accounts
       const clinicAdmins = await this.seedClinicAdmins();
 
       // Step 2: Seed CLINIC_MANAGER accounts
-      const clinicManagers = await this.seedClinicManagers(clinicAdmins);
-
-      // Step 3: Seed CLINIC_STAFF accounts
-      await this.seedClinicStaff(clinicManagers);
-
-      // Step 4: Seed DOCTOR accounts
-      await this.seedDoctors(clinicManagers);
+      await this.seedClinicManagers(clinicAdmins);
 
       // Step 5: Seed PATIENT accounts
       await this.seedPatients();
@@ -112,9 +103,61 @@ export class AccountSeederService {
       // Step 6: Ensure all accounts have addresses and google iframes
       await this.ensureAddressesAndGoogleIframes();
 
-      this.logger.log('✅ Account seeding completed successfully');
+      this.logger.log('✅ Base Account seeding completed successfully');
     } catch (error) {
-      this.logger.error('Failed to seed accounts', error.stack);
+      this.logger.error('Failed to seed base accounts', error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Seed employee accounts (Staff, Doctors) AFTER subscriptions are set up
+   */
+  async seedEmployeeAccounts(): Promise<void> {
+    try {
+      this.logger.log('Starting to seed employee accounts (Staff, Doctors)...');
+
+      // Only get clinic managers belonging to ACTIVE clinics
+      // For simplicity, since the first 5 are active, we just get their managers.
+      // But we can also be explicit: only the first 5 clinic admins
+      const clinicAdmins = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
+          accounts.filter((acc) => acc.role === AccountRole.CLINIC_ADMIN),
+        );
+
+      // Get all managers
+      const allManagers = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
+          accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER),
+        );
+
+      // Filter managers whose parentId is in the first 5 clinic admins (which are ACTIVE)
+      const activeClinicAdminIds = clinicAdmins.slice(0, 5).map((a) => a._id);
+      const activeManagers = allManagers.filter((m) =>
+        activeClinicAdminIds.includes(m.parentId),
+      );
+
+      if (activeManagers.length === 0) {
+        this.logger.warn(
+          'No active managers found, skipping employee seeding.',
+        );
+        return;
+      }
+
+      // Step 3: Seed CLINIC_STAFF accounts
+      await this.seedClinicStaff(activeManagers);
+
+      // Step 4: Seed DOCTOR accounts
+      await this.seedDoctors(activeManagers);
+
+      // Ensure employees also get addresses
+      await this.ensureAddressesAndGoogleIframes();
+
+      this.logger.log('✅ Employee Account seeding completed successfully');
+    } catch (error) {
+      this.logger.error('Failed to seed employee accounts', error.stack);
       throw error;
     }
   }
@@ -124,7 +167,7 @@ export class AccountSeederService {
    * Creates exactly 5 CLINIC_ADMIN accounts
    */
   private async seedClinicAdmins(): Promise<Account[]> {
-    const CLINIC_ADMIN_COUNT = 5;
+    const CLINIC_ADMIN_COUNT = 8; // 5 Active, 3 Pending
     const existingCount = await this.accountRepository.countByRole(
       AccountRole.CLINIC_ADMIN,
     );
@@ -186,8 +229,16 @@ export class AccountSeederService {
   ): Promise<Account[]> {
     const clinicManagers: Account[] = [];
 
-    for (const clinicAdmin of clinicAdmins) {
-      const count = this.getRandomInt(1, 3);
+    for (let index = 0; index < clinicAdmins.length; index++) {
+      const clinicAdmin = clinicAdmins[index];
+      const isPending = index >= 5;
+
+      // Pending clinics may or may not have a manager set up
+      if (isPending && Math.random() < 0.3) {
+        continue;
+      }
+
+      const count = isPending ? 1 : this.getRandomInt(1, 3);
 
       for (let i = 1; i <= count; i++) {
         const email = `clinic_manager_${
@@ -385,7 +436,9 @@ export class AccountSeederService {
    * 2. Check if google_iframe exists for that address, if not create one
    */
   private async ensureAddressesAndGoogleIframes(): Promise<void> {
-    this.logger.log('Ensuring all accounts have addresses and Google iframes...');
+    this.logger.log(
+      'Ensuring all accounts have addresses and Google iframes...',
+    );
 
     // Get all accounts from database
     const allAccounts = await this.accountRepository.findAllAccounts();
@@ -424,7 +477,9 @@ export class AccountSeederService {
 
         address = await this.addressRepository.save(address);
         addressesCreated++;
-        this.logger.debug(`Created address for account ${account.email} (${account.role})`);
+        this.logger.debug(
+          `Created address for account ${account.email} (${account.role})`,
+        );
       } else {
         addressesSkipped++;
       }
@@ -436,7 +491,9 @@ export class AccountSeederService {
 
       if (!iframeExists) {
         // Generate Google Maps iframe
-        const mapTemplate = this.getMapTemplateForProvince(address.provinceName);
+        const mapTemplate = this.getMapTemplateForProvince(
+          address.provinceName,
+        );
         const fullAddress = `${address.address}, ${address.wardName}, ${address.districtName}, ${address.provinceName}`;
 
         const googleIframe = this.googleIframeRepository.create({
@@ -457,8 +514,8 @@ export class AccountSeederService {
 
     this.logger.log(
       `✅ Address and Google iframe seeding completed: ` +
-      `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
-      `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
+        `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
+        `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
     );
   }
 
@@ -479,14 +536,22 @@ export class AccountSeederService {
   /**
    * Get random province object
    */
-  private getRandomProvince(): { code: string; name: string; districts: string[] } {
+  private getRandomProvince(): {
+    code: string;
+    name: string;
+    districts: string[];
+  } {
     return this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
   }
 
   /**
    * Get random district from province
    */
-  private getRandomDistrict(province: { code: string; name: string; districts: string[] }): string {
+  private getRandomDistrict(province: {
+    code: string;
+    name: string;
+    districts: string[];
+  }): string {
     return province.districts[
       Math.floor(Math.random() * province.districts.length)
     ];
@@ -521,7 +586,10 @@ export class AccountSeederService {
     const lowerProvinceName = provinceName.toLowerCase();
 
     // Match Vietnamese city names
-    if (lowerProvinceName.includes('hanoi') || lowerProvinceName.includes('ha noi')) {
+    if (
+      lowerProvinceName.includes('hanoi') ||
+      lowerProvinceName.includes('ha noi')
+    ) {
       return this.MAP_IFRAME_TEMPLATES[0];
     }
     if (lowerProvinceName.includes('ho chi minh')) {

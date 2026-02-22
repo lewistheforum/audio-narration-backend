@@ -22,6 +22,9 @@ import {
   ClinicAdminResponseDto,
   ClinicAdminDetailResponseDto,
 } from './dto/clinic-admin-response.dto';
+import { ClinicAdminFeedbackResponseDto } from './dto/clinic-admin-feedback-response.dto';
+import { ClinicAdminFeedbackDetailResponseDto } from './dto/clinic-admin-feedback-detail.dto';
+import { ClinicAdminFeedbackListDto } from './dto/clinic-admin-feedback-list.dto';
 import {
   SubscriptionHistoryItemDto,
   TransactionHistoryItemDto,
@@ -177,5 +180,38 @@ export class ClinicAdminsController {
   @ApiResponse({ status: 404, description: 'Clinic admin not found' })
   async getBanHistory(@Param('id', ParseUUIDPipe) id: string) {
     return this.clinicAdminsService.getBanHistory(id);
+  }
+
+  @Get(':id/feedbacks')
+  @ApiOperation({ summary: 'Get feedbacks for clinics managed by this admin' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'List of feedbacks',
+    type: ClinicAdminFeedbackListDto,
+  })
+  @ApiResponse({ status: 404, description: 'Clinic admin not found' })
+  async getFeedbacks(@Param('id', ParseUUIDPipe) id: string) {
+    return this.clinicAdminsService.getFeedbacks(id);
+  }
+
+  @Get(':id/feedbacks/:feedbackId')
+  @ApiOperation({ summary: 'Get feedback detail for clinic admin' })
+  @ApiResponse({
+    status: 200,
+    description: 'Feedback detail',
+    type: ClinicAdminFeedbackDetailResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic admin or Feedback not found',
+  })
+  async getFeedbackDetail(
+    @Param('id', ParseUUIDPipe) id: string, // This maps to clinicManagerId in the service call
+    @Param('feedbackId', ParseUUIDPipe) feedbackId: string,
+  ) {
+    return this.clinicAdminsService.getFeedbackDetail(id, feedbackId);
   }
 }

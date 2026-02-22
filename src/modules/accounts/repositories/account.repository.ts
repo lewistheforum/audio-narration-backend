@@ -470,11 +470,13 @@ export class AccountRepository {
     search?: string,
     province?: string,
     specialty?: string,
+    subscriptionStatus?: string,
   ): Promise<[Account[], number]> {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
       .andWhere('account.status = :status', { status });
 
@@ -499,6 +501,16 @@ export class AccountRepository {
       queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
         specialty: JSON.stringify([specialty]),
       });
+    }
+
+    // Apply subscription status filter
+    if (subscriptionStatus) {
+      queryBuilder.andWhere(
+        'subscription.subscriptionStatus = :subscriptionStatus',
+        {
+          subscriptionStatus,
+        },
+      );
     }
 
     // Apply pagination and ordering

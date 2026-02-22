@@ -8,6 +8,7 @@ import { AppointmentStatus } from '../../modules/appointments/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 import { ClinicServiceConfigRepository } from '../../modules/service-configs/repositories/clinic-service-config.repository';
+import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import {
   APPOINTMENTS_PER_PATIENT,
   APPOINTMENT_STATUS,
@@ -55,6 +56,7 @@ export class AppointmentSeederService {
     private readonly serviceAppointmentRepository: Repository<ServiceAppointment>,
     private readonly accountRepository: AccountRepository,
     private readonly clinicServiceConfigRepository: ClinicServiceConfigRepository,
+    private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
   ) {}
 
   /**
@@ -69,30 +71,52 @@ export class AppointmentSeederService {
       // Step 1: Fetch required accounts
       const patients = await this.accountRepository
         .findAllAccounts()
-        .then((accounts) => accounts.filter((acc) => acc.role === AccountRole.PATIENT));
+        .then((accounts) =>
+          accounts.filter((acc) => acc.role === AccountRole.PATIENT),
+        );
+
+      // Get active subscriptions
+      const activeClinicIds =
+        await this.clinicSubscriptionRepository.findActiveClinicIds();
 
       const clinics = await this.accountRepository
         .findAllAccounts()
-        .then((accounts) => accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER));
+        .then((accounts) =>
+          accounts.filter(
+            (acc) =>
+              acc.role === AccountRole.CLINIC_MANAGER &&
+              activeClinicIds.includes(acc.parentId),
+          ),
+        );
 
       const doctors = await this.accountRepository
         .findAllAccounts()
-        .then((accounts) => accounts.filter((acc) => acc.role === AccountRole.DOCTOR));
+        .then((accounts) =>
+          accounts.filter((acc) => acc.role === AccountRole.DOCTOR),
+        );
 
       // Validate required data exists
       if (patients.length === 0) {
-        throw new Error('No PATIENT accounts found. Please run account seeder first.');
+        throw new Error(
+          'No PATIENT accounts found. Please run account seeder first.',
+        );
       }
       if (clinics.length === 0) {
-        throw new Error('No CLINIC_MANAGER accounts found. Please run account seeder first.');
+        throw new Error(
+          'No CLINIC_MANAGER accounts found. Please run account seeder first.',
+        );
       }
 
-      this.logger.log(`Found ${patients.length} patients, ${clinics.length} clinics, ${doctors.length} doctors`);
+      this.logger.log(
+        `Found ${patients.length} patients, ${clinics.length} clinics, ${doctors.length} doctors`,
+      );
 
       // Step 2: Fetch all clinic service configs
       const serviceConfigs = await this.clinicServiceConfigRepository.findAll();
       if (serviceConfigs.length === 0) {
-        throw new Error('No ClinicServiceConfig records found. Please run service config seeder first.');
+        throw new Error(
+          'No ClinicServiceConfig records found. Please run service config seeder first.',
+        );
       }
       this.logger.log(`Found ${serviceConfigs.length} service configs`);
 
@@ -145,11 +169,20 @@ export class AppointmentSeederService {
       // Pick random clinic
       const clinic = getRandomItem(clinics);
 
+      // Filter doctors to match the clinic manager's id
+      const clinicDoctors = doctors.filter(
+        (doc) => doc.parentId === clinic._id,
+      );
+
       // Pick random doctor (nullable)
-      const doctor = doctors.length > 0 ? getRandomItem(doctors) : null;
+      const doctor =
+        clinicDoctors.length > 0 ? getRandomItem(clinicDoctors) : null;
 
       // Generate appointment date in the past
-      const appointmentDate = getRandomPastDate(APPOINTMENT_DAYS_PAST_MIN, APPOINTMENT_DAYS_PAST_MAX);
+      const appointmentDate = getRandomPastDate(
+        APPOINTMENT_DAYS_PAST_MIN,
+        APPOINTMENT_DAYS_PAST_MAX,
+      );
       const appointmentHour = getRandomAppointmentHour(appointmentDate);
 
       // Create appointment
@@ -168,11 +201,16 @@ export class AppointmentSeederService {
         rejectReason: null, // Must be null for COMPLETED appointments
       });
 
-      const savedAppointment = await this.appointmentRepository.save(appointment);
+      const savedAppointment =
+        await this.appointmentRepository.save(appointment);
       appointments.push(savedAppointment);
 
       // Create appointment package and services
-      await this.createAppointmentPackageAndServices(savedAppointment, clinic, serviceConfigs);
+      await this.createAppointmentPackageAndServices(
+        savedAppointment,
+        clinic,
+        serviceConfigs,
+      );
     }
 
     return appointments;
@@ -243,7 +281,10 @@ export class AppointmentSeederService {
     }
 
     // Determine number of services
-    const numServices = getRandomInt(SERVICES_PER_APPOINTMENT_MIN, SERVICES_PER_APPOINTMENT_MAX);
+    const numServices = getRandomInt(
+      SERVICES_PER_APPOINTMENT_MIN,
+      SERVICES_PER_APPOINTMENT_MAX,
+    );
 
     // Create appointment package
     const appointmentPackage = this.appointmentPackageRepository.create({
@@ -254,7 +295,8 @@ export class AppointmentSeederService {
       paymentType: getRandomItem(PAYMENT_TYPES),
     });
 
-    const savedPackage = await this.appointmentPackageRepository.save(appointmentPackage);
+    const savedPackage =
+      await this.appointmentPackageRepository.save(appointmentPackage);
 
     // Create service appointments
     for (let i = 0; i < numServices; i++) {
@@ -320,14 +362,20 @@ export class AppointmentSeederService {
       }
 
       // Check: Patient account has role PATIENT
-      if (appointment.patient && appointment.patient.role !== AccountRole.PATIENT) {
+      if (
+        appointment.patient &&
+        appointment.patient.role !== AccountRole.PATIENT
+      ) {
         errors.push(
           `Appointment ${appointment._id} has patient ${appointment.patientId} with role ${appointment.patient.role}. Must be PATIENT.`,
         );
       }
 
       // Check: reject_reason is NULL for COMPLETED appointments
-      if (appointment.status === AppointmentStatus.COMPLETED && appointment.rejectReason !== null) {
+      if (
+        appointment.status === AppointmentStatus.COMPLETED &&
+        appointment.rejectReason !== null
+      ) {
         errors.push(
           `Appointment ${appointment._id} has reject_reason set but status is COMPLETED. reject_reason must be NULL for COMPLETED appointments.`,
         );

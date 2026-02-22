@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Param,
@@ -215,7 +216,11 @@ export class AdminController {
   @Post('registrations/:subscriptionId/approve')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Approve a clinic registration by subscription ID' })
-  @ApiParam({ name: 'subscriptionId', type: 'string', description: 'Subscription ID (UUID)' })
+  @ApiParam({
+    name: 'subscriptionId',
+    type: 'string',
+    description: 'Subscription ID (UUID)',
+  })
   @ApiResponseData({
     type: ApprovalSuccessResponseDto,
     status: 200,
@@ -224,7 +229,9 @@ export class AdminController {
   async approveRegistrationBySubscriptionId(
     @Param('subscriptionId', ParseUUIDPipe) subscriptionId: string,
   ): Promise<ApprovalSuccessResponseDto> {
-    return await this.adminService.approveRegistrationBySubscriptionId(subscriptionId);
+    return await this.adminService.approveRegistrationBySubscriptionId(
+      subscriptionId,
+    );
   }
 
   /**
@@ -236,7 +243,11 @@ export class AdminController {
   @Post('registrations/:subscriptionId/reject')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Reject a clinic registration by subscription ID' })
-  @ApiParam({ name: 'subscriptionId', type: 'string', description: 'Subscription ID (UUID)' })
+  @ApiParam({
+    name: 'subscriptionId',
+    type: 'string',
+    description: 'Subscription ID (UUID)',
+  })
   @ApiBody({ type: RejectRegistrationDto })
   @ApiResponseData({
     type: RejectionSuccessResponseDto,
@@ -247,10 +258,11 @@ export class AdminController {
     @Param('subscriptionId', ParseUUIDPipe) subscriptionId: string,
     @Body() dto: RejectRegistrationDto,
   ): Promise<RejectionSuccessResponseDto> {
-    return await this.adminService.rejectRegistrationBySubscriptionId(subscriptionId, dto.reason);
+    return await this.adminService.rejectRegistrationBySubscriptionId(
+      subscriptionId,
+      dto.reason,
+    );
   }
-
-
 
   // ============================================
   // Statistics Endpoints
@@ -576,6 +588,44 @@ export class AdminController {
     return {
       data: { data: result },
       message: 'Longest using clinics retrieved successfully',
+    };
+  }
+
+  // ============================================
+  // Data Maintenance Endpoints
+  // ============================================
+
+  /**
+   * Sync Knowledge Base
+   *
+   * Clears current knowledge base and triggers sync from AI backend
+   */
+  @Post('knowledge-base/sync')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Sync Knowledge Base' })
+  async syncKnowledgeBase(): Promise<any> {
+    return await this.adminService.syncKnowledgeBase();
+  }
+
+  /**
+   * Cleanup stale pending registrations
+   *
+   * Deletes registrations that have been in pending statuses
+   * for more than 6 months. Sends notification emails before deletion.
+   */
+  @Delete('cleanup-stale-registrations')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({
+    summary: 'Cleanup stale pending registrations older than 6 months',
+  })
+  async cleanupStaleRegistrations(): Promise<{
+    data: any;
+    message: string;
+  }> {
+    const result = await this.adminService.cleanupStaleRegistrations();
+    return {
+      data: result,
+      message: `Cleanup completed. Found ${result.totalStaleFound} stale registrations, deleted ${result.deletedSuccessfully} successfully.`,
     };
   }
 }
