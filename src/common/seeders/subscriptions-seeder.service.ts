@@ -89,6 +89,15 @@ export class SubscriptionsSeederService {
         subscriptionServices,
       );
 
+      // Seed Hanging (Pending) ClinicSubscription records (backdated 6-12 months)
+      await this.seedHangingSubscriptions(clinicAdmins, subscriptionServices);
+
+      // Seed Hanging SubscriptionHistory records
+      await this.seedHangingSubscriptionHistory(
+        clinicAdmins,
+        subscriptionServices,
+      );
+
       this.logger.log('✅ Clinic subscriptions seeding completed');
     } catch (error) {
       this.logger.error('Failed to seed clinic subscriptions', error.stack);
@@ -299,6 +308,175 @@ export class SubscriptionsSeederService {
 
     this.logger.log(
       `✅ ClinicSubscriptionHistory seeding completed: ${createdCount} created, ${skippedCount} skipped`,
+    );
+  }
+
+  /**
+   * Seed Hanging (Pending) ClinicSubscription records
+   *
+   * Creates 15 subscription records with PENDING statuses, backdated 6-12 months ago.
+   * These records simulate abandoned/incomplete registrations from the past.
+   *
+   * Rules:
+   * - Status: Randomly selected from PENDING_PAYMENT, PENDING_APPROVAL, PENDING_LEGAL_SETUP, 
+   *           PENDING_MANAGER_SETUP, PENDING_SEPAY_SETUP
+   * - created_at/updated_at: Backdated 6-12 months ago
+   * - subscription_date: Set based on status progression (earlier statuses = no date)
+   * - expirationDate: null for pending statuses (not activated yet)
+   * - Distribute across available clinic admins
+   */
+  private async seedHangingSubscriptions(
+    clinicAdmins: Account[],
+    subscriptionServices: SubscriptionService[],
+  ): Promise<void> {
+    const hangingCount = 15;
+    let createdCount = 0;
+
+    // Pending statuses to randomly assign
+    const pendingStatuses = [
+      RegistrationStatus.PENDING_SEPAY_SETUP,
+      RegistrationStatus.PENDING_MANAGER_SETUP,
+      RegistrationStatus.PENDING_LEGAL_SETUP,
+      RegistrationStatus.PENDING_APPROVAL,
+      RegistrationStatus.PENDING_PAYMENT,
+    ];
+
+    this.logger.log(`Seeding ${hangingCount} hanging clinic subscriptions...`);
+
+    for (let i = 0; i < hangingCount; i++) {
+      // Round-robin clinic selection
+      const clinicAdmin = clinicAdmins[i % clinicAdmins.length];
+
+      // Random service selection
+      const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+      const service = subscriptionServices[serviceIndex];
+
+      // Random pending status
+      const statusIndex = this.getRandomInt(0, pendingStatuses.length - 1);
+      const subscriptionStatus = pendingStatuses[statusIndex];
+
+      // Backdate created_at/updated_at: 6-12 months ago
+      const monthsAgo = this.getRandomInt(6, 12);
+      const backdatedDate = new Date();
+      backdatedDate.setMonth(backdatedDate.getMonth() - monthsAgo);
+
+      // subscription_date logic based on status progression:
+      // - PENDING_SEPAY_SETUP, PENDING_MANAGER_SETUP: null (registration not complete)
+      // - PENDING_LEGAL_SETUP, PENDING_APPROVAL, PENDING_PAYMENT: set to backdated date
+      let subscriptionDate: Date | null = null;
+      if (
+        subscriptionStatus === RegistrationStatus.PENDING_LEGAL_SETUP ||
+        subscriptionStatus === RegistrationStatus.PENDING_APPROVAL ||
+        subscriptionStatus === RegistrationStatus.PENDING_PAYMENT
+      ) {
+        subscriptionDate = new Date(backdatedDate);
+      }
+
+      // expirationDate: null for all pending statuses (not activated)
+      const expirationDate = null;
+
+      // Create hanging clinic subscription
+      const hangingSubscription = this.clinicSubscriptionRepository.create({
+        clinicId: clinicAdmin._id,
+        serviceId: service._id,
+        subscriptionDate,
+        expirationDate,
+        subscriptionStatus,
+      });
+
+      // Manually set created_at and updated_at to backdated date
+      hangingSubscription.createdAt = backdatedDate;
+      hangingSubscription.updatedAt = backdatedDate;
+
+      await this.clinicSubscriptionRepository.save(hangingSubscription);
+      createdCount++;
+    }
+
+    this.logger.log(
+      `✅ Hanging ClinicSubscription seeding completed: ${createdCount} created`,
+    );
+  }
+
+  /**
+   * Seed Hanging SubscriptionHistory records
+   *
+   * Creates historical records for the hanging subscriptions to reflect past state changes.
+   * Each hanging subscription gets 0-2 history records showing previous attempts or status changes.
+   */
+  private async seedHangingSubscriptionHistory(
+    clinicAdmins: Account[],
+    subscriptionServices: SubscriptionService[],
+  ): Promise<void> {
+    const hangingCount = 15;
+    let createdCount = 0;
+
+    // Possible historical statuses for abandoned registrations
+    const historicalStatuses = [
+      RegistrationStatus.PENDING_SEPAY_SETUP,
+      RegistrationStatus.PENDING_MANAGER_SETUP,
+      RegistrationStatus.PENDING_LEGAL_SETUP,
+      RegistrationStatus.EXPIRED, // Previous subscription expired
+    ];
+
+    this.logger.log('Seeding hanging subscription history records...');
+
+    for (let i = 0; i < hangingCount; i++) {
+      // Match the same clinic admin distribution
+      const clinicAdmin = clinicAdmins[i % clinicAdmins.length];
+
+      // Randomly decide how many historical records (0-2)
+      const historyCount = this.getRandomInt(0, 2);
+
+      for (let j = 0; j < historyCount; j++) {
+        // Random service selection
+        const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+        const service = subscriptionServices[serviceIndex];
+
+        // Random historical status
+        const statusIndex = this.getRandomInt(0, historicalStatuses.length - 1);
+        const status = historicalStatuses[statusIndex];
+
+        // Backdate further into the past: 12-24 months ago
+        const monthsAgo = this.getRandomInt(12, 24);
+        const historicalDate = new Date();
+        historicalDate.setMonth(historicalDate.getMonth() - monthsAgo);
+
+        // subscription_date for historical records
+        let subscriptionDate: Date | null = null;
+        if (
+          status === RegistrationStatus.PENDING_LEGAL_SETUP ||
+          status === RegistrationStatus.EXPIRED
+        ) {
+          subscriptionDate = new Date(historicalDate);
+        }
+
+        // expirationDate only for EXPIRED status
+        let expirationDate: Date | null = null;
+        if (status === RegistrationStatus.EXPIRED && subscriptionDate) {
+          expirationDate = new Date(subscriptionDate);
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        }
+
+        // Create hanging history record
+        const historyRecord = this.clinicSubscriptionHistoryRepository.create({
+          clinicId: clinicAdmin._id,
+          serviceId: service._id,
+          subscriptionDate,
+          expirationDate,
+          subscriptionStatus: status,
+        });
+
+        // Manually set created_at to historical date
+        historyRecord.createdAt = historicalDate;
+        historyRecord.updatedAt = historicalDate;
+
+        await this.clinicSubscriptionHistoryRepository.save(historyRecord);
+        createdCount++;
+      }
+    }
+
+    this.logger.log(
+      `✅ Hanging SubscriptionHistory seeding completed: ${createdCount} created`,
     );
   }
 
