@@ -318,7 +318,7 @@ export class SubscriptionsSeederService {
    * These records simulate abandoned/incomplete registrations from the past.
    *
    * Rules:
-   * - Status: Randomly selected from PENDING_PAYMENT, PENDING_APPROVAL, PENDING_LEGAL_SETUP, 
+   * - Status: Randomly selected from PENDING_PAYMENT, PENDING_APPROVAL, PENDING_LEGAL_SETUP,
    *           PENDING_MANAGER_SETUP, PENDING_SEPAY_SETUP
    * - created_at/updated_at: Backdated 6-12 months ago
    * - subscription_date: Set based on status progression (earlier statuses = no date)
@@ -347,8 +347,20 @@ export class SubscriptionsSeederService {
       // Round-robin clinic selection
       const clinicAdmin = clinicAdmins[i % clinicAdmins.length];
 
+      // Check if this clinic already has a subscription
+      const existing = await this.clinicSubscriptionRepository.existsByClinicId(
+        clinicAdmin._id,
+      );
+
+      if (existing) {
+        continue; // Skip this clinic to avoid unique constraint error
+      }
+
       // Random service selection
-      const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+      const serviceIndex = this.getRandomInt(
+        0,
+        subscriptionServices.length - 1,
+      );
       const service = subscriptionServices[serviceIndex];
 
       // Random pending status
@@ -429,7 +441,10 @@ export class SubscriptionsSeederService {
 
       for (let j = 0; j < historyCount; j++) {
         // Random service selection
-        const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+        const serviceIndex = this.getRandomInt(
+          0,
+          subscriptionServices.length - 1,
+        );
         const service = subscriptionServices[serviceIndex];
 
         // Random historical status

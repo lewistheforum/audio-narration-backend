@@ -628,4 +628,32 @@ export class AdminController {
       message: `Cleanup completed. Found ${result.totalStaleFound} stale registrations, deleted ${result.deletedSuccessfully} successfully.`,
     };
   }
+
+  /**
+   * Get all clinic admin account with ACTIVE subscription status
+   */
+  @Get('clinic-accounts/active-subscriptions')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Get all active clinic admin accounts' })
+  async getActiveClinicAdmins(): Promise<{ data: any; message: string }> {
+    const result = await this.adminService.getActiveClinicAdmins();
+    return {
+      data: result,
+      message: 'Active clinic admin accounts retrieved successfully',
+    };
+  }
+
+  /**
+   * Get all admin accounts with detail information
+   */
+  @Get('admin-accounts')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Get all admin accounts with detail information' })
+  async getAdminAccounts(): Promise<{ data: any; message: string }> {
+    const result = await this.adminService.getAdminAccounts();
+    return {
+      data: result,
+      message: 'Admin accounts retrieved successfully',
+    };
+  }
 }

@@ -689,4 +689,128 @@ export class AdminService {
 
     return stats;
   }
+
+  /**
+   * Get all active clinic admins
+   */
+  async getActiveClinicAdmins(): Promise<any[]> {
+    const activeAdmins = await this.accountRepository.find({
+      where: {
+        role: AccountRole.CLINIC_ADMIN,
+        subscription: {
+          subscriptionStatus: RegistrationStatus.ACTIVE,
+        },
+      },
+      relations: ['clinicAdminInformation', 'subscription'],
+      select: {
+        _id: true,
+        email: true,
+        username: true,
+        phone: true,
+        status: true,
+        createdAt: true,
+        clinicAdminInformation: {
+          _id: true,
+          clinicName: true,
+          clinicPhone: true,
+          description: true,
+          specializedIn: true,
+          pros: true,
+          paraclinical: true,
+          dob: true,
+          profilePicture: true,
+          bankName: true,
+          bankNumber: true,
+          bankBranch: true,
+          sepayVa: true,
+          isVerify: true,
+        },
+        subscription: {
+          _id: true,
+          subscriptionStatus: true,
+          serviceId: true,
+          expirationDate: true,
+        },
+      },
+    });
+
+    return activeAdmins.map((admin) => {
+      const { _id, clinicAdminInformation, subscription, ...rest } = admin;
+      return {
+        id: _id,
+        ...rest,
+        clinicAdminInformation: clinicAdminInformation
+          ? {
+              id: clinicAdminInformation._id,
+              clinicName: clinicAdminInformation.clinicName,
+              clinicPhone: clinicAdminInformation.clinicPhone,
+              description: clinicAdminInformation.description,
+              specializedIn: clinicAdminInformation.specializedIn,
+              pros: clinicAdminInformation.pros,
+              paraclinical: clinicAdminInformation.paraclinical,
+              dob: clinicAdminInformation.dob,
+              profilePicture: clinicAdminInformation.profilePicture,
+              bankName: clinicAdminInformation.bankName,
+              bankNumber: clinicAdminInformation.bankNumber,
+              bankBranch: clinicAdminInformation.bankBranch,
+              sepayVa: clinicAdminInformation.sepayVa,
+              isVerify: clinicAdminInformation.isVerify,
+            }
+          : null,
+        subscription: subscription
+          ? {
+              id: subscription._id,
+              subscriptionStatus: subscription.subscriptionStatus,
+              serviceId: subscription.serviceId,
+              expirationDate: subscription.expirationDate,
+            }
+          : null,
+      };
+    });
+  }
+
+  async getAdminAccounts(): Promise<any[]> {
+    const admins = await this.accountRepository.find({
+      where: {
+        role: AccountRole.ADMIN,
+      },
+      relations: ['generalAccount'],
+      select: {
+        _id: true,
+        email: true,
+        username: true,
+        phone: true,
+        role: true,
+        status: true,
+        isEmailVerified: true,
+        isOAuthUser: true,
+        createdAt: true,
+        updatedAt: true,
+        generalAccount: {
+          _id: true,
+          fullName: true,
+          gender: true,
+          dob: true,
+          profilePicture: true,
+        },
+      },
+    });
+
+    return admins.map((admin) => {
+      const { _id, generalAccount, ...rest } = admin;
+      return {
+        id: _id,
+        ...rest,
+        generalAccount: generalAccount
+          ? {
+              id: generalAccount._id,
+              fullName: generalAccount.fullName,
+              gender: generalAccount.gender,
+              dob: generalAccount.dob,
+              profilePicture: generalAccount.profilePicture,
+            }
+          : null,
+      };
+    });
+  }
 }
