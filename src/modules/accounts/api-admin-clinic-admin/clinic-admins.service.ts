@@ -20,6 +20,13 @@ import {
   TransactionHistoryItemDto,
 } from './dto/clinic-admin-subscription-history.dto';
 import { ClinicAdminClinicServiceDto } from './dto/clinic-admin-clinic-service.dto';
+import { ClinicAdminFeedbackResponseDto } from './dto/clinic-admin-feedback-response.dto';
+import { ClinicAdminFeedbackDetailResponseDto } from './dto/clinic-admin-feedback-detail.dto';
+import { ClinicAdminFeedbackListDto } from './dto/clinic-admin-feedback-list.dto';
+import { Appointment } from '../../appointments/entities/appointment.entity';
+import { Feedback } from '../../reports/entities/feedback.entity';
+import { FeedbackType } from '../../reports/enums/feedback-type.enum';
+import { DoctorInformation } from '../entities/doctor_information.entity';
 
 /**
  * ClinicAdminsService
@@ -43,6 +50,10 @@ export class ClinicAdminsService {
     private readonly clinicServiceConfigRepository: Repository<ClinicServiceConfig>,
     @InjectRepository(BanHistory)
     private readonly banHistoryRepository: Repository<BanHistory>,
+    @InjectRepository(Appointment)
+    private readonly appointmentRepository: Repository<Appointment>,
+    @InjectRepository(Feedback)
+    private readonly feedbackRepository: Repository<Feedback>,
     private readonly mailerService: MailerService,
   ) {}
 
@@ -179,6 +190,7 @@ export class ClinicAdminsService {
     clinicAdminId: string,
     page: number = 1,
     limit: number = 10,
+    search?: string,
   ): Promise<{ data: SubscriptionHistoryItemDto[]; total: number }> {
     const account = await this.accountRepository.findOne({
       where: { _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN },
@@ -219,6 +231,7 @@ export class ClinicAdminsService {
     clinicAdminId: string,
     page: number = 1,
     limit: number = 10,
+    search?: string,
   ): Promise<{ data: TransactionHistoryItemDto[]; total: number }> {
     const account = await this.accountRepository.findOne({
       where: { _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN },
@@ -498,6 +511,178 @@ export class ClinicAdminsService {
     await this.banHistoryRepository.save(banHistory);
 
     return new ClinicAdminResponseDto(savedAccount);
+  }
+
+  /**
+   * Get list of feedbacks for clinics managed by this admin
+   */
+
+  /**
+   * Get list of feedbacks for clinics managed by this admin
+   */
+  async getFeedbacks(
+    clinicAdminId: string,
+  ): Promise<{ data: ClinicAdminFeedbackListDto; total: number }> {
+    const admin = await this.accountRepository.findOne({
+      where: { _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN },
+    });
+
+    if (!admin) {
+      throw new NotFoundException(
+        `Clinic admin with ID ${clinicAdminId} not found.`,
+      );
+    }
+
+    // 1. Get all clinic managers (branches) under this clinic admin
+    const managers = await this.accountRepository.find({
+      where: { parentId: clinicAdminId, role: AccountRole.CLINIC_MANAGER },
+      select: ['_id'],
+    });
+    const managerIds = managers.map((m) => m._id);
+
+    if (managerIds.length === 0) {
+      return { data: { clinics: [], doctors: [] }, total: 0 };
+    }
+
+    // 2. Query Feedbacks
+    const rawQuery = this.feedbackRepository
+      .createQueryBuilder('feedback')
+      .leftJoin('feedback.clinic', 'clinic')
+      .leftJoin('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoin('feedback.doctor', 'doctor')
+      .leftJoin('doctor.generalAccount', 'doctorGeneral')
+      .leftJoin(
+        DoctorInformation,
+        'doctorInfo',
+        'doctorInfo.accountId = doctor._id',
+      )
+      .leftJoin(
+        Appointment,
+        'appointment',
+        'appointment._id = feedback.appointmentId',
+      )
+      .leftJoin('appointment.patient', 'patient')
+      .leftJoin('patient.generalAccount', 'patientGeneral')
+      .where('feedback.clinicId IN (:...managerIds)', { managerIds });
+
+    const rawData = await rawQuery
+      .select([
+        'feedback._id AS id',
+        'feedback.rating AS rating',
+        'feedback.description AS description',
+        'feedback.clinicId AS "clinicId"',
+        'feedback.type AS type',
+        'feedback.createdAt AS "createdAt"',
+        'clinic.username AS "clinicUsername"',
+        'clinicInfo.clinicBranchName AS "clinicName"',
+        'doctor.username AS "doctorUsername"',
+        'doctorGeneral.fullName AS "doctorFullName"',
+        'doctorInfo.fullName AS "doctorName"',
+        'patientGeneral.fullName AS "patientName"',
+        'patientGeneral.profilePicture AS "patientAvatar"',
+      ])
+      .orderBy('feedback.createdAt', 'DESC')
+      .getRawMany();
+
+    const totalCount = await rawQuery.getCount();
+
+    const clinics: ClinicAdminFeedbackResponseDto[] = [];
+    const doctors: ClinicAdminFeedbackResponseDto[] = [];
+
+    rawData.forEach((row) => {
+      const dto = new ClinicAdminFeedbackResponseDto({
+        _id: row.id,
+        rating: row.rating,
+        description: row.description,
+        clinicId: row.clinicId,
+        type: row.type,
+        createdAt: row.createdAt,
+      } as any);
+
+      dto.clinicName = row.clinicName || row.clinicUsername;
+      dto.doctorName = row.doctorName;
+      dto.patientName = row.patientName || 'Unknown';
+      dto.patientAvatar = row.patientAvatar;
+
+      if (row.type === FeedbackType.CLINIC) {
+        clinics.push(dto);
+      } else if (row.type === FeedbackType.DOCTOR) {
+        doctors.push(dto);
+      }
+    });
+
+    return { data: { clinics, doctors }, total: totalCount };
+  }
+
+  /**
+   * Get feedback detail
+   */
+  async getFeedbackDetail(
+    clinicManagerId: string,
+    feedbackId: string,
+  ): Promise<ClinicAdminFeedbackDetailResponseDto> {
+    // const admin = await this.accountRepository.findOne({
+    //   where: { _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN },
+    // });
+
+    // if (!admin) {
+    //   throw new NotFoundException(
+    //     `Clinic admin with ID ${clinicAdminId} not found.`,
+    //   );
+    // }
+
+    // Verify manager (clinic) exists under this admin context (if checking hierarchy is strict)
+    // However, if we just want to get detail by ID and we assume the feedback belongs to a manager who is under the admin...
+    // The user's prompt implies we are passing `clinicManagerId` now instead of `clinicAdminId` for `getFeedbacks`.
+    // But for `getFeedbackDetail`, the params were `(clinicManagerId, feedbackId)`.
+    // Let's stick to the current signature but update logic.
+
+    // Check if the feedback belongs to the clinic manager
+    // Actually, we can just query the feedback with all relations.
+
+    const feedback = await this.feedbackRepository.findOne({
+      where: {
+        _id: feedbackId,
+        // If we want to strictly ensure it belongs to the passed managerId:
+        clinicId: clinicManagerId,
+      },
+      relations: [
+        'clinic',
+        'clinic.clinicManagerInformation',
+        'doctor',
+        'doctor.generalAccount',
+        'doctor.doctorInformation', // Added doctor info
+      ],
+    });
+
+    if (!feedback) {
+      throw new NotFoundException(`Feedback not found.`);
+    }
+
+    // Fetch appointment separately to include its relations (patient)
+    // We can also use relations in feedbackRepository.findOne if we add relation to Feedback entity,
+    // but Appointment is manually joined via ID normally.
+    // Let's fetch appointment using its repository because Feedback might not have a direct relation setup in TypeORM for `appointment`.
+    // Looking at Feedback entity, it has `appointmentId` column but no `@ManyToOne` to Appointment yet?
+    // checking file... Yes, I saw `appointmentId` column but I didn't see a `appointment` relation property in the file snippet I read earlier?
+    // Wait, let me re-read Feedback entity to be sure.
+    // Accessing my memory of the file view:
+    // Line 24: @Column({ name: 'appointment_id', type: 'uuid' }) appointmentId: string;
+    // There was NO @ManyToOne for appointment in Feedback entity.
+
+    // So we MUST fetch appointment separately.
+
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: feedback.appointmentId },
+      relations: ['patient', 'patient.generalAccount'],
+    });
+
+    return new ClinicAdminFeedbackDetailResponseDto(
+      feedback,
+      appointment,
+      feedback.clinic,
+      feedback.doctor,
+    );
   }
 
   /**

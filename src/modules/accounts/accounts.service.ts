@@ -282,6 +282,26 @@ export class AccountsService {
     return new AccountResponseDto(account, generalAccount);
   }
 
+  /**
+   * Find Accounts by Role and Status
+   *
+   * Exposes the repository method to find accounts by role and status with pagination.
+   *
+   * @param {AccountRole} role - Account role to filter
+   * @param {AccountStatus} status - Account status to filter
+   * @param {number} skip - Number of records to skip
+   * @param {number} take - Number of records to return
+   * @returns {Promise<[Account[], number]>} Array of accounts and total count
+   */
+  async findByRoleAndStatus(
+    role: AccountRole,
+    status: AccountStatus,
+    skip: number = 0,
+    take: number = 10,
+  ): Promise<[Account[], number]> {
+    return this.accountRepository.findByRoleAndStatus(role, status, skip, take);
+  }
+
   async getAccountInformationByRole(id: string): Promise<AccountResponseDto> {
     const account = await this.findAccountEntityById(id);
 
@@ -1799,9 +1819,8 @@ export class AccountsService {
     }
 
     // Retrieve subscription record for the clinic admin
-    const subscription = await this.clinicSubscriptionRepository.findByClinicId(
-      clinicAdminId,
-    );
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
 
     if (!subscription) {
       throw new ForbiddenException(
@@ -1843,7 +1862,8 @@ export class AccountsService {
 
       if (
         !legalDocs ||
-        legalDocs.verificationStatus !== LegalDocumentVerificationStatus.APPROVED
+        legalDocs.verificationStatus !==
+          LegalDocumentVerificationStatus.APPROVED
       ) {
         throw new ForbiddenException(
           'Account is not ready or clinic is not active',
@@ -2819,6 +2839,9 @@ export class AccountsService {
         search,
         province,
         specialty,
+        RegistrationStatus.ACTIVE ||
+          RegistrationStatus.NON_RENEWING ||
+          RegistrationStatus.EXPIRED,
       );
 
     const clinicItems: ClinicItemDto[] = [];
@@ -3816,8 +3839,7 @@ export class AccountsService {
       throw new NotFoundException('Clinic subscription not found');
     }
     if (
-      subscription.subscriptionStatus !==
-        RegistrationStatus.PENDING_LEGAL_SETUP
+      subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP
     ) {
       throw new ForbiddenException(
         `Cannot upload legal documents. Current status: ${subscription.subscriptionStatus}`,
@@ -3986,7 +4008,9 @@ export class AccountsService {
     if (!subscription) {
       throw new NotFoundException('Clinic subscription not found');
     }
-    if (subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP) {
+    if (
+      subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP
+    ) {
       throw new BadRequestException(
         `Cannot update legal documents. Current status: ${subscription.subscriptionStatus}. Expected: PENDING_LEGAL_SETUP`,
       );

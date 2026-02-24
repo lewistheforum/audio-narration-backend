@@ -10,9 +10,12 @@ import { AdminRegistrationRepository } from './repositories/admin-registration.r
 import { AdminStatisticsRepository } from './repositories/admin-statistics.repository';
 import {
   Account,
+  Address,
   ClinicAdminInformation,
   ClinicManagerInformation,
   ClinicsLegalDocuments,
+  CodeVerification,
+  GoogleIframe,
 } from '../accounts/entities';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { ClinicSubscriptionHistory } from '../subscriptions/entities/clinic-subscription-history.entity';
@@ -26,6 +29,7 @@ import { Appointment } from '../appointments/entities/appointment.entity';
  * Provides admin functionality for:
  * - Approving/rejecting clinic registrations
  * - Dashboard statistics
+ * - Data maintenance (cleanup stale registrations)
  *
  * Dependencies:
  * - AccountsModule: For accessing Account, ClinicAdminInformation, ClinicManagerInformation, ClinicsLegalDocuments entities and repositories
@@ -37,11 +41,14 @@ import { Appointment } from '../appointments/entities/appointment.entity';
   imports: [
     TypeOrmModule.forFeature([
       Account,
+      Address,
       ClinicAdminInformation,
       ClinicManagerInformation,
       ClinicsLegalDocuments,
       ClinicSubscription,
       ClinicSubscriptionHistory,
+      CodeVerification,
+      GoogleIframe,
       SubscriptionService,
       Transaction,
       Appointment,

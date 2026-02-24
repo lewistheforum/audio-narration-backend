@@ -43,6 +43,12 @@ export class Report {
   @Column({ name: 'report_images', type: 'text', array: true, nullable: true })
   reportImages?: string[];
 
+  @Column({ name: 'is_response', type: 'boolean', default: false })
+  isResponse?: boolean;
+
+  @Column({ name: 'response_description', type: 'text', nullable: true })
+  responseDescription?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

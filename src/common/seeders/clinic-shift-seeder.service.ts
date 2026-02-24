@@ -6,6 +6,7 @@ import { ClinicShift } from '../../modules/schedules/entities/clinic-shift.entit
 import { ClinicShiftHour } from '../../modules/schedules/entities/clinic-shift-hour.entity';
 import { ClinicShiftRepository } from '../../modules/schedules/repositories/clinic-shift.repository';
 import { ClinicShiftHourRepository } from '../../modules/schedules/repositories/clinic-shift-hour.repository';
+import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import { ShiftType } from '../../modules/schedules/enums';
 
 /**
@@ -56,6 +57,7 @@ export class ClinicShiftSeederService {
     private readonly accountRepository: AccountRepository,
     private readonly clinicShiftRepository: ClinicShiftRepository,
     private readonly clinicShiftHourRepository: ClinicShiftHourRepository,
+    private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
   ) {}
 
   /**
@@ -67,14 +69,22 @@ export class ClinicShiftSeederService {
     try {
       this.logger.log('Starting to seed clinic shifts...');
 
+      // Check active subscriptions to filter clinics
+      const activeClinicIds =
+        await this.clinicSubscriptionRepository.findActiveClinicIds();
+
       // Get all CLINIC_MANAGER accounts (clinics)
       const allAccounts = await this.accountRepository.findAllAccounts();
       const clinicManagers = allAccounts.filter(
-        (acc) => acc.role === AccountRole.CLINIC_MANAGER,
+        (acc) =>
+          acc.role === AccountRole.CLINIC_MANAGER &&
+          activeClinicIds.includes(acc.parentId),
       );
 
       if (clinicManagers.length === 0) {
-        this.logger.warn('No CLINIC_MANAGER accounts found. Skipping clinic shift seeding.');
+        this.logger.warn(
+          'No CLINIC_MANAGER accounts found. Skipping clinic shift seeding.',
+        );
         return;
       }
 

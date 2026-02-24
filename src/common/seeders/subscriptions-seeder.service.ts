@@ -117,11 +117,13 @@ export class SubscriptionsSeederService {
   ): Promise<void> {
     let createdCount = 0;
     let skippedCount = 0;
+    let activeCount = 0; // Track how many clinics got ACTIVE status
 
     for (const clinicAdmin of clinicAdmins) {
       // Check if subscription already exists for this clinic
-      const existing =
-        await this.clinicSubscriptionRepository.existsByClinicId(clinicAdmin._id);
+      const existing = await this.clinicSubscriptionRepository.existsByClinicId(
+        clinicAdmin._id,
+      );
 
       if (existing) {
         skippedCount++;
@@ -143,23 +145,35 @@ export class SubscriptionsSeederService {
           ),
         );
 
-      // Determine subscription status based on legal document status
-      let subscriptionStatus = RegistrationStatus.PENDING_MANAGER_SETUP;
+      // Determine subscription status based on index (first 5 are ACTIVE, rest are PENDING)
+      const isPending = createdCount >= 5;
+      let subscriptionStatus: RegistrationStatus;
 
-      if (clinicManagers.length > 0) {
-        // Get legal document for the first clinic manager
+      if (!isPending && clinicManagers.length > 0) {
+        // Force first 5 clinics to ACTIVE status
+        subscriptionStatus = RegistrationStatus.ACTIVE;
+
+        // Also update their legal docs to APPROVED for consistency
         const legalDoc =
           await this.clinicsLegalDocumentsRepository.findByAccountId(
             clinicManagers[0]._id,
           );
-
         if (legalDoc) {
-          subscriptionStatus = this.mapLegalStatusToSubscriptionStatus(
-            legalDoc.verificationStatus,
-          );
-        } else {
-          subscriptionStatus = RegistrationStatus.PENDING_LEGAL_SETUP;
+          legalDoc.verificationStatus =
+            LegalDocumentVerificationStatus.APPROVED;
+          await this.clinicsLegalDocumentsRepository.save(legalDoc);
         }
+      } else {
+        // Assign a random pending status for testing cleanup
+        const pendingStatuses = [
+          RegistrationStatus.PENDING_SEPAY_SETUP,
+          RegistrationStatus.PENDING_MANAGER_SETUP,
+          RegistrationStatus.PENDING_LEGAL_SETUP,
+          RegistrationStatus.PENDING_APPROVAL,
+          RegistrationStatus.PENDING_PAYMENT,
+        ];
+        subscriptionStatus =
+          pendingStatuses[Math.floor(Math.random() * pendingStatuses.length)];
       }
 
       // Calculate subscription and expiration dates
@@ -176,7 +190,28 @@ export class SubscriptionsSeederService {
         subscriptionStatus,
       });
 
-      await this.clinicSubscriptionRepository.save(clinicSubscription);
+      const savedSubscription =
+        await this.clinicSubscriptionRepository.save(clinicSubscription);
+
+      // If this is a pending subscription (not ACTIVE), backdate its createdAt
+      // so it becomes "stale" (> 6 months) to facilitate testing the cleanup API
+      if (subscriptionStatus !== RegistrationStatus.ACTIVE) {
+        // Generate a date 7-10 months in the past
+        const staleMonthsAge = Math.floor(Math.random() * 4) + 7;
+        const staleDate = new Date();
+        staleDate.setMonth(staleDate.getMonth() - staleMonthsAge);
+
+        // Use update() to bypass TypeORM's @CreateDateColumn behavior
+        await this.clinicSubscriptionRepository.update(
+          savedSubscription._id,
+          {
+            createdAt: staleDate,
+            updatedAt: staleDate,
+            subscriptionDate: staleDate,
+          } as any, // Cast to any to bypass entity readonly properties if needed
+        );
+      }
+
       createdCount++;
     }
 
@@ -198,6 +233,27 @@ export class SubscriptionsSeederService {
     let skippedCount = 0;
 
     for (const clinicAdmin of clinicAdmins) {
+      // Check current subscription status - skip if in pending statuses
+      const currentSubscription =
+        await this.clinicSubscriptionRepository.findByClinicId(clinicAdmin._id);
+      const pendingStatuses = [
+        RegistrationStatus.PENDING_SEPAY_SETUP,
+        RegistrationStatus.PENDING_MANAGER_SETUP,
+        RegistrationStatus.PENDING_LEGAL_SETUP,
+        RegistrationStatus.PENDING_APPROVAL,
+        RegistrationStatus.PENDING_PAYMENT,
+      ];
+      if (
+        currentSubscription &&
+        pendingStatuses.includes(currentSubscription.subscriptionStatus)
+      ) {
+        this.logger.log(
+          `Skipping history for ${clinicAdmin._id} (status: ${currentSubscription.subscriptionStatus})`,
+        );
+        skippedCount++;
+        continue;
+      }
+
       // Check if history records already exist for this clinic
       const existingHistoryCount =
         await this.clinicSubscriptionHistoryRepository.count({
@@ -214,7 +270,10 @@ export class SubscriptionsSeederService {
 
       for (let i = 0; i < historyCount; i++) {
         // Get random subscription service
-        const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+        const serviceIndex = this.getRandomInt(
+          0,
+          subscriptionServices.length - 1,
+        );
         const service = subscriptionServices[serviceIndex];
 
         // Calculate subscription and expiration dates (historical)
@@ -228,9 +287,10 @@ export class SubscriptionsSeederService {
         // Randomly select between EXPIRED and NON_RENEWING for historical records
         // NON_RENEWING: User explicitly cancelled (churn)
         // EXPIRED: Natural expiration (no cancellation)
-        const status = Math.random() > 0.7 
-          ? RegistrationStatus.NON_RENEWING 
-          : RegistrationStatus.EXPIRED;
+        const status =
+          Math.random() > 0.7
+            ? RegistrationStatus.NON_RENEWING
+            : RegistrationStatus.EXPIRED;
 
         // Create clinic subscription history
         const historyRecord = this.clinicSubscriptionHistoryRepository.create({
@@ -258,7 +318,7 @@ export class SubscriptionsSeederService {
    * These records simulate abandoned/incomplete registrations from the past.
    *
    * Rules:
-   * - Status: Randomly selected from PENDING_PAYMENT, PENDING_APPROVAL, PENDING_LEGAL_SETUP, 
+   * - Status: Randomly selected from PENDING_PAYMENT, PENDING_APPROVAL, PENDING_LEGAL_SETUP,
    *           PENDING_MANAGER_SETUP, PENDING_SEPAY_SETUP
    * - created_at/updated_at: Backdated 6-12 months ago
    * - subscription_date: Set based on status progression (earlier statuses = no date)
@@ -287,8 +347,20 @@ export class SubscriptionsSeederService {
       // Round-robin clinic selection
       const clinicAdmin = clinicAdmins[i % clinicAdmins.length];
 
+      // Check if this clinic already has a subscription
+      const existing = await this.clinicSubscriptionRepository.existsByClinicId(
+        clinicAdmin._id,
+      );
+
+      if (existing) {
+        continue; // Skip this clinic to avoid unique constraint error
+      }
+
       // Random service selection
-      const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+      const serviceIndex = this.getRandomInt(
+        0,
+        subscriptionServices.length - 1,
+      );
       const service = subscriptionServices[serviceIndex];
 
       // Random pending status
@@ -369,7 +441,10 @@ export class SubscriptionsSeederService {
 
       for (let j = 0; j < historyCount; j++) {
         // Random service selection
-        const serviceIndex = this.getRandomInt(0, subscriptionServices.length - 1);
+        const serviceIndex = this.getRandomInt(
+          0,
+          subscriptionServices.length - 1,
+        );
         const service = subscriptionServices[serviceIndex];
 
         // Random historical status
