@@ -45,8 +45,8 @@ export class ContractsController {
         @Query('page') page: number = 1,
         @Query('limit') limit: number = 10,
     ) {
-        const clinicId = req.user._id;
-        return this.contractsService.getPackagesByClinic(clinicId, employeeName, page, limit);
+        const clinicManagerId = req.user._id;
+        return this.contractsService.getPackagesByManager(clinicManagerId, employeeName, page, limit);
     }
 
     /**
@@ -61,8 +61,8 @@ export class ContractsController {
     @ApiOperation({ summary: 'Create a new contract package (Step 1)' })
     @ApiResponse({ status: 201, description: 'Contract package created successfully' })
     async createPackage(@Body() dto: CreateContractPackageDto, @Req() req) {
-        const clinicId = req.user.parentId || req.user._id;
-        return this.contractsService.createPackage(dto, clinicId);
+        const clinicManagerId = req.user._id;
+        return this.contractsService.createPackage(dto, clinicManagerId);
     }
 
     /**

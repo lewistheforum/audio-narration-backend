@@ -1,4 +1,11 @@
 export * from './create-account.dto';
+export * from './username-email-list.dto';
+export * from './get-employees-by-clinic.dto';
+
+export * from './get-staff-list.dto';
+export * from './get-doctor-list.dto';
+export * from './staff-list-response.dto';
+export * from './doctor-list-response.dto';
 export * from './create-staff-by-manager.dto';
 export * from './create-doctor-by-manager.dto';
 export * from './update-clinic-admin-profile.dto';
