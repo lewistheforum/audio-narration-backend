@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { API } from '../utils/ai-api';
 
 @Injectable()
 export class KnowledgeBaseSeederService {
@@ -11,7 +12,7 @@ export class KnowledgeBaseSeederService {
   async seed(): Promise<void> {
     this.logger.log('Starting to seed Knowledge Base via API...');
 
-    const url = 'http://localhost:8080/api/v1/rag/knowledge-base/sync';
+    const url = API.AI.SYNC_DATA;
     const body = {
       sync_clinic_services: true,
       sync_doctor_profiles: true,

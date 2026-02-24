@@ -6,6 +6,8 @@ export enum RegistrationStatus {
    */
   PENDING_SEPAY_SETUP = 'PENDING_SEPAY_SETUP',
 
+  //accounts, clinic admin information, address, iframe, clinic subcription, clinic legal documents, code verification, clinic manager information
+
   /**
    * STEP 3 START: Account created (Step 2 completed).
    * Status: User has account but hasn't created Clinic Manager yet.
@@ -55,5 +57,4 @@ export enum RegistrationStatus {
    * Action: User needs to renew subscription manually (no auto-renewal).
    */
   EXPIRED = 'EXPIRED',
-
 }

@@ -12,6 +12,8 @@ import { ClinicService } from '../../clinic-services/entities/clinic-service.ent
 import { ClinicServiceCategory } from '../../clinic-services/entities/clinic-service-category.entity';
 import { BanHistory } from '../../accounts/entities/ban-history.entity';
 import { MailerModule } from '../../mailer/mailer.module';
+import { Appointment } from '../../appointments/entities/appointment.entity';
+import { Feedback } from '../../reports/entities/feedback.entity';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { MailerModule } from '../../mailer/mailer.module';
       ClinicService,
       ClinicServiceCategory,
       BanHistory,
+      Appointment,
+      Feedback,
     ]),
     MailerModule,
   ],

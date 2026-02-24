@@ -170,6 +170,13 @@ export class AccountRepository {
     }
     return this.accountRepository.find({
       where: { _id: In(ids) },
+      relations: [
+        'clinicAdminInformation',
+        'clinicManagerInformation',
+        'doctorInformation',
+        'clinicStaffInformation',
+        'generalAccount',
+      ],
     });
   }
 
@@ -225,6 +232,20 @@ export class AccountRepository {
    */
   async saveAccount(account: Account): Promise<Account> {
     return this.accountRepository.save(account);
+  }
+
+  /**
+   * Find Accounts with Flexible Options
+   */
+  async findAccounts(options: any): Promise<Account[]> {
+    return this.accountRepository.find(options);
+  }
+
+  /**
+   * Create Query Builder for complex queries
+   */
+  createQueryBuilder(alias?: string) {
+    return this.accountRepository.createQueryBuilder(alias);
   }
 
   /**
@@ -470,11 +491,13 @@ export class AccountRepository {
     search?: string,
     province?: string,
     specialty?: string,
+    subscriptionStatus?: string,
   ): Promise<[Account[], number]> {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
       .andWhere('account.status = :status', { status });
 
@@ -499,6 +522,16 @@ export class AccountRepository {
       queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
         specialty: JSON.stringify([specialty]),
       });
+    }
+
+    // Apply subscription status filter
+    if (subscriptionStatus) {
+      queryBuilder.andWhere(
+        'subscription.subscriptionStatus = :subscriptionStatus',
+        {
+          subscriptionStatus,
+        },
+      );
     }
 
     // Apply pagination and ordering

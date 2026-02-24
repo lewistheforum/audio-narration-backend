@@ -160,6 +160,14 @@ export class ClinicItemDto {
   status: AccountStatus;
 
   @ApiProperty({
+    description: 'Subscription status',
+    example: 'ACTIVE',
+    required: false,
+    nullable: true,
+  })
+  subscriptionStatus?: string;
+
+  @ApiProperty({
     description: 'Clinic information',
     type: ClinicInfoDto,
   })
@@ -192,6 +200,7 @@ export class ClinicItemDto {
     this.profilePicture = account.profilePicture;
     this.role = account.role;
     this.status = account.status;
+    this.subscriptionStatus = account.subscription?.subscriptionStatus;
 
     this.clinicInfo = {
       id: clinicInfo._id,

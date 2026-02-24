@@ -4,6 +4,8 @@ import { AccountRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity';
 import { ClinicRoomRepository } from '../../modules/schedules/repositories/clinic-room.repository';
+import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
+// imports resolved
 
 /**
  * Clinic Room Seeder Service
@@ -26,6 +28,7 @@ export class ClinicRoomSeederService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly clinicRoomRepository: ClinicRoomRepository,
+    private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
   ) {}
 
   /**
@@ -37,14 +40,22 @@ export class ClinicRoomSeederService {
     try {
       this.logger.log('Starting to seed clinic rooms...');
 
+      // Check active subscriptions to filter clinics
+      const activeClinicIds =
+        await this.clinicSubscriptionRepository.findActiveClinicIds();
+
       // Get all CLINIC_MANAGER accounts (clinics)
       const allAccounts = await this.accountRepository.findAllAccounts();
       const clinicManagers = allAccounts.filter(
-        (acc) => acc.role === AccountRole.CLINIC_MANAGER,
+        (acc) =>
+          acc.role === AccountRole.CLINIC_MANAGER &&
+          activeClinicIds.includes(acc.parentId),
       );
 
       if (clinicManagers.length === 0) {
-        this.logger.warn('No CLINIC_MANAGER accounts found. Skipping clinic room seeding.');
+        this.logger.warn(
+          'No CLINIC_MANAGER accounts found. Skipping clinic room seeding.',
+        );
         return;
       }
 
@@ -55,7 +66,9 @@ export class ClinicRoomSeederService {
         totalRoomsCreated += roomsCreated;
       }
 
-      this.logger.log(`✅ Clinic room seeding completed. Created ${totalRoomsCreated} rooms total.`);
+      this.logger.log(
+        `✅ Clinic room seeding completed. Created ${totalRoomsCreated} rooms total.`,
+      );
     } catch (error) {
       this.logger.error('Failed to seed clinic rooms', error.stack);
       throw error;
@@ -88,9 +101,7 @@ export class ClinicRoomSeederService {
       this.MAX_ROOMS_PER_CLINIC,
     );
 
-    this.logger.log(
-      `Seeding ${roomCount} rooms for clinic ${clinic._id}...`,
-    );
+    this.logger.log(`Seeding ${roomCount} rooms for clinic ${clinic._id}...`);
 
     let createdCount = 0;
 
