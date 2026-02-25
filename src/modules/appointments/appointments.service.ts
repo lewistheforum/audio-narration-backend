@@ -359,7 +359,6 @@ export class AppointmentsService {
     const cancellableStatuses = [
       AppointmentStatus.PENDING,
       AppointmentStatus.CONFIRMED,
-      AppointmentStatus.AWAITING_PAYMENT,
     ];
 
     if (!cancellableStatuses.includes(appointment.status)) {
@@ -652,8 +651,6 @@ export class AppointmentsService {
     // Validate reason for certain statuses
     const statusesRequiringReason = [
       AppointmentStatus.CANCELLED,
-      AppointmentStatus.PAYMENT_FAILED,
-      AppointmentStatus.PAYMENT_CANCELLED,
       AppointmentStatus.ABSENT,
     ];
 
@@ -715,27 +712,6 @@ export class AppointmentsService {
 
     // Define valid transitions from each status
     const validTransitions: Record<AppointmentStatus, AppointmentStatus[]> = {
-      // Payment lifecycle
-      [AppointmentStatus.AWAITING_PAYMENT]: [
-        AppointmentStatus.PENDING,
-        AppointmentStatus.PAYMENT_FAILED,
-        AppointmentStatus.PAYMENT_CANCELLED,
-        AppointmentStatus.PAYMENT_EXPIRED,
-        AppointmentStatus.CANCELLED,
-      ],
-      [AppointmentStatus.PAYMENT_FAILED]: [
-        AppointmentStatus.AWAITING_PAYMENT,
-        AppointmentStatus.CANCELLED,
-      ],
-      [AppointmentStatus.PAYMENT_CANCELLED]: [
-        AppointmentStatus.AWAITING_PAYMENT,
-        AppointmentStatus.CANCELLED,
-      ],
-      [AppointmentStatus.PAYMENT_EXPIRED]: [
-        AppointmentStatus.AWAITING_PAYMENT,
-        AppointmentStatus.CANCELLED,
-      ],
-
       // Appointment lifecycle
       [AppointmentStatus.PENDING]: [
         AppointmentStatus.CONFIRMED,
@@ -762,7 +738,6 @@ export class AppointmentsService {
       // Terminal states (empty array - no transitions allowed)
       [AppointmentStatus.CANCELLED]: [
         AppointmentStatus.PENDING, // Allow re-opening if needed
-        AppointmentStatus.AWAITING_PAYMENT, // Allow retry payment
       ],
       [AppointmentStatus.COMPLETED]: [],
       [AppointmentStatus.ABSENT]: [],
