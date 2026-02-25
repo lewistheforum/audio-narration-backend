@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
-import { AccountRole, AccountStatus, VerificationType } from './enums';
+import { AccountRole, AccountStatus, VerificationType, ClinicRole } from './enums';
 import * as crypto from 'crypto';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
@@ -48,6 +48,8 @@ import {
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
+  StaffListResponseDto,
+  StaffItemDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import * as bcrypt from 'bcrypt';
@@ -63,6 +65,8 @@ import {
   GoogleIframeRepository,
 } from './repositories';
 import { UsernameEmailListDto } from './dto/username-email-list.dto';
+import { GetEmployeesByClinicDto } from './dto/get-employees-by-clinic.dto';
+
 import { generateVerificationCode } from 'src/common/utils/util';
 import { MailerService } from '../mailer/mailer.service';
 import {
@@ -3100,17 +3104,7 @@ export class AccountsService {
    * @param {string} [search] - Optional search filter
    * @returns {Promise<Account[]>} List of employees
    */
-  async findAllEmployeesByClinic(
-    clinicId: string,
-    role?: AccountRole,
-    search?: string,
-  ): Promise<Account[]> {
-    return this.accountRepository.findEmployeesByClinicWithFilters(
-      clinicId,
-      role,
-      search,
-    );
-  }
+
 
   /**
    * Get Doctor by ID with Full Details
@@ -4254,5 +4248,160 @@ export class AccountsService {
         'Subscription cancelled successfully. Access retained until expiration date.',
       newStatus: RegistrationStatus.NON_RENEWING,
     };
+  }
+
+  /**
+   * Find Staff by ID (Manager Only)
+   *
+   * Retrieves staff details for a manager, ensuring the staff belongs to the manager's clinic.
+   *
+   * @param id Staff Account ID
+   * @param managerId Manager Account ID
+   */
+  async findStaffById(id: string, managerId: string): Promise<AccountResponseDto> {
+    const staff = await this.findAccountEntityById(id);
+
+    // Security Check: Ensure staff belongs to the manager's clinic
+    if (staff.parentId !== managerId) {
+      throw new ForbiddenException(MESSAGES.failMessage.insufficientPermissions);
+    }
+
+    return this.getAccountInformationByRole(id);
+  }
+
+  /**
+   * Find All Staff by Manager
+   *
+   * Retrieves paginated list of staff members for a specific clinic manager.
+   *
+   * @param managerId Manager Account ID
+   * @param page Page number
+   * @param limit Items per page
+   * @param search Search term
+   * @param role Filter by clinic role
+   * @param fromDate Filter by creation date from
+   * @param toDate Filter by creation date to
+   */
+  async findAllStaffByManager(
+    managerId: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    role?: ClinicRole,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<StaffListResponseDto> {
+    const parent = await this.accountRepository.findAccountById(managerId);
+    if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+
+    const [accounts, total] = await this.accountRepository.findStaffByClinicWithFilters(
+      managerId,
+      (page - 1) * limit,
+      limit,
+      search,
+      role,
+      fromDate,
+      toDate,
+    );
+
+    const staffItems: StaffItemDto[] = [];
+    for (const account of accounts) {
+      const staffInfo = account.clinicStaffInformation;
+      staffItems.push(new StaffItemDto(account, staffInfo));
+    }
+
+    return {
+      staff: staffItems,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Find All Doctors by Manager (Management View)
+   *
+   * Retrieves paginated list of doctors for a specific clinic manager.
+   *
+   * @param managerId Manager Account ID
+   * @param page Page number
+   * @param limit Items per page
+   * @param search Search term
+   * @param academicDegree Filter by degree
+   * @param fromDate Filter by creation date from
+   * @param toDate Filter by creation date to
+   */
+  async findAllDoctorsByManager(
+    managerId: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    academicDegree?: string,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<DoctorListResponseDto> {
+    const parent = await this.accountRepository.findAccountById(managerId);
+    if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+
+    const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(managerId);
+
+    const [accounts, total] = await this.accountRepository.findDoctorsWithFilters(
+      AccountRole.DOCTOR,
+      AccountStatus.ACTIVE,
+      (page - 1) * limit,
+      limit,
+      managerId,
+      undefined,
+      search,
+      academicDegree,
+      fromDate,
+      toDate,
+    );
+
+    const doctorItems: DoctorItemDto[] = [];
+    for (const account of accounts) {
+      const doctorInfo = account.doctorInformation;
+      doctorItems.push(new DoctorItemDto(account, doctorInfo, clinicInfo));
+    }
+
+    return {
+      doctors: doctorItems,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Find All Employees by Clinic
+   *
+   * Retrieves list of employees (doctors and staff) for a specific clinic.
+   *
+   * @param clinicId Clinic ID
+   * @param query Query filters
+   */
+  async findAllEmployeesByClinic(
+    clinicId: string,
+    query: GetEmployeesByClinicDto,
+  ): Promise<AccountResponseDto[]> {
+    const employees =
+      await this.accountRepository.findEmployeesByClinicWithFilters(
+        clinicId,
+        query.role,
+        query.search,
+      );
+
+    const result: AccountResponseDto[] = [];
+    for (const account of employees) {
+      result.push(await this.getAccountInformationByRole(account._id));
+    }
+
+    return result;
   }
 }

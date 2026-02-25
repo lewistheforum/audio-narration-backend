@@ -152,13 +152,13 @@ describe('ContractsService', () => {
                 _id: 'emp-1',
                 role: 'DOCTOR'
             });
-            contractPackageRepo.create.mockReturnValue({ ...dto, clinicId: adminId });
-            contractPackageRepo.save.mockResolvedValue({ ...dto, clinicId: adminId, _id: 'pkg-1' });
+            contractPackageRepo.create.mockReturnValue({ ...dto, clinicManagerId: adminId });
+            contractPackageRepo.save.mockResolvedValue({ ...dto, clinicManagerId: adminId, _id: 'pkg-1' });
 
             const result = await service.createPackage(dto, adminId);
 
             expect(result).toBeDefined();
-            expect(result.clinicId).toBe(adminId);
+            expect(result.clinicManagerId).toBe(adminId);
             expect(contractPackageRepo.save).toHaveBeenCalled();
         });
 
@@ -187,7 +187,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: userId,
-                clinicId: 'other'
+                clinicManagerId: 'other'
             });
             contractInfoRepo.findByContractId.mockResolvedValue({
                 contractStatus: ContractStatus.PENDING_SIGNATURE
@@ -208,7 +208,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: 'other-1',
-                clinicId: 'other-2'
+                clinicManagerId: 'other-2'
             });
 
             await expect(service.sendSigningOtp(contractId, userId)).rejects.toThrow(UnauthorizedException);
@@ -219,7 +219,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: userId,
-                clinicId: 'other'
+                clinicManagerId: 'other'
             });
             contractInfoRepo.findByContractId.mockResolvedValue({
                 contractStatus: ContractStatus.DRAFT
@@ -247,7 +247,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: employeeId,
-                clinicId: managerId,
+                clinicManagerId: managerId,
             });
             contractInfoRepo.findByContractId.mockResolvedValue({
                 _id: 'info-1',
@@ -293,7 +293,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: employeeId,
-                clinicId: managerId,
+                clinicManagerId: managerId,
                 employeeSignature: empSignature,
             });
             contractInfoRepo.findByContractId.mockResolvedValue({
@@ -373,7 +373,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: 'emp-1',
-                clinicId: managerId
+                clinicManagerId: managerId
             });
             contractInfoRepo.findByContractId.mockResolvedValue({
                 contractStatus: ContractStatus.PENDING_MANAGER_SIGNATURE
@@ -396,7 +396,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: 'emp-1',
-                clinicId: managerId,
+                clinicManagerId: managerId,
                 employeeSignature: 'sig-1'
             });
             contractInfoRepo.findByContractId.mockResolvedValue({
@@ -438,7 +438,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: 'emp-1',
-                clinicId: 'mgr-1',
+                clinicManagerId: 'mgr-1',
                 employeeSignature: 'valid-sig-emp',
                 managerSignature: 'valid-sig-mgr'
             });
@@ -470,7 +470,7 @@ describe('ContractsService', () => {
             contractPackageRepo.findById.mockResolvedValue({
                 _id: contractId,
                 employeeId: 'emp-1',
-                clinicId: 'mgr-1',
+                clinicManagerId: 'mgr-1',
                 employeeSignature: 'bad-sig',
                 managerSignature: 'bad-sig'
             });
