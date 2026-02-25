@@ -89,9 +89,19 @@ export class TransactionsController {
     status: HttpStatus.CREATED,
     message: 'Subscription QR created successfully',
   })
-  async createSubscriptionQr(@Body() body: CreateSubscriptionTransactionDto) {
+  async createSubscriptionQr(@User() user: Account, @Body() body: CreateSubscriptionTransactionDto) {
+    let clinicId = user._id;
+
+    // If Manager, use Parent's Clinic ID
+    if (user.role === AccountRole.CLINIC_MANAGER) {
+      if (!user.parentId) {
+        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+      }
+      clinicId = user.parentId;
+    }
+
     // Legacy support: Map to Renewal Logic (ignores body.serviceId if provided, strictly uses current subscription's service)
-    const payment = await this.transactionsService.createRenewalQr(body.subscriptionId);
+    const payment = await this.transactionsService.createRenewalQr(clinicId);
     return {
       data: payment,
       message: 'Subscription QR created successfully',

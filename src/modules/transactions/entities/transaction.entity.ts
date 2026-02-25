@@ -8,7 +8,7 @@ import {
   JoinColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
+import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { TransactionType } from './transaction-type.entity';
 import { Account } from '../../accounts/entities/accounts.entity';
 
@@ -54,11 +54,11 @@ export class Transaction {
   @Column({ name: 'subcription_id', type: 'uuid', nullable: true })
   subscriptionId?: string;
 
-  @ManyToOne(() => ClinicSubscriptionHistory, {
+  @ManyToOne(() => ClinicSubscription, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'subcription_id' })
-  subscription?: ClinicSubscriptionHistory;
+  subscription?: ClinicSubscription;
   @Column({ name: 'transaction_type_id', type: 'uuid', nullable: true })
   transactionTypeId?: string;
 
