@@ -60,6 +60,20 @@ export const APPOINTMENT_DAYS_PAST_MAX = 90;
 export const APPOINTMENT_STATUS = AppointmentStatus.COMPLETED;
 
 /**
+ * All valid appointment statuses (excluding payment-related statuses)
+ * Use this array to create diverse sample data if needed
+ */
+export const VALID_APPOINTMENT_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.PENDING,
+  AppointmentStatus.CONFIRMED,
+  AppointmentStatus.CHECKED_IN,
+  AppointmentStatus.IN_PROGRESS,
+  AppointmentStatus.COMPLETED,
+  AppointmentStatus.CANCELLED,
+  AppointmentStatus.ABSENT,
+];
+
+/**
  * Valid ERM statuses for completed appointments
  * Only COMPLETED or SIGNED are allowed (not DRAFT/IN_PROGRESS/CANCELLED)
  */
