@@ -11,7 +11,6 @@ import {
 import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { TransactionType } from './transaction-type.entity';
 import { Account } from '../../accounts/entities/accounts.entity';
-import { ClinicAdminInformation } from '../../accounts/entities/clinic-admin-information.entity';
 
 export enum PaymentStatus {
   PENDING = 'PENDING',

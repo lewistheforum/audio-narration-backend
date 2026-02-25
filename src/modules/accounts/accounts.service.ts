@@ -74,11 +74,12 @@ import {
   ClinicSubscriptionHistoryRepository,
   SubscriptionServiceRepository,
 } from '../subscriptions/repositories';
-import {
-  ClinicsLegalDocumentsRepository,
-} from './repositories';
+import { ClinicsLegalDocumentsRepository } from './repositories';
 import { TransactionRepository } from '../transactions/repositories/transaction.repository';
-import { Transaction, PaymentStatus } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  PaymentStatus,
+} from '../transactions/entities/transaction.entity';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 
 /**
@@ -155,9 +156,12 @@ export class AccountsService {
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
-  ) { }
+  ) {}
 
-  private generateKeyPair(): { publicKey: string; encryptedPrivateKey: string } {
+  private generateKeyPair(): {
+    publicKey: string;
+    encryptedPrivateKey: string;
+  } {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
       modulusLength: 2048,
       publicKeyEncoding: {
@@ -173,7 +177,9 @@ export class AccountsService {
     return { publicKey, encryptedPrivateKey: privateKey };
   }
 
-  async generateUserKeys(userId: string): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
+  async generateUserKeys(
+    userId: string,
+  ): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
     const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
     const account = await this.findAccountEntityById(userId);
     account.publicKey = publicKey;
@@ -278,6 +284,26 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
     const generalAccount = await this.findGeneralAccountByUserId(id);
     return new AccountResponseDto(account, generalAccount);
+  }
+
+  /**
+   * Find Accounts by Role and Status
+   *
+   * Exposes the repository method to find accounts by role and status with pagination.
+   *
+   * @param {AccountRole} role - Account role to filter
+   * @param {AccountStatus} status - Account status to filter
+   * @param {number} skip - Number of records to skip
+   * @param {number} take - Number of records to return
+   * @returns {Promise<[Account[], number]>} Array of accounts and total count
+   */
+  async findByRoleAndStatus(
+    role: AccountRole,
+    status: AccountStatus,
+    skip: number = 0,
+    take: number = 10,
+  ): Promise<[Account[], number]> {
+    return this.accountRepository.findByRoleAndStatus(role, status, skip, take);
   }
 
   async getAccountInformationByRole(id: string): Promise<AccountResponseDto> {
@@ -430,7 +456,7 @@ export class AccountsService {
       password: hashedPassword,
       phone: createAccountDto.phone,
       role: AccountRole.PATIENT,
-      status: AccountStatus.PENDING,
+      status: AccountStatus.UNVERIFIED,
     });
 
     const savedAccount = await this.accountRepository.saveAccount(account);
@@ -627,7 +653,7 @@ export class AccountsService {
 
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
-      account.status = AccountStatus.PENDING; // Require re-verification
+      account.status = AccountStatus.ACTIVE; // Keep account active
       emailChanged = true;
     }
 
@@ -1709,20 +1735,6 @@ export class AccountsService {
       throw new ForbiddenException('Your account has been banned.');
     }
 
-    // PENDING: Throw 401 Unauthorized - email verification required
-    if (account.status === AccountStatus.PENDING) {
-      throw new UnauthorizedException(
-        'Email verification required. Please verify your email to activate your account.',
-      );
-    }
-
-    // INACTIVE: Throw 401 Unauthorized - account suspended
-    if (account.status === AccountStatus.INACTIVE) {
-      throw new UnauthorizedException(
-        'Your account is inactive. Please contact support for assistance.',
-      );
-    }
-
     // DELETED: Throw 401 Unauthorized - account deleted
     if (account.status === AccountStatus.DELETED) {
       throw new UnauthorizedException(
@@ -1730,21 +1742,152 @@ export class AccountsService {
       );
     }
 
-    // EXPIRED: Throw 403 Forbidden - subscription expired
-    if (account.status === AccountStatus.EXPIRED) {
+    // UNVERIFIED and ACTIVE: Allow access (no exception thrown)
+  }
+
+  /**
+   * Validate Clinic Subscription Status
+   *
+   * Validates that clinic-related roles have an active subscription before allowing login.
+   * This method enforces subscription-based access control for clinic accounts.
+   *
+   * Hierarchy Resolution:
+   * - CLINIC_ADMIN: Direct subscription check (user owns subscription)
+   * - CLINIC_MANAGER: Parent is CLINIC_ADMIN (1 level up)
+   * - CLINIC_STAFF/DOCTOR: Grandparent is CLINIC_ADMIN (2 levels up: Manager -> Admin)
+   *
+   * Allowed Subscription Statuses:
+   * - ACTIVE: Full subscription access
+   * - NON_RENEWING: Cancelled but still valid until expiration
+   *
+   * Blocked Statuses:
+   * - EXPIRED: Subscription period ended
+   * - PENDING_*: Registration not completed
+   * - REJECTED: Registration rejected
+   *
+   * @param {Account} account - The account attempting to log in
+   * @throws {ForbiddenException} If subscription is not active or has expired
+   *
+   * @example
+   * ```typescript
+   * const account = await accountsService.findByEmail(email);
+   * await accountsService.validateClinicSubscription(account);
+   * ```
+   */
+  async validateClinicSubscription(account: Account): Promise<void> {
+    const clinicRoles = [
+      AccountRole.CLINIC_ADMIN,
+      AccountRole.CLINIC_MANAGER,
+      AccountRole.CLINIC_STAFF,
+      AccountRole.DOCTOR,
+    ];
+
+    // Skip validation for non-clinic roles
+    if (!clinicRoles.includes(account.role)) {
+      return;
+    }
+
+    let clinicAdminId: string;
+
+    // Determine the root CLINIC_ADMIN based on role hierarchy
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      // Direct subscription check
+      clinicAdminId = account._id;
+    } else if (account.role === AccountRole.CLINIC_MANAGER) {
+      // Parent is CLINIC_ADMIN
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Clinic subscription validation failed: No parent account found.',
+        );
+      }
+      clinicAdminId = account.parentId;
+    } else {
+      // CLINIC_STAFF or DOCTOR: Parent is Manager, Grandparent is Admin
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Clinic subscription validation failed: No parent account found.',
+        );
+      }
+
+      const parentAccount = await this.accountRepository.findAccountById(
+        account.parentId,
+      );
+
+      if (!parentAccount || !parentAccount.parentId) {
+        throw new ForbiddenException(
+          'Clinic subscription validation failed: Invalid account hierarchy.',
+        );
+      }
+
+      clinicAdminId = parentAccount.parentId;
+    }
+
+    // Retrieve subscription record for the clinic admin
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+
+    if (!subscription) {
       throw new ForbiddenException(
-        'Your subscription has expired. Please renew your subscription to continue.',
+        'Clinic subscription not found. Please contact support.',
       );
     }
 
-    // REFILL: Throw 403 Forbidden - subscription refill required
-    if (account.status === AccountStatus.REFILL) {
-      throw new ForbiddenException(
-        'Your account needs a refill. Please refill your subscription to continue.',
-      );
+    // Role-specific validation logic
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      // CLINIC_ADMIN: Allow all statuses EXCEPT EXPIRED
+      if (subscription.subscriptionStatus === RegistrationStatus.EXPIRED) {
+        throw new ForbiddenException('Subscription expired');
+      }
+      // All other statuses (PENDING_*, ACTIVE, NON_RENEWING) are allowed
+      return;
     }
 
-    // ACTIVE: Allow access (no exception thrown)
+    if (account.role === AccountRole.CLINIC_MANAGER) {
+      // CLINIC_MANAGER: Two conditions must be met:
+      // 1. Parent subscription must be ACTIVE or NON_RENEWING
+      // 2. Manager's legal documents must be APPROVED
+
+      // Check parent subscription status
+      const allowedParentStatuses = [
+        RegistrationStatus.ACTIVE,
+        RegistrationStatus.NON_RENEWING,
+      ];
+
+      if (!allowedParentStatuses.includes(subscription.subscriptionStatus)) {
+        throw new ForbiddenException(
+          'Account is not ready or clinic is not active',
+        );
+      }
+
+      // Check legal documents verification status
+      const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        account._id,
+      );
+
+      if (
+        !legalDocs ||
+        legalDocs.verificationStatus !==
+          LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          'Account is not ready or clinic is not active',
+        );
+      }
+
+      return;
+    }
+
+    // CLINIC_STAFF or DOCTOR: Validate parent subscription is ACTIVE or NON_RENEWING
+    const allowedStatuses = [
+      RegistrationStatus.ACTIVE,
+      RegistrationStatus.NON_RENEWING,
+    ];
+
+    if (!allowedStatuses.includes(subscription.subscriptionStatus)) {
+      throw new ForbiddenException(
+        'Clinic subscription is not active or has expired.',
+      );
+    }
   }
 
   /**
@@ -1886,7 +2029,10 @@ export class AccountsService {
 
     // Mark email as verified and activate account
     account.isEmailVerified = true;
-    account.status = AccountStatus.ACTIVE;
+    // Update account status from UNVERIFIED to ACTIVE
+    if (account.status === AccountStatus.UNVERIFIED) {
+      account.status = AccountStatus.ACTIVE;
+    }
     await this.accountRepository.saveAccount(account);
 
     // Get general account for firstName/lastName (split fullName)
@@ -2160,7 +2306,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_MANAGER) {
       throw new BadRequestException(
         'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
-        `Current role: ${account.role}`,
+          `Current role: ${account.role}`,
       );
     }
   }
@@ -2273,7 +2419,7 @@ export class AccountsService {
         password: hashedPassword,
         phone: dto.phone,
         role: AccountRole.PATIENT,
-        status: AccountStatus.PENDING,
+        status: AccountStatus.ACTIVE,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -2435,18 +2581,16 @@ export class AccountsService {
       );
 
       // Step 4: Create Account entity with CLINIC_STAFF role
-      // Following 2-step registration pattern: Create PENDING account first
+      // Following 2-step registration pattern: Create ACTIVE account first
       const account = this.accountRepository.createAccount({
         username: dto.email.split('@')[0],
         email: dto.email,
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.CLINIC_STAFF,
-        status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
+        status: AccountStatus.ACTIVE, // Account is active by default
         isEmailVerified: false, // Staff must verify themselves
       });
-
-
 
       const savedAccount = await queryRunner.manager.save(account);
 
@@ -2541,11 +2685,9 @@ export class AccountsService {
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.DOCTOR,
-        status: AccountStatus.PENDING, // 2-step pattern: Start with PENDING
+        status: AccountStatus.ACTIVE, // Account is active by default
         isEmailVerified: false, // Doctor must verify themselves
       });
-
-
 
       const savedAccount = await queryRunner.manager.save(account);
 
@@ -2600,7 +2742,7 @@ export class AccountsService {
    * @param {string} [specialty] - Filter by medical specialization
    * @returns {Promise<ClinicListResponseDto>} Clinics with pagination
    */
-  async findAllClinics(
+  async findAllClinicsManager(
     page: number = 1,
     limit: number = 10,
     search?: string,
@@ -2642,6 +2784,97 @@ export class AccountsService {
           new ClinicItemDto(clinic, clinicInfo, address, clinicAdminInfo),
         );
       }
+    }
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      clinics: clinicItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  /**
+   * Find All Clinics with Pagination, Search and Filters
+   *
+   * Retrieves clinic accounts with pagination support and optional search/filter capabilities.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Data Sources:
+   * - accounts table: Core account data
+   * - clinic_manager_information table: Clinic manager details
+   * - addresses table: Address information
+   * - accounts table (parent): CLINIC_ADMIN account linked via parentId
+   * - clinic_admin_information table: Clinic admin details
+   *
+   * Filtering Logic:
+   * - search: Case-insensitive match on clinicBranchName AND description
+   * - province: Exact match on provinceName or province code
+   * - specialty: JSONB containment query on specializedIn array
+   * - All filters work together with AND logic
+   *
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   * @param {string} [search] - Search keyword for clinic name or description
+   * @param {string} [province] - Filter by province name or code
+   * @param {string} [specialty] - Filter by medical specialization
+   * @returns {Promise<ClinicListResponseDto>} Clinics with pagination
+   */
+  async findAllClinicsAdmin(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    province?: string,
+    specialty?: string,
+  ): Promise<ClinicListResponseDto> {
+    // Get clinic admin accounts with ACTIVE status and filters
+    const [clinics, total] =
+      await this.accountRepository.findClinicsAdminWithFilters(
+        AccountRole.CLINIC_ADMIN,
+        AccountStatus.ACTIVE,
+        (page - 1) * limit,
+        limit,
+        search,
+        province,
+        specialty,
+        RegistrationStatus.ACTIVE ||
+          RegistrationStatus.NON_RENEWING ||
+          RegistrationStatus.EXPIRED,
+      );
+
+    const clinicItems: ClinicItemDto[] = [];
+
+    for (const clinic of clinics) {
+      // Get clinic admin information
+      const clinicAdminInfo =
+        await this.clinicAdminInfoRepository.findByAccountId(clinic._id);
+
+      // Get primary address (first address)
+      const address = await this.addressRepository.findByAccountId(clinic._id);
+
+      // if (clinicAdminInfo && address) {
+      // Adapt ClinicAdminInformation to match ClinicItemDto's expected clinicInfo structure
+      const adaptedClinicInfo = {
+        _id: clinicAdminInfo._id,
+        clinicBranchName: clinicAdminInfo.clinicName, // Map clinicName to branchName
+        fullName: clinicAdminInfo.clinicName, // Map clinicName to fullName (representing the org)
+        gender: 'OTHER', // Default for organization
+        profilePicture: clinicAdminInfo.profilePicture,
+        dob: clinicAdminInfo.dob,
+      };
+
+      // Pass adapted info as clinicInfo (2nd arg) for display compatibility.
+      // Pass original clinicAdminInfo as 4th arg for full details.
+      clinicItems.push(
+        new ClinicItemDto(clinic, adaptedClinicInfo, address, clinicAdminInfo),
+      );
+      // }
     }
 
     const totalPages = Math.ceil(total / limit);
@@ -2815,21 +3048,23 @@ export class AccountsService {
     gender?: string,
   ): Promise<DoctorListResponseDto> {
     // Get doctor accounts with filters
-    const [doctors, total] = await this.accountRepository.findDoctorsWithFilters(
-      AccountRole.DOCTOR,
-      AccountStatus.ACTIVE,
-      (page - 1) * limit,
-      limit,
-      clinicId,
-      gender,
-    );
+    const [doctors, total] =
+      await this.accountRepository.findDoctorsWithFilters(
+        AccountRole.DOCTOR,
+        AccountStatus.ACTIVE,
+        (page - 1) * limit,
+        limit,
+        clinicId,
+        gender,
+      );
 
     const doctorItems: DoctorItemDto[] = [];
 
     for (const doctor of doctors) {
       // Get doctor information
-      const doctorInfo =
-        await this.doctorInfoRepository.findByAccountId(doctor._id);
+      const doctorInfo = await this.doctorInfoRepository.findByAccountId(
+        doctor._id,
+      );
 
       // Get parent clinic manager information if exists
       let clinicInfo = null;
@@ -2869,8 +3104,6 @@ export class AccountsService {
    * @param {string} [search] - Optional search filter
    * @returns {Promise<Account[]>} List of employees
    */
-
-
 
 
   /**
@@ -2992,11 +3225,10 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_ADMIN) {
       throw new BadRequestException(
         'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
-        `Current role: ${account.role}`,
+          `Current role: ${account.role}`,
       );
     }
   }
-
 
   /**
    * Update Clinic Admin Profile
@@ -3143,8 +3375,9 @@ export class AccountsService {
     }
 
     // Get clinic subscription to check registration status
-    const subscription =
-      await this.clinicSubscriptionRepository.findByClinicId(account._id);
+    const subscription = await this.clinicSubscriptionRepository.findByClinicId(
+      account._id,
+    );
 
     if (!subscription) {
       // Account exists but no subscription
@@ -3161,7 +3394,8 @@ export class AccountsService {
       account._id,
       AccountRole.CLINIC_MANAGER,
     );
-    const managerAccount = managerAccounts.length > 0 ? managerAccounts[0] : null;
+    const managerAccount =
+      managerAccounts.length > 0 ? managerAccounts[0] : null;
     const managerAccountId = managerAccount?._id || null;
 
     // Map registration status to step information
@@ -3186,7 +3420,8 @@ export class AccountsService {
             currentStep,
             nextAction,
             canResume: false,
-            message: 'Registration data is inconsistent. Please contact support.',
+            message:
+              'Registration data is inconsistent. Please contact support.',
           };
         }
         break;
@@ -3199,20 +3434,8 @@ export class AccountsService {
             currentStep,
             nextAction,
             canResume: false,
-            message: 'Registration data is inconsistent. Please contact support.',
-          };
-        }
-        break;
-      case RegistrationStatus.REJECTED:
-        currentStep = 'STEP_4';
-        nextAction = 'Update legal documents and resubmit';
-        if (!managerAccountId) {
-          return {
-            status,
-            currentStep,
-            nextAction,
-            canResume: false,
-            message: 'Registration data is inconsistent. Please contact support.',
+            message:
+              'Registration data is inconsistent. Please contact support.',
           };
         }
         break;
@@ -3230,7 +3453,8 @@ export class AccountsService {
       case RegistrationStatus.NON_RENEWING:
         currentStep = 'COMPLETED';
         nextAction = 'Access your dashboard (subscription will not renew)';
-        notice = 'Your subscription has been cancelled and will not renew automatically. Access retained until expiration date.';
+        notice =
+          'Your subscription has been cancelled and will not renew automatically. Access retained until expiration date.';
         expirationDate = subscription.expirationDate
           ? subscription.expirationDate.toISOString()
           : null;
@@ -3332,7 +3556,7 @@ export class AccountsService {
         password: hashedPassword,
         phone: dto.phone,
         role: AccountRole.CLINIC_ADMIN,
-        status: AccountStatus.PENDING,
+        status: AccountStatus.ACTIVE,
         isEmailVerified: false,
         isOAuthUser: false,
       });
@@ -3380,7 +3604,15 @@ export class AccountsService {
         });
 
       // Return complete account DTO with subscription status
-      return new AccountResponseDto(savedAccount, null, null, null, null, null, clinicAdminInfo);
+      return new AccountResponseDto(
+        savedAccount,
+        null,
+        null,
+        null,
+        null,
+        null,
+        clinicAdminInfo,
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -3430,7 +3662,10 @@ export class AccountsService {
     if (!subscription) {
       throw new NotFoundException('Clinic subscription not found');
     }
-    if (subscription.subscriptionStatus !== RegistrationStatus.PENDING_MANAGER_SETUP) {
+    if (
+      subscription.subscriptionStatus !==
+      RegistrationStatus.PENDING_MANAGER_SETUP
+    ) {
       throw new ForbiddenException(
         `Cannot create clinic manager. Current status: ${subscription.subscriptionStatus}. Expected: ${RegistrationStatus.PENDING_MANAGER_SETUP}`,
       );
@@ -3479,7 +3714,8 @@ export class AccountsService {
         isOAuthUser: false,
       });
 
-      const savedManagerAccount = await queryRunner.manager.save(managerAccount);
+      const savedManagerAccount =
+        await queryRunner.manager.save(managerAccount);
 
       // Create ClinicManagerInformation entity
       const managerInfo = this.clinicManagerInfoRepository.create({
@@ -3511,7 +3747,8 @@ export class AccountsService {
 
       // Send manager credentials email after successful transaction (fire-and-forget)
       // Get clinic name from the clinic admin
-      const clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
+      const clinicAdminInfo =
+        await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
       const clinicName = clinicAdminInfo?.clinicName;
 
       this.mailerService
@@ -3526,7 +3763,13 @@ export class AccountsService {
         });
 
       // Return complete account DTO
-      return new AccountResponseDto(savedManagerAccount, null, null, null, managerInfo);
+      return new AccountResponseDto(
+        savedManagerAccount,
+        null,
+        null,
+        null,
+        managerInfo,
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -3583,15 +3826,14 @@ export class AccountsService {
       );
     }
 
-    // Step 4: Validate subscription status is PENDING_LEGAL_SETUP or REJECTED
+    // Step 4: Validate subscription status is PENDING_LEGAL_SETUP
     const subscription =
       await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
     if (!subscription) {
       throw new NotFoundException('Clinic subscription not found');
     }
     if (
-      subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP &&
-      subscription.subscriptionStatus !== RegistrationStatus.REJECTED
+      subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP
     ) {
       throw new ForbiddenException(
         `Cannot upload legal documents. Current status: ${subscription.subscriptionStatus}`,
@@ -3605,9 +3847,8 @@ export class AccountsService {
 
     try {
       // Check if legal documents already exist for this manager
-      let legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
-        managerAccountId,
-      );
+      let legalDocs =
+        await this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
 
       if (legalDocs) {
         // Update existing documents
@@ -3742,27 +3983,30 @@ export class AccountsService {
     }
 
     // Step 4: Validate legal documents exist and are in REJECTED status
-    const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
-      managerAccountId,
-    );
+    const legalDocs =
+      await this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
     if (!legalDocs) {
       throw new NotFoundException('Legal documents not found');
     }
-    if (legalDocs.verificationStatus !== LegalDocumentVerificationStatus.REJECTED) {
+    if (
+      legalDocs.verificationStatus !== LegalDocumentVerificationStatus.REJECTED
+    ) {
       throw new BadRequestException(
         'Can only update documents that have been rejected',
       );
     }
 
-    // Step 5: Validate subscription status is REJECTED
+    // Step 5: Validate subscription status is PENDING_LEGAL_SETUP
     const subscription =
       await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
     if (!subscription) {
       throw new NotFoundException('Clinic subscription not found');
     }
-    if (subscription.subscriptionStatus !== RegistrationStatus.REJECTED) {
+    if (
+      subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP
+    ) {
       throw new BadRequestException(
-        `Cannot update legal documents. Current status: ${subscription.subscriptionStatus}. Expected: ${RegistrationStatus.REJECTED}`,
+        `Cannot update legal documents. Current status: ${subscription.subscriptionStatus}. Expected: PENDING_LEGAL_SETUP`,
       );
     }
 
@@ -3845,7 +4089,9 @@ export class AccountsService {
     }
 
     // Check if status is PENDING_APPROVAL
-    if (subscription.subscriptionStatus === RegistrationStatus.PENDING_APPROVAL) {
+    if (
+      subscription.subscriptionStatus === RegistrationStatus.PENDING_APPROVAL
+    ) {
       throw new BadRequestException(
         MESSAGES.failMessage.pendingApprovalBlocked,
       );
@@ -3998,7 +4244,8 @@ export class AccountsService {
     });
 
     return {
-      message: 'Subscription cancelled successfully. Access retained until expiration date.',
+      message:
+        'Subscription cancelled successfully. Access retained until expiration date.',
       newStatus: RegistrationStatus.NON_RENEWING,
     };
   }

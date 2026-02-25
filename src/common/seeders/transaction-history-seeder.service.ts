@@ -60,6 +60,21 @@ export class TransactionHistorySeederService {
       }
 
       for (const sub of subscriptions) {
+        // Skip subscriptions with pending statuses (no payment was made)
+        const pendingStatuses = [
+          RegistrationStatus.PENDING_SEPAY_SETUP,
+          RegistrationStatus.PENDING_MANAGER_SETUP,
+          RegistrationStatus.PENDING_LEGAL_SETUP,
+          RegistrationStatus.PENDING_APPROVAL,
+          RegistrationStatus.PENDING_PAYMENT,
+        ];
+        if (pendingStatuses.includes(sub.subscriptionStatus)) {
+          this.logger.log(
+            `Skipping transaction history for subscription ${sub._id} (status: ${sub.subscriptionStatus})`,
+          );
+          continue;
+        }
+
         // Find the service to get the price
         const service = await this.subscriptionServiceRepository.findOne({
           where: { _id: sub.serviceId },
@@ -96,7 +111,7 @@ export class TransactionHistorySeederService {
           // Create Transaction Record
           const transaction = this.transactionRepository.create({
             clinicId: sub.clinicId, // Use Account ID from subscription
-            subscriptionId: savedHistory._id,
+            subscriptionId: savedHistory._id, // Link to the History record
             transactionTypeId: transactionType._id,
             amount: Math.round(Number(service.price)),
             currency: 'VND',
@@ -108,7 +123,12 @@ export class TransactionHistorySeederService {
             gateway: 'SEPAY', // Assuming generic gateway
           });
 
-          await this.transactionRepository.save(transaction);
+          const savedTransaction =
+            await this.transactionRepository.save(transaction);
+
+          // Update History with Transaction ID
+          savedHistory.transactionId = savedTransaction.id;
+          await this.clinicSubscriptionHistoryRepository.save(savedHistory);
         }
       }
 

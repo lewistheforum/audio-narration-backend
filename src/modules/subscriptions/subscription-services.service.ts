@@ -6,6 +6,8 @@ import {
   SubscriptionResponseDto,
   SubscriptionHistoryResponseDto,
   SubscriptionHistoryItemDto,
+  UpdateSubscriptionServiceDto,
+  CreateSubscriptionServiceDto,
 } from './dto';
 import { SubscriptionServiceStatus } from './enums/subscription-service-status.enum';
 import { ClinicSubscriptionRepository } from './repositories/clinic-subscription.repository';
@@ -14,6 +16,7 @@ import { ClinicSubscriptionRenewalQueueRepository } from './repositories/clinic-
 import { RegistrationStatus } from './enums/subscription-status.enum';
 import { MESSAGES } from 'src/common/message';
 import { ClinicSubscriptionHistory } from './entities/clinic-subscription-history.entity';
+import { DataSource } from 'typeorm';
 
 /**
  * Subscription Services Service
@@ -44,7 +47,8 @@ export class SubscriptionServicesService {
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
     private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
     private readonly clinicSubscriptionRenewalQueueRepository: ClinicSubscriptionRenewalQueueRepository,
-  ) { }
+    private readonly dataSource: DataSource,
+  ) {}
 
   /**
    * Find All Subscription Services
@@ -70,11 +74,9 @@ export class SubscriptionServicesService {
   async findAll(): Promise<SubscriptionServiceResponseDto[]> {
     const services = await this.subscriptionServiceRepository.findAll(
       false,
-      SubscriptionServiceStatus.ACTIVE,
+      // SubscriptionServiceStatus.ACTIVE,
     );
-    return services.map((service) =>
-      this.toResponseDto(service),
-    );
+    return services.map((service) => this.toResponseDto(service));
   }
 
   /**
@@ -109,6 +111,98 @@ export class SubscriptionServicesService {
   }
 
   /**
+   * Create Subscription Service
+   *
+   * Creates a new subscription service (plan).
+   *
+   * @param {CreateSubscriptionServiceDto} createDto - Data for new service
+   * @returns {Promise<SubscriptionServiceResponseDto>} Created service details
+   */
+  async create(
+    createDto: CreateSubscriptionServiceDto,
+  ): Promise<SubscriptionServiceResponseDto> {
+    const service = this.subscriptionServiceRepository.create(createDto);
+    const savedService = await this.subscriptionServiceRepository.save(service);
+    return this.toResponseDto(savedService);
+  }
+
+  /**
+   * Update Subscription Service
+   *
+   * Updates an existing subscription service.
+   *
+   * @param {string} id - Service UUID
+   * @param {UpdateSubscriptionServiceDto} updateDto - Data to update
+   * @returns {Promise<SubscriptionServiceResponseDto>} Updated service details
+   * @throws {NotFoundException} If service not found
+   */
+  async update(
+    id: string,
+    updateDto: UpdateSubscriptionServiceDto,
+  ): Promise<SubscriptionServiceResponseDto> {
+    const service = await this.subscriptionServiceRepository.findById(id);
+
+    if (!service) {
+      throw new NotFoundException('Subscription service not found');
+    }
+
+    // Merge updates
+    const updatedService = await this.subscriptionServiceRepository.save({
+      ...service,
+      ...updateDto,
+    });
+
+    return this.toResponseDto(updatedService);
+  }
+
+  /**
+   * Remove Subscription Service
+   *
+   * Soft deletes a subscription service.
+   *
+   * @param {string} id - Service UUID
+   * @returns {Promise<void>}
+   * @throws {NotFoundException} If service not found
+   */
+  async remove(id: string): Promise<void> {
+    const exists = await this.subscriptionServiceRepository.existsById(id);
+
+    if (!exists) {
+      throw new NotFoundException('Subscription service not found');
+    }
+
+    await this.subscriptionServiceRepository.softDelete(id);
+  }
+
+  async getClinicUsageStatistics(patientId: string) {
+    const query = `
+      SELECT 
+          cai.clinic_name AS "clinicName",
+          cmi.clinic_branch_name AS "branchName",
+          COUNT(app._id)::int AS "appointmentCount"
+      FROM 
+          appointments app
+      JOIN 
+          clinic_manager_information cmi ON cmi.account_id = app.clinic_id
+      JOIN 
+          accounts a ON a._id = cmi.account_id
+      JOIN 
+          clinic_admin_information cai ON cai.account_id = a.parent_id
+      WHERE 
+          app.patient_id = $1
+          AND app.deleted_at IS NULL
+          AND cmi.deleted_at IS NULL
+          AND a.deleted_at IS NULL
+          AND cai.deleted_at IS NULL
+      GROUP BY 
+          cai.clinic_name, 
+          cmi.clinic_branch_name;
+    `;
+
+    return this.dataSource.query(query, [patientId]);
+  }
+
+  /**
    * Transform SubscriptionService Entity to Response DTO
    *
    * Maps entity fields to DTO format.
@@ -122,7 +216,8 @@ export class SubscriptionServicesService {
   private toResponseDto(
     service: SubscriptionService,
   ): SubscriptionServiceResponseDto {
-    const priceAfterDiscount = service.price - (service.price * service.discount / 100);
+    const priceAfterDiscount =
+      service.price - (service.price * service.discount) / 100;
 
     return {
       id: service._id,
@@ -363,21 +458,34 @@ export class SubscriptionServicesService {
    * @param {string} transactionId - Optional ID of the transaction for history linking
    * @param {number} duration - Duration in months (default 1)
    */
-  async handleSubscriptionPaymentSuccess(subscriptionId: string, targetServiceId?: string, transactionId?: string, duration: number = 1): Promise<void> {
-    console.log(`[DEBUG] handleSubscriptionPaymentSuccess called. SubID: ${subscriptionId}, TargetServiceID: ${targetServiceId}, TxID: ${transactionId}, Duration: ${duration}`);
+  async handleSubscriptionPaymentSuccess(
+    subscriptionId: string,
+    targetServiceId?: string,
+    transactionId?: string,
+    duration: number = 1,
+  ): Promise<void> {
+    console.log(
+      `[DEBUG] handleSubscriptionPaymentSuccess called. SubID: ${subscriptionId}, TargetServiceID: ${targetServiceId}, TxID: ${transactionId}, Duration: ${duration}`,
+    );
 
     // 1. Get Subscription
-    const subscription = await this.clinicSubscriptionRepository.findById(subscriptionId);
+    const subscription =
+      await this.clinicSubscriptionRepository.findById(subscriptionId);
     if (!subscription) throw new NotFoundException('Subscription not found');
 
-    console.log(`[DEBUG] Current Subscription State: ServiceID=${subscription.serviceId}, Status=${subscription.subscriptionStatus}, Expire=${subscription.expirationDate}`);
+    console.log(
+      `[DEBUG] Current Subscription State: ServiceID=${subscription.serviceId}, Status=${subscription.subscriptionStatus}, Expire=${subscription.expirationDate}`,
+    );
 
     // 2. Determine Service to Activate / Queue
     const serviceIdToActivate = targetServiceId || subscription.serviceId;
-    console.log(`[DEBUG] Service ID resolved for activation: ${serviceIdToActivate}`);
+    console.log(
+      `[DEBUG] Service ID resolved for activation: ${serviceIdToActivate}`,
+    );
 
     // 3. Get Service Details (for name)
-    const service = await this.subscriptionServiceRepository.findById(serviceIdToActivate);
+    const service =
+      await this.subscriptionServiceRepository.findById(serviceIdToActivate);
     if (!service) throw new NotFoundException('Service not found');
 
     // Use duration from parameter (passed from transaction content)
@@ -386,12 +494,17 @@ export class SubscriptionServicesService {
     const now = new Date();
 
     // Check if currently Active AND Not Expired
-    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
-    const isNotExpired = subscription.expirationDate && new Date(subscription.expirationDate) > now;
+    const isActive =
+      subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
+    const isNotExpired =
+      subscription.expirationDate &&
+      new Date(subscription.expirationDate) > now;
 
     if (isActive && isNotExpired) {
       // CASE: Renewal / Change Package while Active -> QUEUE
-      console.log(`[Subscription] Queueing renewal/change for clinic ${subscription.clinicId}. Next Service: ${service.serviceName}`);
+      console.log(
+        `[Subscription] Queueing renewal/change for clinic ${subscription.clinicId}. Next Service: ${service.serviceName}`,
+      );
 
       const currentExpirationDate = new Date(subscription.expirationDate);
 
@@ -400,7 +513,9 @@ export class SubscriptionServicesService {
       const VN_OFFSET = 7 * 60 * 60 * 1000;
 
       // 2. Determine Current Expiration in VN Time
-      const currentExpireVnSimulated = new Date(currentExpirationDate.getTime() + VN_OFFSET);
+      const currentExpireVnSimulated = new Date(
+        currentExpirationDate.getTime() + VN_OFFSET,
+      );
 
       // 3. Determine Next Start Date (Start of Next Day in VN)
       // If current expires today 23:59 VN, next starts tomorrow 00:00 VN.
@@ -414,10 +529,14 @@ export class SubscriptionServicesService {
       const startDay = nextStartVn.getUTCDate();
 
       // Target Start Date: 00:00:00 UTC (Wall Clock)
-      const targetStartDate = new Date(Date.UTC(startYear, startMonth, startDay, 0, 0, 0, 0));
+      const targetStartDate = new Date(
+        Date.UTC(startYear, startMonth, startDay, 0, 0, 0, 0),
+      );
 
       // Target End Date: 23:59:59 UTC (Wall Clock)
-      const targetEndDate = new Date(Date.UTC(startYear, startMonth + DURATION_MONTHS, startDay, 0, 0, 0, 0));
+      const targetEndDate = new Date(
+        Date.UTC(startYear, startMonth + DURATION_MONTHS, startDay, 0, 0, 0, 0),
+      );
       // Align day logic if needed (e.g. standard month addition), then set end of day
       // Generally end date is (Start + Duration - 1 day) at 23:59:59
       // E.g. Start Jan 1. End Jan 1 next year? Or Dec 31?
@@ -428,7 +547,10 @@ export class SubscriptionServicesService {
       targetEndDate.setUTCHours(23, 59, 59, 999);
 
       // Create or Update Queue Record
-      let queueRecord = await this.clinicSubscriptionRenewalQueueRepository.findByClinicId(subscription.clinicId);
+      let queueRecord =
+        await this.clinicSubscriptionRenewalQueueRepository.findByClinicId(
+          subscription.clinicId,
+        );
 
       if (queueRecord) {
         // Update existing
@@ -442,7 +564,7 @@ export class SubscriptionServicesService {
           clinicId: subscription.clinicId,
           nextServiceId: serviceIdToActivate,
           targetStartDate,
-          targetEndDate
+          targetEndDate,
         });
       }
 
@@ -455,10 +577,11 @@ export class SubscriptionServicesService {
         subscriptionDate: targetStartDate,
         expirationDate: targetEndDate,
       });
-
     } else {
       // CASE: New or Expired -> ACTIVATE IMMEDIATELY
-      console.log(`[Subscription] Activating subscription for clinic ${subscription.clinicId}. Service: ${service.serviceName}`);
+      console.log(
+        `[Subscription] Activating subscription for clinic ${subscription.clinicId}. Service: ${service.serviceName}`,
+      );
 
       // 1. Get offset in milliseconds for VN (UTC+7)
       const VN_OFFSET = 7 * 60 * 60 * 1000;
@@ -475,7 +598,9 @@ export class SubscriptionServicesService {
 
       // 4. Create End Date (23:59:59.999 VN) stored as 23:59:59.999 UTC
       // Add duration (e.g. 1 year)
-      const endDate = new Date(Date.UTC(vnYear, vnMonth + DURATION_MONTHS, vnDay, 0, 0, 0, 0));
+      const endDate = new Date(
+        Date.UTC(vnYear, vnMonth + DURATION_MONTHS, vnDay, 0, 0, 0, 0),
+      );
       // Subtract 1 day to make it inclusive (Jan 1 to Dec 31)
       endDate.setUTCDate(endDate.getUTCDate() - 1);
       endDate.setUTCHours(23, 59, 59, 999);
@@ -484,8 +609,12 @@ export class SubscriptionServicesService {
 
       console.log(`[DEBUG] Date Calculation (VN Wall Clock stored as UTC):`);
       console.log(`   Now (UTC): ${now.toISOString()}`);
-      console.log(`   Start Date (DB): ${startDate.toISOString()} (Expected 00:00:00Z)`);
-      console.log(`   End Date (DB): ${expirationDate.toISOString()} (Expected 23:59:59Z)`);
+      console.log(
+        `   Start Date (DB): ${startDate.toISOString()} (Expected 00:00:00Z)`,
+      );
+      console.log(
+        `   End Date (DB): ${expirationDate.toISOString()} (Expected 23:59:59Z)`,
+      );
 
       // Update Subscription
       subscription.serviceId = serviceIdToActivate;
@@ -495,7 +624,9 @@ export class SubscriptionServicesService {
 
       await this.clinicSubscriptionRepository.save(subscription);
 
-      console.log(`[DEBUG] Creating History Record. Transaction ID: ${transactionId}`);
+      console.log(
+        `[DEBUG] Creating History Record. Transaction ID: ${transactionId}`,
+      );
 
       // Create History
       await this.clinicSubscriptionHistoryRepository.createHistoryRecord({
@@ -506,7 +637,64 @@ export class SubscriptionServicesService {
         subscriptionDate: startDate,
         expirationDate: expirationDate,
       });
+
+      // Update Popular Services (NEW)
+      await this.updatePopularServices();
     }
+  }
+
+  /**
+   * Update Popular Services Based on Active Subscription Count
+   *
+   * Business Rules:
+   * - Count ACTIVE subscriptions grouped by serviceId
+   * - Service with highest count gets is_popular = true
+   * - All other services get is_popular = false
+   * - Only one service can be popular at a time
+   *
+   * Trigger Point:
+   * - Called after successful payment when subscription becomes ACTIVE
+   *
+   * Implementation:
+   * - Uses QueryBuilder for optimized counting
+   * - Transaction ensures atomic update
+   */
+  async updatePopularServices(): Promise<void> {
+    // 1. Count ACTIVE subscriptions grouped by serviceId
+    const activeCountByService =
+      await this.clinicSubscriptionRepository.getActiveCountByService();
+
+    console.log(
+      '[DEBUG] Active subscription counts by service:',
+      activeCountByService,
+    );
+
+    // 2. Check if we have any active subscriptions
+    if (!activeCountByService || activeCountByService.length === 0) {
+      console.log(
+        '[DEBUG] No active subscriptions found. Resetting all is_popular to false.',
+      );
+      await this.subscriptionServiceRepository.resetAllPopular();
+      return;
+    }
+
+    // 3. Get the most popular service (highest count)
+    const mostPopular = activeCountByService[0];
+    const mostPopularServiceId = mostPopular.serviceId;
+
+    console.log(
+      `[DEBUG] Most popular service: ${mostPopularServiceId} with ${mostPopular.activeCount} active subscriptions`,
+    );
+
+    // 4. Reset all services to not popular
+    await this.subscriptionServiceRepository.resetAllPopular();
+
+    // 5. Set the most popular service
+    await this.subscriptionServiceRepository.setPopular(mostPopularServiceId);
+
+    console.log(
+      `[DEBUG] Successfully updated is_popular flag. Service ${mostPopularServiceId} is now popular.`,
+    );
   }
 
   /**

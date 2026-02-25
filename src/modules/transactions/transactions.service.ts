@@ -358,7 +358,7 @@ export class TransactionsService {
         amount: safeAmount,
         currency: 'VND',
         status: PaymentStatus.PENDING,
-        clinicId: clinicAdmin._id,
+        clinicId: clinicAdmin.accountId, // <-- FIX: Use accountId mapped to accounts table
         subscriptionId: subscription._id,
         content,
         transactionTypeId: transactionType._id,

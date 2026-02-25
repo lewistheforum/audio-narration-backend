@@ -77,7 +77,7 @@ export class AddressSeederService {
         const address = this.addressRepository.create({
           accountId: manager._id,
           address: this.generateClinicAddress(),
-          ward: this.getRandomWard(),
+          ward: this.getRandomWardCode(),
           district: this.getRandomDistrictCode(),
           province: this.getRandomProvinceCode(),
           provinceName: this.getRandomProvinceName(),
@@ -152,7 +152,16 @@ export class AddressSeederService {
   }
 
   /**
-   * Get random ward
+   * Get random ward code (numeric code for ward)
+   */
+  private getRandomWardCode(): string {
+    const districtCode = this.getRandomDistrictCode();
+    const wardIndex = Math.floor(Math.random() * 20) + 1; // 1-20 wards per district
+    return `${districtCode}${String(wardIndex).padStart(2, '0')}`;
+  }
+
+  /**
+   * Get random ward name
    */
   private getRandomWard(): string {
     const ward = this.WARDS[Math.floor(Math.random() * this.WARDS.length)];

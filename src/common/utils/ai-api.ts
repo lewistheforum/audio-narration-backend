@@ -38,6 +38,9 @@ const AI = {
     `${BASE_URL}/rag/conversations/${conversation_id}/history`,
   RAG_DELETE_CONVERSATION: (conversation_id: string) =>
     `${BASE_URL}/rag/conversations/${conversation_id}`,
+
+  // SYNC DATA
+  SYNC_DATA: `${BASE_URL}/rag/knowledge-base/sync`,
 };
 
 export const API = {

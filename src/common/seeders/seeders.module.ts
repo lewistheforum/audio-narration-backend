@@ -50,6 +50,7 @@ import { AppointmentSeederService } from './appointment-seeder.service';
 import { ERMSeederService } from './erm-seeder.service';
 import { EPrescriptionSeederService } from './e-prescription-seeder.service';
 import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder.service';
+import { ReportSeederService } from './report-seeder.service';
 
 // Entities for KnowledgeBaseSeeder
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
@@ -66,6 +67,12 @@ import { Appointment } from '../../modules/appointments/entities/appointment.ent
 import { AppointmentPackage } from '../../modules/appointments/entities/appointment-package.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
 import { ERM } from '../../modules/prescriptions/entities/erm.entity';
+import { ERMConsultation } from '../../modules/prescriptions/entities/erm-consultation.entity';
+import { ERMXray } from '../../modules/prescriptions/entities/erm-xray.entity';
+import { ERMUltrasound } from '../../modules/prescriptions/entities/erm-ultrasound.entity';
+import { ERMLab } from '../../modules/prescriptions/entities/erm-lab.entity';
+import { ERMBoneDensity } from '../../modules/prescriptions/entities/erm-bone-density.entity';
+import { ERMProcedure } from '../../modules/prescriptions/entities/erm-procedure.entity';
 import { EPrescription } from '../../modules/prescriptions/entities/e-prescription.entity';
 import { DetailEPrescription } from '../../modules/prescriptions/entities/detail-e-prescription.entity';
 import { Medicine } from '../../modules/prescriptions/entities/medicine.entity';
@@ -123,6 +130,12 @@ import { TransactionType } from '../../modules/transactions/entities/transaction
       AppointmentPackage,
       ServiceAppointment,
       ERM,
+      ERMConsultation,
+      ERMXray,
+      ERMUltrasound,
+      ERMLab,
+      ERMBoneDensity,
+      ERMProcedure,
       EPrescription,
       DetailEPrescription,
       Medicine,
@@ -178,6 +191,7 @@ import { TransactionType } from '../../modules/transactions/entities/transaction
     ClinicShiftHourRepository,
     EmployeeScheduleRepository,
     MedicineRepository,
+    ReportSeederService,
   ],
   exports: [
     AdminSeederService,
@@ -211,6 +225,7 @@ import { TransactionType } from '../../modules/transactions/entities/transaction
     EPrescriptionDetailSeederService,
     TransactionHistorySeederService,
     SeederOrchestratorService,
+    ReportSeederService,
   ],
 })
 export class SeedersModule {}

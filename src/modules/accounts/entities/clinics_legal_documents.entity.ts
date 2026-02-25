@@ -61,6 +61,9 @@ export class ClinicsLegalDocuments {
   })
   verificationStatus: LegalDocumentVerificationStatus;
 
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejectionReason?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

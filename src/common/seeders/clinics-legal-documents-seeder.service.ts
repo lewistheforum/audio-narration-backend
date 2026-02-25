@@ -73,6 +73,7 @@ export class ClinicsLegalDocumentsSeederService {
         }
 
         // Create legal documents with realistic orthopedics clinic data
+        // Use random verification status for testing different registration states
         const legalDocs = this.clinicsLegalDocumentsRepository.create({
           accountId: manager._id,
           operatingLicense: this.getRandomOperatingLicense(),
@@ -116,7 +117,7 @@ export class ClinicsLegalDocumentsSeederService {
 
   /**
    * Get random verification status
-   * Distribute across all enum values for testing
+   * Distribute across all enum values for testing different registration states
    */
   private getRandomVerificationStatus(): LegalDocumentVerificationStatus {
     const statuses = Object.values(LegalDocumentVerificationStatus);

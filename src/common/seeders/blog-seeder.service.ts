@@ -33,7 +33,7 @@ const BLOG_CONTENT_FILES: BlogContentMap = {
 /**
  * Blog Seeder Service
  *
- * Seeds Blog records for all CLINIC_ADMIN accounts.
+ * Seeds Blog records for all CLINIC_MANAGER accounts.
  * Must run after AccountSeederService to ensure accounts exist.
  *
  * Idempotent: Uses check-then-insert pattern by checking if blogs exist before inserting.
@@ -97,7 +97,7 @@ export class BlogSeederService {
   ) {}
 
   /**
-   * Seed Blog records for all CLINIC_ADMIN accounts
+   * Seed Blog records for all CLINIC_MANAGER accounts
    *
    * This method is called by SeederOrchestratorService during application bootstrap.
    * Reads blog content from external text file (data/blog.txt) instead of hardcoded content.
@@ -116,18 +116,18 @@ export class BlogSeederService {
         return;
       }
 
-      // Get all CLINIC_ADMIN accounts
+      // Get all CLINIC_MANAGER accounts
       const allAccounts = await this.accountRepository.findAllAccounts();
-      const clinicAdmins = allAccounts.filter(
-        (acc) => acc.role === AccountRole.CLINIC_ADMIN,
+      const clinicManagers = allAccounts.filter(
+        (acc) => acc.role === AccountRole.CLINIC_MANAGER,
       );
 
-      if (clinicAdmins.length === 0) {
-        this.logger.warn('No CLINIC_ADMIN accounts found. Skipping seeding.');
+      if (clinicManagers.length === 0) {
+        this.logger.warn('No CLINIC_MANAGER accounts found. Skipping seeding.');
         return;
       }
 
-      this.logger.log(`Found ${clinicAdmins.length} CLINIC_ADMIN accounts`);
+      this.logger.log(`Found ${clinicManagers.length} CLINIC_MANAGER accounts`);
 
       // Read content from external file
       const blogContent = this.readContentFromFile(this.DEFAULT_CONTENT_FILE);
@@ -136,10 +136,10 @@ export class BlogSeederService {
       const blogs: Blog[] = [];
       const blogsPerClinic = this.getRandomInt(3, 5);
 
-      for (const clinicAdmin of clinicAdmins) {
+      for (const clinicManager of clinicManagers) {
         for (let i = 0; i < blogsPerClinic; i++) {
           const blog = this.blogRepository.create({
-            clinicId: clinicAdmin._id,
+            clinicId: clinicManager._id,
             title: this.getRandomTitle(),
             content: blogContent,
             thumbnail: this.getRandomThumbnail(),
@@ -180,7 +180,9 @@ export class BlogSeederService {
       this.logger.log(`Reading content from file: ${fullPath}`);
 
       const content = fs.readFileSync(fullPath, 'utf-8');
-      this.logger.log(`Successfully read ${content.length} characters from ${filePath}`);
+      this.logger.log(
+        `Successfully read ${content.length} characters from ${filePath}`,
+      );
 
       return content;
     } catch (error) {
@@ -229,9 +231,7 @@ export class BlogSeederService {
       const contentFilePath = filePath || BLOG_CONTENT_FILES[blogId];
 
       if (!contentFilePath) {
-        this.logger.warn(
-          `No content file mapping found for blog ID ${blogId}`,
-        );
+        this.logger.warn(`No content file mapping found for blog ID ${blogId}`);
         return null;
       }
 
@@ -281,9 +281,7 @@ export class BlogSeederService {
     const failed: string[] = [];
     let updated = 0;
 
-    this.logger.log(
-      `Starting bulk update for ${idsToUpdate.length} blogs`,
-    );
+    this.logger.log(`Starting bulk update for ${idsToUpdate.length} blogs`);
 
     for (const blogId of idsToUpdate) {
       try {

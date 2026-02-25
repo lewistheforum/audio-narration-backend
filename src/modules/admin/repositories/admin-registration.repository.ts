@@ -9,13 +9,13 @@ import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscrip
 import { AccountRole } from '../../accounts/enums/account-role.enum';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 import {
-  RegistrationListItemDto,
   RegistrationDetailResponseDto,
   ClinicAdminInfoDto,
   ClinicManagerInfoDto,
   LegalDocumentsInfoDto,
   SubscriptionInfoDto,
 } from '../dto';
+import { LegalDocumentVerificationStatus } from 'src/modules/accounts/enums';
 
 /**
  * Admin Registration Repository
@@ -36,79 +36,6 @@ export class AdminRegistrationRepository {
     @InjectRepository(ClinicSubscription)
     private readonly clinicSubscriptionRepository: Repository<ClinicSubscription>,
   ) {}
-
-  /**
-   * Find pending approvals with pagination
-   *
-   * Returns clinic admin accounts with PENDING_APPROVAL status
-   */
-  async findPendingApprovals(
-    page: number,
-    limit: number,
-  ): Promise<[RegistrationListItemDto[], number]> {
-    const skip = (page - 1) * limit;
-
-    // Query to find clinic admin accounts with pending approval status
-    const queryBuilder = this.accountRepository
-      .createQueryBuilder('account')
-      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.children', 'childAccounts')
-      .leftJoinAndSelect('childAccounts.clinicManagerInformation', 'clinicManagerInfo')
-      .leftJoinAndSelect('childAccounts.clinicManagerInformation', 'managerInfo')
-      .leftJoin(
-        'clinic_subcriptions',
-        'subscription',
-        'subscription.clinic_id = account._id',
-      )
-      .where('account.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('subscription.subscription_status = :status', {
-        status: RegistrationStatus.PENDING_APPROVAL,
-      })
-      .leftJoin(
-        'clinics_legal_documents',
-        'legalDocs',
-        'legalDocs.account_id = childAccounts._id',
-      )
-      .addSelect([
-        'account._id',
-        'account.email',
-        'account.phone',
-        'account.createdAt',
-        'clinicAdminInfo.clinicName',
-        'legalDocs.verificationStatus',
-        'subscription.subscriptionStatus',
-      ])
-      .orderBy('account.createdAt', 'DESC')
-      .skip(skip)
-      .take(limit);
-
-    const [accounts, total] = await queryBuilder.getManyAndCount();
-
-    // Map to DTOs
-    const items: RegistrationListItemDto[] = accounts.map((account) => {
-      const subscription = account.children?.find(
-        (child) =>
-          child.clinicManagerInformation &&
-          child.clinicManagerInformation.accountId === child._id,
-      );
-
-      const legalDocs = subscription?.clinicManagerInformation
-        ? null
-        : null;
-
-      return {
-        clinicAdminId: account._id,
-        clinicName: account.clinicAdminInformation?.clinicName || '',
-        email: account.email,
-        phone: account.phone || '',
-        legalDocsStatus: legalDocs?.verificationStatus || 'NOT_SUBMITTED',
-        status: RegistrationStatus.PENDING_APPROVAL,
-        submittedAt: account.createdAt,
-      };
-    });
-
-    return [items, total];
-  }
 
   /**
    * Find registration details by clinic admin ID
@@ -245,5 +172,251 @@ export class AdminRegistrationRepository {
     return this.legalDocumentsRepository.findOne({
       where: { accountId: managerAccountId },
     });
+  }
+
+  /**
+   * Find pending legal documents with pagination
+   *
+   * Returns legal documents with status PENDING_REVIEW
+   */
+  async findPendingLegalDocuments(
+    page: number,
+    limit: number,
+    sortBy: string = 'createdAt',
+    sortOrder: 'ASC' | 'DESC' = 'DESC',
+  ): Promise<[any[], number]> {
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.legalDocumentsRepository
+      .createQueryBuilder('legalDocs')
+      .leftJoinAndSelect('legalDocs.account', 'managerAccount')
+      .leftJoin(
+        'accounts',
+        'adminAccount',
+        'adminAccount._id = managerAccount.parent_id',
+      )
+      .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
+      .where('legalDocs.verification_status = :status', {
+        status: 'PENDING_REVIEW',
+      })
+      .select([
+        'adminAccount._id as "id"',
+        'legalDocs._id as "legalDocumentId"',
+        'subscription._id as "subscriptionId"',
+        'clinicInfo.clinic_name as "clinicName"',
+        'managerAccount.email as "managerEmail"',
+        'adminAccount.email as "adminEmail"',
+        'legalDocs.operating_license as "operatingLicense"',
+        'legalDocs.business_license as "businessLicense"',
+        'legalDocs.created_at as "submittedAt"',
+      ])
+      .orderBy(
+        `legalDocs.${sortBy === 'clinicName' ? 'created_at' : sortBy}`,
+        sortOrder,
+      )
+      .offset(skip)
+      .limit(limit);
+
+    const [data, total] = await Promise.all([
+      queryBuilder.getRawMany(),
+      this.legalDocumentsRepository.count({
+        where: {
+          verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW,
+        },
+      }),
+    ]);
+
+    return [data, total];
+  }
+
+  /**
+   * Find approved legal documents with pagination
+   */
+  async findApprovedLegalDocuments(
+    page: number,
+    limit: number,
+    sortBy: string = 'createdAt',
+    sortOrder: 'ASC' | 'DESC' = 'DESC',
+  ): Promise<[any[], number]> {
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.legalDocumentsRepository
+      .createQueryBuilder('legalDocs')
+      .leftJoinAndSelect('legalDocs.account', 'managerAccount')
+      .leftJoin(
+        'accounts',
+        'adminAccount',
+        'adminAccount._id = managerAccount.parent_id',
+      )
+      .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
+      .where('legalDocs.verification_status = :status', { status: 'APPROVED' })
+      .select([
+        'adminAccount._id as "id"',
+        'legalDocs._id as "legalDocumentId"',
+        'subscription._id as "subscriptionId"',
+        'clinicInfo.clinic_name as "clinicName"',
+        'managerAccount.email as "managerEmail"',
+        'adminAccount.email as "adminEmail"',
+        'legalDocs.updated_at as "approvedAt"',
+      ])
+      .orderBy(
+        `legalDocs.${sortBy === 'clinicName' ? 'updated_at' : sortBy}`,
+        sortOrder,
+      )
+      .offset(skip)
+      .limit(limit);
+
+    const [data, total] = await Promise.all([
+      queryBuilder.getRawMany(),
+      this.legalDocumentsRepository.count({
+        where: { verificationStatus: LegalDocumentVerificationStatus.APPROVED },
+      }),
+    ]);
+
+    return [data, total];
+  }
+
+  /**
+   * Find rejected legal documents with pagination
+   */
+  async findRejectedLegalDocuments(
+    page: number,
+    limit: number,
+    sortBy: string = 'createdAt',
+    sortOrder: 'ASC' | 'DESC' = 'DESC',
+  ): Promise<[any[], number]> {
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.legalDocumentsRepository
+      .createQueryBuilder('legalDocs')
+      .leftJoinAndSelect('legalDocs.account', 'managerAccount')
+      .leftJoin(
+        'accounts',
+        'adminAccount',
+        'adminAccount._id = managerAccount.parent_id',
+      )
+      .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
+      .where('legalDocs.verification_status = :status', { status: 'REJECTED' })
+      .select([
+        'adminAccount._id as "id"',
+        'legalDocs._id as "legalDocumentId"',
+        'subscription._id as "subscriptionId"',
+        'clinicInfo.clinic_name as "clinicName"',
+        'managerAccount.email as "managerEmail"',
+        'adminAccount.email as "adminEmail"',
+        'legalDocs.rejection_reason as "rejectionReason"',
+        'legalDocs.updated_at as "rejectedAt"',
+      ])
+      .orderBy(
+        `legalDocs.${sortBy === 'clinicName' ? 'updated_at' : sortBy}`,
+        sortOrder,
+      )
+      .offset(skip)
+      .limit(limit);
+
+    const [data, total] = await Promise.all([
+      queryBuilder.getRawMany(),
+      this.legalDocumentsRepository.count({
+        where: { verificationStatus: LegalDocumentVerificationStatus.REJECTED },
+      }),
+    ]);
+
+    return [data, total];
+  }
+
+  /**
+   * Find not submitted registrations with pagination
+   */
+  async findNotSubmittedRegistrations(
+    page: number,
+    limit: number,
+    sortBy: string = 'createdAt',
+    sortOrder: 'ASC' | 'DESC' = 'DESC',
+  ): Promise<[any[], number]> {
+    const skip = (page - 1) * limit;
+
+    // Find accounts with legal docs status NOT_SUBMITTED or no legal docs at all
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('adminAccount')
+      .leftJoinAndSelect('adminAccount.clinicAdminInformation', 'clinicInfo')
+      .leftJoin('adminAccount.children', 'managerAccount')
+      .leftJoin(
+        'clinics_legal_documents',
+        'legalDocs',
+        'legalDocs.account_id = managerAccount._id',
+      )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
+      .where('adminAccount.role = :role', { role: AccountRole.CLINIC_ADMIN })
+      .andWhere(
+        '(legalDocs.verification_status = :status OR legalDocs._id IS NULL)',
+        {
+          status: 'NOT_SUBMITTED',
+        },
+      )
+      .select([
+        'adminAccount._id as "id"',
+        'clinicInfo.clinic_name as "clinicName"',
+        'adminAccount.email as "adminEmail"',
+        'managerAccount.email as "managerEmail"',
+        'adminAccount.created_at as "registrationDate"',
+        'subscription.subscription_status as "currentStatus"',
+      ])
+      .orderBy(
+        `adminAccount.${sortBy === 'clinicName' ? 'created_at' : sortBy}`,
+        sortOrder,
+      )
+      .offset(skip)
+      .limit(limit);
+
+    const data = await queryBuilder.getRawMany();
+
+    // Calculate days since registration
+    const enrichedData = data.map((item) => ({
+      ...item,
+      daysSinceRegistration: Math.floor(
+        (Date.now() - new Date(item.registrationDate).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ),
+    }));
+
+    // Count total
+    const countQuery = this.accountRepository
+      .createQueryBuilder('adminAccount')
+      .leftJoin('adminAccount.children', 'managerAccount')
+      .leftJoin(
+        'clinics_legal_documents',
+        'legalDocs',
+        'legalDocs.account_id = managerAccount._id',
+      )
+      .where('adminAccount.role = :role', { role: AccountRole.CLINIC_ADMIN })
+      .andWhere(
+        '(legalDocs.verification_status = :status OR legalDocs._id IS NULL)',
+        {
+          status: 'NOT_SUBMITTED',
+        },
+      );
+
+    const total = await countQuery.getCount();
+
+    return [enrichedData, total];
   }
 }
