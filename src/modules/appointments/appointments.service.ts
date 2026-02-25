@@ -27,6 +27,7 @@ import {
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentStatus } from './enums';
+import { BookingSessionService } from './booking-session.service';
 
 /**
  * Appointments Service
@@ -49,6 +50,7 @@ export class AppointmentsService {
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
     private readonly accountRepository: AccountRepository,
+    private readonly bookingSessionService: BookingSessionService,
   ) {}
 
   /**
@@ -1008,6 +1010,1313 @@ export class AppointmentsService {
       package: packageData,
       createdAt: appointment.createdAt,
       updatedAt: appointment.updatedAt,
+    };
+  }
+
+  /**
+   * Create appointment from Redis booking session (Option 1: Service-first)
+   *
+   * This method finalizes the booking process by:
+   * 1. Reading session data from Redis
+   * 2. Validating all business rules
+   * 3. Creating appointment with pessimistic locking (prevents race conditions)
+   * 4. Deleting the Redis session on success
+   * 5. Sending email notifications asynchronously
+   *
+   * IMPORTANT - Payment Gateway Pending:
+   * - Currently forcing payment_method: 'online'
+   * - Appointment status set to PENDING (awaiting clinic confirmation)
+   * - Payment gateway integration is PENDING implementation
+   * - When payment gateway is ready, this will generate payment link
+   *   and set status to AWAITING_PAYMENT instead
+   *
+   * @param sessionId - Booking session UUID from Redis
+   * @param patientId - Patient account UUID (from JWT)
+   * @param paymentMethod - Payment method (must be 'online', COD not supported)
+   * @returns Created appointment with details
+   * @throws NotFoundException if session expired or data not found
+   * @throws BadRequestException if validation fails or slot full
+   * @throws ConflictException if duplicate appointment exists
+   */
+  async createAppointmentFromSession(
+    sessionId: string,
+    patientId: string,
+    paymentMethod: 'online',
+  ): Promise<any> {
+    // Payment gateway pending - Explicitly reject COD
+    if (paymentMethod !== 'online') {
+      throw new BadRequestException(
+        'Only online payment is supported. COD is not available at this time.',
+      );
+    }
+
+    // Retrieve and delete session (will throw if not found)
+    const session = await this.bookingSessionService.getSession(sessionId);
+
+    // Verify session ownership
+    if (session.patientId !== patientId) {
+      throw new ForbiddenException('You do not have permission to access this session');
+    }
+
+    // Validate session completeness for Option 1 (service-first)
+    if (session.bookingOption !== 'service') {
+      throw new BadRequestException(
+        'This endpoint currently only supports service-first booking (Option 1)',
+      );
+    }
+
+    if (!session.clinicServiceConfigId || !session.clinicId || !session.appointmentDate || 
+        !session.doctorShiftHourId || !session.doctorId) {
+      throw new BadRequestException(
+        'Incomplete booking session. Please complete all steps before confirming.',
+      );
+    }
+
+    // Parse appointment date
+    const appointmentDate = new Date(session.appointmentDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Business Rule: Appointment date must be >= today
+    if (appointmentDate < today) {
+      throw new BadRequestException('Appointment date must be today or in the future');
+    }
+
+    // Business Rule: Appointment date must be <= 60 days from now
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 60);
+    if (appointmentDate > maxDate) {
+      throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+    }
+
+    // Execute transaction with SERIALIZABLE isolation level
+    // This ensures ACID compliance and prevents race conditions
+    const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+      // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      // SELECT ... FOR UPDATE prevents concurrent bookings
+      const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+      const shiftHour = await manager
+        .createQueryBuilder()
+        .select('csh')
+        .from('clinic_shift_hour', 'csh')
+        .where('csh._id = :id', { id: session.doctorShiftHourId })
+        .setLock('pessimistic_write') // Critical: Prevents race conditions
+        .getOne();
+
+      if (!shiftHour) {
+        throw new NotFoundException('Time slot not found');
+      }
+
+      // Business Rule: Check slot availability
+      if (shiftHour.limit <= 0) {
+        throw new BadRequestException(
+          'This time slot is fully booked. Please select another time.',
+        );
+      }
+
+      // === STEP 2: Validate Service Config ===
+      const serviceConfigRepo = manager.getRepository('clinic_service_config');
+      const serviceConfig = await serviceConfigRepo.findOne({
+        where: {
+          _id: session.clinicServiceConfigId,
+          clinicId: session.clinicId,
+        },
+        relations: ['service'],
+      });
+
+      if (!serviceConfig || !serviceConfig.isActive) {
+        throw new BadRequestException('Service is not available');
+      }
+
+      // Calculate price (base price - discount)
+      const basePrice = parseFloat(serviceConfig.price.toString());
+      const discount = serviceConfig.discount ? parseFloat(serviceConfig.discount.toString()) : 0;
+      const finalPrice = basePrice - (basePrice * discount / 100);
+
+      // === STEP 3: Validate Doctor Schedule ===
+      const employeeScheduleRepo = manager.getRepository('employee_schedule');
+      const doctorSchedule = await employeeScheduleRepo.findOne({
+        where: {
+          employeeId: session.doctorId,
+          clinicId: session.clinicId,
+          workDate: appointmentDate,
+        },
+      });
+
+      if (!doctorSchedule) {
+        throw new BadRequestException(
+          'Doctor is not available on this date at this clinic',
+        );
+      }
+
+      // === STEP 4: Calculate Appointment Hour ===
+      // Combine date + start_hour to create full timestamp
+      const [hours, minutes] = shiftHour.startHour.split(':');
+      const appointmentHour = new Date(appointmentDate);
+      appointmentHour.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+      // Business Rule: Must book at least 2 hours in advance
+      const minBookingTime = new Date();
+      minBookingTime.setHours(minBookingTime.getHours() + 2);
+      if (appointmentHour <= minBookingTime) {
+        throw new BadRequestException(
+          'Appointment must be at least 2 hours from now',
+        );
+      }
+
+      // === STEP 5: Check for Duplicate Appointments ===
+      const appointmentRepo = manager.getRepository('appointments');
+      const existingAppointment = await appointmentRepo.findOne({
+        where: {
+          patientId,
+          appointmentDate,
+          appointmentHour,
+          status: 'PENDING', // Only check active appointments
+        },
+      });
+
+      if (existingAppointment) {
+        throw new ConflictException(
+          'You already have an appointment at this time',
+        );
+      }
+
+      // === STEP 6: Atomic Decrement Slot Limit ===
+      await manager
+        .createQueryBuilder()
+        .update('clinic_shift_hour')
+        .set({ limit: () => 'limit - 1' }) // Raw SQL prevents race condition
+        .where('_id = :id', { id: session.doctorShiftHourId })
+        .execute();
+
+      // === STEP 7: Create Appointment ===
+      // PAYMENT GATEWAY PENDING: Status set to PENDING instead of AWAITING_PAYMENT
+      const appointment = appointmentRepo.create({
+        patientId,
+        clinicId: session.clinicId,
+        doctorId: session.doctorId,
+        doctorShiftHourId: session.doctorShiftHourId,
+        appointmentDate,
+        appointmentHour,
+        total: finalPrice,
+        status: AppointmentStatus.PENDING, // TODO: Change to AWAITING_PAYMENT when payment ready
+        patientNote: session.patientNote || null,
+      });
+
+      const savedAppointment = await appointmentRepo.save(appointment);
+
+      // === STEP 8: Create Appointment Package ===
+      const packageRepo = manager.getRepository('appointment_package');
+      
+      // PAYMENT GATEWAY PENDING: transactionId will be set after payment webhook
+      const appointmentPackage = packageRepo.create({
+        appointmentId: savedAppointment._id,
+        transactionId: null, // TODO: Set after payment completion
+        amount: Math.round(finalPrice), // Convert to integer (cents/smallest unit)
+        status: 'pending_payment', // TODO: Update via payment webhook
+        paymentType: 'online',
+      });
+
+      const savedPackage = await packageRepo.save(appointmentPackage);
+
+      // === STEP 9: Create Service Appointment ===
+      const serviceAppointmentRepo = manager.getRepository('service_appointments');
+      const serviceAppointment = serviceAppointmentRepo.create({
+        clinicServiceId: session.clinicServiceConfigId,
+        appointmentPackageId: savedPackage._id,
+      });
+
+      await serviceAppointmentRepo.save(serviceAppointment);
+
+      // Return data for response
+      return {
+        appointment: savedAppointment,
+        serviceConfig,
+        shiftHour,
+      };
+    });
+
+    // === STEP 10: Delete Redis Session (Cleanup) ===
+    await this.bookingSessionService.deleteSession(sessionId);
+
+    // === STEP 11: Send Email Notifications (Async - Non-blocking) ===
+    // Email failures should NOT rollback the appointment
+    // TODO: Implement email sending when MailerService is ready
+    /*
+    try {
+      await this.mailerService.sendAppointmentConfirmation({
+        patientEmail: patient.email,
+        clinicName: clinic.name,
+        doctorName: doctor.name,
+        appointmentDate: result.appointment.appointmentDate,
+        appointmentHour: result.appointment.appointmentHour,
+      });
+    } catch (emailError) {
+      console.error('Failed to send appointment email:', emailError);
+      // Continue - appointment was created successfully
+    }
+    */
+
+    // === STEP 12: Build Response ===
+    return {
+      appointment_id: result.appointment._id,
+      clinic_id: result.appointment.clinicId,
+      service_name: result.serviceConfig.service?.serviceName || 'N/A',
+      appointment_date: result.appointment.appointmentDate,
+      appointment_hour: result.appointment.appointmentHour,
+      start_time: result.shiftHour.startHour,
+      end_time: result.shiftHour.endHour,
+      total: result.appointment.total,
+      status: result.appointment.status,
+      payment_type: 'online',
+      patient_note: result.appointment.patientNote,
+      // PAYMENT GATEWAY PENDING: payment_link will be added here
+      // payment_link: paymentGatewayResponse.paymentUrl,
+    };
+  }
+
+  // ========================================================================
+  // PATIENT BOOKING FLOW - GET ENDPOINTS
+  // ========================================================================
+
+  /**
+   * Get Available Services (Option 1 - Step 1)
+   *
+   * Business Logic:
+   * - Query clinic_service_config with JOINs
+   * - Filter by is_active = true
+   * - Calculate final_price = price - (price * discount / 100)
+   * - Support search, category filter, clinic filter
+   * - Pagination
+   *
+   * @param params - Query parameters for filtering and pagination
+   * @returns Paginated list of available services
+   */
+  async getAvailableServices(params: {
+    page: number;
+    limit: number;
+    search?: string;
+    categoryId?: string;
+    clinicId?: string;
+  }) {
+    const { page, limit, search, categoryId, clinicId } = params;
+    const offset = (page - 1) * limit;
+
+    // Build query with complex JOINs
+    let query = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'csc._id AS clinic_service_config_id',
+        'csc.clinic_id AS clinic_id',
+        'clinic.business_name AS clinic_name',
+        'clinic.address AS clinic_address',
+        'cs._id AS service_id',
+        'cs.service_name AS service_name',
+        'cat._id AS category_id',
+        'cat.category_name AS category_name',
+        'csc.price AS price',
+        'csc.discount AS discount',
+        'CASE WHEN csc.discount IS NULL OR csc.discount = 0 THEN csc.price ELSE (csc.price - (csc.price * csc.discount / 100)) END AS final_price',
+        'cs.description AS description',
+      ])
+      .from('clinic_service_config', 'csc')
+      .innerJoin('clinic_services', 'cs', 'cs._id = csc.clinic_service_id')
+      .innerJoin('accounts', 'clinic', 'clinic._id = csc.clinic_id')
+      .leftJoin('service_categories', 'cat', 'cat._id = cs.category_id')
+      .where('csc.is_active = :active', { active: true })
+      .andWhere('cs.is_active = :active', { active: true })
+      .andWhere('clinic.is_active = :active', { active: true })
+      .andWhere('csc.deleted_at IS NULL')
+      .andWhere('cs.deleted_at IS NULL')
+      .andWhere('clinic.deleted_at IS NULL');
+
+    // Apply search filter
+    if (search) {
+      query = query.andWhere('cs.service_name ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    // Apply category filter
+    if (categoryId) {
+      query = query.andWhere('cs.category_id = :categoryId', { categoryId });
+    }
+
+    // Apply clinic filter
+    if (clinicId) {
+      query = query.andWhere('csc.clinic_id = :clinicId', { clinicId });
+    }
+
+    // Get total count for pagination
+    const countQuery = query.clone();
+    const totalResults = await countQuery.getRawMany();
+    const total = totalResults.length;
+
+    // Apply ordering and pagination
+    const results = await query
+      .orderBy('cs.service_name', 'ASC')
+      .limit(limit)
+      .offset(offset)
+      .getRawMany();
+
+    return {
+      data: results,
+      meta: {
+        total,
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get Working Days for Clinic (Option 1 - Step 2)
+   *
+   * Business Logic:
+   * - Query employee_schedule WHERE date >= CURRENT_DATE
+   * - JOIN clinic_shift_hour to check slot availability
+   * - Only return dates with available_slots > 0
+   * - Optional: filter by service (doctors who can perform this service)
+   * - GROUP BY date
+   *
+   * @param clinicId - Clinic UUID
+   * @param serviceConfigId - Service config UUID (optional)
+   * @returns List of available working days
+   */
+  async getWorkingDays(clinicId: string, serviceConfigId?: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 60);
+
+    let query = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'es.work_date AS date',
+        'es.week_day AS week_day',
+        'COUNT(DISTINCT es._id) AS working_schedules',
+        'COUNT(DISTINCT es.employee_id) AS available_doctors',
+      ])
+      .from('employee_schedule', 'es')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+      .where('es.clinic_id = :clinicId', { clinicId })
+      .andWhere('es.work_date >= :today', { today })
+      .andWhere('es.work_date <= :maxDate', { maxDate })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('csh.limit > 0');
+
+    // If service_config_id is provided, filter by doctors who can perform this service
+    if (serviceConfigId) {
+      // First, get the clinic_service_id from service config
+      const serviceConfig = await this.dataSource
+        .createQueryBuilder()
+        .select('clinic_service_id')
+        .from('clinic_service_config', 'csc')
+        .where('csc._id = :serviceConfigId', { serviceConfigId })
+        .getRawOne();
+
+      if (serviceConfig) {
+        query = query
+          .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+          .innerJoin(
+            'doctor_services',
+            'ds',
+            'ds.doctor_id = doctor._id AND ds.clinic_service_id = :serviceId',
+            { serviceId: serviceConfig.clinic_service_id },
+          );
+      }
+    }
+
+    // Group by date and week_day
+    const results = await query
+      .groupBy('es.work_date')
+      .addGroupBy('es.week_day')
+      .orderBy('es.work_date', 'ASC')
+      .getRawMany();
+
+    // For each date, calculate total available slots
+    const enrichedResults = await Promise.all(
+      results.map(async (row) => {
+        const slotsQuery = this.dataSource
+          .createQueryBuilder()
+          .select('SUM(csh.limit)', 'total_slots')
+          .from('employee_schedule', 'es')
+          .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+          .where('es.clinic_id = :clinicId', { clinicId })
+          .andWhere('es.work_date = :date', { date: row.date })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('csh.deleted_at IS NULL')
+          .andWhere('csh.limit > 0');
+
+        const slotResult = await slotsQuery.getRawOne();
+
+        return {
+          date: row.date,
+          week_day: row.week_day,
+          available_slots: parseInt(slotResult?.total_slots || '0'),
+          available_doctors: parseInt(row.available_doctors || '0'),
+        };
+      }),
+    );
+
+    return {
+      data: enrichedResults.filter((r) => r.available_slots > 0),
+    };
+  }
+
+  /**
+   * Get Available Slots for Service on Date (Option 1 - Step 3)
+   *
+   * Business Logic:
+   * - Validate date (>= today, <= today + 60 days)
+   * - Query employee_schedule for given clinic, date
+   * - JOIN with doctor accounts
+   * - JOIN with doctor_services to filter doctors who can do this service
+   * - JOIN with clinic_shift_hour to get time slots
+   * - Calculate available_slots = limit - COUNT(active appointments)
+   * - Only return slots where available_slots > 0
+   * - Group by shift (MORNING, AFTERNOON, EVENING)
+   *
+   * @param clinicId - Clinic UUID
+   * @param serviceConfigId - Service config UUID
+   * @param dateString - Appointment date (YYYY-MM-DD)
+   * @returns Available slots grouped by shift
+   */
+  async getAvailableSlots(
+    clinicId: string,
+    serviceConfigId: string,
+    dateString: string,
+  ) {
+    // Validate date format
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    // Business Rule: date >= today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) {
+      throw new BadRequestException('Appointment date must be today or in the future');
+    }
+
+    // Business Rule: date <= today + 60 days
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 60);
+    if (date > maxDate) {
+      throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+    }
+
+    // Get clinic_service_id from service_config_id
+    const serviceConfig = await this.dataSource
+      .createQueryBuilder()
+      .select('csc.clinic_service_id', 'clinic_service_id')
+      .from('clinic_service_config', 'csc')
+      .where('csc._id = :serviceConfigId', { serviceConfigId })
+      .andWhere('csc.clinic_id = :clinicId', { clinicId })
+      .andWhere('csc.is_active = :active', { active: true })
+      .andWhere('csc.deleted_at IS NULL')
+      .getRawOne();
+
+    if (!serviceConfig) {
+      throw new BadRequestException('Service not found or inactive at this clinic');
+    }
+
+    // Query for slots with doctors who can perform this service
+    const slots = await this.dataSource
+      .createQueryBuilder()
+      .select([
+        'csh._id AS doctor_shift_hour_id',
+        'doctor._id AS doctor_id',
+        'doctor.full_name AS doctor_name',
+        'di.specialty AS doctor_specialty',
+        'csh.start_hour AS start_time',
+        'csh.end_hour AS end_time',
+        'csh.limit AS limit',
+        'es.shift_type AS shift',
+        'es.clinic_room AS clinic_room',
+      ])
+      .from('employee_schedule', 'es')
+      .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin('doctor_information', 'di', 'di.account_id = doctor._id')
+      .innerJoin(
+        'doctor_services',
+        'ds',
+        'ds.doctor_id = doctor._id AND ds.clinic_service_id = :serviceId',
+        { serviceId: serviceConfig.clinic_service_id },
+      )
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+      .where('es.clinic_id = :clinicId', { clinicId })
+      .andWhere('es.work_date = :date', { date: dateString })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('csh.limit > 0')
+      .andWhere('doctor.is_active = :active', { active: true })
+      .orderBy('csh.start_hour', 'ASC')
+      .getRawMany();
+
+    // For each slot, calculate available_slots
+    const enrichedSlots = await Promise.all(
+      slots.map(async (slot) => {
+        // Count active appointments for this slot
+        const appointmentCount = await this.dataSource
+          .createQueryBuilder()
+          .select('COUNT(*)', 'count')
+          .from('appointments', 'a')
+          .where('a.doctor_shift_hour_id = :shiftHourId', {
+            shiftHourId: slot.doctor_shift_hour_id,
+          })
+          .andWhere('a.appointment_date = :date', { date: dateString })
+          .andWhere(
+            "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
+          )
+          .andWhere('a.deleted_at IS NULL')
+          .getRawOne();
+
+        const bookedCount = parseInt(appointmentCount?.count || '0');
+        const availableSlots = slot.limit - bookedCount;
+
+        return {
+          ...slot,
+          available_slots: availableSlots,
+        };
+      }),
+    );
+
+    // Filter out fully booked slots
+    const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
+
+    // Group by shift
+    const groupedByShift = {
+      MORNING: availableSlots.filter((s) => s.shift === 'MORNING'),
+      AFTERNOON: availableSlots.filter((s) => s.shift === 'AFTERNOON'),
+      EVENING: availableSlots.filter((s) => s.shift === 'EVENING'),
+    };
+
+    return {
+      data: [
+        {
+          shift: 'MORNING',
+          slots: groupedByShift.MORNING.map((s) => ({
+            doctor_shift_hour_id: s.doctor_shift_hour_id,
+            doctor_id: s.doctor_id,
+            doctor_name: s.doctor_name,
+            doctor_specialty: s.doctor_specialty,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            limit: s.limit,
+            available_slots: s.available_slots,
+            clinic_room: s.clinic_room,
+          })),
+        },
+        {
+          shift: 'AFTERNOON',
+          slots: groupedByShift.AFTERNOON.map((s) => ({
+            doctor_shift_hour_id: s.doctor_shift_hour_id,
+            doctor_id: s.doctor_id,
+            doctor_name: s.doctor_name,
+            doctor_specialty: s.doctor_specialty,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            limit: s.limit,
+            available_slots: s.available_slots,
+            clinic_room: s.clinic_room,
+          })),
+        },
+        {
+          shift: 'EVENING',
+          slots: groupedByShift.EVENING.map((s) => ({
+            doctor_shift_hour_id: s.doctor_shift_hour_id,
+            doctor_id: s.doctor_id,
+            doctor_name: s.doctor_name,
+            doctor_specialty: s.doctor_specialty,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            limit: s.limit,
+            available_slots: s.available_slots,
+            clinic_room: s.clinic_room,
+          })),
+        },
+      ],
+    };
+  }
+
+  /**
+   * Get Patient's Appointments (Step 5 - Patient appointment history)
+   *
+   * Business Logic:
+   * - Query appointments for patient_id
+   * - JOIN with clinic, doctor, appointment_package, service_appointments
+   * - Support filtering by status, date
+   * - Pagination
+   * - Order by appointment_date DESC, appointment_hour DESC
+   *
+   * @param patientId - Patient account UUID
+   * @param params - Query parameters for filtering and pagination
+   * @returns Paginated list of patient's appointments
+   */
+  async getMyAppointments(
+    patientId: string,
+    params: {
+      page: number;
+      limit: number;
+      status?: string;
+      appointmentDate?: string;
+    },
+  ) {
+    const { page, limit, status, appointmentDate } = params;
+    const offset = (page - 1) * limit;
+
+    // Build base query
+    let query = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'a._id AS appointment_id',
+        'clinic._id AS clinic_id',
+        'clinic.business_name AS clinic_name',
+        'clinic.address AS clinic_address',
+        'doctor._id AS doctor_id',
+        'doctor.full_name AS doctor_name',
+        'a.appointment_date AS appointment_date',
+        'a.appointment_hour AS appointment_hour',
+        'a.total AS total',
+        'a.status AS status',
+        'a.patient_note AS patient_note',
+        'a.created_at AS created_at',
+        'ap.payment_type AS payment_type',
+        'ap.status AS payment_status',
+      ])
+      .from('appointments', 'a')
+      .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
+      .leftJoin('accounts', 'doctor', 'doctor._id = a.doctor_id')
+      .leftJoin('appointment_package', 'ap', 'ap.appointment_id = a._id')
+      .where('a.patient_id = :patientId', { patientId })
+      .andWhere('a.deleted_at IS NULL');
+
+    // Apply status filter
+    if (status) {
+      query = query.andWhere('a.status = :status', { status });
+    }
+
+    // Apply date filter
+    if (appointmentDate) {
+      query = query.andWhere('a.appointment_date = :appointmentDate', {
+        appointmentDate,
+      });
+    }
+
+    // Get total count
+    const countQuery = query.clone();
+    const countResult = await countQuery.getRawMany();
+    const total = countResult.length;
+
+    // Get paginated results
+    const appointments = await query
+      .orderBy('a.appointment_date', 'DESC')
+      .addOrderBy('a.appointment_hour', 'DESC')
+      .limit(limit)
+      .offset(offset)
+      .getRawMany();
+
+    // For each appointment, get services and shift hour details
+    const enrichedAppointments = await Promise.all(
+      appointments.map(async (apt) => {
+        // Get services
+        const services = await this.dataSource
+          .createQueryBuilder()
+          .select([
+            'cs._id AS service_id',
+            'cs.service_name AS service_name',
+            'csc.price AS price',
+          ])
+          .from('service_appointments', 'sa')
+          .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
+          .innerJoin('clinic_services', 'cs', 'cs._id = csc.clinic_service_id')
+          .innerJoin('appointment_package', 'ap', 'ap._id = sa.appointment_package_id')
+          .where('ap.appointment_id = :appointmentId', {
+            appointmentId: apt.appointment_id,
+          })
+          .getRawMany();
+
+        // Get shift hour details (start_time, end_time)
+        let startTime = null;
+        let endTime = null;
+        if (apt.appointment_id) {
+          const shiftHour = await this.dataSource
+            .createQueryBuilder()
+            .select(['csh.start_hour AS start_time', 'csh.end_hour AS end_time'])
+            .from('appointments', 'a')
+            .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.doctor_shift_hour_id')
+            .where('a._id = :appointmentId', { appointmentId: apt.appointment_id })
+            .getRawOne();
+
+          if (shiftHour) {
+            startTime = shiftHour.start_time;
+            endTime = shiftHour.end_time;
+          }
+        }
+
+        return {
+          appointment_id: apt.appointment_id,
+          clinic_id: apt.clinic_id,
+          clinic_name: apt.clinic_name,
+          clinic_address: apt.clinic_address,
+          doctor_id: apt.doctor_id,
+          doctor_name: apt.doctor_name,
+          services,
+          appointment_date: apt.appointment_date,
+          appointment_hour: apt.appointment_hour,
+          start_time: startTime,
+          end_time: endTime,
+          total: parseFloat(apt.total || '0'),
+          status: apt.status,
+          payment_type: apt.payment_type,
+          payment_status: apt.payment_status,
+          patient_note: apt.patient_note,
+          created_at: apt.created_at,
+        };
+      }),
+    );
+
+    return {
+      data: enrichedAppointments,
+      meta: {
+        total,
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // ========================================================================
+  // OPTION 2: DOCTOR-FIRST BOOKING FLOW (PATIENT)
+  // ========================================================================
+
+  /**
+   * Get Available Doctors (Option 2 - Step 1a)
+   *
+   * Business Logic:
+   * - Query accounts WHERE role = 'doctor' AND is_active = true
+   * - JOIN with employee_schedule to get clinics where doctor works
+   * - Support search by full_name
+   * - Support filter by specialization
+   * - Support filter by clinic_id
+   * - Pagination
+   *
+   * @param params - Query parameters for filtering and pagination
+   * @returns Paginated list of doctors with their clinics
+   */
+  async getDoctors(params: {
+    page: number;
+    limit: number;
+    search?: string;
+    specialization?: string;
+    clinic_id?: string;
+  }) {
+    const { page, limit, search, specialization, clinic_id } = params;
+    const offset = (page - 1) * limit;
+
+    // Build base query for doctors
+    let doctorQuery = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'doctor._id AS doctor_id',
+        'doctor.full_name AS full_name',
+        'di.specialty AS specialization',
+      ])
+      .from('accounts', 'doctor')
+      .innerJoin('doctor_information', 'di', 'di.account_id = doctor._id')
+      .where('doctor.role = :role', { role: AccountRole.DOCTOR })
+      .andWhere('doctor.is_active = :active', { active: true })
+      .andWhere('doctor.deleted_at IS NULL');
+
+    // Apply search filter
+    if (search) {
+      doctorQuery = doctorQuery.andWhere('doctor.full_name ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    // Apply specialization filter
+    if (specialization) {
+      doctorQuery = doctorQuery.andWhere('di.specialty ILIKE :specialization', {
+        specialization: `%${specialization}%`,
+      });
+    }
+
+    // Apply clinic filter (doctor works at this clinic)
+    if (clinic_id) {
+      doctorQuery = doctorQuery
+        .innerJoin('employee_schedule', 'es', 'es.employee_id = doctor._id')
+        .andWhere('es.clinic_id = :clinic_id', { clinic_id })
+        .andWhere('es.deleted_at IS NULL');
+    }
+
+    // Get total count
+    const countQuery = doctorQuery.clone();
+    const totalResults = await countQuery.getRawMany();
+    const total = totalResults.length;
+
+    // Get paginated doctors
+    const doctors = await doctorQuery
+      .groupBy('doctor._id')
+      .addGroupBy('di.specialty')
+      .orderBy('doctor.full_name', 'ASC')
+      .limit(limit)
+      .offset(offset)
+      .getRawMany();
+
+    // For each doctor, get clinics where they work
+    const enrichedDoctors = await Promise.all(
+      doctors.map(async (doctor) => {
+        const clinics = await this.dataSource
+          .createQueryBuilder()
+          .select([
+            'DISTINCT clinic._id AS clinic_id',
+            'clinic.business_name AS clinic_name',
+            'clinic.address AS clinic_address',
+          ])
+          .from('employee_schedule', 'es')
+          .innerJoin('accounts', 'clinic', 'clinic._id = es.clinic_id')
+          .where('es.employee_id = :doctor_id', { doctor_id: doctor.doctor_id })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('clinic.is_active = :active', { active: true })
+          .andWhere('clinic.deleted_at IS NULL')
+          .getRawMany();
+
+        return {
+          doctor_id: doctor.doctor_id,
+          full_name: doctor.full_name,
+          specialization: doctor.specialization,
+          clinics: clinics.map((c) => ({
+            clinic_id: c.clinic_id,
+            clinic_name: c.clinic_name,
+            clinic_address: c.clinic_address,
+          })),
+        };
+      }),
+    );
+
+    return {
+      data: enrichedDoctors,
+      meta: {
+        total,
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get Working Days for Doctor (Option 2 - Step 2a)
+   *
+   * Business Logic:
+   * - Query employee_schedule for specific doctor
+   * - Filter by date range (today to +60 days)
+   * - Optional filter by clinic_id
+   * - JOIN with clinic_shift_hour to check slot availability
+   * - Only return dates with available_slots > 0
+   * - GROUP BY date
+   *
+   * @param doctorId - Doctor account UUID
+   * @param clinicId - Clinic UUID (optional)
+   * @returns List of available working days for doctor
+   */
+  async getDoctorWorkingDays(doctorId: string, clinicId?: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 60);
+
+    // Build query
+    let query = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'es.work_date AS date',
+        'es.week_day AS week_day',
+        'es.clinic_id AS clinic_id',
+        'clinic.business_name AS clinic_name',
+      ])
+      .from('employee_schedule', 'es')
+      .innerJoin('accounts', 'clinic', 'clinic._id = es.clinic_id')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+      .where('es.employee_id = :doctorId', { doctorId })
+      .andWhere('es.work_date >= :today', { today })
+      .andWhere('es.work_date <= :maxDate', { maxDate })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('csh.limit > 0')
+      .andWhere('clinic.is_active = :active', { active: true })
+      .andWhere('clinic.deleted_at IS NULL');
+
+    // Apply clinic filter if provided
+    if (clinicId) {
+      query = query.andWhere('es.clinic_id = :clinicId', { clinicId });
+    }
+
+    // Execute query
+    const results = await query
+      .groupBy('es.work_date')
+      .addGroupBy('es.week_day')
+      .addGroupBy('es.clinic_id')
+      .addGroupBy('clinic.business_name')
+      .orderBy('es.work_date', 'ASC')
+      .getRawMany();
+
+    // For each date, calculate total available slots
+    const enrichedResults = await Promise.all(
+      results.map(async (row) => {
+        const slotsQuery = this.dataSource
+          .createQueryBuilder()
+          .select('SUM(csh.limit)', 'total_slots')
+          .from('employee_schedule', 'es')
+          .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+          .where('es.employee_id = :doctorId', { doctorId })
+          .andWhere('es.work_date = :date', { date: row.date })
+          .andWhere('es.clinic_id = :clinicId', { clinicId: row.clinic_id })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('csh.deleted_at IS NULL')
+          .andWhere('csh.limit > 0');
+
+        const slotResult = await slotsQuery.getRawOne();
+
+        return {
+          date: row.date,
+          week_day: row.week_day,
+          clinic_id: row.clinic_id,
+          clinic_name: row.clinic_name,
+          available_slots: parseInt(slotResult?.total_slots || '0'),
+        };
+      }),
+    );
+
+    return {
+      data: enrichedResults.filter((r) => r.available_slots > 0),
+    };
+  }
+
+  /**
+   * Get Available Slots and Services for Doctor (Option 2 - Step 3a)
+   *
+   * Business Logic:
+   * - Validate date (>= today, <= today + 60 days)
+   * - Query employee_schedule for doctor + date + clinic
+   * - JOIN with clinic_shift_hour to get time slots
+   * - Calculate available_slots = limit - COUNT(active appointments)
+   * - Only return slots where available_slots > 0
+   * - Group slots by shift (MORNING, AFTERNOON, EVENING)
+   * - Also return available services that doctor can provide at this clinic
+   *
+   * @param doctorId - Doctor account UUID
+   * @param dateString - Appointment date (YYYY-MM-DD)
+   * @param clinicId - Clinic UUID
+   * @returns Available slots and services for doctor on specified date
+   */
+  async getDoctorSlots(
+    doctorId: string,
+    dateString: string,
+    clinicId: string,
+  ) {
+    // Validate date format
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    // Business Rule: date >= today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) {
+      throw new BadRequestException('Appointment date must be today or in the future');
+    }
+
+    // Business Rule: date <= today + 60 days
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 60);
+    if (date > maxDate) {
+      throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+    }
+
+    // Query for slots
+    const slots = await this.dataSource
+      .createQueryBuilder()
+      .select([
+        'csh._id AS doctor_shift_hour_id',
+        'csh.start_hour AS start_time',
+        'csh.end_hour AS end_time',
+        'csh.limit AS limit',
+        'es.shift_type AS shift',
+        'es.clinic_room AS clinic_room',
+      ])
+      .from('employee_schedule', 'es')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+      .where('es.employee_id = :doctorId', { doctorId })
+      .andWhere('es.clinic_id = :clinicId', { clinicId })
+      .andWhere('es.work_date = :date', { date: dateString })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('csh.limit > 0')
+      .orderBy('csh.start_hour', 'ASC')
+      .getRawMany();
+
+    // For each slot, calculate available_slots
+    const enrichedSlots = await Promise.all(
+      slots.map(async (slot) => {
+        // Count active appointments for this slot
+        const appointmentCount = await this.dataSource
+          .createQueryBuilder()
+          .select('COUNT(*)', 'count')
+          .from('appointments', 'a')
+          .where('a.doctor_shift_hour_id = :shiftHourId', {
+            shiftHourId: slot.doctor_shift_hour_id,
+          })
+          .andWhere('a.appointment_date = :date', { date: dateString })
+          .andWhere(
+            "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
+          )
+          .andWhere('a.deleted_at IS NULL')
+          .getRawOne();
+
+        const bookedCount = parseInt(appointmentCount?.count || '0');
+        const availableSlots = slot.limit - bookedCount;
+
+        return {
+          ...slot,
+          available_slots: availableSlots,
+        };
+      }),
+    );
+
+    // Filter out fully booked slots
+    const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
+
+    // Group by shift
+    const groupedByShift = {
+      MORNING: availableSlots.filter((s) => s.shift === 'MORNING'),
+      AFTERNOON: availableSlots.filter((s) => s.shift === 'AFTERNOON'),
+      EVENING: availableSlots.filter((s) => s.shift === 'EVENING'),
+    };
+
+    // Get available services that doctor can provide at this clinic
+    const services = await this.dataSource
+      .createQueryBuilder()
+      .select([
+        'csc._id AS clinic_service_config_id',
+        'cs._id AS service_id',
+        'cs.service_name AS service_name',
+        'cat.category_name AS category_name',
+        'csc.price AS price',
+        'csc.discount AS discount',
+        'CASE WHEN csc.discount IS NULL OR csc.discount = 0 THEN csc.price ELSE (csc.price - (csc.price * csc.discount / 100)) END AS final_price',
+        'cs.description AS description',
+      ])
+      .from('doctor_services', 'ds')
+      .innerJoin('clinic_services', 'cs', 'cs._id = ds.clinic_service_id')
+      .innerJoin('clinic_service_config', 'csc', 'csc.clinic_service_id = cs._id')
+      .leftJoin('service_categories', 'cat', 'cat._id = cs.category_id')
+      .where('ds.doctor_id = :doctorId', { doctorId })
+      .andWhere('csc.clinic_id = :clinicId', { clinicId })
+      .andWhere('csc.is_active = :active', { active: true })
+      .andWhere('cs.is_active = :active', { active: true })
+      .andWhere('csc.deleted_at IS NULL')
+      .andWhere('cs.deleted_at IS NULL')
+      .andWhere('ds.deleted_at IS NULL')
+      .orderBy('cs.service_name', 'ASC')
+      .getRawMany();
+
+    return {
+      slots: [
+        {
+          shift: 'MORNING',
+          slots: groupedByShift.MORNING.map((s) => ({
+            doctor_shift_hour_id: s.doctor_shift_hour_id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            limit: s.limit,
+            available_slots: s.available_slots,
+            clinic_room: s.clinic_room,
+          })),
+        },
+        {
+          shift: 'AFTERNOON',
+          slots: groupedByShift.AFTERNOON.map((s) => ({
+            doctor_shift_hour_id: s.doctor_shift_hour_id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            limit: s.limit,
+            available_slots: s.available_slots,
+            clinic_room: s.clinic_room,
+          })),
+        },
+        {
+          shift: 'EVENING',
+          slots: groupedByShift.EVENING.map((s) => ({
+            doctor_shift_hour_id: s.doctor_shift_hour_id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            limit: s.limit,
+            available_slots: s.available_slots,
+            clinic_room: s.clinic_room,
+          })),
+        },
+      ],
+      available_services: services.map((s) => ({
+        clinic_service_config_id: s.clinic_service_config_id,
+        service_id: s.service_id,
+        service_name: s.service_name,
+        category_name: s.category_name,
+        price: parseFloat(s.price || '0'),
+        discount: parseFloat(s.discount || '0'),
+        final_price: parseFloat(s.final_price || '0'),
+        description: s.description,
+      })),
+    };
+  }
+
+  /**
+   * Get clinics by working date (Option 3: Date-first booking - Step 2a)
+   *
+   * Returns clinics that have available appointments on the specified date.
+   * Filters by clinics where:
+   * - Role is CLINIC_ADMIN (clinic accounts)
+   * - Status is ACTIVE
+   * - Has at least 1 available slot on the working date
+   *
+   * @param params - Query parameters (working_date, page, limit, search, district)
+   * @returns Paginated list of clinics with availability information
+   */
+  async getClinicsByWorkingDate(params: {
+    working_date: string;
+    page: number;
+    limit: number;
+    search?: string;
+    district?: string;
+  }): Promise<any> {
+    const { working_date, page, limit, search, district } = params;
+
+    // Validate date format and range
+    const appointmentDate = new Date(working_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (appointmentDate < today) {
+      throw new BadRequestException('Working date must be today or in the future');
+    }
+
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 60);
+
+    if (appointmentDate > maxDate) {
+      throw new BadRequestException('Working date cannot be more than 60 days in the future');
+    }
+
+    // Build query to get clinics with available slots on the working date
+    const queryBuilder = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'DISTINCT clinic._id AS clinic_id',
+        'clinic.full_name AS clinic_name',
+        'addr.full_address AS clinic_address',
+        'addr.district AS district',
+      ])
+      .from('accounts', 'clinic')
+      .innerJoin('employee_schedule', 'es', 'es.clinic_id = clinic._id')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+      .leftJoin('address', 'addr', 'addr.account_id = clinic._id')
+      .where('clinic.role = :role', { role: AccountRole.CLINIC_ADMIN })
+      .andWhere('clinic.status = :status', { status: 'ACTIVE' })
+      .andWhere('es.work_date = :workDate', { workDate: working_date })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('csh.limit > 0')
+      .orderBy('clinic.full_name', 'ASC');
+
+    // Add search filter (clinic name)
+    if (search) {
+      queryBuilder.andWhere('clinic.full_name ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    // Add district filter
+    if (district) {
+      queryBuilder.andWhere('addr.district ILIKE :district', {
+        district: `%${district}%`,
+      });
+    }
+
+    // Get total count before pagination
+    const totalResults = await queryBuilder.getRawMany();
+    const total = totalResults.length;
+
+    // Apply pagination
+    const offset = (page - 1) * limit;
+    const clinicsRaw = await queryBuilder
+      .limit(limit)
+      .offset(offset)
+      .getRawMany();
+
+    // For each clinic, calculate available slots and doctors
+    const clinicsWithStats = await Promise.all(
+      clinicsRaw.map(async (clinic) => {
+        // Calculate available slots
+        const slotsQuery = await this.dataSource
+          .createQueryBuilder()
+          .select([
+            'SUM(csh.limit) AS total_slots',
+            'COUNT(DISTINCT es.employee_id) AS doctor_count',
+          ])
+          .from('employee_schedule', 'es')
+          .innerJoin('clinic_shift_hour', 'csh', 'csh.employee_schedule_id = es._id')
+          .where('es.clinic_id = :clinicId', { clinicId: clinic.clinic_id })
+          .andWhere('es.work_date = :workDate', { workDate: working_date })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('csh.deleted_at IS NULL')
+          .andWhere('csh.limit > 0')
+          .getRawOne();
+
+        // Count booked appointments for this clinic on this date
+        const bookedQuery = await this.dataSource
+          .createQueryBuilder()
+          .select('COUNT(*) AS booked_count')
+          .from('appointments', 'apt')
+          .innerJoin('employee_schedule', 'es', 'apt.doctor_id = es.employee_id')
+          .where('es.clinic_id = :clinicId', { clinicId: clinic.clinic_id })
+          .andWhere('apt.appointment_date = :workDate', { workDate: working_date })
+          .andWhere('apt.status IN (:...statuses)', {
+            statuses: ['PENDING', 'CONFIRMED', 'CHECKED_IN'],
+          })
+          .andWhere('apt.deleted_at IS NULL')
+          .getRawOne();
+
+        const totalSlots = parseInt(slotsQuery?.total_slots || '0', 10);
+        const bookedCount = parseInt(bookedQuery?.booked_count || '0', 10);
+        const availableSlots = totalSlots - bookedCount;
+
+        return {
+          clinic_id: clinic.clinic_id,
+          clinic_name: clinic.clinic_name,
+          clinic_address: clinic.clinic_address || '',
+          district: clinic.district || null,
+          available_slots: availableSlots > 0 ? availableSlots : 0,
+          available_doctors: parseInt(slotsQuery?.doctor_count || '0', 10),
+        };
+      }),
+    );
+
+    // Filter out clinics with 0 available slots
+    const filteredClinics = clinicsWithStats.filter((c) => c.available_slots > 0);
+
+    return {
+      data: filteredClinics,
+      total: filteredClinics.length,
+      page,
+      limit,
+      total_pages: Math.ceil(filteredClinics.length / limit),
     };
   }
 }
