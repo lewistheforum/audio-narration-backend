@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,6 +35,7 @@ import {
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
   AppointmentDetailResponseDto,
+  WorkHistoryQueryDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -61,7 +63,7 @@ import { AppointmentStatus } from './enums';
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
-  constructor(private readonly appointmentsService: AppointmentsService) {}
+  constructor(private readonly appointmentsService: AppointmentsService) { }
 
   /**
    * Get all appointments for staff's clinic
@@ -635,5 +637,84 @@ export class AppointmentsController {
       id,
       updateStatusDto,
     );
+  }
+
+  /**
+   * Get doctor work history
+   *
+   * @param doctorId - Doctor UUID
+   * @param queryDto - Filters (fromDate, toDate, status) and pagination
+   * @returns Paginated list of appointments
+   */
+  @Get('doctor/:doctorId/work-history')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get doctor work history',
+    description: 'Retrieve paginated work history (appointments) for a specific doctor with optional date and status filters.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Work history retrieved successfully',
+    type: PaginatedAppointmentResponseDto,
+  })
+  @ApiParam({
+    name: 'doctorId',
+    type: String,
+    description: 'Doctor UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async getDoctorWorkHistory(
+    @Request() req: any,
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+    @Query() queryDto: WorkHistoryQueryDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    const userAccountId = req.user._id;
+    return this.appointmentsService.getDoctorWorkHistory(userAccountId, doctorId, queryDto);
+  }
+
+  /**
+   * Export doctor work history to CSV
+   *
+   * @param doctorId - Doctor UUID
+   * @param queryDto - Filters (fromDate, toDate, status)
+   * @param res - Express response to send file
+   */
+  @Get('doctor/:doctorId/work-history/export')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Export doctor work history (CSV)',
+    description: 'Export all filtered work history for a doctor to a CSV file.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file generated successfully',
+  })
+  @ApiParam({
+    name: 'doctorId',
+    type: String,
+    description: 'Doctor UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async exportDoctorWorkHistoryCSV(
+    @Request() req: any,
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+    @Query() queryDto: WorkHistoryQueryDto,
+    @Res() res: any,
+  ) {
+    const userAccountId = req.user._id;
+    const csvContent = await this.appointmentsService.exportDoctorWorkHistoryCSV(userAccountId, doctorId, queryDto);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=work-history-${doctorId}.csv`);
+
+    // Add BOM for Excel utf-8 compatibility
+    res.write('\uFEFF');
+    return res.end(csvContent);
   }
 }

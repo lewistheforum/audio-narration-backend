@@ -14,7 +14,14 @@ export class AppointmentRepository {
   constructor(
     @InjectRepository(Appointment)
     private readonly repository: Repository<Appointment>,
-  ) {}
+  ) { }
+
+  /**
+   * Create a query builder for the Appointment entity
+   */
+  createQueryBuilder(alias?: string) {
+    return this.repository.createQueryBuilder(alias);
+  }
 
   /**
    * Find appointments by clinic ID with filters and pagination

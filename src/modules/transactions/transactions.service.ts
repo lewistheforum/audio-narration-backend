@@ -458,7 +458,7 @@ export class TransactionsService {
       amount: 10_000,
       currency: 'VND',
       status: PaymentStatus.PENDING,
-      clinicId: clinicAdminId,
+      clinicId: clinicId,
       transactionTypeId: transactionType._id,
       description: 'Verification Payment',
     });
@@ -534,7 +534,7 @@ export class TransactionsService {
       if (status === PaymentStatus.SUCCESS && isVerification) {
         if (existingTransaction.clinicId) {
           console.log('handleCallback Debug - Updating Clinic Verify Status for:', existingTransaction.clinicId);
-          await this.clinicAdminRepo.update({ _id: existingTransaction.clinicId }, { isVerify: true });
+          await this.clinicAdminRepo.update({ accountId: existingTransaction.clinicId }, { isVerify: true });
         } else {
           console.error('handleCallback Debug - No Clinic ID in verification transaction!');
         }
@@ -591,12 +591,6 @@ export class TransactionsService {
       throw new NotFoundException('Transaction reference (Transaction ID or Appointment ID) not found');
     }
 
-    let clinicAdminId: string | undefined;
-    if (appointment?.clinicId) {
-      const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { accountId: appointment.clinicId } });
-      clinicAdminId = clinicAdmin?._id;
-    }
-
     // Resolve Transaction Type (ONLINE for appointments)
     let typeName = 'ONLINE';
 
@@ -615,7 +609,7 @@ export class TransactionsService {
       currency: 'VND',
       status,
       gateway: payload.gateway,
-      clinicId: clinicAdminId,
+      clinicId: appointment?.clinicId,
       senderAccountId: appointment?.patientId,
       transactionTypeId: transactionType?._id,
       transactionDate: new Date(payload.transactionDate),
@@ -636,8 +630,9 @@ export class TransactionsService {
 
     if (status === PaymentStatus.SUCCESS) {
       if (payload.transferAmount === 10_000) {
-        // Verification payment: mark clinic verified by clinic-admin _id (stored in prescriptionId)
-        await this.clinicAdminRepo.update({ _id: prescriptionId }, { isVerify: true });
+        // Verification payment fallback: assume prescriptionId received (if any) holds the account ID
+        console.warn('handleCallback Debug - Verification fallback strategy reached. prescriptionId received:', prescriptionId);
+        await this.clinicAdminRepo.update({ accountId: prescriptionId }, { isVerify: true });
       }
 
       // Check if this is a SUBSCRIPTION payment

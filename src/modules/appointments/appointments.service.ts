@@ -23,6 +23,7 @@ import {
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
   AppointmentDetailResponseDto,
+  WorkHistoryQueryDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
@@ -49,7 +50,7 @@ export class AppointmentsService {
     private readonly clinicStaffRepository: ClinicStaffInformationRepository,
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
     private readonly accountRepository: AccountRepository,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for a clinic (Staff access)
@@ -183,7 +184,7 @@ export class AppointmentsService {
     if (existingAppointments.length > 0) {
       throw new ConflictException(
         MESSAGES.failMessage.appointmentTimeConflict ||
-          'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
+        'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
       );
     }
 
@@ -447,7 +448,7 @@ export class AppointmentsService {
 
     // Update appointment with new schedule
     appointment.appointmentDate = newAppointmentDate;
-    
+
     if (rescheduleDto.doctorShiftHourId !== undefined) {
       appointment.doctorShiftHourId = rescheduleDto.doctorShiftHourId || null;
     }
@@ -1009,5 +1010,140 @@ export class AppointmentsService {
       createdAt: appointment.createdAt,
       updatedAt: appointment.updatedAt,
     };
+  }
+
+  /**
+   * Get work history of a doctor
+   */
+  async getDoctorWorkHistory(
+    userAccountId: string,
+    doctorId: string,
+    queryDto: WorkHistoryQueryDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    const userAccount = await this.accountRepository.findAccountById(userAccountId);
+    if (!userAccount) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const query = this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('appointment.clinic', 'clinic')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.deletedAt IS NULL');
+
+    // Filter by clinic based on user role (Manager uses parentId too)
+    const clinicId = userAccount.parentId || (userAccount.role === AccountRole.CLINIC_MANAGER ? userAccount._id : undefined);
+    if (clinicId) {
+      query.andWhere('appointment.clinicId = :clinicId', { clinicId });
+    }
+
+    if (queryDto.fromDate) {
+      query.andWhere('appointment.appointmentDate >= :fromDate', { fromDate: queryDto.fromDate });
+    }
+
+    if (queryDto.toDate) {
+      query.andWhere('appointment.appointmentDate <= :toDate', { toDate: queryDto.toDate });
+    }
+
+    if (queryDto.status) {
+      query.andWhere('appointment.status = :status', { status: queryDto.status });
+    }
+
+    query.orderBy('appointment.appointmentDate', 'DESC');
+    query.addOrderBy('appointment.appointmentHour', 'DESC');
+
+    const total = await query.getCount();
+
+    // pagination
+    const page = queryDto.page || 1;
+    const limit = queryDto.limit || 10;
+    const skip = (page - 1) * limit;
+
+    query.skip(skip).take(limit);
+
+    const appointments = await query.getMany();
+
+    const data = appointments.map((appointment) =>
+      this.transformToResponseDto(appointment),
+    );
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  /**
+   * Export doctor work history to CSV
+   */
+  async exportDoctorWorkHistoryCSV(
+    userAccountId: string,
+    doctorId: string,
+    queryDto: WorkHistoryQueryDto,
+  ): Promise<string> {
+    const userAccount = await this.accountRepository.findAccountById(userAccountId);
+    if (!userAccount) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const query = this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('appointment.clinic', 'clinic')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.deletedAt IS NULL');
+
+    // Filter by clinic based on user role (Manager uses parentId too)
+    const clinicId = userAccount.parentId || (userAccount.role === AccountRole.CLINIC_MANAGER ? userAccount._id : undefined);
+    if (clinicId) {
+      query.andWhere('appointment.clinicId = :clinicId', { clinicId });
+    }
+
+    if (queryDto.fromDate) {
+      query.andWhere('appointment.appointmentDate >= :fromDate', { fromDate: queryDto.fromDate });
+    }
+
+    if (queryDto.toDate) {
+      query.andWhere('appointment.appointmentDate <= :toDate', { toDate: queryDto.toDate });
+    }
+
+    if (queryDto.status) {
+      query.andWhere('appointment.status = :status', { status: queryDto.status });
+    }
+
+    query.orderBy('appointment.appointmentDate', 'DESC');
+    query.addOrderBy('appointment.appointmentHour', 'DESC');
+
+    const appointments = await query.getMany();
+
+    const headers = ['Mã Ca Khám', 'Bệnh Nhân', 'Phòng Khám', 'Ngày Khám', 'Giờ Khám', 'Trạng Thái', 'Ghi Chú', 'Doanh Thu (VNĐ)'];
+
+    const rows = appointments.map(app => {
+      const patientName = app.patient?.username || app.patientId;
+      const clinicName = app.clinic?.username || app.clinicId;
+      const date = new Date(app.appointmentDate).toISOString().split('T')[0];
+      const time = new Date(app.appointmentHour).toLocaleTimeString('vi-VN');
+      const note = app.patientNote?.replace(/,/g, ' ') || '';
+      const amount = app.total || 0;
+
+      return [
+        app._id,
+        patientName,
+        clinicName,
+        date,
+        time,
+        app.status,
+        note,
+        amount
+      ].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
   }
 }

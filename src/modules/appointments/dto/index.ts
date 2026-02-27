@@ -9,3 +9,4 @@ export * from './check-in.dto';
 export * from './accept-appointment.dto';
 export * from './decline-appointment.dto';
 export * from './update-appointment-status.dto';
+export * from './work-history-query.dto';
