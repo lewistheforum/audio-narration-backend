@@ -91,7 +91,7 @@ export class ContractPackageSeederService {
 
         // Check if contract package already exists for this clinic-employee pair
         const existing =
-          await this.contractPackageRepository.existsByClinicAndEmployee(
+          await this.contractPackageRepository.existsByManagerAndEmployee(
             employee.parentId,
             employee._id,
           );
@@ -109,7 +109,7 @@ export class ContractPackageSeederService {
 
         // Create contract package with realistic orthopedics clinic data
         const contractPackage = this.contractPackageRepository.create({
-          clinicId: employee.parentId, // This is the CLINIC_MANAGER account
+          clinicManagerId: employee.parentId, // This is the CLINIC_MANAGER account
           employeeId: employee._id,
           role: contractRole,
           headerAddress: this.getRandomHeaderAddress(),

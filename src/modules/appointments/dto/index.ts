@@ -1,6 +1,7 @@
 export * from './query-appointment.dto';
 export * from './appointment-response.dto';
 export * from './appointment-detail-response.dto';
+export * from './booking-session.dto';
 export * from './create-appointment.dto';
 export * from './staff-create-appointment.dto';
 export * from './cancel-appointment.dto';
@@ -9,3 +10,5 @@ export * from './check-in.dto';
 export * from './accept-appointment.dto';
 export * from './decline-appointment.dto';
 export * from './update-appointment-status.dto';
+export * from './doctor-booking.dto';
+export * from './clinic-booking.dto';

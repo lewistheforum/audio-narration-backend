@@ -11,12 +11,7 @@ export class CreateContractPackageDto {
     @IsUUID()
     employeeId: string;
 
-    // @ApiProperty({
-    //     description: 'The ID of the Clinic (Manager) - Extracted from Token',
-    //     required: false
-    // })
-    @IsOptional()
-    clinicId?: string;
+
 
     @ApiProperty({
         description: 'The role of the contract (MANAGER or EMPLOYEE - usually determined by who is creating)',

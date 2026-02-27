@@ -18,13 +18,13 @@ export class ContractPackage {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'clinic_id', type: 'uuid' })
-  clinicId: string;
+  @Column({ name: 'clinic_manager_id', type: 'uuid' })
+  clinicManagerId: string;
 
   @ManyToOne(() => Account, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'clinic_id', referencedColumnName: '_id' })
+  @JoinColumn({ name: 'clinic_manager_id', referencedColumnName: '_id' })
   clinicAccount?: Account;
 
   @Column({ name: 'employee_id', type: 'uuid' })

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ReportRepository } from './repositories/report.repository';
 import { MailerService } from '../mailer/mailer.service';
-import { GetReportsDto, ResponseReportDto } from './dto';
+import { CreateReportDto, GetReportsDto, ResponseReportDto } from './dto';
 import { Report } from './entities/report.entity';
 
 @Injectable()
@@ -14,6 +14,24 @@ export class ReportService {
     private readonly reportRepository: ReportRepository,
     private readonly mailerService: MailerService,
   ) {}
+
+  /**
+   * Create a new report
+   */
+  async createReport(accountId: string, dto: CreateReportDto): Promise<Report> {
+    // Create report entity with default values
+    const report = this.reportRepository.createReport({
+      accountId,
+      reportType: dto.reportType,
+      description: dto.description,
+      reportImages: dto.reportImages || [],
+      isResponse: false,
+      responseDescription: null,
+    });
+
+    // Save report to database
+    return this.reportRepository.saveReport(report);
+  }
 
   /**
    * Find All Reports
