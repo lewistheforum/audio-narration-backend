@@ -68,6 +68,9 @@ importers:
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
+      capstone-backend:
+        specifier: 'link:'
+        version: 'link:'
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
