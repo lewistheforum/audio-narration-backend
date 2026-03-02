@@ -518,7 +518,7 @@ export class TransactionsService {
       amount: 10_000,
       currency: 'VND',
       status: PaymentStatus.PENDING,
-      clinicId: clinicAdminId,
+      clinicId: clinicId, // FIX: Use accountId (from accounts table), NOT clinicAdminId (from clinic_admin_information table)
       transactionTypeId: transactionType._id,
       description: 'Verification Payment',
     });
@@ -609,10 +609,6 @@ export class TransactionsService {
 
       if (status === PaymentStatus.SUCCESS && isVerification) {
         if (existingTransaction.clinicId) {
-<<<<<<< HEAD
-          console.log('handleCallback Debug - Updating Clinic Verify Status for:', existingTransaction.clinicId);
-          await this.clinicAdminRepo.update({ _id: existingTransaction.clinicId }, { isVerify: true });
-=======
           console.log(
             'handleCallback Debug - Updating Clinic Verify Status for:',
             existingTransaction.clinicId,
@@ -645,7 +641,6 @@ export class TransactionsService {
               existingTransaction.clinicId,
             );
           }
->>>>>>> b261bfb (feature/update-transaction-verification)
         } else {
           console.error(
             'handleCallback Debug - No Clinic ID in verification transaction!',
@@ -718,7 +713,9 @@ export class TransactionsService {
 
     let clinicAdminId: string | undefined;
     if (appointment?.clinicId) {
-      const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { accountId: appointment.clinicId } });
+      const clinicAdmin = await this.clinicAdminRepo.findOne({
+        where: { accountId: appointment.clinicId },
+      });
       clinicAdminId = clinicAdmin?._id;
     }
 
@@ -760,10 +757,6 @@ export class TransactionsService {
 
     if (status === PaymentStatus.SUCCESS) {
       if (payload.transferAmount === 10_000) {
-<<<<<<< HEAD
-        // Verification payment: mark clinic verified by clinic-admin _id (stored in prescriptionId)
-        await this.clinicAdminRepo.update({ _id: prescriptionId }, { isVerify: true });
-=======
         // Verification payment fallback: assume prescriptionId received (if any) holds the account ID
         console.warn(
           'handleCallback Debug - Verification fallback strategy reached. prescriptionId received:',
@@ -773,7 +766,6 @@ export class TransactionsService {
           { accountId: prescriptionId },
           { isVerify: true },
         );
->>>>>>> b261bfb (feature/update-transaction-verification)
       }
 
       // Check if this is a SUBSCRIPTION payment
