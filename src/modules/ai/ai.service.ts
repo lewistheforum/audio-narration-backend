@@ -6,6 +6,10 @@ import { AiChatResponseDto } from './dto/ai-chat-response.dto';
 import { AiProvider } from './enums/ai-provider.enum';
 import { AiModel } from './enums/ai-model.enum';
 import { AiChatImvFeedbackRequestDto } from './dto/ai-chat-imv-feedback-request.dto';
+import { PatientAppointmentRecommendationRequestDto } from './dto/patient-appointment-recommendation-request.dto';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+import { API } from '../../common/utils/ai-api';
 
 /**
  * AI Service
@@ -27,6 +31,7 @@ export class AiService {
   constructor(
     private readonly geminiService: GeminiService,
     private readonly chatGptService: ChatGptService,
+    private readonly httpService: HttpService,
   ) {}
 
   /**
@@ -147,6 +152,40 @@ export class AiService {
       model,
       timestamp: new Date(),
     };
+  }
+
+  /**
+   * Get similar clinics from AI backend
+   * @param clinicId The clinic ID to find similar clinics for
+   */
+  async getSimilarClinics(clinicId: string): Promise<any> {
+    try {
+      const url = API.AI.RECOMMENDATION_GET_SIMILAR_CLINICS(clinicId);
+      const response = await firstValueFrom(this.httpService.get(url));
+      return response.data;
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to fetch similar clinics: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Get recommended clinics based on patient appointment history
+   * @param dto The payload containing clinic IDs and a limit
+   */
+  async getRecommendationsFromPatientAppointment(
+    dto: PatientAppointmentRecommendationRequestDto,
+  ): Promise<any> {
+    try {
+      const url = API.AI.RECOMMENDATION_RECOMMEND_FROM_APPOINTMENT;
+      const response = await firstValueFrom(this.httpService.post(url, dto));
+      return response.data;
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to fetch recommendations from appointment: ${error.message}`,
+      );
+    }
   }
 
   /**

@@ -1,7 +1,19 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Get,
+  Param,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AiService } from './ai.service';
-import { AiChatRequestDto, AiChatResponseDto } from './dto';
+import {
+  AiChatRequestDto,
+  AiChatResponseDto,
+  PatientAppointmentRecommendationRequestDto,
+} from './dto';
 import { AiChatImvFeedbackRequestDto } from './dto/ai-chat-imv-feedback-request.dto';
 
 /**
@@ -90,8 +102,46 @@ export class AiController {
     @Body() dto: AiChatImvFeedbackRequestDto,
   ): Promise<AiChatResponseDto> {
     const clinic = await this.aiService.chatServiceImprovement(dto);
-    console.log('check result: ', clinic);
 
     return clinic;
+  }
+
+  @Get('recommendation-clinic/clinics/:id/similar')
+  @ApiOperation({
+    summary: 'Get similar clinics',
+    description:
+      'Fetch similar clinics from the AI backend based on the clinic ID.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Similar clinics retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Failed to fetch similar clinics',
+  })
+  async getSimilarClinics(@Param('id') id: string): Promise<any> {
+    return this.aiService.getSimilarClinics(id);
+  }
+
+  @Post('recommendation-clinic/clinics/recommend/patient-appointment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get recommended clinics from patient appointment history',
+    description:
+      'Fetch recommended clinics from the AI backend based on a list of clinic IDs from previous appointments.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Recommended clinics retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Failed to fetch recommendations',
+  })
+  async getRecommendationsFromPatientAppointment(
+    @Body() dto: PatientAppointmentRecommendationRequestDto,
+  ): Promise<any> {
+    return this.aiService.getRecommendationsFromPatientAppointment(dto);
   }
 }
