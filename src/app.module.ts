@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { buildTypeOrmOptions } from './config/typeorm.config';
+import { RedisModule } from './config/redis.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { HealthModule } from './common/health/health.module';
@@ -44,6 +45,9 @@ import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/cl
 
     // TypeORM feature for seeder access to Account repository
     TypeOrmModule.forFeature([Account]),
+
+    // Redis for session management
+    RedisModule,
 
     // import modules
     AuthModule,

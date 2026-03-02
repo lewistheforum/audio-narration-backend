@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
@@ -6,7 +10,12 @@ import { Repository, Like } from 'typeorm';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType } from './entities';
 import { RegistrationStatus } from '../subscriptions/enums';
-import { CreateTransactionDto, PaymentResponseDto, SeepayCallbackDto, CreateSubscriptionTransactionDto } from './dto';
+import {
+  CreateTransactionDto,
+  PaymentResponseDto,
+  SeepayCallbackDto,
+  CreateSubscriptionTransactionDto,
+} from './dto';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
@@ -15,7 +24,7 @@ import { SubscriptionServicesService } from '../subscriptions/subscription-servi
 
 /**
  * Transactions Service
- * 
+ *
  * Handles business logic for payments, QR generation, and Seepay webhooks.
  */
 @Injectable()
@@ -48,12 +57,12 @@ export class TransactionsService {
     );
   }
 
-
-
   /**
    * Create payment QR for a subscription
    */
-  async createSubscriptionQr(dto: CreateSubscriptionTransactionDto): Promise<PaymentResponseDto> {
+  async createSubscriptionQr(
+    dto: CreateSubscriptionTransactionDto,
+  ): Promise<PaymentResponseDto> {
     // 1. Get Subscription (Source of Truth)
     const subscription = await this.clinicSubscriptionRepo.findOne({
       where: { _id: dto.subscriptionId },
@@ -81,7 +90,9 @@ export class TransactionsService {
     const { acc, bank } = { acc: this.seepayAccount, bank: this.seepayBank };
 
     if (!acc || !bank) {
-      throw new BadRequestException('System SePay configuration is missing (SEEPAY_ACC, SEEPAY_BANK)');
+      throw new BadRequestException(
+        'System SePay configuration is missing (SEEPAY_ACC, SEEPAY_BANK)',
+      );
     }
 
     const description = transaction.id;
@@ -127,12 +138,17 @@ export class TransactionsService {
     }
 
     const now = new Date();
-    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
-    const isNotExpired = subscription.expirationDate && new Date(subscription.expirationDate) > now;
+    const isActive =
+      subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
+    const isNotExpired =
+      subscription.expirationDate &&
+      new Date(subscription.expirationDate) > now;
 
     if (isActive && isNotExpired) {
       // throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
-      console.log('Allowing renewal for active subscription: Queueing logic will apply on payment success.');
+      console.log(
+        'Allowing renewal for active subscription: Queueing logic will apply on payment success.',
+      );
     }
 
     const transaction = await this.handleRenewalTransaction(subscription);
@@ -146,7 +162,11 @@ export class TransactionsService {
    * @param serviceId Target service ID
    * @param duration Duration in months (default 1, max 12)
    */
-  async createNewSubscriptionQr(clinicId: string, serviceId: string, duration: number = 1): Promise<PaymentResponseDto> {
+  async createNewSubscriptionQr(
+    clinicId: string,
+    serviceId: string,
+    duration: number = 1,
+  ): Promise<PaymentResponseDto> {
     // 1. Get or Create Subscription (Source of Truth)
     let subscription = await this.clinicSubscriptionRepo.findOne({
       where: { clinicId },
@@ -154,7 +174,9 @@ export class TransactionsService {
 
     // Case A: Subscription does not exist (New Clinic) -> Create PENDING
     if (!subscription) {
-      console.log(`[createNewSubscriptionQr] Creating new subscription record for clinic ${clinicId}`);
+      console.log(
+        `[createNewSubscriptionQr] Creating new subscription record for clinic ${clinicId}`,
+      );
       subscription = this.clinicSubscriptionRepo.create({
         clinicId,
         serviceId, // Set initial service intent
@@ -167,18 +189,23 @@ export class TransactionsService {
 
     // Case B: Exist but Active & Valid (User mistake?)
     const now = new Date();
-    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
-    const isNotExpired = subscription.expirationDate && new Date(subscription.expirationDate) > now;
+    const isActive =
+      subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
+    const isNotExpired =
+      subscription.expirationDate &&
+      new Date(subscription.expirationDate) > now;
 
     if (isActive && isNotExpired) {
-      throw new BadRequestException('Current subscription is still active. Please use "Renew" or "Change Package" features.');
+      throw new BadRequestException(
+        'Current subscription is still active. Please use "Renew" or "Change Package" features.',
+      );
     }
 
     // Case C: Exist but Expired/Pending -> Allow "New" Subscription logic
     const transaction = await this.handlePackageChangeTransaction(
       subscription,
       serviceId,
-      duration
+      duration,
     );
 
     return this.generateQrResponse(subscription, transaction);
@@ -191,7 +218,11 @@ export class TransactionsService {
    * @param targetServiceId Target service ID
    * @param duration Duration in months (default 1, max 12)
    */
-  async createPackageChangeQr(clinicId: string, targetServiceId: string, duration: number = 1): Promise<PaymentResponseDto> {
+  async createPackageChangeQr(
+    clinicId: string,
+    targetServiceId: string,
+    duration: number = 1,
+  ): Promise<PaymentResponseDto> {
     const subscription = await this.clinicSubscriptionRepo.findOne({
       where: { clinicId },
     });
@@ -200,19 +231,28 @@ export class TransactionsService {
       throw new NotFoundException('Subscription not found for this clinic');
     }
 
-    const transaction = await this.handlePackageChangeTransaction(subscription, targetServiceId, duration);
+    const transaction = await this.handlePackageChangeTransaction(
+      subscription,
+      targetServiceId,
+      duration,
+    );
     return this.generateQrResponse(subscription, transaction);
   }
 
   /**
    * Helper to generate QR Response from Transaction
    */
-  async generateQrResponse(subscription: ClinicSubscription, transaction: any): Promise<PaymentResponseDto> {
+  async generateQrResponse(
+    subscription: ClinicSubscription,
+    transaction: any,
+  ): Promise<PaymentResponseDto> {
     // USE SYSTEM CONFIG FOR SUBSCRIPTIONS (Company Account)
     const { acc, bank } = { acc: this.seepayAccount, bank: this.seepayBank };
 
     if (!acc || !bank) {
-      throw new BadRequestException('System SePay configuration is missing (SEEPAY_ACC, SEEPAY_BANK)');
+      throw new BadRequestException(
+        'System SePay configuration is missing (SEEPAY_ACC, SEEPAY_BANK)',
+      );
     }
 
     const description = transaction.id;
@@ -294,7 +334,8 @@ export class TransactionsService {
     const expirationDate = new Date(subscription.expirationDate);
 
     // Calculate months difference
-    let duration = (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
+    let duration =
+      (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
     duration -= startDate.getMonth();
     duration += expirationDate.getMonth();
 
@@ -303,7 +344,9 @@ export class TransactionsService {
     // Ensure duration is at least 1
     duration = duration <= 0 ? 1 : duration;
 
-    console.log(`[DEBUG] Calculated renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`);
+    console.log(
+      `[DEBUG] Calculated renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`,
+    );
 
     // 2. Calculate Amount: price * duration (NO discount)
     const amount = service.price * duration;
@@ -381,7 +424,6 @@ export class TransactionsService {
   async createDynamicQr(
     dto: CreateTransactionDto,
   ): Promise<PaymentResponseDto> {
-
     // Verify appointment and get real amount & clinic
     const appointment = await this.appointmentRepository.findOne({
       where: { _id: dto.prescriptionId },
@@ -393,7 +435,9 @@ export class TransactionsService {
 
     let clinicAdminId: string | undefined;
     if (appointment?.clinicId) {
-      const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { accountId: appointment.clinicId } });
+      const clinicAdmin = await this.clinicAdminRepo.findOne({
+        where: { accountId: appointment.clinicId },
+      });
       clinicAdminId = clinicAdmin?._id;
     }
 
@@ -404,7 +448,12 @@ export class TransactionsService {
 
     const expiresAt = this.computeExpireTime();
     const qrCodeUrl = this.buildQrUrl(amount, dto.prescriptionId, acc, bank);
-    const qrPayload = this.buildQrPayload(amount, dto.prescriptionId, acc, bank);
+    const qrPayload = this.buildQrPayload(
+      amount,
+      dto.prescriptionId,
+      acc,
+      bank,
+    );
 
     return new PaymentResponseDto({
       id: null,
@@ -422,19 +471,31 @@ export class TransactionsService {
    */
   async createVerificationQr(clinicId: string): Promise<PaymentResponseDto> {
     // 1. Resolve Clinic Admin Info from Account ID
-    console.log('DEBUG: createVerificationQr - Input clinicId (Account ID):', clinicId);
+    console.log(
+      'DEBUG: createVerificationQr - Input clinicId (Account ID):',
+      clinicId,
+    );
 
     const clinicAdmin = await this.clinicAdminRepo.findOne({
       where: { accountId: clinicId },
     });
 
-    console.log('DEBUG: createVerificationQr - Found clinicAdmin:', clinicAdmin);
+    console.log(
+      'DEBUG: createVerificationQr - Found clinicAdmin:',
+      clinicAdmin,
+    );
 
     if (!clinicAdmin) {
-      console.error('DEBUG: createVerificationQr - Clinic Admin NOT FOUND for accountId:', clinicId);
+      console.error(
+        'DEBUG: createVerificationQr - Clinic Admin NOT FOUND for accountId:',
+        clinicId,
+      );
       // Debug: Try to list all admins to see what is available
       const allAdmins = await this.clinicAdminRepo.find({ take: 5 });
-      console.log('DEBUG: createVerificationQr - First 5 admins in DB:', JSON.stringify(allAdmins, null, 2));
+      console.log(
+        'DEBUG: createVerificationQr - First 5 admins in DB:',
+        JSON.stringify(allAdmins, null, 2),
+      );
       throw new NotFoundException('Clinic Admin Information not found');
     }
 
@@ -453,17 +514,17 @@ export class TransactionsService {
       throw new NotFoundException('Transaction Type VERIFICATION not found');
     }
 
-
     const pendingTransaction = this.transactionRepository.create({
       amount: 10_000,
       currency: 'VND',
       status: PaymentStatus.PENDING,
-      clinicId: clinicId,
+      clinicId: clinicId, // FIX: Use accountId (from accounts table), NOT clinicAdminId (from clinic_admin_information table)
       transactionTypeId: transactionType._id,
       description: 'Verification Payment',
     });
 
-    const savedTransaction = await this.transactionRepository.save(pendingTransaction);
+    const savedTransaction =
+      await this.transactionRepository.save(pendingTransaction);
 
     // 4. Generate QR with Transaction ID as content
     // Use the Transaction ID (savedTransaction.id) as the description
@@ -490,12 +551,17 @@ export class TransactionsService {
   /**
    * Handle webhook callback from Seepay
    */
-  async handleCallback(payload: SeepayCallbackDto): Promise<PaymentResponseDto> {
+  async handleCallback(
+    payload: SeepayCallbackDto,
+  ): Promise<PaymentResponseDto> {
     const prescriptionId =
-      payload.prescriptionId || this.extractPrescriptionIdFromContent(payload.content);
+      payload.prescriptionId ||
+      this.extractPrescriptionIdFromContent(payload.content);
 
     if (!prescriptionId) {
-      throw new BadRequestException('Unable to detect prescription ID in callback');
+      throw new BadRequestException(
+        'Unable to detect prescription ID in callback',
+      );
     }
 
     const isIncoming = payload.transferType === PaymentDirection.IN;
@@ -521,29 +587,79 @@ export class TransactionsService {
       existingTransaction.referenceCode = payload.referenceCode;
       existingTransaction.seepayTransactionId = payload.id?.toString();
 
-
-      console.log('handleCallback Debug - Found Existing Transaction:', existingTransaction.id);
-      console.log('handleCallback Debug - Transaction Type:', existingTransaction.transactionType?.name);
-      console.log('handleCallback Debug - Clinic ID:', existingTransaction.clinicId);
+      console.log(
+        'handleCallback Debug - Found Existing Transaction:',
+        existingTransaction.id,
+      );
+      console.log(
+        'handleCallback Debug - Transaction Type:',
+        existingTransaction.transactionType?.name,
+      );
+      console.log(
+        'handleCallback Debug - Clinic ID:',
+        existingTransaction.clinicId,
+      );
 
       const saved = await this.transactionRepository.save(existingTransaction);
 
-      const isVerification = existingTransaction.transactionType?.name?.toUpperCase().startsWith('VERIFICATION');
+      const isVerification = existingTransaction.transactionType?.name
+        ?.toUpperCase()
+        .startsWith('VERIFICATION');
       console.log('handleCallback Debug - Is Verification:', isVerification);
 
       if (status === PaymentStatus.SUCCESS && isVerification) {
         if (existingTransaction.clinicId) {
-          console.log('handleCallback Debug - Updating Clinic Verify Status for:', existingTransaction.clinicId);
-          await this.clinicAdminRepo.update({ accountId: existingTransaction.clinicId }, { isVerify: true });
+          console.log(
+            'handleCallback Debug - Updating Clinic Verify Status for:',
+            existingTransaction.clinicId,
+          );
+          await this.clinicAdminRepo.update(
+            { accountId: existingTransaction.clinicId },
+            { isVerify: true },
+          );
+
+          // FIX: Also advance subscription status PENDING_SEPAY_SETUP → PENDING_MANAGER_SETUP
+          // so that check-registration-status endpoint reflects the change and frontend polling detects success.
+          const subscription = await this.clinicSubscriptionRepo.findOne({
+            where: {
+              clinicId: existingTransaction.clinicId,
+              subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
+            },
+          });
+
+          if (subscription) {
+            subscription.subscriptionStatus =
+              RegistrationStatus.PENDING_MANAGER_SETUP;
+            await this.clinicSubscriptionRepo.save(subscription);
+            console.log(
+              'handleCallback Debug - Subscription status advanced to PENDING_MANAGER_SETUP for clinic:',
+              existingTransaction.clinicId,
+            );
+          } else {
+            console.warn(
+              'handleCallback Debug - No PENDING_SEPAY_SETUP subscription found for clinic:',
+              existingTransaction.clinicId,
+            );
+          }
         } else {
-          console.error('handleCallback Debug - No Clinic ID in verification transaction!');
+          console.error(
+            'handleCallback Debug - No Clinic ID in verification transaction!',
+          );
         }
       }
 
       // Logic for Subscription Status Update (Existing Transaction)
-      if (status === PaymentStatus.SUCCESS && existingTransaction.transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
+      if (
+        status === PaymentStatus.SUCCESS &&
+        existingTransaction.transactionType?.name
+          ?.toUpperCase()
+          .startsWith('SUBSCRIPTION')
+      ) {
         if (existingTransaction.subscriptionId) {
-          console.log('handleCallback Debug - Updating Subscription Status for:', existingTransaction.subscriptionId);
+          console.log(
+            'handleCallback Debug - Updating Subscription Status for:',
+            existingTransaction.subscriptionId,
+          );
 
           // Extract targetServiceId and duration from content if available
           let targetServiceId: string | undefined;
@@ -563,7 +679,7 @@ export class TransactionsService {
             existingTransaction.subscriptionId,
             targetServiceId,
             saved.id, // PASS TRANSACTION ID HERE
-            duration  // PASS DURATION HERE
+            duration, // PASS DURATION HERE
           );
         }
       }
@@ -587,8 +703,20 @@ export class TransactionsService {
     if (!appointment) {
       // STRICT MODE: If neither Transaction nor Appointment is found, REJECT the callback.
       // We do not allow "blind" transactions based on amount/content guessing anymore.
-      console.error(`handleCallback Error - Reference ID ${prescriptionId} not found in Transaction or Appointment tables.`);
-      throw new NotFoundException('Transaction reference (Transaction ID or Appointment ID) not found');
+      console.error(
+        `handleCallback Error - Reference ID ${prescriptionId} not found in Transaction or Appointment tables.`,
+      );
+      throw new NotFoundException(
+        'Transaction reference (Transaction ID or Appointment ID) not found',
+      );
+    }
+
+    let clinicAdminId: string | undefined;
+    if (appointment?.clinicId) {
+      const clinicAdmin = await this.clinicAdminRepo.findOne({
+        where: { accountId: appointment.clinicId },
+      });
+      clinicAdminId = clinicAdmin?._id;
     }
 
     // Resolve Transaction Type (ONLINE for appointments)
@@ -623,7 +751,6 @@ export class TransactionsService {
       referenceCode: payload.referenceCode,
       description: payload.description,
       seepayTransactionId: payload.id?.toString(),
-
     });
 
     const savedTransaction = await this.transactionRepository.save(transaction);
@@ -631,8 +758,14 @@ export class TransactionsService {
     if (status === PaymentStatus.SUCCESS) {
       if (payload.transferAmount === 10_000) {
         // Verification payment fallback: assume prescriptionId received (if any) holds the account ID
-        console.warn('handleCallback Debug - Verification fallback strategy reached. prescriptionId received:', prescriptionId);
-        await this.clinicAdminRepo.update({ accountId: prescriptionId }, { isVerify: true });
+        console.warn(
+          'handleCallback Debug - Verification fallback strategy reached. prescriptionId received:',
+          prescriptionId,
+        );
+        await this.clinicAdminRepo.update(
+          { accountId: prescriptionId },
+          { isVerify: true },
+        );
       }
 
       // Check if this is a SUBSCRIPTION payment
@@ -640,23 +773,40 @@ export class TransactionsService {
         where: { _id: savedTransaction.transactionTypeId },
       });
 
-      console.log('handleCallback Debug - Transaction Type Name:', transactionType?.name);
-      console.log('handleCallback Debug - Saved Transaction Subscription ID:', savedTransaction.subscriptionId);
+      console.log(
+        'handleCallback Debug - Transaction Type Name:',
+        transactionType?.name,
+      );
+      console.log(
+        'handleCallback Debug - Saved Transaction Subscription ID:',
+        savedTransaction.subscriptionId,
+      );
 
       if (transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
         if (savedTransaction.subscriptionId) {
-          console.log('handleCallback Debug - Updating Subscription Status for:', savedTransaction.subscriptionId);
+          console.log(
+            'handleCallback Debug - Updating Subscription Status for:',
+            savedTransaction.subscriptionId,
+          );
 
           // Extract targetServiceId and duration from content if available
           let targetServiceId: string | undefined;
           let duration: number = 1;
           if (savedTransaction.content) {
-            console.log('[DEBUG] Processing content for Target Service ID and Duration:', savedTransaction.content);
+            console.log(
+              '[DEBUG] Processing content for Target Service ID and Duration:',
+              savedTransaction.content,
+            );
             try {
               const contentObj = JSON.parse(savedTransaction.content);
               targetServiceId = contentObj.targetServiceId;
               duration = contentObj.duration || 1;
-              console.log('[DEBUG] Found targetServiceId:', targetServiceId, 'duration:', duration);
+              console.log(
+                '[DEBUG] Found targetServiceId:',
+                targetServiceId,
+                'duration:',
+                duration,
+              );
             } catch (e) {
               console.warn('[DEBUG] Failed to parse transaction content:', e);
             }
@@ -664,17 +814,21 @@ export class TransactionsService {
             console.log('[DEBUG] No content found in transaction');
           }
 
-          console.log(`[DEBUG] Delegating to SubscriptionService. handleSubscriptionPaymentSuccess(subId=${savedTransaction.subscriptionId}, targetId=${targetServiceId}, duration=${duration})`);
+          console.log(
+            `[DEBUG] Delegating to SubscriptionService. handleSubscriptionPaymentSuccess(subId=${savedTransaction.subscriptionId}, targetId=${targetServiceId}, duration=${duration})`,
+          );
 
           // Delegate to SubscriptionServicesService to handle renewal/activation logic
           await this.subscriptionServicesService.handleSubscriptionPaymentSuccess(
             savedTransaction.subscriptionId,
             targetServiceId,
             savedTransaction.id, // Pass Transaction ID to link history
-            duration // Pass Duration for end date calculation
+            duration, // Pass Duration for end date calculation
           );
         } else {
-          console.warn('handleCallback Debug - Transaction has SUBSCRIPTION type but no subscriptionId');
+          console.warn(
+            'handleCallback Debug - Transaction has SUBSCRIPTION type but no subscriptionId',
+          );
         }
       }
     }
@@ -690,7 +844,12 @@ export class TransactionsService {
     });
   }
 
-  private buildQrUrl(amount: number, prescriptionId: string, acc: string, bank: string): string {
+  private buildQrUrl(
+    amount: number,
+    prescriptionId: string,
+    acc: string,
+    bank: string,
+  ): string {
     const des = prescriptionId;
     const params = new URLSearchParams({
       acc,
@@ -702,7 +861,12 @@ export class TransactionsService {
     return `${this.qrBaseUrl}?${params.toString()}`;
   }
 
-  buildQrPayload(amount: number, prescriptionId: string, acc: string, bank: string): string {
+  buildQrPayload(
+    amount: number,
+    prescriptionId: string,
+    acc: string,
+    bank: string,
+  ): string {
     const des = prescriptionId;
     return JSON.stringify({
       acc,
@@ -718,13 +882,17 @@ export class TransactionsService {
     return expiresAt;
   }
 
-  private extractPrescriptionIdFromContent(content?: string): string | undefined {
+  private extractPrescriptionIdFromContent(
+    content?: string,
+  ): string | undefined {
     if (!content) {
       return undefined;
     }
 
     // Updated Regex to match standard UUID (8-4-4-4-12) or flat 32 hex chars
-    const standardUuidMatch = content.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    const standardUuidMatch = content.match(
+      /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i,
+    );
     if (standardUuidMatch) {
       return standardUuidMatch[1];
     }
@@ -745,13 +913,17 @@ export class TransactionsService {
       throw new BadRequestException('Clinic id is required for QR');
     }
 
-    const clinicAdmin = await this.clinicAdminRepo.findOne({ where: { _id: clinicAdminId } });
+    const clinicAdmin = await this.clinicAdminRepo.findOne({
+      where: { _id: clinicAdminId },
+    });
 
     const acc = clinicAdmin?.sepayVa || this.seepayAccount;
     const bank = clinicAdmin?.bankName || this.seepayBank;
 
     if (!acc) {
-      throw new BadRequestException('Seepay VA is not configured for this clinic');
+      throw new BadRequestException(
+        'Seepay VA is not configured for this clinic',
+      );
     }
 
     return { acc, bank };
@@ -789,7 +961,11 @@ export class TransactionsService {
   }> {
     const offset = (page - 1) * limit;
 
-    const raw = await this.transactionRepository.findAllPaymentHistory(limit, offset, filters);
+    const raw = await this.transactionRepository.findAllPaymentHistory(
+      limit,
+      offset,
+      filters,
+    );
     const total = await this.transactionRepository.countPaymentHistory(filters);
 
     const items = raw.map((row: any) => ({
@@ -813,7 +989,10 @@ export class TransactionsService {
   /**
    * Get transaction detail by ID via repository
    */
-  async getTransactionDetail(id: string, clinicId?: string): Promise<{
+  async getTransactionDetail(
+    id: string,
+    clinicId?: string,
+  ): Promise<{
     id: string;
     prescriptionId?: string;
     amount: number;
