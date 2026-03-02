@@ -51,16 +51,16 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
     -   Cho phép gia hạn nếu gói đó vẫn còn hạn, đã hết hạn, hoặc Non-renewing.
     -   Tạo Transaction ở trạng thái `PENDING`.
     -   **Metadata Nội dung**: Lưu `{"duration": ...}` để xử lý sau khi thanh toán.
-- **Quy tắc mới (Logic Queue):**
-    - Hệ thống cho phép gọi API `/renew` bất cứ lúc nào (kể cả khi gói đang ACTIVE).
-    - **Logic Xử lý:**
-        - **Thời hạn (Duration):** Hệ thống sẽ tính toán dựa trên thời hạn của gói hiện tại (Subscription Date -> Expiration Date). Ví dụ: Gói hiện tại 12 tháng -> Gia hạn 12 tháng.
-        - **Khi thanh toán thành công:**
-             - Tạo bản ghi mới trong `ClinicSubscriptionRenewalQueue`.
-             - `targetStartDate` = `currentExpirationDate` (nối tiếp).
-             - `targetEndDate` = `targetStartDate` + Duration (tương ứng với gói hiện tại).
-             - Status lịch sử: `QUEUED_FOR_RENEWAL`.
-    - **Lợi ích:** Phòng khám có thể gia hạn trước, đảm bảo không bị gián đoạn dịch vụ.
+- **Quy tắc Gia hạn Cộng dồn (Additive Stacking Queue):**
+    - Hệ thống cho phép gọi API `/renew` hoặc `/change-package` bất cứ lúc nào kể cả khi gói đang `ACTIVE` hoặc đã có gói chờ gia hạn trong hàng đợi (`ClinicSubscriptionRenewalQueue`).
+    - **Logic Xử lý (1-to-1 Queue Record):**
+        - Do DB giới hạn 1 phòng khám chỉ có 1 record trong hàng đợi chờ (`unique clinicId`), khi mua thêm nhiều gói, hệ thống sẽ **cộng dồn thời gian (Stacking)** chứ không tạo nhiều records chờ.
+        - **Cơ sở tính toán (Base Expiration):** Nếu chưa có Queue -> Lấy ngày hết hạn của gói Active hiện tại. Nếu ĐÃ CÓ Queue -> Lấy ngày `targetEndDate` của Queue hiện tại.
+        - **Cập nhật CSDL:**
+             - `targetEndDate` của record Queue duy nhất sẽ được kéo giãn thêm `Duration` của lần mua mới.
+             - `targetStartDate` của record Queue giữ nguyên (vẫn nối tiếp vào đuôi gói Active).
+        - **Lịch sử (History):** Hệ thống ghi nhận các Records History rời rạc, đảm bảo mỗi giao dịch được gán chính xác `StartDate` và `EndDate` độc lập tương ứng với phần tiền vừa bỏ ra.
+    - **Lợi ích:** Phòng khám có thể gia hạn trước 2-3 năm liên tục, chống gián đoạn. Logic tối ưu hóa truy vấn khi CronJob chỉ cần đọc đúng 1 targetEndDate cao nhất.
 
 #### C. Đổi Gói (`POST /transactions/subscription/change-package`)
 *   **Logic**:
