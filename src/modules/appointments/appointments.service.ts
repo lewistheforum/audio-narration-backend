@@ -23,10 +23,23 @@ import {
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
   AppointmentDetailResponseDto,
+  QueryDoctorAppointmentDto,
+  DoctorAppointmentListResponseDto,
+  DoctorAppointmentItemDto,
+  ServiceSummaryDto,
+  DoctorAppointmentDetailResponseDto,
+  PatientInfoDto,
+  PendingServicesResponseDto,
+  PendingServiceItemDto,
+  CompleteExaminationDto,
+  CompleteExaminationResponseDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentStatus } from './enums';
+import { ERMRecordType, ERMStatus } from '../prescriptions/enums';
+import { ERM } from '../prescriptions/entities/erm.entity';
+import { EPrescription } from '../prescriptions/entities/e-prescription.entity';
 
 /**
  * Appointments Service
@@ -326,7 +339,7 @@ export class AppointmentsService {
       );
 
     if (!appointmentWithRelations) {
-      throw new NotFoundException('Không thể tải thông tin lịch hẹn vừa tạo.');
+      throw new NotFoundException('Unable to load appointment information');
     }
 
     return this.transformToResponseDto(appointmentWithRelations);
@@ -350,7 +363,7 @@ export class AppointmentsService {
       await this.appointmentRepository.findByIdWithRelations(appointmentId);
 
     if (!appointment || appointment.deletedAt) {
-      throw new NotFoundException('Không tìm thấy lịch hẹn.');
+      throw new NotFoundException('Appointment not found');
     }
 
     // Check if appointment can be cancelled
@@ -362,7 +375,7 @@ export class AppointmentsService {
 
     if (!cancellableStatuses.includes(appointment.status)) {
       throw new BadRequestException(
-        `Không thể hủy lịch hẹn với trạng thái "${appointment.status}".`,
+        `Cannot cancel appointment with status "${appointment.status}"`,
       );
     }
 
@@ -396,7 +409,7 @@ export class AppointmentsService {
       await this.appointmentRepository.findByIdWithRelations(appointmentId);
 
     if (!appointment || appointment.deletedAt) {
-      throw new NotFoundException('Không tìm thấy lịch hẹn.');
+      throw new NotFoundException('Appointment not found');
     }
 
     // Check if appointment can be rescheduled
@@ -407,7 +420,7 @@ export class AppointmentsService {
 
     if (!reschedulableStatuses.includes(appointment.status)) {
       throw new BadRequestException(
-        `Không thể đổi lịch hẹn với trạng thái "${appointment.status}".`,
+        `Cannot reschedule appointment with status "${appointment.status}"`,
       );
     }
 
@@ -1009,5 +1022,609 @@ export class AppointmentsService {
       createdAt: appointment.createdAt,
       updatedAt: appointment.updatedAt,
     };
+  }
+
+  /**
+   * Get list of doctor's appointments (Step 1)
+   *
+   * Retrieves appointments assigned to the doctor with optional filtering
+   * by date and status. Only shows appointments where doctor can take action.
+   *
+   * @param doctorId - ID of the authenticated doctor
+   * @param queryDto - Query parameters (date, status)
+   * @returns List of appointments with services and ERM status
+   *
+   * Business Rules:
+   * - Only show appointments assigned to this doctor (doctor_id matches)
+   * - Filter by date and status if provided
+   * - Show CHECKED_IN and IN_PROGRESS appointments by default
+   * - Include all services with ERM status for each appointment
+   * - Include transaction_id to determine payment status
+   */
+  async getDoctorAppointments(
+    doctorId: string,
+    queryDto: QueryDoctorAppointmentDto,
+  ): Promise<DoctorAppointmentListResponseDto> {
+    const queryBuilder = this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('patient.generalAccount', 'generalAccount')
+      .where('appointment.doctor_id = :doctorId', { doctorId })
+      .andWhere('appointment.deleted_at IS NULL');
+
+    // Filter by date if provided
+    if (queryDto.date) {
+      queryBuilder.andWhere('appointment.appointment_date = :date', {
+        date: queryDto.date,
+      });
+    }
+
+    // Filter by status if provided, otherwise default to CHECKED_IN and IN_PROGRESS
+    if (queryDto.status) {
+      queryBuilder.andWhere('appointment.status = :status', {
+        status: queryDto.status,
+      });
+    } else {
+      queryBuilder.andWhere('appointment.status IN (:...statuses)', {
+        statuses: [AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS],
+      });
+    }
+
+    // Order by appointment hour
+    queryBuilder.orderBy('appointment.appointment_hour', 'ASC');
+
+    const appointments = await queryBuilder.getMany();
+
+    // If no appointments found, return empty array
+    if (appointments.length === 0) {
+      return {
+        appointments: [],
+      };
+    }
+
+    // Get transaction_id for each appointment
+    const appointmentIds = appointments.map((apt) => apt._id);
+    const appointmentPackages = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .createQueryBuilder('pkg')
+      .where('pkg.appointment_id IN (:...appointmentIds)', { appointmentIds })
+      .getMany();
+
+    const transactionMap = new Map<string, string | null>();
+    appointmentPackages.forEach((pkg) => {
+      transactionMap.set(pkg.appointmentId, pkg.transactionId || null);
+    });
+
+    // Get services for each appointment
+    const appointmentItems: DoctorAppointmentItemDto[] = [];
+
+    for (const appointment of appointments) {
+      const services = await this.getAppointmentServices(appointment._id);
+
+      appointmentItems.push({
+        appointmentId: appointment._id,
+        patientId: appointment.patientId,
+        patientName:
+          appointment.patient?.generalAccount?.fullName || 'Unknown Patient',
+        appointmentDate: this.formatDate(appointment.appointmentDate),
+        appointmentHour: appointment.appointmentHour,
+        clinicId: appointment.clinicId,
+        doctorShiftHourId: appointment.doctorShiftHourId,
+        services,
+        status: appointment.status,
+        transactionId: transactionMap.get(appointment._id) || null,
+      });
+    }
+
+    return {
+      appointments: appointmentItems,
+    };
+  }
+
+  /**
+   * Get appointment detail for doctor (Step 2)
+   *
+   * Retrieves complete appointment information including patient details
+   * and all services. Automatically updates status from CHECKED_IN to IN_PROGRESS
+   * when doctor first accesses the appointment.
+   *
+   * @param appointmentId - UUID of the appointment
+   * @param doctorId - ID of the authenticated doctor
+   * @returns Complete appointment details with patient info and services
+   * @throws NotFoundException if appointment not found
+   * @throws ForbiddenException if appointment not assigned to this doctor
+   *
+   * Business Rules:
+   * - Verify appointment belongs to the authenticated doctor
+   * - Auto-update status from CHECKED_IN → IN_PROGRESS when accessed
+   * - Load patient information from generalAccount
+   * - Load all services with ERM status
+   * - Return detailed patient information (including medical history if available)
+   */
+  async getAppointmentDetailForDoctor(
+    appointmentId: string,
+    doctorId: string,
+  ): Promise<DoctorAppointmentDetailResponseDto> {
+    // Find appointment with relations
+    const appointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('patient.generalAccount', 'generalAccount')
+      .where('appointment._id = :appointmentId', { appointmentId })
+      .andWhere('appointment.deleted_at IS NULL')
+      .getOne();
+
+    if (!appointment) {
+      throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound);
+    }
+
+    // Verify appointment belongs to this doctor
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(
+        'You do not have permission to view this appointment',
+      );
+    }
+
+    // Auto-update status from CHECKED_IN to IN_PROGRESS
+    let statusMessage: string | undefined;
+    if (appointment.status === AppointmentStatus.CHECKED_IN) {
+      appointment.status = AppointmentStatus.IN_PROGRESS;
+      await this.dataSource.getRepository(Appointment).save(appointment);
+      statusMessage = 'Appointment status updated to IN_PROGRESS';
+    }
+
+    // Get services
+    const services = await this.getAppointmentServices(appointmentId);
+
+    // Build patient info
+    const patientInfo: PatientInfoDto = {
+      patientId: appointment.patientId,
+      fullName: appointment.patient?.generalAccount?.fullName || 'Unknown',
+      dateOfBirth: appointment.patient?.generalAccount?.dob
+        ? this.formatDate(appointment.patient.generalAccount.dob)
+        : null,
+      gender: appointment.patient?.generalAccount?.gender || null,
+      phone: appointment.patient?.phone || null,
+      email: appointment.patient?.email || 'No email',
+      medicalHistory: null, // TODO: Get from medical history if available
+    };
+
+    return {
+      appointmentId: appointment._id,
+      patient: patientInfo,
+      appointmentDate: this.formatDate(appointment.appointmentDate),
+      appointmentHour: appointment.appointmentHour,
+      services,
+      patientNote: appointment.patientNote,
+      status: appointment.status,
+      message: statusMessage,
+    };
+  }
+
+  /**
+   * Get services for an appointment with ERM status
+   *
+   * Helper method to retrieve all services associated with an appointment
+   * and check if each service has an ERM record
+   *
+   * @param appointmentId - UUID of the appointment
+   * @returns Array of service summaries with ERM status
+   * @private
+   */
+  private async getAppointmentServices(
+    appointmentId: string,
+  ): Promise<ServiceSummaryDto[]> {
+    // Get appointment package
+    const appointmentPackage = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .createQueryBuilder('pkg')
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('pkg.deleted_at IS NULL')
+      .getOne();
+
+    if (!appointmentPackage) {
+      return [];
+    }
+
+    // Get service appointments
+    const serviceAppointments = await this.dataSource
+      .getRepository(ServiceAppointment)
+      .createQueryBuilder('sa')
+      .leftJoinAndSelect('sa.clinicService', 'clinicServiceConfig')
+      .leftJoinAndSelect('clinicServiceConfig.service', 'clinicService')
+      .leftJoinAndSelect('sa.erm', 'erm')
+      .where('sa.appointment_package_id = :packageId', {
+        packageId: appointmentPackage._id,
+      })
+      .andWhere('sa.deleted_at IS NULL')
+      .getMany();
+
+    // Map to ServiceSummaryDto
+    return serviceAppointments.map((sa) => {
+      // Determine service type from service_functions
+      // Assuming service_functions contains the ERMRecordType
+      const serviceFunctions =
+        sa.clinicService?.service?.serviceFunctions || [];
+      let serviceType: ERMRecordType = ERMRecordType.CONSULTATION; // Default
+
+      // Try to match ERMRecordType from service_functions
+      if (serviceFunctions.length > 0) {
+        const matchedType = serviceFunctions.find((func) =>
+          Object.values(ERMRecordType).includes(func as ERMRecordType),
+        );
+        if (matchedType) {
+          serviceType = matchedType as ERMRecordType;
+        }
+      }
+
+      return {
+        serviceAppointmentId: sa._id,
+        clinicServiceId: sa.clinicServiceId,
+        serviceName: sa.clinicService?.service?.serviceName || 'Unknown Service',
+        serviceType,
+        hasErm: !!sa.erm,
+        ermId: sa.erm?._id,
+      };
+    });
+  }
+
+  /**
+   * Get pending services for an appointment (Step 6)
+   *
+   * Returns services that:
+   * - Do not have ERM yet (pending_services)
+   * - Have ERM with IN_PROGRESS status (in_progress_services)
+   *
+   * @param appointmentId - Appointment UUID
+   * @param doctorId - Doctor UUID (for permission check)
+   * @returns Pending and in-progress services
+   * @throws NotFoundException if appointment not found
+   * @throws ForbiddenException if doctor not assigned to appointment
+   */
+  async getPendingServices(
+    appointmentId: string,
+    doctorId: string,
+  ): Promise<PendingServicesResponseDto> {
+    // Find appointment
+    const appointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .where('appointment._id = :appointmentId', { appointmentId })
+      .andWhere('appointment.deleted_at IS NULL')
+      .getOne();
+
+    if (!appointment) {
+      throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound);
+    }
+
+    // Verify doctor has permission
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException('You do not have permission to access this appointment');
+    }
+
+    // Get appointment package
+    const appointmentPackage = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .findOne({
+        where: {
+          appointmentId: appointment._id,
+        },
+      });
+
+    if (!appointmentPackage) {
+      return {
+        pendingServices: [],
+        inProgressServices: [],
+      };
+    }
+
+    // Get all service appointments with ERM data
+    const serviceAppointments = await this.dataSource
+      .getRepository(ServiceAppointment)
+      .createQueryBuilder('sa')
+      .leftJoinAndSelect('sa.clinicService', 'clinicServiceConfig')
+      .leftJoinAndSelect('clinicServiceConfig.service', 'clinicService')
+      .leftJoinAndSelect('sa.erm', 'erm')
+      .where('sa.appointment_package_id = :packageId', {
+        packageId: appointmentPackage._id,
+      })
+      .andWhere('sa.deleted_at IS NULL')
+      .getMany();
+
+    // Classify services
+    const pendingServices: PendingServiceItemDto[] = [];
+    const inProgressServices: PendingServiceItemDto[] = [];
+
+    for (const sa of serviceAppointments) {
+      // Determine service type from service_functions
+      const serviceFunctions =
+        sa.clinicService?.service?.serviceFunctions || [];
+      let serviceType: ERMRecordType = ERMRecordType.CONSULTATION; // Default
+
+      // Try to match ERMRecordType from service_functions
+      if (serviceFunctions.length > 0) {
+        const matchedType = serviceFunctions.find((func) =>
+          Object.values(ERMRecordType).includes(func as ERMRecordType),
+        );
+        if (matchedType) {
+          serviceType = matchedType as ERMRecordType;
+        }
+      }
+
+      const serviceItem: PendingServiceItemDto = {
+        serviceAppointmentId: sa._id,
+        serviceName: sa.clinicService?.service?.serviceName || 'Unknown Service',
+        serviceType,
+        hasErm: !!sa.erm,
+        ermId: sa.erm?._id || null,
+        ermStatus: sa.erm?.status || null,
+      };
+
+      // Classify based on ERM status
+      if (!sa.erm) {
+        // No ERM -> pending
+        pendingServices.push(serviceItem);
+      } else if (sa.erm.status === ERMStatus.IN_PROGRESS) {
+        // Has ERM with IN_PROGRESS status
+        inProgressServices.push(serviceItem);
+      }
+      // Note: COMPLETED and DRAFT ERMs are not included in either list
+    }
+
+    return {
+      pendingServices,
+      inProgressServices,
+    };
+  }
+
+  /**
+   * Complete examination process
+   *
+   * Step 8 of ERM workflow - Complete all ERMs, lock prescription, determine appointment status
+   *
+   * Business Rules:
+   * - Validate all service_appointments have ERM with IN_PROGRESS status
+   * - Validate e_prescription exists if there's CONSULTATION ERM
+   * - Change all ERMs from IN_PROGRESS to COMPLETED (immutable)
+   * - Lock e_prescription (immutable)
+   * - Determine appointment status based on payment logic
+   *
+   * @param appointmentId - Appointment ID
+   * @param doctorId - Doctor ID from JWT
+   * @returns CompleteExaminationResponseDto
+   * @throws NotFoundException if appointment not found
+   * @throws ForbiddenException if appointment doesn't belong to doctor
+   * @throws BadRequestException if validation fails
+   */
+  async completeExamination(
+    appointmentId: string,
+    doctorId: string,
+  ): Promise<CompleteExaminationResponseDto> {
+    // 1. Find appointment and validate ownership
+    const appointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .where('appointment._id = :appointmentId', { appointmentId })
+      .andWhere('appointment.deleted_at IS NULL')
+      .getOne();
+
+    if (!appointment) {
+      throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound);
+    }
+
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(MESSAGES.failMessage.appointmentNotAssignedToDoctor);
+    }
+
+    // Check appointment status
+    if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
+      throw new BadRequestException(
+        'Can only complete examination when appointment status is IN_PROGRESS',
+      );
+    }
+
+    // 2. Get appointment packages (to check transactionId and calculate prices)
+    const appointmentPackages = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .createQueryBuilder('pkg')
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('pkg.deleted_at IS NULL')
+      .getMany();
+
+    // 3. Get all service appointments with related data
+    const serviceAppointments = await this.dataSource
+      .getRepository(ServiceAppointment)
+      .createQueryBuilder('sa')
+      .leftJoinAndSelect('sa.erm', 'erm')
+      .leftJoinAndSelect('sa.clinicService', 'clinicService')
+      .innerJoin('sa.appointmentPackage', 'pkg')
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('sa.deleted_at IS NULL')
+      .getMany();
+
+    if (serviceAppointments.length === 0) {
+      throw new BadRequestException('Appointment has no services');
+    }
+
+    // 4. Validate all service appointments have ERM
+    const missingRequirements: string[] = [];
+
+    for (const serviceAppointment of serviceAppointments) {
+      if (!serviceAppointment.erm) {
+        missingRequirements.push(
+          `Service (ID: ${serviceAppointment.clinicServiceId}) does not have ERM`,
+        );
+      } else if (serviceAppointment.erm.status === ERMStatus.DRAFT) {
+        missingRequirements.push(
+          `ERM for service (ID: ${serviceAppointment.clinicServiceId}) has not saved data (status = DRAFT)`,
+        );
+      }
+    }
+
+    // 5. Check if there's CONSULTATION ERM, must have e_prescription
+    const hasConsultationErm = serviceAppointments.some(
+      (sa) => sa.erm?.recordType === ERMRecordType.CONSULTATION,
+    );
+
+    if (hasConsultationErm) {
+      const ePrescription = await this.dataSource
+        .getRepository(EPrescription)
+        .createQueryBuilder('ep')
+        .where('ep.appointment_id = :appointmentId', { appointmentId })
+        .andWhere('ep.deleted_at IS NULL')
+        .getOne();
+
+      if (!ePrescription) {
+        missingRequirements.push('E-prescription not created (required when there is consultation ERM)');
+      }
+    }
+
+    // If there are missing requirements, throw error
+    if (missingRequirements.length > 0) {
+      throw new BadRequestException({
+        message: 'Cannot complete examination',
+        missingRequirements,
+      });
+    }
+
+    // 6. Update all ERMs from IN_PROGRESS to COMPLETED
+    const ermIds = serviceAppointments
+      .filter((sa) => sa.erm && sa.erm.status === ERMStatus.IN_PROGRESS)
+      .map((sa) => sa.erm._id);
+
+    if (ermIds.length > 0) {
+      await this.dataSource
+        .getRepository(ERM)
+        .createQueryBuilder()
+        .update(ERM)
+        .set({
+          status: ERMStatus.COMPLETED,
+          signedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where('_id IN (:...ermIds)', { ermIds })
+        .execute();
+    }
+
+    // 7. Lock e_prescription (already immutable by virtue of appointment status change)
+    // No specific action needed as we'll check appointment status when modifying prescription
+
+    // 8. Determine payment logic and appointment status
+    const appointmentStartTime = new Date(appointment.appointmentHour);
+
+    // Identify additional services (created after appointment start time)
+    const additionalServices = serviceAppointments.filter((sa) => {
+      return new Date(sa.createdAt) > appointmentStartTime;
+    });
+
+    const hasAdditionalServices = additionalServices.length > 0;
+
+    // Calculate additional amount
+    let additionalAmount = 0;
+    if (hasAdditionalServices) {
+      for (const service of additionalServices) {
+        const price = service.clinicService?.price || 0;
+        additionalAmount += Number(price);
+      }
+    }
+
+    // Determine if paid online (check if any package has transactionId)
+    const hasPaidOnline = appointmentPackages.some((pkg) => pkg.transactionId !== null);
+
+    // Determine appointment status and payment status
+    let appointmentStatus: AppointmentStatus;
+    let paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL';
+    let nextStep: 'EXPORT_PRESCRIPTION' | 'PROCEED_TO_PAYMENT';
+
+    if (hasPaidOnline && !hasAdditionalServices) {
+      // CASE 1: Paid online + No additional services
+      appointmentStatus = AppointmentStatus.COMPLETED;
+      paymentStatus = 'PAID';
+      nextStep = 'EXPORT_PRESCRIPTION';
+    } else if (!hasPaidOnline && !hasAdditionalServices) {
+      // CASE 2: Not paid online + No additional services
+      appointmentStatus = AppointmentStatus.AWAITING_PAYMENT;
+      paymentStatus = 'UNPAID';
+      nextStep = 'PROCEED_TO_PAYMENT';
+    } else {
+      // CASE 3: Paid online + Has additional services
+      appointmentStatus = AppointmentStatus.AWAITING_PAYMENT;
+      paymentStatus = hasPaidOnline ? 'PARTIAL' : 'UNPAID';
+      nextStep = 'PROCEED_TO_PAYMENT';
+    }
+
+    // 9. Update appointment status
+    appointment.status = appointmentStatus;
+
+    await this.dataSource.getRepository(Appointment).save(appointment);
+
+    // 10. Get prescription info
+    const ePrescription = await this.dataSource
+      .getRepository(EPrescription)
+      .createQueryBuilder('ep')
+      .where('ep.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('ep.deleted_at IS NULL')
+      .getOne();
+
+    // 11. Build ERMs summary
+    const ermsSummary = serviceAppointments
+      .filter((sa) => sa.erm)
+      .map((sa) => ({
+        serviceName: `Service (${sa.clinicServiceId})`,
+        ermId: sa.erm._id,
+        status: 'COMPLETED',
+      }));
+
+    // 12. Return response
+    return {
+      appointmentId: appointment._id,
+      appointmentStatus,
+      paymentStatus,
+      completedAt: new Date(), // Current timestamp as completion time
+      ermsSummary,
+      hasPrescription: !!ePrescription,
+      ePrescriptionId: ePrescription?._id,
+      hasAdditionalServices,
+      additionalAmount,
+      nextStep,
+    };
+  }
+
+  /**
+   * Format date to YYYY-MM-DD string
+   *
+   * Safely handles both Date objects and string dates
+   *
+   * @param date - Date object or string
+   * @returns Formatted date string (YYYY-MM-DD)
+   * @private
+   */
+  private formatDate(date: Date | string | null | undefined): string {
+    if (!date) {
+      return '';
+    }
+
+    // If already a string, check if it's in ISO format
+    if (typeof date === 'string') {
+      // If it's already in YYYY-MM-DD format, return as is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date;
+      }
+      // Otherwise, try to parse and format
+      const parsedDate = new Date(date);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate.toISOString().split('T')[0];
+      }
+      return date; // Return as is if can't parse
+    }
+
+    // If it's a Date object
+    if (date instanceof Date && !isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+
+    return '';
   }
 }
