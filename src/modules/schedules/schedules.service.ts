@@ -11,6 +11,9 @@ import { ClinicShift } from './entities/clinic-shift.entity';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { CopyScheduleDto } from './dto/copy-schedule.dto';
+import { CreateClinicRoomDto } from './dto/create-clinic-room.dto';
+import { UpdateClinicRoomDto } from './dto/update-clinic-room.dto';
+import { ClinicRoomQueryDto } from './dto/clinic-room-query.dto';
 import { WeekDay } from './enums';
 import { ClinicRoom } from './entities/clinic_room.entity';
 import { Account } from '../accounts/entities/accounts.entity';
@@ -362,6 +365,8 @@ export class SchedulesService {
                 from: query.from,
                 to: query.to,
                 employeeId: filterEmployeeId,
+                roomId: query.roomId,
+                shiftId: query.shiftId,
             })
         );
     }
@@ -432,6 +437,15 @@ export class SchedulesService {
         if (employeeId) schedule.employeeId = employeeId;
         if (clinicShiftId) schedule.clinicShiftId = clinicShiftId;
 
+        // Update Room if provided
+        if (roomId) {
+            const room = await this.roomRepository.findOne({
+                where: { _id: roomId, clinicId: schedule.clinicId }
+            });
+            if (!room) throw new NotFoundException('Clinic Room not found');
+            schedule.rooms = [room];
+        }
+
         // Conflict Check on Update
         if (clinicShiftId || workDate || employeeId) {
             const conflict = await this.scheduleRepository.findConflict(
@@ -494,6 +508,88 @@ export class SchedulesService {
             select: ['_id', 'roomName'],
             order: { roomName: 'ASC' },
         });
+    }
+
+    /**
+     * ---------------------------------------------------------
+     * CLINIC ROOM CRUD APIs
+     * ---------------------------------------------------------
+     */
+
+    async createClinicRoom(user: any, dto: CreateClinicRoomDto) {
+        const clinicId = await this.resolveClinicId(user);
+        if (!clinicId) throw new BadRequestException('Clinic ID could not be resolved');
+
+        const room = this.roomRepository.create({
+            roomName: dto.roomName,
+            clinicId,
+        });
+
+        return await this.roomRepository.save(room);
+    }
+
+    async getPaginatedClinicRooms(user: any, query: ClinicRoomQueryDto) {
+        const clinicId = await this.resolveClinicId(user);
+        if (!clinicId) throw new BadRequestException('Clinic ID could not be resolved');
+
+        const { page = 1, limit = 10, search } = query;
+        const skip = (page - 1) * limit;
+
+        const qb = this.roomRepository.createQueryBuilder('room')
+            .where('room.clinicId = :clinicId', { clinicId });
+
+        if (search) {
+            qb.andWhere('LOWER(room.roomName) LIKE LOWER(:search)', { search: `%${search}%` });
+        }
+
+        qb.orderBy('room.createdAt', 'DESC')
+            .skip(skip)
+            .take(limit);
+
+        const [items, total] = await qb.getManyAndCount();
+
+        return {
+            items,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    async getClinicRoomById(id: string, user: any) {
+        const clinicId = await this.resolveClinicId(user);
+        if (!clinicId) throw new BadRequestException('Clinic ID could not be resolved');
+
+        const room = await this.roomRepository.findOne({
+            where: { _id: id, clinicId },
+        });
+
+        if (!room) throw new NotFoundException('Clinic room not found or you do not have permission');
+        return room;
+    }
+
+    async updateClinicRoom(id: string, user: any, dto: UpdateClinicRoomDto) {
+        const room = await this.getClinicRoomById(id, user);
+
+        if (dto.roomName) {
+            room.roomName = dto.roomName;
+        }
+
+        return await this.roomRepository.save(room);
+    }
+
+    async deleteClinicRoom(id: string, user: any) {
+        const room = await this.getClinicRoomById(id, user);
+
+        // Optional logic: Check if room is being used in an active EmployeeSchedule before deleting
+        // ...
+
+        const result = await this.roomRepository.softDelete(room._id);
+        if (result.affected === 0) throw new NotFoundException('Failed to delete clinic room');
+        return { message: 'Clinic room deleted successfully' };
     }
 
 

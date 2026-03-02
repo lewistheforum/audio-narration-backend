@@ -88,17 +88,22 @@ export class ConversationResponseDto {
   updatedAt: Date;
 
   constructor(
-    conversation: (Omit<Partial<ConversationResponseDto>, 'participants'> & {
-      participants?: string[] | AccountResponseDto[]
-    }) | any,
-    AccountsService?: AccountsService
+    conversation:
+      | (Omit<Partial<ConversationResponseDto>, 'participants'> & {
+          participants?: string[] | AccountResponseDto[];
+        })
+      | any,
+    AccountsService?: AccountsService,
   ) {
     this.id = conversation._id || conversation.id || '';
     this.title = conversation.title || '';
     this.description = conversation.description || '';
-    this.participants = (Array.isArray(conversation.participants) && conversation.participants.length > 0 && typeof conversation.participants[0] === 'string')
-      ? []
-      : (conversation.participants as AccountResponseDto[] || []);
+    this.participants =
+      Array.isArray(conversation.participants) &&
+      conversation.participants.length > 0 &&
+      typeof conversation.participants[0] === 'string'
+        ? []
+        : (conversation.participants as AccountResponseDto[]) || [];
     this.lastMessage = conversation.lastMessage || null;
     this.deletedBy = conversation.deletedBy || [];
     this.createdAt = conversation.createdAt || new Date();
@@ -107,7 +112,11 @@ export class ConversationResponseDto {
 
   // Static method to create with populated participants and last message
   static async createWithParticipants(
-    conversation: (Omit<Partial<ConversationResponseDto>, 'participants'> & { participants: string[] }) | any,
+    conversation:
+      | (Omit<Partial<ConversationResponseDto>, 'participants'> & {
+          participants: string[];
+        })
+      | any,
     AccountsService: AccountsService,
     messagesService?: MessagesService,
   ): Promise<ConversationResponseDto> {
@@ -119,7 +128,15 @@ export class ConversationResponseDto {
           conversation.participants,
         );
         dto.participants = participantUsers.map(
-          (user) => new AccountResponseDto(user),
+          (user) =>
+            new AccountResponseDto(
+              user,
+              user.generalAccount,
+              user.clinicStaffInformation,
+              user.doctorInformation,
+              user.clinicManagerInformation,
+              user.clinicAdminInformation,
+            ),
         );
       } catch (error) {
         console.error('Error fetching participant data:', error);

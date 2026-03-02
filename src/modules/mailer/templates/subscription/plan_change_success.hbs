@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan Changed Successfully</title>
+</head>
+
+<body style="margin: 0; padding: 0; background-color: #F7FCFF; font-family: Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <!-- Logo -->
+        <div style="text-align: center; margin-bottom: 30px;">
+            <img alt="Medicare Logo" style="width: 150px; height: auto;"
+                src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png" />
+        </div>
+
+        <!-- Main Content -->
+        <div style="background: #F0F9FF; border-radius: 10px; padding: 30px; border-left: 4px solid #0284C7;">
+            <h1 style="color: #0284C7; margin: 0 0 20px 0; font-size: 24px;">
+                🔄 Subscription Plan Changed Successfully!
+            </h1>
+            <p style="color: #0B1F2A; font-size: 16px; margin: 0 0 15px 0;">
+                Hi <strong>{{clinicName}}</strong>,
+            </p>
+            <p style="color: #475569; font-size: 16px; margin: 0 0 20px 0;">
+                Your subscription plan has been successfully updated. Your new plan is now active.
+            </p>
+
+            <!-- Plan Change Box -->
+            <div
+                style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D4ECF6;">
+                <h3 style="color: #0B1F2A; margin: 0 0 15px 0; font-size: 16px;">Plan Change Details</h3>
+
+                <!-- Previous Plan -->
+                <div style="background: #FEF2F2; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                    <div style="text-align: center;">
+                        <span
+                            style="color: #64748B; font-size: 12px; text-transform: uppercase; font-weight: 600;">Previous
+                            Plan</span>
+                        <div style="color: #DC2626; font-size: 18px; font-weight: bold; margin-top: 5px;">{{oldPlan}}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow -->
+                <div style="text-align: center; margin: 10px 0;">
+                    <span style="font-size: 24px;">➡️</span>
+                </div>
+
+                <!-- New Plan -->
+                <div style="background: #DBEAFE; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                    <div style="text-align: center;">
+                        <span style="color: #64748B; font-size: 12px; text-transform: uppercase; font-weight: 600;">New
+                            Plan</span>
+                        <div style="color: #0284C7; font-size: 18px; font-weight: bold; margin-top: 5px;">{{newPlan}}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dates -->
+                <div style="border-top: 1px solid #D4ECF6; padding-top: 15px; margin-top: 15px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="color: #64748B; font-size: 14px;">Start Date:</span>
+                        <strong style="color: #0B1F2A; font-size: 15px;">{{startDate}}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748B; font-size: 14px;">Next Renewal:</span>
+                        <strong style="color: #0284C7; font-size: 15px;">{{endDate}}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success Box -->
+            <div style="background: #DBEAFE; border-left: 4px solid #0284C7; padding: 15px; margin: 20px 0;">
+                <p style="color: #075985; font-size: 14px; margin: 0;">
+                    🎉 <strong>Congratulations!</strong> You now have access to premium features and enhanced
+                    capabilities.
+                </p>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="http://localhost:5173/subscription"
+                    style="background: #5CB6D3; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
+                    Explore New Features
+                </a>
+            </div>
+        </div>
+
+        <!-- New Features Section -->
+        <div style="background: #EAF6FB; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #0B1F2A; margin: 0 0 10px 0; font-size: 16px;">What's New in Your Plan?</h3>
+            <ul style="color: #475569; font-size: 14px; margin: 10px 0; padding-left: 20px;">
+                <li>Access to advanced analytics and reporting</li>
+                <li>Priority customer support</li>
+                <li>Enhanced data storage capacity</li>
+                <li>Additional customization options</li>
+            </ul>
+        </div>
+
+        <!-- Contact -->
+        <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #64748B; font-size: 14px; margin: 0 0 10px 0;">
+                Questions about your new plan? Contact us at
+                <a href="mailto:support@medicare.com"
+                    style="color: #1D4ED8; text-decoration: none;">support@medicare.com</a>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #D4ECF6;">
+            <p style="color: #64748B; font-size: 12px; margin: 0;">
+                © 2026 Medicare. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

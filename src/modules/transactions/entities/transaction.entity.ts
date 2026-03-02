@@ -8,10 +8,9 @@ import {
   JoinColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
+import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { TransactionType } from './transaction-type.entity';
 import { Account } from '../../accounts/entities/accounts.entity';
-import { ClinicAdminInformation } from '../../accounts/entities/clinic-admin-information.entity';
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
@@ -38,9 +37,9 @@ export class Transaction {
   @Column({ name: 'clinic_id', type: 'uuid', nullable: true })
   clinicId?: string;
 
-  @ManyToOne(() => ClinicAdminInformation, { onDelete: 'SET NULL' })
+  @ManyToOne(() => Account, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic?: ClinicAdminInformation;
+  clinic?: Account;
 
   @Column({ name: 'sender_account_id', type: 'uuid', nullable: true })
   senderAccountId?: string;
@@ -55,11 +54,11 @@ export class Transaction {
   @Column({ name: 'subcription_id', type: 'uuid', nullable: true })
   subscriptionId?: string;
 
-  @ManyToOne(() => ClinicSubscriptionHistory, {
+  @ManyToOne(() => ClinicSubscription, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'subcription_id' })
-  subscription?: ClinicSubscriptionHistory;
+  subscription?: ClinicSubscription;
   @Column({ name: 'transaction_type_id', type: 'uuid', nullable: true })
   transactionTypeId?: string;
 
@@ -102,7 +101,12 @@ export class Transaction {
   @Column({ name: 'transfer_amount', type: 'bigint', nullable: true })
   transferAmount?: number;
 
-  @Column({ name: 'transfer_type', type: 'enum', enum: PaymentDirection, nullable: true })
+  @Column({
+    name: 'transfer_type',
+    type: 'enum',
+    enum: PaymentDirection,
+    nullable: true,
+  })
   transferType?: PaymentDirection;
 
   @Column({ name: 'accumulated', type: 'bigint', nullable: true })
@@ -116,9 +120,6 @@ export class Transaction {
 
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
-
-  @Column({ name: 'metadata', type: 'jsonb', nullable: true })
-  metadata?: Record<string, unknown>;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

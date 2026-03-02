@@ -4,14 +4,14 @@ services:
   db:
     # pgvector image with PostgreSQL 16 (most stable with pgvector support)
     image: pgvector/pgvector:${POSTGRES_VERSION:-pg16}
-    container_name: ${POSTGRES_CONTAINER_NAME:-medicare_postgres}
+    container_name: ${POSTGRES_CONTAINER_NAME:-bonix_postgres}
     restart: unless-stopped
     ports:
       - '${POSTGRES_PORT:-15432}:5432'
     environment:
       POSTGRES_USER: ${POSTGRES_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DATABASE:-medicare}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-bonix}
       # Performance optimization
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
     volumes:
@@ -31,14 +31,43 @@ services:
     # Shared memory for PostgreSQL (optimized for complex queries)
     shm_size: 256mb
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-postgres} -d ${POSTGRES_DATABASE:-medicare}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-postgres} -d ${POSTGRES_DATABASE:-bonix}" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     networks:
-      - medicare-network
+      - bonix-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${REDIS_CONTAINER_NAME:-medicare_redis}
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    command: >
+      redis-server --appendonly yes --appendfsync everysec --maxmemory ${REDIS_MAX_MEMORY:-256mb} --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      # Store Redis data in project folder (gitignored)
+      - ./database/redis_data:/data
+    # Resource limits for Docker Desktop Windows
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - bonix-network
 
 networks:
-  medicare-network:
+  bonix-network:
     driver: bridge

@@ -46,7 +46,7 @@ export class ContractsService {
      * @throws NotFoundException if employee not found
      * @throws BadRequestException if roles do not match
      */
-    async createPackage(dto: CreateContractPackageDto, clinicId: string): Promise<ContractPackage> {
+    async createPackage(dto: CreateContractPackageDto, clinicManagerId: string): Promise<ContractPackage> {
         // 1. Validate Employee
         const employee = await this.accountsService.findAccountEntityById(dto.employeeId);
         if (!employee) {
@@ -74,7 +74,7 @@ export class ContractsService {
             headerAddress,
             clinicRepresentative,
             position,
-            clinicId: clinicId,
+            clinicManagerId: clinicManagerId,
         });
 
         return this.contractPackageRepository.save(contractPackage);
@@ -99,7 +99,7 @@ export class ContractsService {
         if (!contractPackage) throw new NotFoundException('Contract package not found');
 
         // Verify user is part of the contract
-        if (contractPackage.clinicId !== userId && contractPackage.employeeId !== userId) {
+        if (contractPackage.clinicManagerId !== userId && contractPackage.employeeId !== userId) {
             throw new UnauthorizedException('User is not a party in this contract');
         }
 
@@ -112,7 +112,7 @@ export class ContractsService {
             if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
                 throw new BadRequestException('Not your turn to sign or contract not ready');
             }
-        } else if (contractPackage.clinicId === userId) {
+        } else if (contractPackage.clinicManagerId === userId) {
             // Manager can only sign if status is PENDING_MANAGER_SIGNATURE
             if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
                 if (contractInfo.contractStatus === ContractStatus.PENDING_SIGNATURE) {
@@ -173,6 +173,18 @@ export class ContractsService {
         let contractInfo = await this.clinicContractInfoRepository.findByContractId(packageId);
 
         if (contractInfo) {
+            // Check status to enforce locking
+            if (contractInfo.contractStatus === ContractStatus.PENDING_MANAGER_SIGNATURE ||
+                contractInfo.contractStatus === ContractStatus.CURRENT) {
+                throw new BadRequestException('Cannot edit contract information after employee has signed.');
+            }
+
+            // If file was uploaded but not signed, reset to DRAFT to force re-upload with new terms
+            if (contractInfo.contractStatus === ContractStatus.PENDING_SIGNATURE) {
+                contractInfo.contractStatus = ContractStatus.DRAFT;
+                contractInfo.contractFile = null; // Clear file as terms changed
+            }
+
             // Update existing
             Object.assign(contractInfo, dto);
             return this.clinicContractInfoRepository.save(contractInfo);
@@ -273,9 +285,31 @@ export class ContractsService {
         }
 
         const userAccount = await this.accountsService.findAccountEntityById(userId);
-        if (!userAccount.encryptedPrivateKey) throw new BadRequestException('User does not have digital keys generated');
+        // Determine which Private Key to use
+        let privateKey: string;
 
-        const privateKey = userAccount.encryptedPrivateKey;
+        if (contractPackage.clinicManagerId === userId) {
+            // If Manager is signing, use the Parent's (Clinic Admin) Private Key
+            if (userAccount.parentId) {
+                const parentAccount = await this.accountsService.findAccountEntityById(userAccount.parentId);
+                if (!parentAccount || !parentAccount.encryptedPrivateKey) {
+                    throw new BadRequestException('Clinic Admin (Parent) does not have digital keys generated');
+                }
+                privateKey = parentAccount.encryptedPrivateKey;
+            } else {
+                // Fallback for Admin signing directly (if clinicId = Admin ID)
+                if (!userAccount.encryptedPrivateKey) {
+                    throw new BadRequestException('Clinic Admin does not have digital keys generated');
+                }
+                privateKey = userAccount.encryptedPrivateKey;
+            }
+        } else {
+            // If Employee is signing, use their own Private Key
+            if (!userAccount.encryptedPrivateKey) {
+                throw new BadRequestException('User does not have digital keys generated');
+            }
+            privateKey = userAccount.encryptedPrivateKey;
+        }
 
         let fileHash: string;
         // Re-using internal calculateFileHash logic or calling it if available.
@@ -300,7 +334,17 @@ export class ContractsService {
             contractInfo.contractStatus = ContractStatus.PENDING_MANAGER_SIGNATURE;
             await this.clinicContractInfoRepository.save(contractInfo);
 
-        } else if (contractPackage.clinicId === userId) {
+            // Notify Manager
+            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
+            if (manager && manager.email) {
+                await this.mailerService.sendContractSignedNotificationToManager(
+                    manager.email,
+                    userAccount.username || 'Employee',
+                    contractId
+                );
+            }
+
+        } else if (contractPackage.clinicManagerId === userId) {
             // --- MANAGER SIGNING ---
 
             if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
@@ -334,6 +378,16 @@ export class ContractsService {
             // Final Status
             contractInfo.contractStatus = ContractStatus.CURRENT;
             await this.clinicContractInfoRepository.save(contractInfo);
+
+            // Notify Employee
+            if (employeeAccount && employeeAccount.email) {
+                await this.mailerService.sendContractCompletedNotificationToEmployee(
+                    employeeAccount.email,
+                    userAccount.username || 'Manager',
+                    contractId,
+                    contractInfo.contractFile
+                );
+            }
         } else {
             throw new UnauthorizedException('User is not a party in this contract');
         }
@@ -360,8 +414,8 @@ export class ContractsService {
 
         // Verify Manager
         if (contractPackage.managerSignature) {
-            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicId);
-            if (manager.publicKey) {
+            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
+            if (manager && manager.publicKey) {
                 const verify = crypto.createVerify('SHA256');
                 verify.update(fileHash);
                 verify.end();
@@ -379,7 +433,7 @@ export class ContractsService {
         // Verify Employee
         if (contractPackage.employeeSignature) {
             const employee = await this.accountsService.findAccountEntityById(contractPackage.employeeId);
-            if (employee.publicKey) {
+            if (employee && employee.publicKey) {
                 const verify = crypto.createVerify('SHA256');
                 verify.update(fileHash);
                 verify.end();
@@ -445,14 +499,15 @@ export class ContractsService {
             throw new BadRequestException(`Failed to upload file to Cloudinary: ${error.message}`);
         }
     }
-    async getPackagesByClinic(
-        clinicId: string,
+
+    async getPackagesByManager(
+        clinicManagerId: string,
         employeeName?: string,
         page: number = 1,
         limit: number = 10,
     ) {
-        const [packages, total] = await this.contractPackageRepository.findPackagesByClinicWithFilters(
-            clinicId,
+        const [packages, total] = await this.contractPackageRepository.findPackagesByManagerWithFilters(
+            clinicManagerId,
             employeeName,
             page,
             limit,

@@ -11,7 +11,7 @@ import {
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { SubscriptionService } from './subscription-service.entity';
-import { SubscriptionStatus } from '../enums';
+import { RegistrationStatus } from '../enums';
 
 /**
  * ClinicSubscription Entity
@@ -41,19 +41,19 @@ export class ClinicSubscription {
   @JoinColumn({ name: 'service_id' })
   service?: SubscriptionService;
 
-  @Column({ name: 'subscription_date', type: 'timestamptz' })
+  @Column({ name: 'subscription_date', type: 'timestamptz', nullable: true })
   subscriptionDate: Date;
 
-  @Column({ name: 'expiration_date', type: 'timestamptz' })
+  @Column({ name: 'expiration_date', type: 'timestamptz', nullable: true })
   expirationDate: Date;
 
   @Column({
     name: 'subscription_status',
     type: 'enum',
-    enum: SubscriptionStatus,
-    default: SubscriptionStatus.PENDING_DOCUMENT_UPLOAD,
+    enum: RegistrationStatus,
+    default: RegistrationStatus.PENDING_SEPAY_SETUP,
   })
-  subscriptionStatus: SubscriptionStatus;
+  subscriptionStatus: RegistrationStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

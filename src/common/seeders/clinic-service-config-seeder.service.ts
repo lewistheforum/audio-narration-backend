@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ClinicServiceConfig } from '../../modules/service-configs/entities/clinic-service-config.entity';
 import { ClinicServiceConfigRepository } from '../../modules/service-configs/repositories/clinic-service-config.repository';
 import { ClinicServiceRepository } from '../../modules/clinic-services/repositories/clinic-service.repository';
+import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 import { SERVICE_NOTES } from '../constants/medical-terms';
@@ -27,6 +28,7 @@ export class ClinicServiceConfigSeederService {
     private readonly clinicServiceConfigRepository: ClinicServiceConfigRepository,
     private readonly clinicServiceRepository: ClinicServiceRepository,
     private readonly accountRepository: AccountRepository,
+    private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
   ) {}
 
   /**
@@ -38,10 +40,16 @@ export class ClinicServiceConfigSeederService {
     try {
       this.logger.log('Starting to seed clinic service configs...');
 
+      // Check active subscriptions to filter clinics
+      const activeClinicIds =
+        await this.clinicSubscriptionRepository.findActiveClinicIds();
+
       // Get all CLINIC_MANAGER accounts
       const allAccounts = await this.accountRepository.findAllAccounts();
       const clinicManagers = allAccounts.filter(
-        (account) => account.role === AccountRole.CLINIC_MANAGER,
+        (account) =>
+          account.role === AccountRole.CLINIC_MANAGER &&
+          activeClinicIds.includes(account.parentId),
       );
 
       if (clinicManagers.length === 0) {
@@ -118,7 +126,7 @@ export class ClinicServiceConfigSeederService {
    */
   private generatePrice(serviceCode: string): number {
     const basePrice = 100000;
-    const multiplier = serviceCode.length % 5 + 1; // 1-5
+    const multiplier = (serviceCode.length % 5) + 1; // 1-5
     return basePrice * multiplier;
   }
 

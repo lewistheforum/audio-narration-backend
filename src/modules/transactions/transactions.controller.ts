@@ -19,6 +19,10 @@ import {
   PaymentResponseDto,
   SeepayCallbackDto,
   TransactionDetailDto,
+  CreateSubscriptionTransactionDto,
+  CreateNewSubscriptionDto,
+  RenewSubscriptionDto,
+  ChangePackageDto,
 } from './dto';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -40,6 +44,7 @@ import { SeepayAuthGuard } from './guards/seepay-auth.guard';
 @ApiExtraModels(PaymentResponseDto)
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) { }
+
 
   /**
    * Create payment QR for a specific prescription
@@ -70,6 +75,110 @@ export class TransactionsController {
     return {
       data: payment,
       message: 'Payment QR created successfully',
+    };
+  }
+
+  @Post('clinic/subscription-qr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'DEPRECATED: Use /renew instead. Tạo QR thanh toán cho đăng ký gói dịch vụ (Renewal Logic)' })
+  @ApiResponseData({
+    type: PaymentResponseDto,
+    status: HttpStatus.CREATED,
+    message: 'Subscription QR created successfully',
+  })
+  async createSubscriptionQr(@User() user: Account, @Body() body: CreateSubscriptionTransactionDto) {
+    let clinicId = user._id;
+
+    // If Manager, use Parent's Clinic ID
+    if (user.role === AccountRole.CLINIC_MANAGER) {
+      if (!user.parentId) {
+        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+      }
+      clinicId = user.parentId;
+    }
+
+    // Legacy support: Map to Renewal Logic (ignores body.serviceId if provided, strictly uses current subscription's service)
+    const payment = await this.transactionsService.createRenewalQr(clinicId);
+    return {
+      data: payment,
+      message: 'Subscription QR created successfully',
+    };
+  }
+
+  @Post('subscription/new')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tạo QR cho đăng ký mới (Onboarding)' })
+  async createNewSubscriptionQr(@User() user: Account, @Body() body: CreateNewSubscriptionDto) {
+    let clinicId = user._id;
+
+    // If Manager, use Parent's Clinic ID
+    if (user.role === AccountRole.CLINIC_MANAGER) {
+      if (!user.parentId) {
+        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+      }
+      clinicId = user.parentId;
+    }
+
+    const duration = body.duration || 1;
+    const payment = await this.transactionsService.createNewSubscriptionQr(clinicId, body.serviceId, duration);
+    return {
+      data: payment,
+      message: 'New Subscription QR created successfully',
+    };
+  }
+
+  @Post('subscription/renew')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tạo QR gia hạn gói hiện tại' })
+  async createRenewalQr(@User() user: Account) {
+    let clinicId = user._id;
+
+    // If Manager, use Parent's Clinic ID
+    if (user.role === AccountRole.CLINIC_MANAGER) {
+      if (!user.parentId) {
+        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+      }
+      clinicId = user.parentId;
+    }
+
+    const payment = await this.transactionsService.createRenewalQr(clinicId);
+    return {
+      data: payment,
+      message: 'Renewal QR created successfully',
+    };
+  }
+
+  @Post('subscription/change-package')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tạo QR đổi gói dịch vụ' })
+  async createPackageChangeQr(@User() user: Account, @Body() body: ChangePackageDto) {
+    let clinicId = user._id;
+
+    // If Manager, use Parent's Clinic ID
+    if (user.role === AccountRole.CLINIC_MANAGER) {
+      if (!user.parentId) {
+        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+      }
+      clinicId = user.parentId;
+    }
+
+    const duration = body.duration || 1;
+    const payment = await this.transactionsService.createPackageChangeQr(clinicId, body.targetServiceId, duration);
+    return {
+      data: payment,
+      message: 'Package Change QR created successfully',
     };
   }
 

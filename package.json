@@ -11,13 +11,16 @@
     "start:dev": "nodemon",
     "start:prod": "node dist/main",
     "build": "nest build",
+    "type-check": "npx tsc --noEmit --pretty",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:restart": "docker-compose restart",
     "docker:logs": "docker-compose logs -f db",
+    "docker:logs:redis": "docker-compose logs -f redis",
     "docker:ps": "docker-compose ps",
-    "docker:clean": "docker-compose down -v && rmdir /s /q database\\postgres_data 2>nul || rm -rf database/postgres_data",
+    "docker:clean": "docker-compose down -v && (rmdir /s /q database\\postgres_data 2>nul & rmdir /s /q database\\redis_data 2>nul) || (rm -rf database/postgres_data && rm -rf database/redis_data)",
     "docker:setup": "docker-compose up -d && timeout /t 20 && pnpm run script:enable-vector",
+    "script:setup-database-vector": "pnpm run script:enable-vector",
     "script:schema-diff": "ts-node -r tsconfig-paths/register src/common/scripts/check-schema-diff.ts",
     "script:sync-local-db": "ts-node -r tsconfig-paths/register src/common/scripts/sync-local-db.ts",
     "script:analyze-excel": "ts-node -r tsconfig-paths/register src/common/scripts/analyze-excel.ts",
@@ -26,7 +29,10 @@
     "script:generate-encryption-key": "ts-node -r tsconfig-paths/register src/common/scripts/generate-encryption-key.ts",
     "script:enable-vector": "ts-node -r tsconfig-paths/register src/common/scripts/enable-vector.ts",
     "script:check-seeders": "ts-node -r tsconfig-paths/register src/common/scripts/check-seeders.ts",
-    "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db"
+    "script:clear-db": "ts-node -r tsconfig-paths/register src/common/scripts/clear-db.ts",
+    "script:check-and-sync": "pnpm run script:schema-diff && pnpm run script:sync-local-db",
+    "script:create-tables": "ts-node -r tsconfig-paths/register src/common/scripts/create-tables.ts",
+    "script:detailed-build": "ts-node -r tsconfig-paths/register src/common/scripts/detailed-build.ts"
   },
   "nodemonConfig": {
     "watch": [
@@ -61,6 +67,7 @@
     "@nestjs/platform-express": "^11.1.12",
     "@nestjs/platform-fastify": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.1.6",
+    "@nestjs/schedule": "^6.1.1",
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.6",
@@ -74,6 +81,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^4.29.1",
     "form-data": "^4.0.5",
+    "ioredis": "^5.9.3",
     "mongoose": "^8.15.0",
     "nodemailer": "^7.0.7",
     "passport": "^0.7.0",
@@ -86,9 +94,11 @@
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "typeorm": "^0.3.27"
+    "typeorm": "^0.3.27",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.2.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.1.6",
     "@types/bcrypt": "^5.0.2",

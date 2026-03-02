@@ -20,10 +20,22 @@ export const SPECIALIZATIONS = [
 ];
 
 export const PROS = [
-  ['Highly qualified trauma orthopedic specialists', 'Modern X-ray, MRI equipment'],
-  ['Advanced physical therapy methods', 'International standard bone density measurement'],
-  ['Spine and joint replacement specialists', 'Minimally invasive arthroscopic surgery'],
-  ['Comprehensive rehabilitation programs', 'Specialized sports trauma treatment'],
+  [
+    'Highly qualified trauma orthopedic specialists',
+    'Modern X-ray, MRI equipment',
+  ],
+  [
+    'Advanced physical therapy methods',
+    'International standard bone density measurement',
+  ],
+  [
+    'Spine and joint replacement specialists',
+    'Minimally invasive arthroscopic surgery',
+  ],
+  [
+    'Comprehensive rehabilitation programs',
+    'Specialized sports trauma treatment',
+  ],
   ['Modern facilities', 'Health insurance and reasonable costs'],
 ];
 
@@ -42,7 +54,13 @@ export const DOCTOR_SPECIALTIES = [
   'Musculoskeletal Therapy Specialty',
 ];
 
-export const NATIONALITIES = ['Vietnam', 'Vietnamese Overseas', 'Vietnamese Chinese', 'Vietnamese American', 'Vietnamese British'];
+export const NATIONALITIES = [
+  'Vietnam',
+  'Vietnamese Overseas',
+  'Vietnamese Chinese',
+  'Vietnamese American',
+  'Vietnamese British',
+];
 
 export const WORK_SPECIALTIES = [
   'Orthopedic treatment doctor',
@@ -106,7 +124,12 @@ export const SERVICE_NAMES = {
     name: 'General Consultation',
     code: 'CONSULTATION_GENERAL_001',
     description: 'General consultation for adults',
-    functions: ['General health check', 'Blood pressure measurement', 'Heart and lung auscultation', 'Abdominal examination'],
+    functions: [
+      'General health check',
+      'Blood pressure measurement',
+      'Heart and lung auscultation',
+      'Abdominal examination',
+    ],
   },
   CONSULTATION_ENT: {
     name: 'ENT Consultation',
@@ -118,19 +141,32 @@ export const SERVICE_NAMES = {
     name: 'Abdominal Ultrasound',
     code: 'ULTRASOUND_ABDOMINAL_001',
     description: 'General abdominal ultrasound',
-    functions: ['Liver examination', 'Gallbladder examination', 'Spleen examination', 'Kidney examination'],
+    functions: [
+      'Liver examination',
+      'Gallbladder examination',
+      'Spleen examination',
+      'Kidney examination',
+    ],
   },
   ULTRASOUND_OBSTETRIC: {
     name: 'Obstetric Ultrasound',
     code: 'ULTRASOUND_OBSTETRIC_001',
     description: 'Periodic obstetric ultrasound',
-    functions: ['Fetal heart check', 'Fetal size measurement', 'Fetal position assessment'],
+    functions: [
+      'Fetal heart check',
+      'Fetal size measurement',
+      'Fetal position assessment',
+    ],
   },
   XRAY_CHEST: {
     name: 'Chest X-Ray',
     code: 'XRAY_CHEST_001',
     description: 'Chest X-ray examination',
-    functions: ['Lung assessment', 'Heart examination', 'Abnormality detection'],
+    functions: [
+      'Lung assessment',
+      'Heart examination',
+      'Abnormality detection',
+    ],
   },
   XRAY_LIMB: {
     name: 'Limb X-Ray',
@@ -142,7 +178,12 @@ export const SERVICE_NAMES = {
     name: 'Complete Blood Count',
     code: 'LAB_CBC_001',
     description: 'Complete blood count test',
-    functions: ['Red blood cell count', 'White blood cell count', 'Platelet count', 'Hemoglobin'],
+    functions: [
+      'Red blood cell count',
+      'White blood cell count',
+      'Platelet count',
+      'Hemoglobin',
+    ],
   },
   LAB_GLUCOSE: {
     name: 'Glucose Test',
@@ -154,13 +195,21 @@ export const SERVICE_NAMES = {
     name: 'Bone Density Measurement',
     code: 'BONE_DENSITY_DEXA_001',
     description: 'Bone density measurement by DEXA method',
-    functions: ['Bone density assessment', 'Osteoporosis detection', 'Fracture risk assessment'],
+    functions: [
+      'Bone density assessment',
+      'Osteoporosis detection',
+      'Fracture risk assessment',
+    ],
   },
   PROCEDURE_VACCINE: {
     name: 'Vaccination',
     code: 'PROCEDURE_VACCINE_001',
     description: 'Preventive vaccination',
-    functions: ['Vaccine administration', 'Post-vaccination monitoring', 'Vaccination schedule consultation'],
+    functions: [
+      'Vaccine administration',
+      'Post-vaccination monitoring',
+      'Vaccination schedule consultation',
+    ],
   },
   PROCEDURE_DRESSING: {
     name: 'Dressing Change',
@@ -245,27 +294,27 @@ export const PARTY_B_SIGNERS = [
 ];
 
 export const OPERATING_LICENSES = [
-  'Operating license for orthopedic clinic No. {number}',
-  'Operating license for orthopedic clinic No. {number}',
-  'Operating license for orthopedic and trauma clinic No. {number}',
-  'Operating license for trauma orthopedics clinic No. {number}',
-  'Operating license for musculoskeletal therapy clinic No. {number}',
+  'https://scontent.fsgn5-9.fna.fbcdn.net/v/t39.30808-6/495964294_122190813968284082_2031134282026641728_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=833d8c&_nc_ohc=Z5CIrg7vewAQ7kNvwG7jbmT&_nc_oc=AdnM_HtymMYPYyh1_889HO6__2Y3p4h_GvVtZpOqx6FJL9mrUUW3Zquz3N-13ifogL0&_nc_zt=23&_nc_ht=scontent.fsgn5-9.fna&_nc_gid=sgHehkKl9u-QS3dQZKOg1g&oh=00_AftIWf1lyQ73ua-Hvfx8fdXKT7F2r04GtS7SJCvLz3QCAA&oe=6995EEDD',
+  'https://scontent.fsgn5-9.fna.fbcdn.net/v/t39.30808-6/495964294_122190813968284082_2031134282026641728_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=833d8c&_nc_ohc=Z5CIrg7vewAQ7kNvwG7jbmT&_nc_oc=AdnM_HtymMYPYyh1_889HO6__2Y3p4h_GvVtZpOqx6FJL9mrUUW3Zquz3N-13ifogL0&_nc_zt=23&_nc_ht=scontent.fsgn5-9.fna&_nc_gid=sgHehkKl9u-QS3dQZKOg1g&oh=00_AftIWf1lyQ73ua-Hvfx8fdXKT7F2r04GtS7SJCvLz3QCAA&oe=6995EEDD',
+  'https://scontent.fsgn5-12.fna.fbcdn.net/v/t39.30808-6/495964598_122190813992284082_211623923408794290_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=833d8c&_nc_ohc=KqPBVwTA6cwQ7kNvwFm6GLl&_nc_oc=AdmT4fQ-pVaNACJbzNFCld2y5oEE97wfmTQ7Y3f7yFX4I-ClIxK8pDszGkgipwqPaFQ&_nc_zt=23&_nc_ht=scontent.fsgn5-12.fna&_nc_gid=oOVSbjCOHUMIZ7wLZi3ZHQ&oh=00_AfubdtcaOb0SRaJsOAY0PTl4TXFbc2aIGbQ27FELfQCRcQ&oe=6995FB1D',
+  'https://scontent.fsgn5-12.fna.fbcdn.net/v/t39.30808-6/495964598_122190813992284082_211623923408794290_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=833d8c&_nc_ohc=KqPBVwTA6cwQ7kNvwFm6GLl&_nc_oc=AdmT4fQ-pVaNACJbzNFCld2y5oEE97wfmTQ7Y3f7yFX4I-ClIxK8pDszGkgipwqPaFQ&_nc_zt=23&_nc_ht=scontent.fsgn5-12.fna&_nc_gid=oOVSbjCOHUMIZ7wLZi3ZHQ&oh=00_AfubdtcaOb0SRaJsOAY0PTl4TXFbc2aIGbQ27FELfQCRcQ&oe=6995FB1D',
+  'https://scontent.fsgn5-9.fna.fbcdn.net/v/t39.30808-6/496009018_122190814016284082_7038272728913943125_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=833d8c&_nc_ohc=dI-H043wo5oQ7kNvwEj90vP&_nc_oc=AdnGtnolMgn1OneBYrW3m8Pw_aEM62Oi122U8KUH5Zr1iV5J1_RV0k_ofPMgF5_kQkM&_nc_zt=23&_nc_ht=scontent.fsgn5-9.fna&_nc_gid=FkZUxbpA6L1zB685U0SQTQ&oh=00_AfvxmdiP7XGMXTjtmW8yQiFN5kIwlofAm8ArZ-vNJebBww&oe=69960DDD',
 ];
 
 export const BUSINESS_LICENSES = [
-  'Business registration certificate for orthopedic clinic',
-  'Business registration certificate for orthopedic clinic',
-  'Business registration certificate for orthopedic and trauma clinic',
-  'Business registration certificate for trauma orthopedics clinic',
-  'Business registration certificate for musculoskeletal therapy clinic',
+  'https://healthguardhungary.com/wp-content/uploads/2023/05/SanthaAkosPAlicense-2024Sig-1024x660.jpg',
+  'https://healthguardhungary.com/wp-content/uploads/2023/05/SanthaAkosPAlicense-2024Sig-1024x660.jpg',
+  'https://media.licdn.com/dms/image/v2/D5622AQGckO8URI_WzQ/feedshare-shrink_800/feedshare-shrink_800/0/1725096061875?e=2147483647&v=beta&t=e5uYY-pGcJDQd1iyXrDL3aGTl9kAardU7GcUbrQwxF0',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRT0vTGKa9rbCyITr7XQzBGdw85KGJoXn5KZg&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSLn8KBngm3L3rt6Ef1zqzDZTbNZ3N81EVqVA&s',
 ];
 
 export const COMPLIANCE_DOCS = [
-  'Certificate of medical facility standards',
-  'Certificate of GMP standard clinic',
-  'Food safety certificate',
-  'Fire safety certificate',
-  'Environmental certificate',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSrNOfLU9g4gU_MCeU967AYSEuvgkUYE9xZXw&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXNCHrRodc0fvh2-OGXB4Z8ST5JECx7lNICQ&s',
+  'https://realdoctorsnotes.com/wordpress/wp-content/uploads/2024/08/Doctors-Note-for-back-Pain-Word.jpg',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSrNOfLU9g4gU_MCeU967AYSEuvgkUYE9xZXw&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXNCHrRodc0fvh2-OGXB4Z8ST5JECx7lNICQ&s',
 ];
 
 export const CLINIC_POSITIONS = [
@@ -284,4 +333,5 @@ export const DESCRIPTIONS = [
   'Dedicated orthopedic team with extensive experience in arthroscopic joint and spine surgery, committed to delivering the best treatment results.',
 ];
 
-export const EXPERIENCE_YEARS = (years: number): string => `${years} years of experience`;
+export const EXPERIENCE_YEARS = (years: number): string =>
+  `${years} years of experience`;

@@ -17,7 +17,7 @@ export class ClinicServiceCategoryRepository {
   constructor(
     @InjectRepository(ClinicServiceCategory)
     private readonly clinicServiceCategoryRepository: Repository<ClinicServiceCategory>,
-  ) { }
+  ) {}
 
   /**
    * Find All Clinic Service Categories
@@ -91,5 +91,17 @@ export class ClinicServiceCategoryRepository {
    */
   async count(): Promise<number> {
     return this.clinicServiceCategoryRepository.count();
+  }
+
+  /**
+   * Soft Delete Clinic Service Category by ID
+   *
+   * Soft deletes a category by its ID.
+   *
+   * @param {string} id - Category ID
+   * @returns {Promise<void>}
+   */
+  async softDelete(id: string): Promise<void> {
+    await this.clinicServiceCategoryRepository.softDelete(id);
   }
 }

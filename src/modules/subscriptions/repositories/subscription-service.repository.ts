@@ -19,8 +19,17 @@ export class SubscriptionServiceRepository {
   /**
    * Find all subscription services
    */
-  async findAll(includeDeleted: boolean = false): Promise<SubscriptionService[]> {
+  async findAll(
+    includeDeleted: boolean = false,
+    status?: string,
+  ): Promise<SubscriptionService[]> {
+    const where: any = {};
+    // if (status) {
+    //   where.status = status;
+    // }
+
     return this.repository.find({
+      where,
       withDeleted: includeDeleted,
     });
   }
@@ -110,5 +119,19 @@ export class SubscriptionServiceRepository {
    */
   async count(): Promise<number> {
     return this.repository.count();
+  }
+
+  /**
+   * Reset all is_popular to false
+   */
+  async resetAllPopular(): Promise<void> {
+    await this.repository.update({ isPopular: true }, { isPopular: false });
+  }
+
+  /**
+   * Set is_popular to true for specific service
+   */
+  async setPopular(serviceId: string): Promise<void> {
+    await this.repository.update({ _id: serviceId }, { isPopular: true });
   }
 }

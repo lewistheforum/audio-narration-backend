@@ -60,7 +60,7 @@ export class DoctorInformationSeederService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly doctorInfoRepository: DoctorInformationRepository,
-  ) {}
+  ) { }
 
   /**
    * Seed DoctorInformation records for all DOCTOR accounts
@@ -87,7 +87,7 @@ export class DoctorInformationSeederService {
       let createdCount = 0;
 
       for (const account of doctors) {
-        const existing = await this.doctorInfoRepository.findById(account._id);
+        const existing = await this.doctorInfoRepository.findByAccountId(account._id);
 
         if (existing) {
           continue;

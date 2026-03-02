@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Appointment } from './appointment.entity';
 import { Transaction } from '../../transactions/entities/transaction.entity';
+import { PaymentType } from '../enums/payment-type.enum';
 
 /**
  * AppointmentPackage Entity
@@ -46,8 +47,13 @@ export class AppointmentPackage {
   @Column({ name: 'status', type: 'text', nullable: true })
   status?: string;
 
-  @Column({ name: 'payment_type', type: 'text', nullable: true })
-  paymentType?: string;
+  @Column({
+    name: 'payment_type',
+    type: 'enum',
+    enum: PaymentType,
+    nullable: true,
+  })
+  paymentType?: PaymentType;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

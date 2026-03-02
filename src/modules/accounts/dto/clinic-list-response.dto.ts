@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AccountRole, AccountStatus } from '../enums';
+import { ClinicAdminInformation } from '../entities';
 
 /**
  * Clinic Info DTO
@@ -159,6 +160,14 @@ export class ClinicItemDto {
   status: AccountStatus;
 
   @ApiProperty({
+    description: 'Subscription status',
+    example: 'ACTIVE',
+    required: false,
+    nullable: true,
+  })
+  subscriptionStatus?: string;
+
+  @ApiProperty({
     description: 'Clinic information',
     type: ClinicInfoDto,
   })
@@ -176,20 +185,12 @@ export class ClinicItemDto {
     required: false,
     nullable: true,
   })
-  clinicAdminName?: string;
-
-  @ApiProperty({
-    description: 'Final clinic name combining clinic admin name and branch name',
-    example: 'City Medical Group Branch 1',
-    required: false,
-    nullable: true,
-  })
-  finalClinicName?: string;
+  clinicAdminInfor?: ClinicAdminInformation;
 
   constructor(
     account: any,
     clinicInfo: any,
-    address: any,
+    address?: any,
     clinicAdminInfo?: any,
   ) {
     this.id = account._id;
@@ -199,6 +200,7 @@ export class ClinicItemDto {
     this.profilePicture = account.profilePicture;
     this.role = account.role;
     this.status = account.status;
+    this.subscriptionStatus = account.subscription?.subscriptionStatus;
 
     this.clinicInfo = {
       id: clinicInfo._id,
@@ -210,37 +212,38 @@ export class ClinicItemDto {
     };
 
     this.address = {
-      id: address._id,
-      address: address.address,
-      ward: address.ward,
-      wardName: address.wardName,
-      district: address.district,
-      districtName: address.districtName,
-      province: address.province,
-      provinceName: address.provinceName,
+      id: address?._id,
+      address: address?.address,
+      ward: address?.ward,
+      wardName: address?.wardName,
+      district: address?.district,
+      districtName: address?.districtName,
+      province: address?.province,
+      provinceName: address?.provinceName,
     };
 
     // Handle clinic admin information and compute final clinic name
     if (clinicAdminInfo) {
-      this.clinicAdminName = clinicAdminInfo.clinicName || null;
+      this.clinicAdminInfor = clinicAdminInfo;
 
-      // Compute final clinic name: clinic_admin_name + " " + clinic_branch_name
-      // Handle null/empty values safely
+      // Compute final clinic name
       const adminName = (clinicAdminInfo.clinicName || '').trim();
       const branchName = (clinicInfo.clinicBranchName || '').trim();
 
-      if (adminName && branchName) {
-        this.finalClinicName = `${adminName} ${branchName}`;
-      } else if (adminName) {
-        this.finalClinicName = adminName;
+      // For CLINIC_ADMIN, clinicInfo is adapted from clinicAdminInfo, so branchName === adminName.
+      // Use adminName as finalClinicName.
+      if (adminName) {
+        this.clinicAdminInfor.clinicName = adminName;
       } else if (branchName) {
-        this.finalClinicName = branchName;
+        this.clinicInfo.clinicBranchName = branchName;
       } else {
-        this.finalClinicName = null;
+        this.clinicInfo.fullName = null;
       }
     } else {
-      this.clinicAdminName = null;
-      this.finalClinicName = null;
+      this.clinicAdminInfor = null;
+      // If no admin info, fall back to branch name (typical for MANAGER accounts)
+      this.clinicInfo.clinicBranchName =
+        (clinicInfo.clinicBranchName || '').trim() || null;
     }
   }
 }

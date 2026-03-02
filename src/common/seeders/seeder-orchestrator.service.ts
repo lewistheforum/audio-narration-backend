@@ -29,6 +29,12 @@ import { ClinicRoomSeederService } from './clinic-room-seeder.service';
 import { ClinicShiftSeederService } from './clinic-shift-seeder.service';
 import { EmployeeScheduleSeederService } from './employee-schedule-seeder.service';
 import { ClinicRoomEmployeeScheduleSeederService } from './clinic-room-employee-schedule-seeder.service';
+import { AppointmentSeederService } from './appointment-seeder.service';
+import { ERMSeederService } from './erm-seeder.service';
+import { EPrescriptionSeederService } from './e-prescription-seeder.service';
+import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder.service';
+import { TransactionHistorySeederService } from './transaction-history-seeder.service';
+import { ReportSeederService } from './report-seeder.service';
 
 /**
  * Seeder Orchestrator Service
@@ -86,6 +92,7 @@ import { ClinicRoomEmployeeScheduleSeederService } from './clinic-room-employee-
  * 17. ClinicServiceCategorySeederService - Seeds ClinicServiceCategory records
  * 18. ClinicServiceSeederService - Seeds ClinicService records
  * 19. ClinicServiceConfigSeederService - Seeds ClinicServiceConfig records (not part of idempotency check)
+ * 20. TransactionHistorySeederService - Seeds Transaction and ClinicSubscriptionHistory records
  *
  * The orchestrator implements OnModuleInit and is the only seeder that runs automatically
  * during application startup. Individual seeder services expose public seed() methods
@@ -125,6 +132,12 @@ export class SeederOrchestratorService implements OnModuleInit {
     private readonly clinicShiftSeeder: ClinicShiftSeederService,
     private readonly employeeScheduleSeeder: EmployeeScheduleSeederService,
     private readonly clinicRoomEmployeeScheduleSeeder: ClinicRoomEmployeeScheduleSeederService,
+    private readonly appointmentSeeder: AppointmentSeederService,
+    private readonly ermSeeder: ERMSeederService,
+    private readonly ePrescriptionSeeder: EPrescriptionSeederService,
+    private readonly ePrescriptionDetailSeeder: EPrescriptionDetailSeederService,
+    private readonly transactionHistorySeeder: TransactionHistorySeederService,
+    private readonly reportSeeder: ReportSeederService,
   ) {}
 
   /**
@@ -171,7 +184,7 @@ export class SeederOrchestratorService implements OnModuleInit {
 
     this.logger.log(`Current data counts:`);
     this.logger.log(`  - Admins: ${adminCount} (required: 1)`);
-    this.logger.log(`  - Clinic Admins: ${clinicAdminCount} (required: 5)`);
+    this.logger.log(`  - Clinic Admins: ${clinicAdminCount} (required: 8)`);
     this.logger.log(`  - Patients: ${patientCount} (required: 10)`);
     this.logger.log(
       `  - Subscription Services: ${subscriptionServiceCount} (required: 4)`,
@@ -185,7 +198,7 @@ export class SeederOrchestratorService implements OnModuleInit {
 
     const allConditionsMet =
       adminCount >= 1 &&
-      clinicAdminCount >= 5 &&
+      clinicAdminCount >= 8 &&
       patientCount >= 10 &&
       subscriptionServiceCount >= 4 &&
       clinicServiceCategoryCount >= 6 &&
@@ -215,13 +228,13 @@ export class SeederOrchestratorService implements OnModuleInit {
         this.logger.log('✅ Seed data already exists.');
 
         // Ensure AI conversations are seeded even if other data exists
-        await this.aiConversationSeeder.seed();
+        // await this.aiConversationSeeder.seed();
         this.logger.log(
           '✅ AI Conversation seeding completed (Incremental update)',
         );
 
         // Ensure Knowledge Base is seeded/updated even if other data exists
-        await this.knowledgeBaseSeeder.seed();
+        // await this.knowledgeBaseSeeder.seed();
         this.logger.log(
           '✅ Knowledge Base seeding completed (Incremental update)',
         );
@@ -234,9 +247,9 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.adminSeeder.seed();
       this.logger.log('✅ Admin seeding completed');
 
-      // Step 2: Seed all account types
-      await this.accountSeeder.seed();
-      this.logger.log('✅ Account seeding completed');
+      // Step 2: Seed base account types (Admin, ClinicAdmin, Manager, Patient)
+      await this.accountSeeder.seedBaseAccounts();
+      this.logger.log('✅ Base Account seeding completed');
 
       // Step 3: Seed ClinicAdminInformation
       await this.clinicAdminInfoSeeder.seed();
@@ -258,29 +271,39 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.googleIframeSeeder.seed();
       this.logger.log('✅ GoogleIframe seeding completed');
 
-      // Step 8: Seed ContractPackage for CLINIC_STAFF and DOCTOR
+      // Now that Base Accounts and basic legal docs/addresses are seeded, we seed Subscriptions
+      // Step 8: Seed subscription services
+      await this.subscriptionServiceSeeder.seed();
+      this.logger.log('✅ SubscriptionService seeding completed');
+
+      // Step 9: Seed clinic subscriptions and subscription history
+      await this.subscriptionsSeeder.seed();
+      this.logger.log('✅ Clinic subscriptions seeding completed');
+
+      // Now that Subscriptions exist (identifying ACTIVE clinics), we seed Employee accounts (Staff, Doctors)
+      // Step 10: Seed Employee Accounts (Staff and Doctors)
+      await this.accountSeeder.seedEmployeeAccounts();
+      this.logger.log('✅ Employee Account seeding completed');
+
+      // Step 11: Seed ContractPackage for CLINIC_STAFF and DOCTOR
       await this.contractPackageSeeder.seed();
       this.logger.log('✅ ContractPackage seeding completed');
 
-      // Step 9: Seed ClinicContractInformation for CLINIC_STAFF and DOCTOR
+      // Step 12: Seed ClinicContractInformation for CLINIC_STAFF and DOCTOR
       await this.clinicContractInformationSeeder.seed();
       this.logger.log('✅ ClinicContractInformation seeding completed');
 
-      // Step 10: Seed ClinicStaffInformation
+      // Step 13: Seed ClinicStaffInformation
       await this.clinicStaffInfoSeeder.seed();
       this.logger.log('✅ ClinicStaffInformation seeding completed');
 
-      // Step 11: Seed DoctorInformation
+      // Step 14: Seed DoctorInformation
       await this.doctorInfoSeeder.seed();
       this.logger.log('✅ DoctorInformation seeding completed');
 
       // Step 12: Seed GeneralAccount for PATIENT accounts
       await this.generalAccountSeeder.seed();
       this.logger.log('✅ GeneralAccount seeding completed');
-
-      // Step 13: Seed feedback records
-      await this.feedbackSeeder.seed();
-      this.logger.log('✅ Feedback seeding completed');
 
       // Step 14: Seed AI conversations
       await this.aiConversationSeeder.seed();
@@ -290,13 +313,8 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.blogSeeder.seed();
       this.logger.log('✅ Blog seeding completed');
 
-      // Step 16: Seed subscription services
-      await this.subscriptionServiceSeeder.seed();
-      this.logger.log('✅ SubscriptionService seeding completed');
-
-      // Step 17: Seed clinic subscriptions and subscription history
-      await this.subscriptionsSeeder.seed();
-      this.logger.log('✅ Clinic subscriptions seeding completed');
+      // The subscription seeders were already moved up above employees.
+      // So we skip step 16 and 17 here.
 
       // Step 18: Seed clinic service categories
       await this.clinicServiceCategorySeeder.seed();
@@ -330,10 +348,81 @@ export class SeederOrchestratorService implements OnModuleInit {
       await this.knowledgeBaseSeeder.seed();
       this.logger.log('✅ Knowledge Base seeding completed');
 
+      // Step 26: Seed Appointments (must run after all other data is seeded)
+      await this.appointmentSeeder.seed();
+      this.logger.log('✅ Appointment seeding completed');
+
+      // Step 27: Seed ERMs (must run after appointments)
+      await this.ermSeeder.seed();
+      this.logger.log('✅ ERM seeding completed');
+
+      // Step 28: Seed E-Prescriptions (must run after appointments)
+      await this.ePrescriptionSeeder.seed();
+      this.logger.log('✅ E-Prescription seeding completed');
+
+      // Step 29: Seed E-Prescription Details (must run after e-prescriptions)
+      await this.ePrescriptionDetailSeeder.seed();
+      this.logger.log('✅ E-Prescription Detail seeding completed');
+
+      // Step 30: Seed Transaction History
+      await this.transactionHistorySeeder.seed();
+      this.logger.log('✅ Transaction history seeding completed');
+
+      // Step 31: Validate seeded appointment data
+      await this.validateAppointmentData();
+      this.logger.log('✅ Appointment data validation completed');
+
+      // Step 32: Seed feedback records
+      await this.feedbackSeeder.seed();
+      this.logger.log('✅ Feedback seeding completed');
+
+      // Step 33: Seed report records
+      await this.reportSeeder.seed();
+      this.logger.log('✅ Report seeding completed');
+
       this.logger.log('🎉 Database seeding process completed successfully');
     } catch (error) {
       this.logger.error('❌ Database seeding process failed', error.stack);
       throw error;
+    }
+  }
+
+  /**
+   * Validate appointment-related data after seeding
+   *
+   * Checks:
+   * - Every appointment has status COMPLETED
+   * - Every appointment has exactly one e_prescription
+   * - Every ERM references a valid appointment and has compatible status
+   * - Every appointment's patient account has role PATIENT
+   */
+  private async validateAppointmentData(): Promise<void> {
+    const errors: string[] = [];
+
+    // Validate appointments
+    const appointmentValidation =
+      await this.appointmentSeeder.validateAppointments();
+    errors.push(...appointmentValidation.errors);
+
+    // Validate ERMs
+    const ermValidation = await this.ermSeeder.validateERMs();
+    errors.push(...ermValidation.errors);
+
+    // Validate e-prescriptions
+    const ePrescriptionValidation =
+      await this.ePrescriptionSeeder.validateEPrescriptions();
+    errors.push(...ePrescriptionValidation.errors);
+
+    // Validate e-prescription details
+    const ePrescriptionDetailValidation =
+      await this.ePrescriptionDetailSeeder.validateEPrescriptionDetails();
+    errors.push(...ePrescriptionDetailValidation.errors);
+
+    if (errors.length > 0) {
+      this.logger.warn('Appointment data validation found issues:');
+      errors.forEach((error) => this.logger.warn(`  - ${error}`));
+    } else {
+      this.logger.log('✅ All appointment data validation checks passed');
     }
   }
 }

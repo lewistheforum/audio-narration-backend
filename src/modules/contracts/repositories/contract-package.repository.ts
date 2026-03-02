@@ -37,11 +37,11 @@ export class ContractPackageRepository {
   }
 
   /**
-   * Find contract packages by clinic ID
+   * Find contract packages by clinic manager ID
    */
-  async findByClinicId(clinicId: string): Promise<ContractPackage[]> {
+  async findByManagerId(clinicManagerId: string): Promise<ContractPackage[]> {
     return this.repository.find({
-      where: { clinicId },
+      where: { clinicManagerId },
       relations: ['clinicAccount', 'employeeAccount'],
     });
   }
@@ -57,14 +57,14 @@ export class ContractPackageRepository {
   }
 
   /**
-   * Find contract package by clinic ID and employee ID
+   * Find contract package by clinic manager ID and employee ID
    */
-  async findByClinicAndEmployee(
-    clinicId: string,
+  async findByManagerAndEmployee(
+    clinicManagerId: string,
     employeeId: string,
   ): Promise<ContractPackage | null> {
     return this.repository.findOne({
-      where: { clinicId, employeeId },
+      where: { clinicManagerId, employeeId },
       relations: ['clinicAccount', 'employeeAccount'],
     });
   }
@@ -117,23 +117,23 @@ export class ContractPackageRepository {
   }
 
   /**
-   * Check if contract package exists by clinic ID and employee ID
+   * Check if contract package exists by clinic manager ID and employee ID
    */
-  async existsByClinicAndEmployee(
-    clinicId: string,
+  async existsByManagerAndEmployee(
+    clinicManagerId: string,
     employeeId: string,
   ): Promise<boolean> {
     const count = await this.repository.count({
-      where: { clinicId, employeeId },
+      where: { clinicManagerId, employeeId },
     });
     return count > 0;
   }
 
   /**
-   * Count contract packages by clinic ID
+   * Count contract packages by clinic manager ID
    */
-  async countByClinicId(clinicId: string): Promise<number> {
-    return this.repository.count({ where: { clinicId } });
+  async countByManagerId(clinicManagerId: string): Promise<number> {
+    return this.repository.count({ where: { clinicManagerId } });
   }
 
   /**
@@ -143,15 +143,15 @@ export class ContractPackageRepository {
     return this.repository.count({ where: { employeeId } });
   }
   /**
-   * Find Contract Packages by Clinic ID with Filters and Pagination
+   * Find Contract Packages by Clinic Manager ID with Filters and Pagination
    *
-   * @param clinicId - Filter by Clinic ID
+   * @param clinicManagerId - Filter by Clinic Manager ID
    * @param employeeName - Search by Employee Name (Optional)
    * @param page - Page number (Default 1)
    * @param limit - Limit per page (Default 10)
    */
-  async findPackagesByClinicWithFilters(
-    clinicId: string,
+  async findPackagesByManagerWithFilters(
+    clinicManagerId: string,
     employeeName?: string,
     page: number = 1,
     limit: number = 10,
@@ -165,8 +165,8 @@ export class ContractPackageRepository {
       .leftJoinAndSelect('contractPackage.clinicContractInformation', 'info')
       .leftJoinAndSelect('employee.generalAccount', 'generalAccount'); // Assuming name is in generalAccount
 
-    // Filter by Clinic ID
-    queryBuilder.where('contractPackage.clinicId = :clinicId', { clinicId });
+    // Filter by Clinic Manager ID
+    queryBuilder.where('contractPackage.clinicManagerId = :clinicManagerId', { clinicManagerId });
 
     // Optional Filter: Employee Name search
     if (employeeName) {

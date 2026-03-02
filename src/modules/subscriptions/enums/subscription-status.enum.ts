@@ -1,52 +1,60 @@
-/**
- * SubscriptionStatus Enum
- *
- * Represents the status of a clinic subscription with integrated step tracking
- * Flow: PENDING_DOCUMENT_UPLOAD → PENDING_PAYMENT_CONFIG → PENDING_APPROVAL → (REJECTED | PENDING_PAYMENT) → ACTIVE → (EXPIRED | CANCELLED)
- */
-export enum SubscriptionStatus {
+export enum RegistrationStatus {
   /**
-   * After STEP 1: Account created, waiting for legal documents upload
-   * Before STEP 2: User needs to submit operatingLicense and businessLicense
+   * STEP 2 START: Account created (Step 1.5 completed).
+   * Status: User has account but hasn't configured payment gateway (Sepay) yet.
+   * Action: User needs to configure Sepay.
    */
-  PENDING_DOCUMENT_UPLOAD = 'PENDING_DOCUMENT_UPLOAD',
+  PENDING_SEPAY_SETUP = 'PENDING_SEPAY_SETUP',
+
+  //accounts, clinic admin information, address, iframe, clinic subcription, clinic legal documents, code verification, clinic manager information
 
   /**
-   * After STEP 2: Legal documents submitted, waiting for payment gateway configuration
+   * STEP 3 START: Account created (Step 2 completed).
+   * Status: User has account but hasn't created Clinic Manager yet.
+   * Action: User needs to create Clinic Manager account.
    */
-  PENDING_PAYMENT_CONFIG = 'PENDING_PAYMENT_CONFIG',
+  PENDING_MANAGER_SETUP = 'PENDING_MANAGER_SETUP',
 
   /**
-   * After STEP 3: Payment gateway configured, waiting for admin approval
-   * During STEP 4: Admin is reviewing the registration
+   * STEP 4 START: Manager configured.
+   * Status: User hasn't uploaded legal documents yet.
+   * Action: User needs to upload Operating/Business License.
+   */
+  PENDING_LEGAL_SETUP = 'PENDING_LEGAL_SETUP',
+
+  /**
+   * STEP 4 START: All documents submitted.
+   * Status: Waiting for System Admin to review and approve.
+   * Action: User waits. System Admin reviews `clinic_legal_documents`.
    */
   PENDING_APPROVAL = 'PENDING_APPROVAL',
 
   /**
-   * Admin rejected during STEP 4: Registration rejected, needs resubmission
-   * User can go back to PENDING_DOCUMENT_UPLOAD to resubmit documents
-   */
-  REJECTED = 'REJECTED',
-
-  /**
-   * Admin approved during STEP 4: Waiting for subscription payment
-   * Before STEP 5: User needs to complete payment
+   * STEP 5 START: Admin approved.
+   * Status: Registration approved, but Subscription fee is not paid yet.
+   * Action: User needs to make payment for the selected service package.
    */
   PENDING_PAYMENT = 'PENDING_PAYMENT',
 
   /**
-   * After STEP 5: Payment completed, subscription is active
-   * STEP 6: Account activation completed
+   * STEP 6 DONE: Payment successful.
+   * Status: Account fully activated. Service is running.
+   * Action: User can access Dashboard.
    */
   ACTIVE = 'ACTIVE',
 
   /**
-   * Subscription has expired, can be extended
+   * LIFECYCLE CHURN: User cancelled the subscription while Active.
+   * Status: Account remains fully functional (same as ACTIVE) until expirationDate.
+   * Action: System will NOT renew automatically. Transitions to EXPIRED after date passes.
+   * History: Logged in clinic_subscriptions_history for churn analysis.
    */
-  EXPIRED = 'EXPIRED',
+  NON_RENEWING = 'NON_RENEWING',
 
   /**
-   * Subscription was cancelled by user or admin
+   * LIFECYCLE END: Subscription duration ended.
+   * Status: Account service suspended or limited until renewal.
+   * Action: User needs to renew subscription manually (no auto-renewal).
    */
-  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
 }

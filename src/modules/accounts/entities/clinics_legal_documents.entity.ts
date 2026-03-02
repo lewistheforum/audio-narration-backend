@@ -47,6 +47,12 @@ export class ClinicsLegalDocuments {
   @Column({ name: 'business_license', type: 'text', nullable: true, transformer: encryptionTransformer })
   businessLicense?: string;
 
+  @Column({ name: 'tax_id_url', type: 'text', nullable: true, transformer: encryptionTransformer })
+  taxIdUrl?: string;
+
+  @Column({ name: 'other_docs', type: 'jsonb', nullable: true })
+  otherDocs?: string[];
+
   @Column({
     name: 'verification_status',
     type: 'enum',
@@ -54,6 +60,9 @@ export class ClinicsLegalDocuments {
     default: LegalDocumentVerificationStatus.NOT_SUBMITTED,
   })
   verificationStatus: LegalDocumentVerificationStatus;
+
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejectionReason?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

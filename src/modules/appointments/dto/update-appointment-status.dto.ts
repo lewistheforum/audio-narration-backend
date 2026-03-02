@@ -35,20 +35,18 @@ export class UpdateAppointmentStatusDto {
 
   @ApiProperty({
     description:
-      'Reason for status change (required when changing to CANCELLED or PAYMENT_FAILED)',
+      'Reason for status change (required when changing to CANCELLED or ABSENT)',
     example: 'Patient requested cancellation',
     required: false,
   })
   @ValidateIf(
     (o) =>
       o.status === AppointmentStatus.CANCELLED ||
-      o.status === AppointmentStatus.PAYMENT_FAILED ||
-      o.status === AppointmentStatus.PAYMENT_CANCELLED ||
       o.status === AppointmentStatus.ABSENT,
   )
   @IsNotEmpty({
     message:
-      'Reason is required when status is CANCELLED, PAYMENT_FAILED, PAYMENT_CANCELLED, or ABSENT',
+      'Reason is required when status is CANCELLED or ABSENT',
   })
   @IsString({ message: 'Reason must be a string' })
   @MinLength(10, { message: 'Reason must be at least 10 characters' })

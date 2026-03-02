@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 import {
   Account,
   GeneralAccount,
@@ -30,6 +31,7 @@ import {
 
 } from './repositories';
 import { MailerModule } from '../mailer/mailer.module';
+import { TransactionRepository } from '../transactions/repositories/transaction.repository';
 
 /**
  * Accounts Module
@@ -76,7 +78,8 @@ import { MailerModule } from '../mailer/mailer.module';
 
     ]),
     forwardRef(() => MailerModule),
-    SubscriptionsModule,
+    forwardRef(() => SubscriptionsModule),
+    forwardRef(() => TransactionsModule),
   ],
   controllers: [AccountsController],
   providers: [
@@ -91,6 +94,7 @@ import { MailerModule } from '../mailer/mailer.module';
     ClinicAdminInformationRepository,
     CodeVerificationRepository,
 
+    TransactionRepository,
     AccountsService,
   ],
   exports: [
@@ -105,7 +109,7 @@ import { MailerModule } from '../mailer/mailer.module';
     ClinicStaffInformationRepository,
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
-
+    TransactionRepository,
   ],
 })
 export class AccountsModule { }

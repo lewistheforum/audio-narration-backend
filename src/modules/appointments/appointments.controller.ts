@@ -22,6 +22,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
+import { BookingSessionService } from './booking-session.service';
 import {
   QueryAppointmentDto,
   PaginatedAppointmentResponseDto,
@@ -41,6 +42,9 @@ import {
   PendingServicesResponseDto,
   CompleteExaminationDto,
   CompleteExaminationResponseDto,
+  CreateBookingSessionDto,
+  UpdateBookingSessionDto,
+  CreateAppointmentFromSessionDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -64,11 +68,23 @@ import { AppointmentStatus } from './enums';
  * - PATCH /appointments/:id/accept - Accept appointment (Doctor only)
  * - PATCH /appointments/:id/decline - Decline appointment (Doctor only)
  * - PATCH /appointments/:id/status - Update appointment status (Admin/Staff)
+ *
+ * Patient Booking Flow:
+ * - GET /patients/services - List available services
+ * - GET /patients/clinics/:clinicId/working-days - Get available dates
+ * - GET /patients/clinics/:clinicId/services/:serviceConfigId/slots - Get available slots
+ * - GET /patients/me/appointments - Get patient's appointments
+ * - POST /patients/booking-sessions - Create booking session
+ * - PATCH /patients/booking-sessions/:sessionId - Update booking session
+ * - POST /patients/appointments - Create appointment from session
  */
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
-  constructor(private readonly appointmentsService: AppointmentsService) {}
+  constructor(
+    private readonly appointmentsService: AppointmentsService,
+    private readonly bookingSessionService: BookingSessionService,
+  ) {}
 
   /**
    * Get all appointments for staff's clinic
@@ -932,5 +948,933 @@ export class AppointmentsController {
       id,
       updateStatusDto,
     );
+  }
+
+  // ========================================================================
+  // PATIENT BOOKING FLOW ENDPOINTS
+  // ========================================================================
+
+  /**
+   * Get available services (Step 1 - Option 1: Service-first)
+   *
+   * Returns list of active clinic services with calculated final price.
+   * Supports pagination, search, and filtering by category/clinic.
+   *
+   * @param page - Page number for pagination
+   * @param limit - Number of items per page
+   * @param search - Search by service name (optional)
+   * @param categoryId - Filter by category UUID (optional)
+   * @param clinicId - Filter by clinic UUID (optional)
+   * @returns Paginated list of available services
+   */
+  @Get('patients/services')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available services for booking (Patient)',
+    description:
+      'List all active services across clinics with pricing. Supports search by name, filter by category and clinic.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Services retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            clinic_service_config_id: 'uuid',
+            clinic_id: 'uuid',
+            clinic_name: 'Phòng khám ABC',
+            clinic_address: '123 Đường X, Q.1, TP.HCM',
+            service_id: 'uuid',
+            service_name: 'Khám Xương Khớp',
+            category_id: 'uuid',
+            category_name: 'Khám Chuyên Khoa',
+            price: 300000,
+            discount: 10,
+            final_price: 270000,
+            description: 'Khám và điều trị bệnh xương khớp',
+          },
+        ],
+        meta: {
+          total: 45,
+          page: 1,
+          limit: 20,
+          total_pages: 3,
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by service name',
+  })
+  @ApiQuery({
+    name: 'category_id',
+    required: false,
+    type: String,
+    description: 'Filter by service category UUID',
+  })
+  @ApiQuery({
+    name: 'clinic_id',
+    required: false,
+    type: String,
+    description: 'Filter by clinic UUID',
+  })
+  async getAvailableServices(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('search') search?: string,
+    @Query('category_id') categoryId?: string,
+    @Query('clinic_id') clinicId?: string,
+  ) {
+    return this.appointmentsService.getAvailableServices({
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      categoryId,
+      clinicId,
+    });
+  }
+
+  /**
+   * Get working days for clinic (Step 2 - Option 1: Service-first)
+   *
+   * Returns available dates where clinic has doctors working
+   * and slots are available. Can filter by service.
+   *
+   * @param clinicId - Clinic UUID
+   * @param serviceConfigId - Service config UUID (optional)
+   * @returns List of available dates with slot information
+   */
+  @Get('patients/clinics/:clinicId/working-days')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available working days for clinic (Patient)',
+    description:
+      'Get list of dates where clinic has available appointments. Can filter by service.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Working days retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            date: '2026-02-25',
+            week_day: 'THỨ BA',
+            available_slots: 12,
+            available_doctors: 3,
+          },
+          {
+            date: '2026-02-26',
+            week_day: 'THỨ TƯ',
+            available_slots: 8,
+            available_doctors: 2,
+          },
+        ],
+      },
+    },
+  })
+  @ApiParam({
+    name: 'clinicId',
+    type: String,
+    description: 'Clinic UUID',
+  })
+  @ApiQuery({
+    name: 'service_config_id',
+    required: false,
+    type: String,
+    description: 'Filter by service config UUID (optional)',
+  })
+  async getWorkingDays(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query('service_config_id') serviceConfigId?: string,
+  ) {
+    return this.appointmentsService.getWorkingDays(clinicId, serviceConfigId);
+  }
+
+  /**
+   * Get available slots (Step 3 - Option 1: Service-first)
+   *
+   * Returns doctors and their available time slots for a specific service
+   * on a specific date, grouped by shift (morning, afternoon, evening).
+   *
+   * @param clinicId - Clinic UUID
+   * @param serviceConfigId - Service config UUID
+   * @param date - Appointment date (YYYY-MM-DD)
+   * @returns Available slots grouped by shift
+   */
+  @Get('patients/clinics/:clinicId/services/:serviceConfigId/slots')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available slots for service on date (Patient)',
+    description:
+      'Get available time slots with doctor information for a specific service and date. Grouped by shift (morning, afternoon, evening).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Slots retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            shift: 'MORNING',
+            slots: [
+              {
+                doctor_shift_hour_id: 'uuid',
+                doctor_id: 'uuid',
+                doctor_name: 'BS. Nguyễn Văn A',
+                doctor_specialty: 'Bác sĩ Xương Khớp',
+                start_time: '08:00:00',
+                end_time: '08:30:00',
+                limit: 5,
+                available_slots: 3,
+                clinic_room: 'Phòng 101',
+              },
+            ],
+          },
+          {
+            shift: 'AFTERNOON',
+            slots: [],
+          },
+        ],
+      },
+    },
+  })
+  @ApiParam({
+    name: 'clinicId',
+    type: String,
+    description: 'Clinic UUID',
+  })
+  @ApiParam({
+    name: 'serviceConfigId',
+    type: String,
+    description: 'Service Config UUID',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: true,
+    type: String,
+    description: 'Appointment date (YYYY-MM-DD)',
+    example: '2026-02-25',
+  })
+  async getAvailableSlots(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Param('serviceConfigId', ParseUUIDPipe) serviceConfigId: string,
+    @Query('date') date: string,
+  ) {
+    return this.appointmentsService.getAvailableSlots(
+      clinicId,
+      serviceConfigId,
+      date,
+    );
+  }
+
+  /**
+   * Get patient's appointments (Step 5 - Patient appointment history)
+   *
+   * Returns list of patient's appointments with pagination and filtering.
+   * Includes clinic, doctor, services, and payment information.
+   *
+   * @param req - Request object containing authenticated user
+   * @param page - Page number for pagination
+   * @param limit - Number of items per page
+   * @param status - Filter by status (optional)
+   * @param appointmentDate - Filter by appointment date (optional)
+   * @returns Paginated list of patient's appointments
+   */
+  @Get('patients/me/appointments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get my appointments (Patient)',
+    description:
+      'Retrieve all appointments for the authenticated patient. Supports filtering and pagination.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointments retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            appointment_id: 'uuid',
+            clinic_id: 'uuid',
+            clinic_name: 'Phòng khám ABC',
+            doctor_id: 'uuid',
+            doctor_name: 'BS. Nguyễn Văn A',
+            services: [
+              {
+                service_id: 'uuid',
+                service_name: 'Khám Xương Khớp',
+                price: 270000,
+              },
+            ],
+            appointment_date: '2026-02-25',
+            appointment_hour: '2026-02-25T08:00:00.000Z',
+            start_time: '08:00:00',
+            end_time: '08:30:00',
+            total: 270000,
+            status: 'PENDING',
+            payment_type: 'online',
+            payment_status: null,
+            patient_note: 'Đau mỏi vai gáy',
+            created_at: '2026-02-24T10:00:00.000Z',
+          },
+        ],
+        meta: {
+          total: 5,
+          page: 1,
+          limit: 10,
+          total_pages: 1,
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    type: String,
+    description: 'Filter by status',
+  })
+  @ApiQuery({
+    name: 'appointment_date',
+    required: false,
+    type: String,
+    description: 'Filter by appointment date (YYYY-MM-DD)',
+  })
+  async getMyAppointments(
+    @Request() req: any,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status?: string,
+    @Query('appointment_date') appointmentDate?: string,
+  ) {
+    const patientId = req.user._id;
+    return this.appointmentsService.getMyAppointments(patientId, {
+      page: Number(page),
+      limit: Number(limit),
+      status,
+      appointmentDate,
+    });
+  }
+
+  /**
+   * Get clinics by working date (Step 2a - Option 3: Date-first)
+   *
+   * Returns clinics that have available appointments on the specified date.
+   * Supports pagination, search by clinic name, and filter by district.
+   *
+   * @param queryDto - Query parameters (working_date, pagination, filters)
+   * @returns Paginated list of clinics with availability information
+   */
+  @Get('patients/clinics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get clinics by working date (Patient)',
+    description:
+      'Get list of clinics that have available slots on a specific date. Used for Option 3: Date-first booking. Supports search and district filtering.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Clinics retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            clinic_id: 'uuid',
+            clinic_name: 'Phòng khám Đa khoa Medicare',
+            clinic_address: '123 Đường X, Quận 1, TP.HCM',
+            district: 'Quận 1',
+            available_slots: 15,
+            available_doctors: 3,
+          },
+        ],
+        meta: {
+          total: 10,
+          page: 1,
+          limit: 20,
+          total_pages: 1,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid working date or out of range',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiQuery({
+    name: 'working_date',
+    required: true,
+    type: String,
+    description: 'Working date in YYYY-MM-DD format',
+    example: '2026-02-25',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by clinic name',
+  })
+  @ApiQuery({
+    name: 'district',
+    required: false,
+    type: String,
+    description: 'Filter by district',
+  })
+  async getClinicsByWorkingDate(
+    @Query('working_date') workingDate: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('search') search?: string,
+    @Query('district') district?: string,
+  ) {
+    return this.appointmentsService.getClinicsByWorkingDate({
+      working_date: workingDate,
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      district,
+    });
+  }
+
+  // ========================================================================
+  // BOOKING SESSION ENDPOINTS (PATIENT ROLE)
+  // ========================================================================
+
+  /**
+   * Create booking session (Step 1)
+   *
+   * Initialize a new booking session for Option 1 (service-first),
+   * Option 2 (doctor-first), or Option 3 (date-first).
+   * Session is stored in Redis with 30-minute TTL.
+   *
+   * @param req - Request object containing authenticated user
+   * @param createDto - Booking option and initial data
+   * @returns Session ID and initial session data
+   */
+  @Post('patients/booking-sessions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create booking session (Patient)',
+    description:
+      'Initialize a new booking session with initial data based on the selected booking option (service, doctor, or date). Session expires in 30 minutes.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Booking session created successfully',
+    schema: {
+      example: {
+        message: 'Phiên đặt lịch được tạo thành công',
+        data: {
+          session_id: '123e4567-e89b-12d3-a456-426614174000',
+          booking_option: 'service',
+          current_step: 1,
+          expires_at: '2026-02-25T11:30:00.000Z',
+          booking_data: {
+            clinic_service_config_id: '123e4567-e89b-12d3-a456-426614174001',
+            clinic_id: '123e4567-e89b-12d3-a456-426614174002',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid initial data or inactive service/clinic',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a patient',
+  })
+  async createBookingSession(
+    @Request() req: any,
+    @Body() createDto: CreateBookingSessionDto,
+  ): Promise<any> {
+    const patientId = req.user._id;
+    const result = await this.bookingSessionService.createSession(
+      patientId,
+      createDto,
+    );
+    return {
+      message: 'Phiên đặt lịch được tạo thành công',
+      data: result,
+    };
+  }
+
+  /**
+   * Update booking session (Steps 2-4)
+   *
+   * Update the booking session with additional data step-by-step.
+   * - Step 2: Add appointment_date
+   * - Step 3: Add doctor_shift_hour_id and doctor_id
+   * - Step 4: Add patient_note (optional)
+   *
+   * @param req - Request object containing authenticated user
+   * @param sessionId - Session UUID
+   * @param updateDto - Step number and data to update
+   * @returns Updated session data
+   */
+  @Patch('patients/booking-sessions/:sessionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update booking session (Patient)',
+    description:
+      'Update the booking session with additional data based on the current step. Steps must be executed in order (2, 3, 4).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Booking session updated successfully',
+    schema: {
+      example: {
+        message: 'Cập nhật phiên đặt lịch thành công',
+        data: {
+          session_id: '123e4567-e89b-12d3-a456-426614174000',
+          current_step: 2,
+          booking_data: {
+            clinic_service_config_id: '123e4567-e89b-12d3-a456-426614174001',
+            clinic_id: '123e4567-e89b-12d3-a456-426614174002',
+            appointment_date: '2026-02-25',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid step sequence or data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Session does not belong to user',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Session not found or expired',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: String,
+    description: 'Booking session UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async updateBookingSession(
+    @Request() req: any,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() updateDto: UpdateBookingSessionDto,
+  ): Promise<any> {
+    const patientId = req.user._id;
+    const result = await this.bookingSessionService.updateSession(
+      sessionId,
+      patientId,
+      updateDto,
+    );
+    return {
+      message: 'Cập nhật phiên đặt lịch thành công',
+      data: result,
+    };
+  }
+
+  /**
+   * Create appointment from session (Final step)
+   *
+   * Finalize the booking by creating an appointment from the completed session.
+   * This endpoint:
+   * - Reads session data from Redis
+   * - Validates all business rules
+   * - Creates appointment with pessimistic locking
+   * - Deletes Redis session on success
+   * - Sends email notifications
+   *
+   * IMPORTANT: Only supports online payment. COD is not available.
+   *
+   * @param req - Request object containing authenticated user
+   * @param createDto - Session ID and payment method
+   * @returns Created appointment details
+   */
+  @Post('patients/appointments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create appointment from session (Patient)',
+    description:
+      'Finalize booking by creating an appointment from a completed session. Requires session_id and payment_method (must be "online"). Session will be deleted after successful creation.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Appointment created successfully',
+    schema: {
+      example: {
+        message: 'Đặt lịch hẹn thành công',
+        data: {
+          appointment_id: '123e4567-e89b-12d3-a456-426614174000',
+          clinic_id: '123e4567-e89b-12d3-a456-426614174002',
+          service_name: 'Khám Xương Khớp',
+          appointment_date: '2026-02-25',
+          appointment_hour: '2026-02-25T08:00:00.000Z',
+          start_time: '08:00:00',
+          end_time: '08:30:00',
+          total: 270000,
+          status: 'PENDING',
+          payment_type: 'online',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Incomplete session, slot full, or invalid payment method',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Session does not belong to user',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Session not found or expired',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Duplicate appointment at this time',
+  })
+  async createAppointmentFromSession(
+    @Request() req: any,
+    @Body() createDto: CreateAppointmentFromSessionDto,
+  ): Promise<any> {
+    const patientId = req.user._id;
+    const result = await this.appointmentsService.createAppointmentFromSession(
+      createDto.session_id,
+      patientId,
+      createDto.payment_method,
+    );
+    return {
+      message: 'Đặt lịch hẹn thành công',
+      data: result,
+    };
+  }
+
+  // ========================================================================
+  // OPTION 2: DOCTOR-FIRST BOOKING FLOW ENDPOINTS (PATIENT ROLE)
+  // ========================================================================
+
+  /**
+   * Get available doctors (Step 1a - Option 2: Doctor-first)
+   *
+   * Returns list of active doctors with their clinics.
+   * Supports pagination, search, and filtering by specialization/clinic.
+   *
+   * @param page - Page number for pagination
+   * @param limit - Number of items per page
+   * @param search - Search by doctor full name (optional)
+   * @param specialization - Filter by specialization (optional)
+   * @param clinicId - Filter by clinic UUID (optional)
+   * @returns Paginated list of available doctors
+   */
+  @Get('patients/doctors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available doctors for booking (Patient)',
+    description:
+      'List all active doctors with their clinics. Supports search by name, filter by specialization and clinic.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Doctors retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            doctor_id: 'uuid',
+            full_name: 'BS. Nguyễn Văn A',
+            specialization: 'Bác sĩ Xương Khớp',
+            clinics: [
+              {
+                clinic_id: 'uuid',
+                clinic_name: 'Phòng khám ABC',
+                clinic_address: '123 Đường X, Q.1, TP.HCM',
+              },
+            ],
+          },
+        ],
+        meta: {
+          total: 25,
+          page: 1,
+          limit: 20,
+          total_pages: 2,
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by doctor full name',
+  })
+  @ApiQuery({
+    name: 'specialization',
+    required: false,
+    type: String,
+    description: 'Filter by specialization',
+  })
+  @ApiQuery({
+    name: 'clinic_id',
+    required: false,
+    type: String,
+    description: 'Filter by clinic UUID',
+  })
+  async getDoctors(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('search') search?: string,
+    @Query('specialization') specialization?: string,
+    @Query('clinic_id') clinicId?: string,
+  ) {
+    return this.appointmentsService.getDoctors({
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      specialization,
+      clinic_id: clinicId,
+    });
+  }
+
+  /**
+   * Get working days for doctor (Step 2a - Option 2: Doctor-first)
+   *
+   * Returns available dates where doctor is working and has available slots.
+   * Can be filtered by clinic if doctor works at multiple clinics.
+   *
+   * @param doctorId - Doctor UUID
+   * @param clinicId - Clinic UUID (optional)
+   * @returns List of available working days for doctor
+   */
+  @Get('patients/doctors/:doctorId/working-days')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available working days for doctor (Patient)',
+    description:
+      'Get list of dates where doctor has available appointments. Can filter by clinic if doctor works at multiple locations.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Working days retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            date: '2026-02-25',
+            week_day: 'THỨ BA',
+            clinic_id: 'uuid',
+            clinic_name: 'Phòng khám ABC',
+            available_slots: 12,
+          },
+          {
+            date: '2026-02-26',
+            week_day: 'THỨ TƯ',
+            clinic_id: 'uuid',
+            clinic_name: 'Phòng khám ABC',
+            available_slots: 8,
+          },
+        ],
+      },
+    },
+  })
+  @ApiParam({
+    name: 'doctorId',
+    type: String,
+    description: 'Doctor UUID',
+  })
+  @ApiQuery({
+    name: 'clinic_id',
+    required: false,
+    type: String,
+    description: 'Filter by clinic UUID (optional if doctor works at multiple clinics)',
+  })
+  async getDoctorWorkingDays(
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+    @Query('clinic_id') clinicId?: string,
+  ) {
+    return this.appointmentsService.getDoctorWorkingDays(doctorId, clinicId);
+  }
+
+  /**
+   * Get available slots and services for doctor (Step 3a - Option 2: Doctor-first)
+   *
+   * Returns doctor's available time slots and services they can provide
+   * on a specific date at a specific clinic, grouped by shift (morning, afternoon, evening).
+   *
+   * @param doctorId - Doctor UUID
+   * @param date - Appointment date (YYYY-MM-DD)
+   * @param clinicId - Clinic UUID
+   * @returns Available slots and services for doctor on specified date
+   */
+  @Get('patients/doctors/:doctorId/slots')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available slots and services for doctor on date (Patient)',
+    description:
+      'Get available time slots and services that the doctor can provide on a specific date at a specific clinic. Grouped by shift (morning, afternoon, evening).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Slots and services retrieved successfully',
+    schema: {
+      example: {
+        slots: [
+          {
+            shift: 'MORNING',
+            slots: [
+              {
+                doctor_shift_hour_id: 'uuid',
+                start_time: '08:00:00',
+                end_time: '08:30:00',
+                limit: 5,
+                available_slots: 3,
+                clinic_room: 'Phòng 101',
+              },
+            ],
+          },
+          {
+            shift: 'AFTERNOON',
+            slots: [],
+          },
+        ],
+        available_services: [
+          {
+            clinic_service_config_id: 'uuid',
+            service_id: 'uuid',
+            service_name: 'Khám Xương Khớp',
+            category_name: 'Khám Chuyên Khoa',
+            price: 300000,
+            discount: 10,
+            final_price: 270000,
+            description: 'Khám và tư vấn về xương khớp',
+          },
+        ],
+      },
+    },
+  })
+  @ApiParam({
+    name: 'doctorId',
+    type: String,
+    description: 'Doctor UUID',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: true,
+    type: String,
+    description: 'Appointment date (YYYY-MM-DD)',
+    example: '2026-02-25',
+  })
+  @ApiQuery({
+    name: 'clinic_id',
+    required: true,
+    type: String,
+    description: 'Clinic UUID',
+  })
+  async getDoctorSlots(
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+    @Query('date') date: string,
+    @Query('clinic_id', ParseUUIDPipe) clinicId: string,
+  ) {
+    return this.appointmentsService.getDoctorSlots(doctorId, date, clinicId);
   }
 }

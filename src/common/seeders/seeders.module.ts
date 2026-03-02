@@ -11,6 +11,10 @@ import { ClinicServicesModule } from '../../modules/clinic-services/clinic-servi
 import { ServiceConfigsModule } from '../../modules/service-configs/service-configs.module';
 import { ContractsModule } from '../../modules/contracts/contracts.module';
 import { SchedulesModule } from '../../modules/schedules/schedules.module';
+import { PrescriptionsModule } from '../../modules/prescriptions/prescriptions.module';
+import { AppointmentsModule } from '../../modules/appointments/appointments.module';
+import { TransactionsModule } from '../../modules/transactions/transactions.module';
+import { TransactionHistorySeederService } from './transaction-history-seeder.service';
 import { AdminSeederService } from './admin-seeder.service';
 import { FeedbackSeederService } from './feedback-seeder.service';
 import { AccountSeederService } from './account-seeder.service';
@@ -42,6 +46,11 @@ import { ClinicRoomRepository } from '../../modules/schedules/repositories/clini
 import { ClinicShiftRepository } from '../../modules/schedules/repositories/clinic-shift.repository';
 import { ClinicShiftHourRepository } from '../../modules/schedules/repositories/clinic-shift-hour.repository';
 import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
+import { AppointmentSeederService } from './appointment-seeder.service';
+import { ERMSeederService } from './erm-seeder.service';
+import { EPrescriptionSeederService } from './e-prescription-seeder.service';
+import { EPrescriptionDetailSeederService } from './e-prescription-detail-seeder.service';
+import { ReportSeederService } from './report-seeder.service';
 
 // Entities for KnowledgeBaseSeeder
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
@@ -52,6 +61,25 @@ import { EmployeeSchedule } from '../../modules/schedules/entities/employee-sche
 import { ClinicShift } from '../../modules/schedules/entities/clinic-shift.entity';
 import { ClinicShiftHour } from '../../modules/schedules/entities/clinic-shift-hour.entity';
 import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity';
+
+// Entities for Appointment Seeders
+import { Appointment } from '../../modules/appointments/entities/appointment.entity';
+import { AppointmentPackage } from '../../modules/appointments/entities/appointment-package.entity';
+import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
+import { ERM } from '../../modules/prescriptions/entities/erm.entity';
+import { ERMConsultation } from '../../modules/prescriptions/entities/erm-consultation.entity';
+import { ERMXray } from '../../modules/prescriptions/entities/erm-xray.entity';
+import { ERMUltrasound } from '../../modules/prescriptions/entities/erm-ultrasound.entity';
+import { ERMLab } from '../../modules/prescriptions/entities/erm-lab.entity';
+import { ERMBoneDensity } from '../../modules/prescriptions/entities/erm-bone-density.entity';
+import { ERMProcedure } from '../../modules/prescriptions/entities/erm-procedure.entity';
+import { EPrescription } from '../../modules/prescriptions/entities/e-prescription.entity';
+import { DetailEPrescription } from '../../modules/prescriptions/entities/detail-e-prescription.entity';
+import { Medicine } from '../../modules/prescriptions/entities/medicine.entity';
+import { MedicineRepository } from '../../modules/prescriptions/repositories/medicine.repository';
+// Entities for Transaction History Seeder
+import { Transaction } from '../../modules/transactions/entities/transaction.entity';
+import { TransactionType } from '../../modules/transactions/entities/transaction-type.entity';
 
 /**
  * Seeders Module
@@ -98,6 +126,21 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
       ClinicShift,
       ClinicShiftHour,
       ClinicRoom,
+      Appointment,
+      AppointmentPackage,
+      ServiceAppointment,
+      ERM,
+      ERMConsultation,
+      ERMXray,
+      ERMUltrasound,
+      ERMLab,
+      ERMBoneDensity,
+      ERMProcedure,
+      EPrescription,
+      DetailEPrescription,
+      Medicine,
+      Transaction,
+      TransactionType,
     ]),
     BlogsModule,
     SubscriptionsModule,
@@ -105,6 +148,9 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ServiceConfigsModule,
     ContractsModule,
     SchedulesModule,
+    PrescriptionsModule,
+    AppointmentsModule,
+    TransactionsModule,
     HttpModule,
   ],
   providers: [
@@ -133,12 +179,19 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ClinicShiftSeederService,
     EmployeeScheduleSeederService,
     ClinicRoomEmployeeScheduleSeederService,
+    AppointmentSeederService,
+    ERMSeederService,
+    EPrescriptionSeederService,
+    EPrescriptionDetailSeederService,
+    TransactionHistorySeederService,
     SeederOrchestratorService,
     KnowledgeBaseRepository,
     ClinicRoomRepository,
     ClinicShiftRepository,
     ClinicShiftHourRepository,
     EmployeeScheduleRepository,
+    MedicineRepository,
+    ReportSeederService,
   ],
   exports: [
     AdminSeederService,
@@ -166,7 +219,13 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
     ClinicShiftSeederService,
     EmployeeScheduleSeederService,
     ClinicRoomEmployeeScheduleSeederService,
+    AppointmentSeederService,
+    ERMSeederService,
+    EPrescriptionSeederService,
+    EPrescriptionDetailSeederService,
+    TransactionHistorySeederService,
     SeederOrchestratorService,
+    ReportSeederService,
   ],
 })
-export class SeedersModule { }
+export class SeedersModule {}

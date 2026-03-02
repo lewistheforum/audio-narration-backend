@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { Blog } from '../entities/blog.entity';
+import { BlogNotification } from '../../notifications/entities/blog-notification.entity';
 
 /**
  * Blog Repository
@@ -39,6 +40,8 @@ export class BlogRepository {
   constructor(
     @InjectRepository(Blog)
     private readonly blogRepository: Repository<Blog>,
+    @InjectRepository(BlogNotification)
+    private readonly blogNotificationRepository: Repository<BlogNotification>,
   ) {}
 
   /**
@@ -113,6 +116,7 @@ export class BlogRepository {
   async findByClinicId(clinicId: string): Promise<Blog[]> {
     return this.blogRepository.find({
       where: { clinicId },
+      relations: ['clinic', 'clinic.clinicManagerInformation'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -194,5 +198,64 @@ export class BlogRepository {
    */
   async count(): Promise<number> {
     return this.blogRepository.count();
+  }
+
+  /**
+   * Find Blogs by Patient ID
+   *
+   * Retrieves all blog notifications for a specific patient,
+   * joined with blog data (title, thumbnail, createdAt).
+   *
+   * @param {string} patientId - Patient UUID
+   * @returns {Promise<BlogNotification[]>} Array of blog notifications with blog relations
+   */
+  async findBlogsByPatientId(patientId: string): Promise<BlogNotification[]> {
+    return this.blogNotificationRepository.find({
+      where: { patientId },
+      relations: ['blog'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Save Multiple Blog Notifications
+   *
+   * Bulk save blog notifications to database.
+   *
+   * @param {DeepPartial<BlogNotification>[]} notifications - Array of notifications to save
+   * @returns {Promise<BlogNotification[]>} Array of saved notifications
+   */
+  async saveBlogNotifications(
+    notifications: DeepPartial<BlogNotification>[],
+  ): Promise<BlogNotification[]> {
+    const newNotifications =
+      this.blogNotificationRepository.create(notifications);
+    return this.blogNotificationRepository.save(newNotifications);
+  }
+
+  /**
+   * Mark Notification as Read
+   *
+   * Updates the isRead status of a specific notification belonging to a patient.
+   *
+   * @param {string} notificationId - Notification UUID
+   * @param {string} patientId - Patient UUID who owns the notification
+   * @returns {Promise<BlogNotification | null>} Updated notification or null if not found
+   */
+  async markNotificationAsRead(
+    notificationId: string,
+    patientId: string,
+  ): Promise<BlogNotification | null> {
+    const notification = await this.blogNotificationRepository.findOne({
+      where: { _id: notificationId, patientId },
+      relations: ['blog'],
+    });
+
+    if (!notification) {
+      return null;
+    }
+
+    notification.isRead = true;
+    return this.blogNotificationRepository.save(notification);
   }
 }

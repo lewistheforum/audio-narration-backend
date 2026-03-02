@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { buildTypeOrmOptions } from './config/typeorm.config';
+import { RedisModule } from './config/redis.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { HealthModule } from './common/health/health.module';
@@ -22,7 +23,10 @@ import { ServiceConfigsModule } from './modules/service-configs/service-configs.
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AiModule } from './modules/ai/ai.module';
 import { SeedersModule } from './common/seeders/seeders.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { PatientsModule } from './modules/accounts/api-admin-patients/patients.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
+import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/clinic-admins.module';
 
 @Module({
   imports: [
@@ -41,6 +45,9 @@ import { Account } from './modules/accounts/entities/accounts.entity';
 
     // TypeORM feature for seeder access to Account repository
     TypeOrmModule.forFeature([Account]),
+
+    // Redis for session management
+    RedisModule,
 
     // import modules
     AuthModule,
@@ -63,6 +70,9 @@ import { Account } from './modules/accounts/entities/accounts.entity';
     AppointmentsModule,
     AiModule,
     SeedersModule,
+    AdminModule,
+    PatientsModule,
+    ClinicAdminsModule,
   ],
   controllers: [],
   providers: [],

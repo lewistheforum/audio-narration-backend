@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PaymentType } from '../enums/payment-type.enum';
 
 /**
  * Patient Detail DTO
@@ -111,8 +112,12 @@ export class AppointmentPackageDetailDto {
   @ApiProperty({ description: 'Payment status', required: false })
   status?: string;
 
-  @ApiProperty({ description: 'Payment type', required: false })
-  paymentType?: string;
+  @ApiProperty({
+    description: 'Payment type (online or cod)',
+    required: false,
+    enum: PaymentType,
+  })
+  paymentType?: PaymentType;
 
   @ApiProperty({ description: 'Services in this package', type: [ClinicServiceDetailDto] })
   services: ClinicServiceDetailDto[];
