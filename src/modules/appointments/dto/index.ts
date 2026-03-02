@@ -1,4 +1,5 @@
 export * from './query-appointment.dto';
+export * from './query-doctor-appointment.dto';
 export * from './appointment-response.dto';
 export * from './appointment-detail-response.dto';
 export * from './create-appointment.dto';
@@ -9,3 +10,10 @@ export * from './check-in.dto';
 export * from './accept-appointment.dto';
 export * from './decline-appointment.dto';
 export * from './update-appointment-status.dto';
+export * from './service-summary.dto';
+export * from './patient-info.dto';
+export * from './doctor-appointment-list-response.dto';
+export * from './doctor-appointment-detail-response.dto';
+export * from './pending-services-response.dto';
+export * from './complete-examination.dto';
+export * from './complete-examination-response.dto';
