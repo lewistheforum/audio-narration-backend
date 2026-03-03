@@ -981,4 +981,614 @@ describe('AppointmentsService - Option 1 (Service-first Booking)', () => {
       expect(bookingSessionService.deleteSession).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ============================================================================
+  // TEST SUITE 5: PATIENT VIEW APPOINTMENTS - getMyAppointments()
+  // ============================================================================
+
+  describe('getMyAppointments - Patient View with Tab Filtering', () => {
+    let mockAppointmentRepo: any;
+    let mockDataSource: any;
+
+    beforeEach(() => {
+      mockAppointmentRepo = {
+        createQueryBuilder: jest.fn(),
+      };
+
+      mockDataSource = {
+        createQueryBuilder: jest.fn(),
+      };
+    });
+
+    it('should filter UPCOMING tab correctly (status + date conditions)', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const params = { page: 1, limit: 10, tab: 'UPCOMING' as const };
+      const today = new Date().toISOString().split('T')[0];
+
+      const mockAppointments = [
+        {
+          _id: 'apt-1',
+          patientId,
+          appointmentDate: new Date(today),
+          status: 'PENDING',
+          clinic: { _id: 'clinic-1', businessName: 'Clinic A' },
+          doctor: { _id: 'doctor-1', fullName: 'Dr. A' },
+        },
+        {
+          _id: 'apt-2',
+          patientId,
+          appointmentDate: new Date(new Date().setDate(new Date().getDate() + 1)),
+          status: 'CONFIRMED',
+          clinic: { _id: 'clinic-1', businessName: 'Clinic A' },
+          doctor: { _id: 'doctor-1', fullName: 'Dr. A' },
+        },
+      ];
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([mockAppointments, 2]),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder.mockReturnValue(mockServicesQueryBuilder);
+
+      // Mock service dependencies
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointments(patientId, params);
+
+      // Assert
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // Verify Brackets for UPCOMING logic
+        }),
+      );
+      expect(mockQueryBuilder.getManyAndCount).toHaveBeenCalled();
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result.meta.total).toBe(2);
+    });
+
+    it('should filter HISTORY tab correctly (completed statuses OR past dates)', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const params = { page: 1, limit: 10, tab: 'HISTORY' as const };
+      const yesterday = new Date(new Date().setDate(new Date().getDate() - 1));
+
+      const mockAppointments = [
+        {
+          _id: 'apt-1',
+          patientId,
+          appointmentDate: yesterday,
+          status: 'COMPLETED',
+          clinic: { _id: 'clinic-1', businessName: 'Clinic A' },
+        },
+        {
+          _id: 'apt-2',
+          patientId,
+          appointmentDate: yesterday,
+          status: 'PENDING', // Expired appointment
+          clinic: { _id: 'clinic-1', businessName: 'Clinic A' },
+        },
+      ];
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([mockAppointments, 2]),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder.mockReturnValue(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointments(patientId, params);
+
+      // Assert
+      expect(mockQueryBuilder.getManyAndCount).toHaveBeenCalled();
+      expect(result.data).toHaveLength(2);
+      expect(result.meta.total).toBe(2);
+    });
+
+    it('should prioritize status parameter over tab parameter', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const params = { page: 1, limit: 10, tab: 'UPCOMING' as const, status: 'COMPLETED' };
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder.mockReturnValue(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      await service.getMyAppointments(patientId, params);
+
+      // Assert - Verify status filter was applied, not tab filter
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('a.status = :status', { status: 'COMPLETED' });
+    });
+
+    it('should apply pagination correctly', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const params = { page: 2, limit: 10 };
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], 25]),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder.mockReturnValue(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointments(patientId, params);
+
+      // Assert
+      expect(mockQueryBuilder.skip).toHaveBeenCalledWith(10); // (page - 1) * limit
+      expect(mockQueryBuilder.take).toHaveBeenCalledWith(10);
+      expect(result.meta.page).toBe(2);
+      expect(result.meta.total_pages).toBe(3); // ceil(25 / 10)
+    });
+
+    it('should bulk load services to avoid N+1 queries', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const params = { page: 1, limit: 10 };
+
+      const mockAppointments = [
+        { _id: 'apt-1', clinic: {}, doctor: {} },
+        { _id: 'apt-2', clinic: {}, doctor: {} },
+      ];
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([mockAppointments, 2]),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder.mockReturnValue(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      await service.getMyAppointments(patientId, params);
+
+      // Assert - Verify only 1 bulk query for all services
+      expect(mockServicesQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+      expect(mockServicesQueryBuilder.where).toHaveBeenCalledWith('ap.appointment_id IN (:...ids)', {
+        ids: ['apt-1', 'apt-2'],
+      });
+    });
+  });
+
+  // ============================================================================
+  // TEST SUITE 6: PATIENT VIEW APPOINTMENT DETAIL - getMyAppointmentDetail()
+  // ============================================================================
+
+  describe('getMyAppointmentDetail - Patient View Detail', () => {
+    let mockAppointmentRepo: any;
+    let mockEPrescriptionRepo: any;
+    let mockDataSource: any;
+
+    beforeEach(() => {
+      mockAppointmentRepo = {
+        createQueryBuilder: jest.fn(),
+      };
+
+      mockEPrescriptionRepo = {
+        findOne: jest.fn(),
+      };
+
+      mockDataSource = {
+        createQueryBuilder: jest.fn(),
+      };
+    });
+
+    it('should return full appointment detail with nested data', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const appointmentId = 'apt-123';
+
+      const mockAppointment = {
+        _id: appointmentId,
+        patientId,
+        status: 'CONFIRMED',
+        appointmentDate: new Date('2026-03-10'),
+        appointmentHour: new Date('2026-03-10T08:00:00'),
+        total: 500000,
+        patientNote: 'Test note',
+        clinic: {
+          _id: 'clinic-1',
+          businessName: 'Clinic A',
+          address: '123 Street',
+          phone: '0123456789',
+        },
+        doctor: {
+          _id: 'doctor-1',
+          fullName: 'Dr. Nguyen Van A',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockAppointment),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockPackagesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ _id: 'pkg-1', amount: 500000 }]),
+      };
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            sa_id: 'sa-1',
+            package_id: 'pkg-1',
+            service_name: 'X-Ray',
+            price: 500000,
+            erm_id: 'erm-1',
+            erm_record_type: 'XRAY',
+            erm_status: 'COMPLETED',
+          },
+        ]),
+      };
+
+      mockDataSource.createQueryBuilder
+        .mockReturnValueOnce(mockPackagesQueryBuilder)
+        .mockReturnValueOnce(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        ePrescriptionRepository: mockEPrescriptionRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointmentDetail(patientId, appointmentId);
+
+      // Assert
+      expect(result._id).toBe(appointmentId);
+      expect(result.clinic).toHaveProperty('_id');
+      expect(result.doctor).toHaveProperty('fullName');
+      expect(result.appointment_packages).toBeDefined();
+      expect(result.reject_reason).toBeUndefined(); // Not CANCELLED
+    });
+
+    it('should throw NotFoundException when appointment not found or not owned', async () => {
+      // Arrange
+      const patientId = 'patient-999';
+      const appointmentId = 'apt-123';
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+      }) as AppointmentsService;
+
+      // Act & Assert
+      await expect(service.getMyAppointmentDetail(patientId, appointmentId)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.getMyAppointmentDetail(patientId, appointmentId)).rejects.toThrow(
+        'Appointment not found or access denied',
+      );
+    });
+
+    it('should include e_prescription_summary only when status is COMPLETED', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const appointmentId = 'apt-123';
+
+      const mockAppointment = {
+        _id: appointmentId,
+        patientId,
+        status: 'COMPLETED', // Key: COMPLETED status
+        clinic: { _id: 'clinic-1' },
+        doctor: { _id: 'doctor-1' },
+      };
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockAppointment),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      mockEPrescriptionRepo.findOne.mockResolvedValue({ _id: 'ep-123' });
+
+      const mockPackagesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder
+        .mockReturnValueOnce(mockPackagesQueryBuilder)
+        .mockReturnValueOnce(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        ePrescriptionRepository: mockEPrescriptionRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointmentDetail(patientId, appointmentId);
+
+      // Assert
+      expect(result.e_prescription_summary).toEqual({ _id: 'ep-123' });
+      expect(mockEPrescriptionRepo.findOne).toHaveBeenCalledWith({
+        where: { appointmentId, deletedAt: expect.anything() },
+        select: ['_id'],
+      });
+    });
+
+    it('should include reject_reason only when status is CANCELLED', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const appointmentId = 'apt-123';
+
+      const mockAppointment = {
+        _id: appointmentId,
+        patientId,
+        status: 'CANCELLED', // Key: CANCELLED status
+        rejectReason: 'Patient request',
+        clinic: { _id: 'clinic-1' },
+        doctor: { _id: 'doctor-1' },
+      };
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockAppointment),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockPackagesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockDataSource.createQueryBuilder
+        .mockReturnValueOnce(mockPackagesQueryBuilder)
+        .mockReturnValueOnce(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointmentDetail(patientId, appointmentId);
+
+      // Assert
+      expect(result.reject_reason).toBe('Patient request');
+    });
+
+    it('should load ERM summary for service appointments via LEFT JOIN', async () => {
+      // Arrange
+      const patientId = 'patient-123';
+      const appointmentId = 'apt-123';
+
+      const mockAppointment = {
+        _id: appointmentId,
+        patientId,
+        status: 'CONFIRMED',
+        clinic: { _id: 'clinic-1' },
+      };
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockAppointment),
+      };
+
+      mockAppointmentRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const mockPackagesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ _id: 'pkg-1' }]),
+      };
+
+      const mockServicesQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(), // LEFT JOIN for ERMs
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            sa_id: 'sa-1',
+            service_name: 'X-Ray',
+            erm_id: 'erm-1',
+            erm_record_type: 'XRAY',
+            erm_status: 'COMPLETED',
+          },
+          {
+            sa_id: 'sa-2',
+            service_name: 'Consultation',
+            erm_id: null, // No ERM for this service
+          },
+        ]),
+      };
+
+      mockDataSource.createQueryBuilder
+        .mockReturnValueOnce(mockPackagesQueryBuilder)
+        .mockReturnValueOnce(mockServicesQueryBuilder);
+
+      const service = Object.assign(appointmentsService as any, {
+        appointmentRepository: mockAppointmentRepo,
+        dataSource: mockDataSource,
+      }) as AppointmentsService;
+
+      // Act
+      const result = await service.getMyAppointmentDetail(patientId, appointmentId);
+
+      // Assert
+      expect(mockServicesQueryBuilder.leftJoin).toHaveBeenCalledWith(
+        'erms',
+        'e',
+        expect.stringContaining('e.service_appointments_id = sa._id'),
+      );
+      expect(result.appointment_packages[0].service_appointments).toHaveLength(2);
+      expect(result.appointment_packages[0].service_appointments[0].erm_summary).toBeDefined();
+      expect(result.appointment_packages[0].service_appointments[1].erm_summary).toBeUndefined();
+    });
+  });
 });

@@ -1,2 +1,10 @@
 export { CreateMedicineDto } from './create-medicine.dto';
 export { UpdateMedicineDto } from './update-medicine.dto';
+export { PatientEPrescriptionDetailResponseDto, DetailEPrescriptionItemDto, MedicineDetailDto } from './patient-e-prescription-response.dto';
+export { PatientERMDetailResponseDto } from './patient-erm-detail-response.dto';
+export { ERMXrayDto } from './erm-xray.dto';
+export { ERMLabDto } from './erm-lab.dto';
+export { ERMConsultationDto } from './erm-consultation.dto';
+export { ERMUltrasoundDto } from './erm-ultrasound.dto';
+export { ERMBoneDensityDto } from './erm-bone-density.dto';
+export { ERMProcedureDto } from './erm-procedure.dto';

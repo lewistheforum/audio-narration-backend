@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   OneToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
+import { DetailEPrescription } from './detail-e-prescription.entity';
 
 /**
  * EPrescription Entity
@@ -29,6 +31,9 @@ export class EPrescription {
   })
   @JoinColumn({ name: 'appointment_id' })
   appointment?: Appointment;
+
+  @OneToMany(() => DetailEPrescription, (detail) => detail.ePrescription)
+  detailEPrescriptions?: DetailEPrescription[];
 
   @Column({ name: 'reference_id', type: 'varchar', nullable: true })
   referenceId?: string;
