@@ -3703,7 +3703,7 @@ export class AccountsService {
 
       // Create Account entity with CLINIC_MANAGER role and ACTIVE status
       const managerAccount = this.accountRepository.createAccount({
-        username: dto.email.split('@')[0],
+        username: dto.username,
         email: dto.email,
         password: hashedPassword,
         phone: dto.phone,
@@ -3720,10 +3720,11 @@ export class AccountsService {
       // Create ClinicManagerInformation entity
       const managerInfo = this.clinicManagerInfoRepository.create({
         accountId: savedManagerAccount._id,
-        clinicBranchName: 'Main Branch', // Default branch name
+        clinicBranchName: dto.clinicBranchName,
         fullName: dto.fullName,
         gender: dto.gender,
-        dob: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+        profilePicture: dto.profilePicture,
+        dob: dto.dob ? new Date(dto.dob) : undefined,
       });
 
       await queryRunner.manager.save(managerInfo);
@@ -3731,10 +3732,13 @@ export class AccountsService {
       // Create Address entity for manager
       const address = this.addressRepository.create({
         accountId: savedManagerAccount._id,
-        address: dto.address,
+        address: dto.addressDetail,
         ward: dto.wardCode,
+        wardName: dto.wardName,
         district: dto.districtCode,
+        districtName: dto.districtName,
         province: dto.provinceCode,
+        provinceName: dto.provinceName,
       });
 
       await queryRunner.manager.save(address);
@@ -3852,10 +3856,10 @@ export class AccountsService {
 
       if (legalDocs) {
         // Update existing documents
-        legalDocs.businessLicense = dto.businessLicenseUrl;
+        legalDocs.operatingLicense = dto.operatingLicense;
+        legalDocs.businessLicense = dto.businessLicense;
         legalDocs.taxIdUrl = dto.taxIdUrl;
         legalDocs.otherDocs = dto.otherDocs;
-        legalDocs.operatingLicense = dto.operatingLicense;
         legalDocs.verificationStatus =
           LegalDocumentVerificationStatus.PENDING_REVIEW;
         legalDocs = await queryRunner.manager.save(legalDocs);
@@ -3863,10 +3867,10 @@ export class AccountsService {
         // Create new legal documents
         legalDocs = this.clinicLegalDocsRepository.create({
           accountId: managerAccountId,
-          businessLicense: dto.businessLicenseUrl,
+          operatingLicense: dto.operatingLicense,
+          businessLicense: dto.businessLicense,
           taxIdUrl: dto.taxIdUrl,
           otherDocs: dto.otherDocs,
-          operatingLicense: dto.operatingLicense,
           verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW,
         });
         legalDocs = await queryRunner.manager.save(legalDocs);
