@@ -13,6 +13,7 @@ import {
   AiChatRequestDto,
   AiChatResponseDto,
   PatientAppointmentRecommendationRequestDto,
+  FractureDetectionRequestDto,
 } from './dto';
 import { AiChatImvFeedbackRequestDto } from './dto/ai-chat-imv-feedback-request.dto';
 
@@ -143,5 +144,25 @@ export class AiController {
     @Body() dto: PatientAppointmentRecommendationRequestDto,
   ): Promise<any> {
     return this.aiService.getRecommendationsFromPatientAppointment(dto);
+  }
+
+  @Post('fracture-detection')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Detect fractures in X-ray image',
+    description:
+      'Upload a base64 encoded X-ray image and optional patient notes ' +
+      'to detect fractures using AI.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Fracture detection completed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid base64 image or bad request',
+  })
+  async detectFracture(@Body() dto: FractureDetectionRequestDto): Promise<any> {
+    return this.aiService.detectFracture(dto);
   }
 }

@@ -7,7 +7,9 @@ import { AiProvider } from './enums/ai-provider.enum';
 import { AiModel } from './enums/ai-model.enum';
 import { AiChatImvFeedbackRequestDto } from './dto/ai-chat-imv-feedback-request.dto';
 import { PatientAppointmentRecommendationRequestDto } from './dto/patient-appointment-recommendation-request.dto';
+import { FractureDetectionRequestDto } from './dto/fracture-detection-request.dto';
 import { HttpService } from '@nestjs/axios';
+import * as FormData from 'form-data';
 import { firstValueFrom } from 'rxjs';
 import { API } from '../../common/utils/ai-api';
 
@@ -99,39 +101,23 @@ export class AiService {
   async chatServiceImprovement(
     dto: AiChatImvFeedbackRequestDto,
   ): Promise<AiChatResponseDto> {
-    // Determine model to use
-    const model = dto.model || this.getDefaultModel(dto.provider);
+    const model = AiModel.GPT_5_MINI;
 
-    // Validate provider and model compatibility
-    this.validateProviderModel(dto.provider, model);
+    this.validateProviderModel(AiProvider.CHATGPT, model);
 
-    let content: string;
+    // const content = await this.geminiService.chatCompletionServiceImprovement(
+    //   dto.clinicId,
+    //   model,
+    //   dto.startDate,
+    //   dto.endDate,
+    // );
 
-    // Route to appropriate provider service
-    switch (dto.provider) {
-      case AiProvider.GEMINI:
-        content = await this.geminiService.chatCompletionServiceImprovement(
-          dto.clinicId,
-          model,
-          // dto.temperature,
-          // dto.maxTokens,
-        );
-        break;
-
-      case AiProvider.CHATGPT:
-        content = await this.chatGptService.chatCompletionServiceImprovement(
-          dto.clinicId,
-          model,
-          // dto.temperature,
-          // dto.maxTokens,
-        );
-        break;
-
-      default:
-        throw new BadRequestException(
-          `Unsupported AI provider: ${dto.provider}`,
-        );
-    }
+    const content = await this.chatGptService.chatCompletionServiceImprovement(
+      dto.clinicId,
+      model,
+      dto.startDate,
+      dto.endDate,
+    );
 
     // Try to parse JSON response, fallback to error message if parsing fails
     let formatJson: any;
@@ -145,10 +131,9 @@ export class AiService {
       };
     }
 
-    // Return formatted response
     return {
       content: formatJson,
-      provider: dto.provider,
+      provider: AiProvider.CHATGPT,
       model,
       timestamp: new Date(),
     };
@@ -184,6 +169,59 @@ export class AiService {
     } catch (error) {
       throw new BadRequestException(
         `Failed to fetch recommendations from appointment: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Detect fractures using AI backend
+   * @param dto The payload containing base64 image and optional notes
+   */
+  async detectFracture(dto: FractureDetectionRequestDto): Promise<any> {
+    try {
+      const url = API.AI.FRACTURE_DETECTION;
+
+      const formData = new FormData();
+
+      // Ensure it is a valid base64 data URI
+      const match = dto.imageBase64.match(
+        /^data:image\/([a-zA-Z0-9]+);base64,(.+)$/,
+      );
+      if (!match) {
+        throw new BadRequestException(
+          'Invalid base64 image format. Expected data URI like data:image/jpeg;base64,...',
+        );
+      }
+
+      const extension = match[1];
+      const base64Data = match[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      formData.append('file', buffer, {
+        filename: `image.${extension}`,
+        contentType: `image/${extension}`,
+      });
+
+      if (dto.notes) {
+        formData.append('notes', String(dto.notes));
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.post(url, formData, {
+          headers: {
+            ...formData.getHeaders(),
+          },
+        }),
+      );
+
+      return response.data;
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        error.message;
+      throw new BadRequestException(
+        `Failed to process fracture detection: ${errorMessage}`,
       );
     }
   }
@@ -228,6 +266,7 @@ export class AiService {
       AiModel.GPT_5_MINI,
       AiModel.GPT_4,
       AiModel.GPT_4_TURBO,
+      AiModel.GPT_o4_MINI,
     ];
 
     if (provider === AiProvider.GEMINI && !geminiModels.includes(model)) {

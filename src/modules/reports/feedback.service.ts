@@ -325,13 +325,14 @@ export class FeedbackService {
       // Label Description
       if (feedback.description) {
         try {
-          const response = await axios.post(
-            'http://localhost:8080/api/v1/feedback/label-description',
-            { text: feedback.description },
-          );
-          feedback.descriptionLabel = response.data.results.map(
-            (result: any) => result.label,
-          );
+          const response = await axios.post(API.AI.FEEDBACK_LABEL_DESCRIPTION, {
+            text: feedback.description,
+          });
+          if (response.data.data?.results) {
+            feedback.descriptionLabel = response.data.data.results.map(
+              (result: any) => result.label,
+            );
+          }
         } catch (error) {
           console.error(
             `Error labeling description for feedback ${feedback._id}:`,
@@ -340,18 +341,18 @@ export class FeedbackService {
         }
       }
 
-      // Label Images
       if (feedback.feedbackImages && Array.isArray(feedback.feedbackImages)) {
         const imageLabels = [];
         for (const imageUrl of feedback.feedbackImages) {
           try {
-            const response = await axios.post(
-              'http://localhost:8080/api/v1/feedback/label-image',
-              { image_url: imageUrl },
-            );
-            imageLabels.push({
-              description: response.data.description,
+            const response = await axios.post(API.AI.FEEDBACK_LABEL_IMAGE, {
+              image_url: imageUrl,
             });
+            if (response.data.data?.description) {
+              imageLabels.push({
+                description: response.data.data.description,
+              });
+            }
           } catch (error) {
             console.error(`Error labeling image ${imageUrl}:`, error.message);
           }
@@ -366,16 +367,16 @@ export class FeedbackService {
   async labelFeedbackById(id: string) {
     const feedback = await this.feedbackRepository.findFeedbackById(id);
 
-    // Label Description
     if (feedback.description) {
       try {
-        const response = await axios.post(
-          'http://localhost:8080/api/v1/feedback/label-description',
-          { text: feedback.description },
-        );
-        feedback.descriptionLabel = response.data.results.map(
-          (result: any) => result.label,
-        );
+        const response = await axios.post(API.AI.FEEDBACK_LABEL_DESCRIPTION, {
+          text: feedback.description,
+        });
+        if (response.data.data?.results) {
+          feedback.descriptionLabel = response.data.data.results.map(
+            (result: any) => result.label,
+          );
+        }
       } catch (error) {
         console.error(
           `Error labeling description for feedback ${feedback._id}:`,
@@ -384,18 +385,18 @@ export class FeedbackService {
       }
     }
 
-    // Label Images
     if (feedback.feedbackImages && Array.isArray(feedback.feedbackImages)) {
       const imageLabels = [];
       for (const imageUrl of feedback.feedbackImages) {
         try {
-          const response = await axios.post(
-            'http://localhost:8080/api/v1/feedback/label-image',
-            { image_url: imageUrl },
-          );
-          imageLabels.push({
-            description: response.data.description,
+          const response = await axios.post(API.AI.FEEDBACK_LABEL_IMAGE, {
+            image_url: imageUrl,
           });
+          if (response.data.data?.description) {
+            imageLabels.push({
+              description: response.data.data.description,
+            });
+          }
         } catch (error) {
           console.error(`Error labeling image ${imageUrl}:`, error.message);
         }
