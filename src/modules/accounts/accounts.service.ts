@@ -3840,7 +3840,7 @@ export class AccountsService {
       subscription.subscriptionStatus !== RegistrationStatus.PENDING_LEGAL_SETUP
     ) {
       throw new ForbiddenException(
-        `Cannot upload legal documents. Current status: ${subscription.subscriptionStatus}`,
+        `Cannot upload legal documents. Current status: ${subscription.subscriptionStatus}. Expected: PENDING_LEGAL_SETUP`,
       );
     }
 
@@ -4000,7 +4000,7 @@ export class AccountsService {
       );
     }
 
-    // Step 5: Validate subscription status is PENDING_LEGAL_SETUP
+    // Step 5: Validate subscription status is PENDING_LEGAL_SETUP (documents must be REJECTED)
     const subscription =
       await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
     if (!subscription) {

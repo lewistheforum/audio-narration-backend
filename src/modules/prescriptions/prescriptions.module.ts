@@ -12,8 +12,11 @@ import {
   ERMUltrasound,
   ERMProcedure,
   ERMBoneDensity,
+  ERMLab,
 } from './entities';
 import { MedicineRepository } from './repositories';
+import { Appointment } from '../appointments/entities/appointment.entity';
+import { PdfGeneratorService } from './services';
 
 /**
  * Prescriptions Module
@@ -47,10 +50,12 @@ import { MedicineRepository } from './repositories';
       ERMUltrasound,
       ERMProcedure,
       ERMBoneDensity,
+      ERMLab,
+      Appointment,
     ]),
   ],
   controllers: [PrescriptionsController],
-  providers: [PrescriptionsService, MedicineRepository],
+  providers: [PrescriptionsService, MedicineRepository, PdfGeneratorService],
   exports: [PrescriptionsService, TypeOrmModule],
 })
 export class PrescriptionsModule {}

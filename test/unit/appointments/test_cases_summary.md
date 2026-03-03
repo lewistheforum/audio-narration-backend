@@ -879,13 +879,44 @@ File: appointments-option3.service.spec.ts
 
 ---
 
+## 8. Luồng Patient View Appointment (APIs 1-5)
+
+### Mục Đích
+Kiểm tra hệ thống xem chi tiết cuộc hẹn cho vai trò PATIENT, bao gồm danh sách, chi tiết, đơn thuốc, xuất PDF, và hồ sơ bệnh án đa hình.
+
+### API 1: GET /patients/me/appointments (Danh Sách Cuộc Hẹn)
+
+| # | Test Case | Đầu Vào | Kết Quả Mong Đợi | Quy Tắc Kiểm Tra |
+|---|-----------|---------|------------------|-------------------|
+| **8.1.1** | **[Pass] Lọc tab UPCOMING thành công** | • `tab: 'UPCOMING'`<br>• `patientId: 'patient-123'`<br>• Có appointments với status PENDING, CONFIRMED<br>• `appointment_date >= today` | ✅ Chỉ trả về appointments:<br>  - Status IN [PENDING, CONFIRMED, CHECKED_IN, IN_PROGRESS]<br>  - appointment_date >= today<br>✅ Không trả về COMPLETED/CANCELLED<br>✅ Không trả về appointments quá hạn | • Xác thực logic UPCOMING filter<br>• Verify date comparison<br>• Verify status filtering |
+| **8.1.2** | **[Pass] Lọc tab HISTORY thành công** | • `tab: 'HISTORY'`<br>• `patientId: 'patient-123'`<br>• Có appointments COMPLETED và PENDING quá hạn | ✅ Trả về appointments:<br>  - Status IN [COMPLETED, CANCELLED, ABSENT]<br>  - HOẶC (status IN [PENDING...] AND date < today)<br>✅ Không trả về UPCOMING valid | • Xác thực logic HISTORY filter<br>• Verify OR condition<br>• Verify expired appointments included |
+| **8.1.3** | **[Pass] Pagination hoạt động đúng** | • `page: 2`<br>• `limit: 10`<br>• Tổng 25 appointments | ✅ Trả về 10 appointments (items 11-20)<br>✅ `meta.total = 25`<br>✅ `meta.page = 2`<br>✅ `meta.total_pages = 3`<br>✅ `meta.limit = 10` | • Verify skip/take logic<br>• Verify meta calculation<br>• Verify correct items returned |
+| **8.1.4** | **[Pass] Status override tab parameter** | • `tab: 'UPCOMING'`<br>• `status: 'COMPLETED'`<br>• Có appointments cả UPCOMING và COMPLETED | ✅ Chỉ trả về COMPLETED appointments<br>✅ Bỏ qua tab filter<br>✅ Priority: status > tab | • Verify parameter priority<br>• Verify status-only filter applied |
+| **8.1.5** | **[Pass] Tránh N+1 query cho services** | • `limit: 20`<br>• Mỗi appointment có 3 services | ✅ Query 1: Load appointments + clinic + doctor<br>✅ Query 2: Bulk load tất cả services (1 query)<br>✅ Total: 2 queries (không phải 1+20)<br>✅ Services được group đúng theo appointment | • Mock dataSource.createQueryBuilder<br>• Verify getRawMany() called once<br>• Verify service grouping logic |
+| **8.1.6** | **[Pass] Soft delete filtering** | • Patient có 10 appointments<br>• 2 appointments có `deleted_at != null` | ✅ Chỉ trả về 8 appointments active<br>✅ Không trả về deleted appointments | • Verify WHERE deleted_at IS NULL<br>• Verify filter applied |
+
+### API 2: GET /patients/me/appointments/:id (Chi Tiết Cuộc Hẹn)
+
+| # | Test Case | Đầu Vào | Kết Quả Mong Đợi | Quy Tắc Kiểm Tra |
+|---|-----------|---------|------------------|-------------------|
+| **8.2.1** | **[Pass] Xem chi tiết appointment thành công** | • `appointmentId: 'apt-123'`<br>• `patientId: 'patient-123'`<br>• Appointment belongs to patient<br>• Status: CONFIRMED | ✅ Trả về full appointment details<br>✅ Clinic info: _id, name, address, phone, profilePicture<br>✅ Doctor info: _id, name, academicDegree, position<br>✅ appointment_packages with service_appointments<br>✅ ERM summaries trong service_appointments<br>✅ Không có e_prescription_summary (vì không COMPLETED)<br>✅ Không có reject_reason (vì không CANCELLED) | • Verify ownership check<br>• Verify nested data loading<br>• Verify conditional fields |
+| **8.2.2** | **[Fail] Appointment không thuộc về patient** | • `appointmentId: 'apt-123'`<br>• `patientId: 'patient-999'`<br>• Appointment belongs to patient-123 | ❌ `NotFoundException`<br>❌ Message: "Appointment not found or access denied"<br>❌ HTTP 404 | • Verify ownership validation<br>• Verify query returns null<br>• Verify exception thrown |
+| **8.2.3** | **[Pass] E-prescription summary chỉ khi COMPLETED** | • `appointmentId: 'apt-123'`<br>• Status: COMPLETED<br>• Có e_prescription với id 'ep-123' | ✅ `e_prescription_summary.id = 'ep-123'`<br>✅ Field có trong response | • Verify conditional query<br>• Verify status check<br>• Verify summary populated |
+| **8.2.4** | **[Pass] Reject reason chỉ khi CANCELLED** | • `appointmentId: 'apt-123'`<br>• Status: CANCELLED<br>• `reject_reason: 'Patient request'` | ✅ `reject_reason = 'Patient request'`<br>✅ Field có trong response | • Verify conditional logic<br>• Verify status check<br>• Verify reason populated |
+| **8.2.5** | **[Pass] ERM summary trong service appointments** | • Appointment có 2 service_appointments<br>• Service 1 có ERM (id: erm-1, type: XRAY, status: COMPLETED)<br>• Service 2 không có ERM | ✅ Service 1: `erm_summary = { _id: 'erm-1', record_type: 'XRAY', status: 'COMPLETED' }`<br>✅ Service 2: `erm_summary = undefined` | • Verify LEFT JOIN with erms<br>• Verify optional ERM handling<br>• Verify summary mapping |
+| **8.2.6** | **[Pass] Tối ưu query - 3-4 queries total** | • Appointment phức tạp: 2 packages, 5 services, 3 ERMs | ✅ Query 1: Appointment + clinic + doctor<br>✅ Query 2: Appointment packages<br>✅ Query 3: Bulk load services + ERMs<br>✅ Query 4: E-prescription (conditional)<br>✅ Total: 3-4 queries (không N+1) | • Mock query execution<br>• Count query calls<br>• Verify bulk loading |
+
+---
+
 ## Tài Liệu Tham Khảo
 
 - **Triển Khai**: `src/modules/appointments/`
 - **Quy Tắc Nghiệp Vụ**: `test/unit/appointments/business_rules.md`
 - **Tài Liệu Spec**: `document/booking_implement.txt` (Phiên bản 3.1)
+- **Tài Liệu Patient View**: `document/view_appointment_implementation.txt`
 - **Framework Testing**: Jest + NestJS Testing Module
 - **Test Files**:
   - Option 1: `test/unit/appointments/appointments.service.spec.ts`
   - Option 2: `test/unit/appointments/appointments-option2.service.spec.ts`
   - Option 3: `test/unit/appointments/appointments-option3.service.spec.ts`
+  - Patient View: Xem test cases trong appointments.service.spec.ts

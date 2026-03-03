@@ -1622,11 +1622,18 @@ export class AppointmentsService {
    * Get Patient's Appointments (Step 5 - Patient appointment history)
    *
    * Business Logic:
+   * - UPCOMING: status IN [PENDING, CONFIRMED, CHECKED_IN, IN_PROGRESS] AND appointment_date >= today
+   * - HISTORY: status IN [COMPLETED, CANCELLED, ABSENT] OR (unfinished status AND appointment_date < today)
+   * - Status filter overrides tab filter if provided
    * - Query appointments for patient_id
    * - JOIN with clinic, doctor, appointment_package, service_appointments
-   * - Support filtering by status, date
+   * - Support filtering by status, date, tab
    * - Pagination
    * - Order by appointment_date DESC, appointment_hour DESC
+   *
+   * Optimization:
+   * - Uses bulk loading to avoid N+1 queries
+   * - Loads appointments first, then fetches services in a single query
    *
    * @param patientId - Patient account UUID
    * @param params - Query parameters for filtering and pagination
@@ -1637,132 +1644,317 @@ export class AppointmentsService {
     params: {
       page: number;
       limit: number;
+      tab?: 'UPCOMING' | 'HISTORY';
       status?: string;
       appointmentDate?: string;
     },
   ) {
-    const { page, limit, status, appointmentDate } = params;
-    const offset = (page - 1) * limit;
+    const { page, limit, tab, status, appointmentDate } = params;
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-    // Build base query
-    let query = this.dataSource
-      .createQueryBuilder()
-      .select([
-        'a._id AS appointment_id',
-        'clinic._id AS clinic_id',
-        'clinic.business_name AS clinic_name',
-        'clinic.address AS clinic_address',
-        'doctor._id AS doctor_id',
-        'doctor.full_name AS doctor_name',
-        'a.appointment_date AS appointment_date',
-        'a.appointment_hour AS appointment_hour',
-        'a.total AS total',
-        'a.status AS status',
-        'a.patient_note AS patient_note',
-        'a.created_at AS created_at',
-        'ap.payment_type AS payment_type',
-        'ap.status AS payment_status',
-      ])
-      .from('appointments', 'a')
-      .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
-      .leftJoin('accounts', 'doctor', 'doctor._id = a.doctor_id')
-      .leftJoin('appointment_package', 'ap', 'ap.appointment_id = a._id')
+    // Build base query using QueryBuilder for better control
+    const query = this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.clinic', 'clinic')
+      .leftJoinAndSelect('a.doctor', 'doctor')
       .where('a.patient_id = :patientId', { patientId })
       .andWhere('a.deleted_at IS NULL');
 
-    // Apply status filter
+    // Apply status filter (overrides tab if provided)
     if (status) {
-      query = query.andWhere('a.status = :status', { status });
+      query.andWhere('a.status = :status', { status });
+    } else if (tab) {
+      // Apply tab-based filtering
+      if (tab === 'UPCOMING') {
+        // UPCOMING: Active statuses AND future/today appointments
+        query.andWhere(
+          `(a.status IN (:...upcomingStatuses) AND a.appointment_date >= :today)`,
+          {
+            upcomingStatuses: [
+              AppointmentStatus.PENDING,
+              AppointmentStatus.CONFIRMED,
+              AppointmentStatus.CHECKED_IN,
+              AppointmentStatus.IN_PROGRESS,
+            ],
+            today,
+          },
+        );
+      } else if (tab === 'HISTORY') {
+        // HISTORY: Completed/Cancelled/Absent OR past appointments with unfinished status
+        query.andWhere(
+          `(a.status IN (:...completedStatuses) OR 
+           (a.status IN (:...unfinishedStatuses) AND a.appointment_date < :today))`,
+          {
+            completedStatuses: [
+              AppointmentStatus.COMPLETED,
+              AppointmentStatus.CANCELLED,
+              AppointmentStatus.ABSENT,
+            ],
+            unfinishedStatuses: [
+              AppointmentStatus.PENDING,
+              AppointmentStatus.CONFIRMED,
+              AppointmentStatus.CHECKED_IN,
+              AppointmentStatus.IN_PROGRESS,
+            ],
+            today,
+          },
+        );
+      }
     }
 
     // Apply date filter
     if (appointmentDate) {
-      query = query.andWhere('a.appointment_date = :appointmentDate', {
+      query.andWhere('a.appointment_date = :appointmentDate', {
         appointmentDate,
       });
     }
 
     // Get total count
-    const countQuery = query.clone();
-    const countResult = await countQuery.getRawMany();
-    const total = countResult.length;
+    const total = await query.getCount();
 
-    // Get paginated results
+    // Get paginated results with ordering
     const appointments = await query
       .orderBy('a.appointment_date', 'DESC')
       .addOrderBy('a.appointment_hour', 'DESC')
-      .limit(limit)
-      .offset(offset)
-      .getRawMany();
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
 
-    // For each appointment, get services and shift hour details
-    const enrichedAppointments = await Promise.all(
-      appointments.map(async (apt) => {
-        // Get services
-        const services = await this.dataSource
-          .createQueryBuilder()
-          .select([
-            'cs._id AS service_id',
-            'cs.service_name AS service_name',
-            'csc.price AS price',
-          ])
-          .from('service_appointments', 'sa')
-          .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
-          .innerJoin('clinic_services', 'cs', 'cs._id = csc.clinic_service_id')
-          .innerJoin('appointment_package', 'ap', 'ap._id = sa.appointment_package_id')
-          .where('ap.appointment_id = :appointmentId', {
-            appointmentId: apt.appointment_id,
-          })
-          .getRawMany();
+    // Optimization: Bulk load services to avoid N+1 queries
+    let servicesMap: Map<string, any[]> = new Map();
+    if (appointments.length > 0) {
+      const appointmentIds = appointments.map((a) => a._id);
 
-        // Get shift hour details (start_time, end_time)
-        let startTime = null;
-        let endTime = null;
-        if (apt.appointment_id) {
-          const shiftHour = await this.dataSource
-            .createQueryBuilder()
-            .select(['csh.start_hour AS start_time', 'csh.end_hour AS end_time'])
-            .from('appointments', 'a')
-            .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.doctor_shift_hour_id')
-            .where('a._id = :appointmentId', { appointmentId: apt.appointment_id })
-            .getRawOne();
+      // Single query to fetch all services for all appointments
+      const servicesRaw = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'ap.appointment_id AS appointment_id',
+          'cs._id AS service_id',
+          'cs.service_name AS service_name',
+          'csc.price AS price',
+        ])
+        .from('appointment_package', 'ap')
+        .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
+        .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
+        .innerJoin('clinic_services', 'cs', 'cs._id = csc.clinic_service_id')
+        .where('ap.appointment_id IN (:...appointmentIds)', { appointmentIds })
+        .andWhere('ap.deleted_at IS NULL')
+        .andWhere('sa.deleted_at IS NULL')
+        .getRawMany();
 
-          if (shiftHour) {
-            startTime = shiftHour.start_time;
-            endTime = shiftHour.end_time;
-          }
+      // Group services by appointment_id
+      servicesRaw.forEach((service) => {
+        const aptId = service.appointment_id;
+        if (!servicesMap.has(aptId)) {
+          servicesMap.set(aptId, []);
         }
+        servicesMap.get(aptId)!.push({
+          service_id: service.service_id,
+          service_name: service.service_name,
+          price: parseFloat(service.price || '0'),
+        });
+      });
+    }
 
-        return {
-          appointment_id: apt.appointment_id,
-          clinic_id: apt.clinic_id,
-          clinic_name: apt.clinic_name,
-          clinic_address: apt.clinic_address,
-          doctor_id: apt.doctor_id,
-          doctor_name: apt.doctor_name,
-          services,
-          appointment_date: apt.appointment_date,
-          appointment_hour: apt.appointment_hour,
-          start_time: startTime,
-          end_time: endTime,
-          total: parseFloat(apt.total || '0'),
-          status: apt.status,
-          payment_type: apt.payment_type,
-          payment_status: apt.payment_status,
-          patient_note: apt.patient_note,
-          created_at: apt.created_at,
-        };
-      }),
-    );
+    // Map to response DTO structure
+    const data = appointments.map((apt) => ({
+      _id: apt._id,
+      clinic: {
+        _id: apt.clinic._id,
+        name: (apt.clinic as any).businessName || (apt.clinic as any).fullName,
+        address: (apt.clinic as any).address,
+      },
+      doctor: apt.doctor
+        ? {
+            _id: apt.doctor._id,
+            name: (apt.doctor as any).fullName,
+            profilePicture: (apt.doctor as any).profilePicture,
+          }
+        : null,
+      appointment_date: apt.appointmentDate,
+      appointment_hour: apt.appointmentHour,
+      status: apt.status,
+      total: parseFloat(apt.total?.toString() || '0'),
+      services: servicesMap.get(apt._id) || [],
+    }));
 
     return {
-      data: enrichedAppointments,
+      data,
       meta: {
         total,
         page,
         limit,
         total_pages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  /**
+   * Get My Appointment Detail (Patient)
+   *
+   * Returns comprehensive appointment details including:
+   * - Clinic and doctor information
+   * - Appointment packages with services
+   * - ERM summaries for each service
+   * - E-prescription summary (only when status is COMPLETED)
+   * - Reject reason (only when status is CANCELLED)
+   *
+   * Security:
+   * - Strict ownership verification (patient_id must match)
+   * - Returns 404 if appointment not found or access denied
+   *
+   * @param patientId - Patient ID from JWT token
+   * @param appointmentId - Appointment ID from URL parameter
+   * @returns PatientAppointmentDetailResponseDto
+   */
+  async getMyAppointmentDetail(patientId: string, appointmentId: string) {
+    // Layer 1: Verify appointment ownership
+    const appointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.clinic', 'clinic')
+      .leftJoinAndSelect('a.doctor', 'doctor')
+      .where('a._id = :appointmentId', { appointmentId })
+      .andWhere('a.patient_id = :patientId', { patientId })
+      .andWhere('a.deleted_at IS NULL')
+      .getOne();
+
+    if (!appointment) {
+      throw new NotFoundException(
+        MESSAGES.failMessage.appointmentNotFound || 'Appointment not found or access denied',
+      );
+    }
+
+    // Layer 2: Load appointment packages
+    const packages = await this.dataSource
+      .createQueryBuilder()
+      .select([
+        'ap._id AS package_id',
+        'ap.amount AS amount',
+      ])
+      .from('appointment_package', 'ap')
+      .where('ap.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('ap.deleted_at IS NULL')
+      .getRawMany();
+
+    // Layer 3: Load service appointments with ERM summary (bulk load to avoid N+1)
+    let serviceAppointmentsData: any[] = [];
+    if (packages.length > 0) {
+      const packageIds = packages.map(p => p.package_id);
+      
+      serviceAppointmentsData = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'sa._id AS sa_id',
+          'sa.appointment_package_id AS package_id',
+          'csc._id AS service_config_id',
+          'cs._id AS service_id',
+          'cs.service_name AS service_name',
+          'csc.price AS price',
+          'e._id AS erm_id',
+          'e.record_type AS erm_record_type',
+          'e.status AS erm_status',
+        ])
+        .from('service_appointments', 'sa')
+        .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
+        .innerJoin('clinic_services', 'cs', 'cs._id = csc.clinic_service_id')
+        .leftJoin('erms', 'e', 'e.service_appointments_id = sa._id AND e.deleted_at IS NULL')
+        .where('sa.appointment_package_id IN (:...packageIds)', { packageIds })
+        .andWhere('sa.deleted_at IS NULL')
+        .getRawMany();
+    }
+
+    // Group service appointments by package
+    const servicesByPackage = new Map<string, any[]>();
+    serviceAppointmentsData.forEach((sa) => {
+      const pkgId = sa.package_id;
+      if (!servicesByPackage.has(pkgId)) {
+        servicesByPackage.set(pkgId, []);
+      }
+      
+      servicesByPackage.get(pkgId)!.push({
+        _id: sa.sa_id,
+        clinic_service: {
+          _id: sa.service_id,
+          service_name: sa.service_name,
+          price: parseFloat(sa.price || '0'),
+        },
+        erm_summary: sa.erm_id ? {
+          _id: sa.erm_id,
+          record_type: sa.erm_record_type,
+          status: sa.erm_status,
+        } : undefined,
+      });
+    });
+
+    // Layer 4: Business Rules - E-Prescription Summary (only when COMPLETED)
+    let ePrescriptionSummary = undefined;
+    if (appointment.status === AppointmentStatus.COMPLETED) {
+      const ePrescription = await this.dataSource
+        .createQueryBuilder()
+        .select('ep._id', 'id')
+        .from('e_prescriptions', 'ep')
+        .where('ep.appointment_id = :appointmentId', { appointmentId })
+        .andWhere('ep.deleted_at IS NULL')
+        .getRawOne();
+
+      if (ePrescription) {
+        ePrescriptionSummary = { _id: ePrescription.id };
+      }
+    }
+
+    // Get doctor information if doctor is assigned
+    let doctorInfo = undefined;
+    if (appointment.doctor) {
+      const doctorDetails = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'di.academic_degree AS academic_degree',
+          'di.position AS position',
+        ])
+        .from('doctor_information', 'di')
+        .where('di.account_id = :doctorId', { doctorId: appointment.doctor._id })
+        .andWhere('di.deleted_at IS NULL')
+        .getRawOne();
+
+      doctorInfo = {
+        _id: appointment.doctor._id,
+        name: (appointment.doctor as any).fullName,
+        profilePicture: (appointment.doctor as any).profilePicture,
+        academicDegree: doctorDetails?.academic_degree,
+        position: doctorDetails?.position,
+      };
+    }
+
+    // Map to response DTO structure
+    return {
+      _id: appointment._id,
+      clinic: {
+        _id: appointment.clinic._id,
+        name: (appointment.clinic as any).businessName || (appointment.clinic as any).fullName,
+        address: (appointment.clinic as any).address,
+        phone: appointment.clinic.phone,
+        profilePicture: (appointment.clinic as any).profilePicture,
+      },
+      doctor: doctorInfo,
+      appointment_date: appointment.appointmentDate,
+      appointment_hour: appointment.appointmentHour,
+      status: appointment.status,
+      total: parseFloat(appointment.total?.toString() || '0'),
+      patient_note: appointment.patientNote,
+      reject_reason: appointment.status === AppointmentStatus.CANCELLED 
+        ? appointment.rejectReason 
+        : undefined,
+      e_prescription_summary: ePrescriptionSummary,
+      appointment_packages: packages.map(pkg => ({
+        _id: pkg.package_id,
+        amount: parseFloat(pkg.amount || '0'),
+        service_appointments: servicesByPackage.get(pkg.package_id) || [],
+      })),
+      created_at: appointment.createdAt,
+      updated_at: appointment.updatedAt,
     };
   }
 
