@@ -522,7 +522,7 @@ export class AccountsController {
     @Request() req: any,
     @Query() query: GetStaffListDto,
   ): Promise<{ data: StaffListResponseDto; message: string }> {
-    const managerId = req.user.accountId;
+    const managerId = req.user._id;
     const result = await this.accountsService.findAllStaffByManager(
       managerId,
       query.page || 1,
@@ -552,7 +552,7 @@ export class AccountsController {
     @Request() req: any,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ data: AccountResponseDto; message: string }> {
-    const managerId = req.user.accountId;
+    const managerId = req.user._id;
     const result = await this.accountsService.findStaffById(id, managerId);
     return {
       data: result,
@@ -574,7 +574,7 @@ export class AccountsController {
     @Request() req: any,
     @Query() query: GetDoctorListDto,
   ): Promise<{ data: DoctorListResponseDto; message: string }> {
-    const managerId = req.user.accountId;
+    const managerId = req.user._id;
     const result = await this.accountsService.findAllDoctorsByManager(
       managerId,
       query.page || 1,
@@ -962,7 +962,7 @@ export class AccountsController {
     @Request() req: any,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ message: string }> {
-    const requestorId = req.user.accountId;
+    const requestorId = req.user._id;
     await this.accountsService.deleteEmployee(id, requestorId);
     return { message: MESSAGES.successMessage.userDeleteSuccess };
   }
@@ -1229,7 +1229,7 @@ export class AccountsController {
     @Request() req: any,
   ): Promise<{ data: CancelRegistrationResponseDto; message: string }> {
     const result = await this.accountsService.cancelPendingRegistration(
-      req.user.accountId,
+      req.user._id,
     );
     return { data: result, message: result.message };
   }
@@ -1277,7 +1277,7 @@ export class AccountsController {
     @Body() dto: CancelSubscriptionDto,
   ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
     const result = await this.accountsService.cancelActiveSubscription(
-      req.user.accountId,
+      req.user._id,
       dto,
     );
     return { data: result, message: result.message };
@@ -1327,7 +1327,7 @@ export class AccountsController {
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
     @Body() dto: any,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1378,7 +1378,7 @@ export class AccountsController {
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.getLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1438,7 +1438,7 @@ export class AccountsController {
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
     @Body() dto: any,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.updateLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,

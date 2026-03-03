@@ -5,7 +5,7 @@
  * This file contains all configurable values for generating realistic test data.
  */
 
-import { AppointmentStatus, PaymentType } from '../../modules/appointments/enums';
+import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../../modules/appointments/enums';
 import { ERMRecordType, ERMStatus } from '../../modules/prescriptions/enums';
 
 // ============================================================================
@@ -226,9 +226,9 @@ export const SERVICE_CODES = [
  * Sample appointment package statuses
  */
 export const APPOINTMENT_PACKAGE_STATUSES = [
-  'PAID',
-  'COMPLETED',
-  'REFUNDED',
+  AppointmentPackageStatus.PENDING_PAYMENT,
+  AppointmentPackageStatus.PAID,
+  AppointmentPackageStatus.CANCELLED,
 ];
 
 /**

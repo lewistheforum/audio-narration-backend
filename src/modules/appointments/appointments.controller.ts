@@ -266,6 +266,39 @@ export class AppointmentsController {
   }
 
   /**
+   * Add extra service to an existing appointment
+   *
+   * @param id - Appointment UUID
+   * @param body - { clinicServiceConfigId: string }
+   * @returns Created extra package and service link
+   */
+  @Post(':id/extra-service')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Add extra service to appointment',
+    description:
+      'Clinic staff can add more services to an existing appointment.',
+  })
+  @ApiParam({ name: 'id', description: 'Appointment ID' })
+  @ApiResponse({ status: 201, description: 'Service added successfully' })
+  async addExtraService(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { clinicServiceConfigId: string },
+  ) {
+    return await this.appointmentsService.addExtraService(
+      id,
+      body.clinicServiceConfigId,
+    );
+  }
+
+  /**
    * Create a new appointment
    *
    * Allows patients to create appointments with clinics

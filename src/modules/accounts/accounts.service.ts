@@ -1515,23 +1515,26 @@ export class AccountsService {
     const requestor = await this.accountRepository.findAccountById(requestorId);
     if (!requestor) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
-    // Resolve the clinic ID based on requestor's role
-    let clinicId = '';
-    if (requestor.role === AccountRole.CLINIC_ADMIN) {
-      clinicId = requestor._id;
-    } else if (requestor.role === AccountRole.CLINIC_MANAGER) {
-      clinicId = requestor.parentId;
-    } else {
-      throw new ForbiddenException(MESSAGES.failMessage.insufficientPermissions);
+    // Simplified Security Check: employee's parentId must strictly match the requestor's ID
+    if (employee.parentId !== requestorId) {
+      console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
+      console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
+      console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
+      console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
+      console.log(`[RESULT] Access Denied because IDs do NOT match!`);
+      console.log('-------------------------------------\n');
+
+      throw new ForbiddenException(
+        'You only have permission to delete employees that were created under your account (matching Parent ID).',
+      );
     }
 
-    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
-    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
-
-    // Check if the employee actually belongs to this clinic ecosystem
-    if (!validParentIds.includes(employee.parentId)) {
-      throw new ForbiddenException(MESSAGES.failMessage.insufficientPermissions);
-    }
+    console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
+    console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
+    console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
+    console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
+    console.log(`[RESULT] Approved! Executing soft delete...`);
+    console.log('-------------------------------------\n');
 
     // Pass access check, perform soft delete natively
     await this.accountRepository.softDeleteAccount(id);

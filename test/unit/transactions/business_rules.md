@@ -18,12 +18,12 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
 
 *   **Endpoint**: `POST /transactions/:prescriptionId/qr`
 *   **Logic**:
-    1.  **Nguồn dữ liệu (Source of Truth)**: Entity `Appointment` (dựa trên `prescriptionId`).
-    2.  **Số tiền**: Sử dụng chính xác `Appointment.total`. Bỏ qua mọi số tiền gửi lên từ request body.
-    3.  **Thông tin Ngân hàng**: Truy vấn `ClinicAdmin` liên kết với đơn thuốc để lấy cấu hình SePay (`sepayVa`, `bankName`).
-    4.  **Bản ghi Giao dịch**: **KHÔNG** tạo bản ghi Transaction ngay lập tức trong DB.
-    5.  **Nội dung QR**: Sử dụng `prescriptionId` (ID Đơn thuốc) làm nội dung chuyển khoản.
-    6.  **Phản hồi**: Trả về URL/Payload QR với `id: null` (vì chưa có record trong DB).
+    21. **Nguồn dữ liệu (Source of Truth)**: Entity `AppointmentPackage` (dựa trên `prescriptionId`).
+22. **Số tiền**: Tính bằng **tổng (SUM) của tất cả các `AppointmentPackage`** đang ở trạng thái `PENDING_PAYMENT` liên kết với `prescriptionId`. Bỏ qua số tiền gửi từ request body.
+23. **Thông tin Ngân hàng**: Truy vấn `ClinicAdmin` liên kết với phòng khám của lịch hẹn để lấy cấu hình SePay (`sepayVa`, `bankName`).
+24. **Bản ghi Giao dịch**: **KHÔNG** tạo bản ghi Transaction ngay lập tức trong DB.
+25. **Nội dung QR**: Sử dụng `prescriptionId` (ID Đơn thuốc/Lịch hẹn) làm nội dung chuyển khoản.
+26. **Phản hồi**: Trả về URL/Payload QR với `id: null` và `amount` đã tính toán.
 
 ### 2.2. Xác Minh Phòng Khám (Verification QR)
 *Dành cho Phòng khám xác minh tài khoản ngân hàng (Chống spam/Xác thực danh tính).*
@@ -94,10 +94,12 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 *Dùng cho: Thanh toán Đơn thuốc.*
 
 1.  **Khớp lệnh**: Tìm `Appointment` theo ID (được trích xuất từ nội dung chuyển khoản).
-2.  **Khởi tạo**: Tạo một bản ghi `Transaction` **MỚI**.
+297. **Khởi tạo**: Tạo một bản ghi `Transaction` **MỚI**.
     -   Loại: `ONLINE` (Mặc định).
     -   Liên kết: Phòng khám, Người gửi (Bệnh nhân).
-3.  **Kết quả**: Chỉ lưu lịch sử giao dịch. Không có hook xử lý đặc biệt nào kích hoạt tại đây (Việc cập nhật trạng thái Appointment được xử lý riêng hoặc ngầm định).
+100. **Hậu xử lý (Post-Processing)**:
+    - **Cập nhật Gói dịch vụ**: Chuyển trạng thái **tất cả** `AppointmentPackage` từ `PENDING_PAYMENT` sang `PAID` liên kết với lịch hẹn này.
+    - **Gán Giao dịch**: Lưu ID của Transaction vừa tạo vào cột `transactionId` của các package tương ứng.
 
 ---
 

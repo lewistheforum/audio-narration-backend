@@ -18,6 +18,8 @@ import {
 } from './dto';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
+import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
+import { AppointmentPackageStatus } from '../appointments/enums';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
@@ -38,6 +40,8 @@ export class TransactionsService {
     private readonly transactionRepository: TransactionRepository,
     @InjectRepository(ClinicAdminInformation)
     private readonly clinicAdminRepo: Repository<ClinicAdminInformation>,
+    @InjectRepository(AppointmentPackage)
+    private readonly packageRepo: Repository<AppointmentPackage>,
     @InjectRepository(TransactionType)
     private readonly transactionTypeRepo: Repository<TransactionType>,
     @InjectRepository(Appointment)
@@ -443,8 +447,20 @@ export class TransactionsService {
 
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
 
-    const amount = Number(appointment.total);
-    // Ignore dto.amount, use source of truth from DB
+    // Calculate sum of all pending packages for this appointment
+    const pendingPackages = await this.packageRepo.find({
+      where: {
+        appointmentId: dto.prescriptionId,
+        status: AppointmentPackageStatus.PENDING_PAYMENT
+      }
+    });
+
+    if (pendingPackages.length === 0) {
+      throw new BadRequestException('No pending payments for this appointment');
+    }
+
+    const amount = pendingPackages.reduce((sum, pkg) => sum + Number(pkg.amount), 0);
+    // Ignore dto.amount, use source of truth from DB packages
 
     const expiresAt = this.computeExpireTime();
     const qrCodeUrl = this.buildQrUrl(amount, dto.prescriptionId, acc, bank);
@@ -683,6 +699,21 @@ export class TransactionsService {
           );
         }
       }
+
+      // NEW: Update Appointment Packages for Existing Transaction (Strategy A)
+      if (status === PaymentStatus.SUCCESS && prescriptionId) {
+        await this.packageRepo.update(
+          {
+            appointmentId: prescriptionId,
+            status: AppointmentPackageStatus.PENDING_PAYMENT
+          },
+          {
+            status: AppointmentPackageStatus.PAID,
+            transactionId: saved.id
+          }
+        );
+      }
+
       return new PaymentResponseDto({
         id: saved.id,
         amount: saved.amount,
@@ -830,6 +861,20 @@ export class TransactionsService {
             'handleCallback Debug - Transaction has SUBSCRIPTION type but no subscriptionId',
           );
         }
+      }
+
+      // NEW: Update Appointment Packages for New Transaction (Strategy B)
+      if (status === PaymentStatus.SUCCESS && prescriptionId) {
+        await this.packageRepo.update(
+          {
+            appointmentId: prescriptionId,
+            status: AppointmentPackageStatus.PENDING_PAYMENT
+          },
+          {
+            status: AppointmentPackageStatus.PAID,
+            transactionId: savedTransaction.id
+          }
+        );
       }
     }
 
