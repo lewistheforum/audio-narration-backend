@@ -6,9 +6,13 @@ import { AiConversationRepository } from './repositories/ai-conversation.reposit
 import { AiMessageRepository } from './repositories/ai-message.repository';
 import { AiRagChatBotService } from './chat-bot.service';
 import { AiRagChatBotController } from './chat-bot.controller';
+import { AccountsModule } from '../accounts/accounts.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AiConversation, AiMessage])],
+  imports: [
+    TypeOrmModule.forFeature([AiConversation, AiMessage]),
+    AccountsModule,
+  ],
   controllers: [AiRagChatBotController],
   providers: [
     AiConversationRepository,
