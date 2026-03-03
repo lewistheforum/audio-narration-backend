@@ -16,7 +16,7 @@ import {
   ClinicAdminDetailResponseDto,
 } from './dto/clinic-admin-response.dto';
 import {
-  SubscriptionHistoryItemDto,
+  ClinicAdminSubscriptionHistoryItemDto,
   TransactionHistoryItemDto,
 } from './dto/clinic-admin-subscription-history.dto';
 import { ClinicAdminClinicServiceDto } from './dto/clinic-admin-clinic-service.dto';
@@ -191,7 +191,7 @@ export class ClinicAdminsService {
     page: number = 1,
     limit: number = 10,
     search?: string,
-  ): Promise<{ data: SubscriptionHistoryItemDto[]; total: number }> {
+  ): Promise<{ data: ClinicAdminSubscriptionHistoryItemDto[]; total: number }> {
     const account = await this.accountRepository.findOne({
       where: { _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN },
     });
@@ -211,15 +211,17 @@ export class ClinicAdminsService {
       .take(limit)
       .getManyAndCount();
 
-    const data: SubscriptionHistoryItemDto[] = histories.map((h) => ({
-      id: h._id,
-      serviceName: h.service?.serviceName || 'Unknown',
-      serviceCode: h.service?.code,
-      subscriptionDate: h.subscriptionDate,
-      expirationDate: h.expirationDate,
-      subscriptionStatus: h.subscriptionStatus,
-      createdAt: h.createdAt,
-    }));
+    const data: ClinicAdminSubscriptionHistoryItemDto[] = histories.map(
+      (h) => ({
+        id: h._id,
+        serviceName: h.service?.serviceName || 'Unknown',
+        serviceCode: h.service?.code,
+        subscriptionDate: h.subscriptionDate,
+        expirationDate: h.expirationDate,
+        subscriptionStatus: h.subscriptionStatus,
+        createdAt: h.createdAt,
+      }),
+    );
 
     return { data, total };
   }

@@ -18,12 +18,12 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
 
 *   **Endpoint**: `POST /transactions/:prescriptionId/qr`
 *   **Logic**:
-    1.  **Nguồn dữ liệu (Source of Truth)**: Entity `Appointment` (dựa trên `prescriptionId`).
-    2.  **Số tiền**: Sử dụng chính xác `Appointment.total`. Bỏ qua mọi số tiền gửi lên từ request body.
-    3.  **Thông tin Ngân hàng**: Truy vấn `ClinicAdmin` liên kết với đơn thuốc để lấy cấu hình SePay (`sepayVa`, `bankName`).
-    4.  **Bản ghi Giao dịch**: **KHÔNG** tạo bản ghi Transaction ngay lập tức trong DB.
-    5.  **Nội dung QR**: Sử dụng `prescriptionId` (ID Đơn thuốc) làm nội dung chuyển khoản.
-    6.  **Phản hồi**: Trả về URL/Payload QR với `id: null` (vì chưa có record trong DB).
+    21. **Nguồn dữ liệu (Source of Truth)**: Entity `AppointmentPackage` (dựa trên `prescriptionId`).
+22. **Số tiền**: Tính bằng **tổng (SUM) của tất cả các `AppointmentPackage`** đang ở trạng thái `PENDING_PAYMENT` liên kết với `prescriptionId`. Bỏ qua số tiền gửi từ request body.
+23. **Thông tin Ngân hàng**: Truy vấn `ClinicAdmin` liên kết với phòng khám của lịch hẹn để lấy cấu hình SePay (`sepayVa`, `bankName`).
+24. **Bản ghi Giao dịch**: **KHÔNG** tạo bản ghi Transaction ngay lập tức trong DB.
+25. **Nội dung QR**: Sử dụng `prescriptionId` (ID Đơn thuốc/Lịch hẹn) làm nội dung chuyển khoản.
+26. **Phản hồi**: Trả về URL/Payload QR với `id: null` và `amount` đã tính toán.
 
 ### 2.2. Xác Minh Phòng Khám (Verification QR)
 *Dành cho Phòng khám xác minh tài khoản ngân hàng (Chống spam/Xác thực danh tính).*
@@ -51,16 +51,16 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
     -   Cho phép gia hạn nếu gói đó vẫn còn hạn, đã hết hạn, hoặc Non-renewing.
     -   Tạo Transaction ở trạng thái `PENDING`.
     -   **Metadata Nội dung**: Lưu `{"duration": ...}` để xử lý sau khi thanh toán.
-- **Quy tắc mới (Logic Queue):**
-    - Hệ thống cho phép gọi API `/renew` bất cứ lúc nào (kể cả khi gói đang ACTIVE).
-    - **Logic Xử lý:**
-        - **Thời hạn (Duration):** Hệ thống sẽ tính toán dựa trên thời hạn của gói hiện tại (Subscription Date -> Expiration Date). Ví dụ: Gói hiện tại 12 tháng -> Gia hạn 12 tháng.
-        - **Khi thanh toán thành công:**
-             - Tạo bản ghi mới trong `ClinicSubscriptionRenewalQueue`.
-             - `targetStartDate` = `currentExpirationDate` (nối tiếp).
-             - `targetEndDate` = `targetStartDate` + Duration (tương ứng với gói hiện tại).
-             - Status lịch sử: `QUEUED_FOR_RENEWAL`.
-    - **Lợi ích:** Phòng khám có thể gia hạn trước, đảm bảo không bị gián đoạn dịch vụ.
+- **Quy tắc Gia hạn Cộng dồn (Additive Stacking Queue):**
+    - Hệ thống cho phép gọi API `/renew` hoặc `/change-package` bất cứ lúc nào kể cả khi gói đang `ACTIVE` hoặc đã có gói chờ gia hạn trong hàng đợi (`ClinicSubscriptionRenewalQueue`).
+    - **Logic Xử lý (1-to-1 Queue Record):**
+        - Do DB giới hạn 1 phòng khám chỉ có 1 record trong hàng đợi chờ (`unique clinicId`), khi mua thêm nhiều gói, hệ thống sẽ **cộng dồn thời gian (Stacking)** chứ không tạo nhiều records chờ.
+        - **Cơ sở tính toán (Base Expiration):** Nếu chưa có Queue -> Lấy ngày hết hạn của gói Active hiện tại. Nếu ĐÃ CÓ Queue -> Lấy ngày `targetEndDate` của Queue hiện tại.
+        - **Cập nhật CSDL:**
+             - `targetEndDate` của record Queue duy nhất sẽ được kéo giãn thêm `Duration` của lần mua mới.
+             - `targetStartDate` của record Queue giữ nguyên (vẫn nối tiếp vào đuôi gói Active).
+        - **Lịch sử (History):** Hệ thống ghi nhận các Records History rời rạc, đảm bảo mỗi giao dịch được gán chính xác `StartDate` và `EndDate` độc lập tương ứng với phần tiền vừa bỏ ra.
+    - **Lợi ích:** Phòng khám có thể gia hạn trước 2-3 năm liên tục, chống gián đoạn. Logic tối ưu hóa truy vấn khi CronJob chỉ cần đọc đúng 1 targetEndDate cao nhất.
 
 #### C. Đổi Gói (`POST /transactions/subscription/change-package`)
 *   **Logic**:
@@ -94,10 +94,12 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 *Dùng cho: Thanh toán Đơn thuốc.*
 
 1.  **Khớp lệnh**: Tìm `Appointment` theo ID (được trích xuất từ nội dung chuyển khoản).
-2.  **Khởi tạo**: Tạo một bản ghi `Transaction` **MỚI**.
+297. **Khởi tạo**: Tạo một bản ghi `Transaction` **MỚI**.
     -   Loại: `ONLINE` (Mặc định).
     -   Liên kết: Phòng khám, Người gửi (Bệnh nhân).
-3.  **Kết quả**: Chỉ lưu lịch sử giao dịch. Không có hook xử lý đặc biệt nào kích hoạt tại đây (Việc cập nhật trạng thái Appointment được xử lý riêng hoặc ngầm định).
+100. **Hậu xử lý (Post-Processing)**:
+    - **Cập nhật Gói dịch vụ**: Chuyển trạng thái **tất cả** `AppointmentPackage` từ `PENDING_PAYMENT` sang `PAID` liên kết với lịch hẹn này.
+    - **Gán Giao dịch**: Lưu ID của Transaction vừa tạo vào cột `transactionId` của các package tương ứng.
 
 ---
 

@@ -26,7 +26,7 @@ import { ClinicAdminFeedbackResponseDto } from './dto/clinic-admin-feedback-resp
 import { ClinicAdminFeedbackDetailResponseDto } from './dto/clinic-admin-feedback-detail.dto';
 import { ClinicAdminFeedbackListDto } from './dto/clinic-admin-feedback-list.dto';
 import {
-  SubscriptionHistoryItemDto,
+  ClinicAdminSubscriptionHistoryItemDto,
   TransactionHistoryItemDto,
 } from './dto/clinic-admin-subscription-history.dto';
 import { ClinicAdminClinicServiceDto } from './dto/clinic-admin-clinic-service.dto';
@@ -88,8 +88,8 @@ export class ClinicAdminsController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({
     status: 200,
-    description: 'Subscription registration history',
-    type: [SubscriptionHistoryItemDto],
+    description: 'Return subscription history of a clinic admin',
+    type: [ClinicAdminSubscriptionHistoryItemDto],
   })
   @ApiResponse({ status: 404, description: 'Clinic admin not found' })
   async getSubscriptionHistory(

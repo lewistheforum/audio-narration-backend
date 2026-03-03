@@ -48,7 +48,7 @@ export class SubscriptionServicesService {
     private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
     private readonly clinicSubscriptionRenewalQueueRepository: ClinicSubscriptionRenewalQueueRepository,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Find All Subscription Services
@@ -482,7 +482,6 @@ export class SubscriptionServicesService {
     console.log(
       `[DEBUG] Service ID resolved for activation: ${serviceIdToActivate}`,
     );
-
     // 3. Get Service Details (for name)
     const service =
       await this.subscriptionServiceRepository.findById(serviceIdToActivate);

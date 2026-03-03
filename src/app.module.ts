@@ -27,6 +27,8 @@ import { AdminModule } from './modules/admin/admin.module';
 import { PatientsModule } from './modules/accounts/api-admin-patients/patients.module';
 import { Account } from './modules/accounts/entities/accounts.entity';
 import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/clinic-admins.module';
+import { ClinicManagersModule } from './modules/accounts/api-clinic-admin/clinic-managers.module';
+import { ManagedAccountsModule } from './modules/accounts/api-clinic-manager/managed-accounts.module';
 
 @Module({
   imports: [
@@ -73,6 +75,8 @@ import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/cl
     AdminModule,
     PatientsModule,
     ClinicAdminsModule,
+    ClinicManagersModule,
+    ManagedAccountsModule,
   ],
   controllers: [],
   providers: [],

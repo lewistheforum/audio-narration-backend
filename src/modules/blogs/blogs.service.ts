@@ -105,8 +105,6 @@ export class BlogsService {
 
     const blogs = await this.blogRepository.findByClinicId(clinicManagerId);
 
-    console.log('=======check: ', blogs);
-
     return blogs.map((blog) => new BlogResponseDto(blog));
   }
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository, DeepPartial, Between } from 'typeorm';
 import { Feedback } from '../entities/feedback.entity';
 
 /**
@@ -81,6 +81,32 @@ export class FeedbackRepository {
   async findFeedbacksByClinicId(clinicId: string): Promise<Feedback[]> {
     return this.feedbackRepository.find({
       where: { clinicId },
+      relations: ['doctor', 'doctor.doctorInformation'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find Feedbacks by Clinic ID and Date Range
+   *
+   * Retrieves all feedbacks for a specific clinic within a date range.
+   *
+   * @param {string} clinicId - Clinic UUID
+   * @param {Date} startDate - Start date (inclusive)
+   * @param {Date} endDate - End date (inclusive)
+   * @returns {Promise<Feedback[]>} Array of feedback entities
+   */
+  async findFeedbacksByClinicIdAndDateRange(
+    clinicId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<Feedback[]> {
+    return this.feedbackRepository.find({
+      where: {
+        clinicId,
+        createdAt: Between(startDate, endDate),
+      },
+      relations: ['doctor', 'doctor.doctorInformation'],
       order: { createdAt: 'DESC' },
     });
   }

@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -39,6 +40,7 @@ import {
   CreateBookingSessionDto,
   UpdateBookingSessionDto,
   CreateAppointmentFromSessionDto,
+  WorkHistoryQueryDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -78,7 +80,7 @@ export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for staff's clinic
@@ -261,6 +263,39 @@ export class AppointmentsController {
     return this.appointmentsService.staffCreateAppointment(
       staffAccountId,
       createDto,
+    );
+  }
+
+  /**
+   * Add extra service to an existing appointment
+   *
+   * @param id - Appointment UUID
+   * @param body - { clinicServiceConfigId: string }
+   * @returns Created extra package and service link
+   */
+  @Post(':id/extra-service')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Add extra service to appointment',
+    description:
+      'Clinic staff can add more services to an existing appointment.',
+  })
+  @ApiParam({ name: 'id', description: 'Appointment ID' })
+  @ApiResponse({ status: 201, description: 'Service added successfully' })
+  async addExtraService(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { clinicServiceConfigId: string },
+  ) {
+    return await this.appointmentsService.addExtraService(
+      id,
+      body.clinicServiceConfigId,
     );
   }
 
@@ -652,6 +687,79 @@ export class AppointmentsController {
       id,
       updateStatusDto,
     );
+  }
+
+  /**
+   * Get doctor work history
+   * 
+   * Get paginated work history including revenue for a specific doctor
+   * 
+   * @param doctorId - Doctor UUID
+   * @param queryDto - Filter options (dates, status, pagination)
+   */
+  @Get('doctors/:doctorId/work-history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get doctor work history',
+    description: 'Get paginated work history including revenue calculation. Managers/Admins can only view doctors in their clinic.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Work history retrieved successfully',
+    type: PaginatedAppointmentResponseDto,
+  })
+  async getDoctorWorkHistory(
+    @Request() req,
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+    @Query() queryDto: WorkHistoryQueryDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    return this.appointmentsService.getDoctorWorkHistory(
+      req.user.accountId || req.user._id,
+      doctorId,
+      queryDto,
+    );
+  }
+
+  /**
+   * Export doctor work history to CSV
+   * 
+   * @param doctorId - Doctor UUID
+   * @param queryDto - Filter options
+   * @param res - Express response object for file download
+   */
+  @Get('doctors/:doctorId/work-history/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Export doctor work history',
+    description: 'Download work history as a CSV file.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file download',
+  })
+  async exportDoctorWorkHistoryCSV(
+    @Request() req,
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+    @Query() queryDto: WorkHistoryQueryDto,
+    @Res() res,
+  ) {
+    const csvContent = await this.appointmentsService.exportDoctorWorkHistoryCSV(
+      req.user.accountId || req.user._id,
+      doctorId,
+      queryDto,
+    );
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`work-history-${doctorId}-${new Date().toISOString().split('T')[0]}.csv`);
+
+    // Add BOM for Excel UTF-8 display
+    res.write('\uFEFF');
+    return res.end(csvContent);
   }
 
   // ========================================================================
