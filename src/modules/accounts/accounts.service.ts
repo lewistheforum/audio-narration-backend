@@ -156,7 +156,7 @@ export class AccountsService {
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
-  ) {}
+  ) { }
 
   private generateKeyPair(): {
     publicKey: string;
@@ -1497,6 +1497,51 @@ export class AccountsService {
   }
 
   /**
+   * Delete Employee Account (Soft Delete) - For Clinic Admin/Manager
+   *
+   * Performs a soft delete on an employee (Doctor or Staff) account.
+   * Ensures the employee belongs to the exact same clinic as the requesting Admin/Manager.
+   *
+   * @param id Employee Account UUID
+   * @param requestorId The UUID of the Admin or Manager making the request
+   */
+  async deleteEmployee(id: string, requestorId: string): Promise<void> {
+    const employee = await this.findAccountEntityById(id);
+
+    if (employee.role !== AccountRole.DOCTOR && employee.role !== AccountRole.CLINIC_STAFF) {
+      throw new ForbiddenException('Only doctors and clinic staff can be removed by clinic management');
+    }
+
+    const requestor = await this.accountRepository.findAccountById(requestorId);
+    if (!requestor) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+
+    // Simplified Security Check: employee's parentId must strictly match the requestor's ID
+    if (employee.parentId !== requestorId) {
+      console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
+      console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
+      console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
+      console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
+      console.log(`[RESULT] Access Denied because IDs do NOT match!`);
+      console.log('-------------------------------------\n');
+
+      throw new ForbiddenException(
+        'You only have permission to delete employees that were created under your account (matching Parent ID).',
+      );
+    }
+
+    console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
+    console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
+    console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
+    console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
+    console.log(`[RESULT] Approved! Executing soft delete...`);
+    console.log('-------------------------------------\n');
+
+    // Pass access check, perform soft delete natively
+    await this.accountRepository.softDeleteAccount(id);
+    await this.generalAccountRepository.softDeleteGeneralAccount(id);
+  }
+
+  /**
    * Restore Soft-Deleted Account
    *
    * Restores a previously soft-deleted account by clearing the deletedAt timestamp.
@@ -1867,7 +1912,7 @@ export class AccountsService {
       if (
         !legalDocs ||
         legalDocs.verificationStatus !==
-          LegalDocumentVerificationStatus.APPROVED
+        LegalDocumentVerificationStatus.APPROVED
       ) {
         throw new ForbiddenException(
           'Account is not ready or clinic is not active',
@@ -2306,7 +2351,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_MANAGER) {
       throw new BadRequestException(
         'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }
@@ -2574,11 +2619,12 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
-      // Step 3: Hash password
+      // Step 3: Hash password & Generate Keys
       const hashedPassword = await bcrypt.hash(
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
+      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
 
       // Step 4: Create Account entity with CLINIC_STAFF role
       // Following 2-step registration pattern: Create ACTIVE account first
@@ -2590,6 +2636,8 @@ export class AccountsService {
         role: AccountRole.CLINIC_STAFF,
         status: AccountStatus.ACTIVE, // Account is active by default
         isEmailVerified: false, // Staff must verify themselves
+        publicKey,
+        encryptedPrivateKey,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -2671,11 +2719,12 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
-      // Step 3: Hash password
+      // Step 3: Hash password & Generate Keys
       const hashedPassword = await bcrypt.hash(
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
+      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
 
       // Step 4: Create Account entity with DOCTOR role
       // Following 2-step registration pattern: Create PENDING account first
@@ -2687,6 +2736,8 @@ export class AccountsService {
         role: AccountRole.DOCTOR,
         status: AccountStatus.ACTIVE, // Account is active by default
         isEmailVerified: false, // Doctor must verify themselves
+        publicKey,
+        encryptedPrivateKey,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -2844,8 +2895,8 @@ export class AccountsService {
         province,
         specialty,
         RegistrationStatus.ACTIVE ||
-          RegistrationStatus.NON_RENEWING ||
-          RegistrationStatus.EXPIRED,
+        RegistrationStatus.NON_RENEWING ||
+        RegistrationStatus.EXPIRED,
       );
 
     const clinicItems: ClinicItemDto[] = [];
@@ -3225,7 +3276,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_ADMIN) {
       throw new BadRequestException(
         'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }
@@ -3549,6 +3600,8 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
+      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+
       // Create Account entity with CLINIC_ADMIN role and PENDING status
       const account = this.accountRepository.createAccount({
         username: dto.username,
@@ -3559,6 +3612,8 @@ export class AccountsService {
         status: AccountStatus.ACTIVE,
         isEmailVerified: false,
         isOAuthUser: false,
+        publicKey,
+        encryptedPrivateKey,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -4265,8 +4320,15 @@ export class AccountsService {
   async findStaffById(id: string, managerId: string): Promise<AccountResponseDto> {
     const staff = await this.findAccountEntityById(id);
 
+    const parent = await this.accountRepository.findAccountById(managerId);
+    if (!parent) throw new ForbiddenException(MESSAGES.failMessage.userNotFound);
+
+    const clinicId = parent.parentId;
+    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
+    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
+
     // Security Check: Ensure staff belongs to the manager's clinic
-    if (staff.parentId !== managerId) {
+    if (!validParentIds.includes(staff.parentId)) {
       throw new ForbiddenException(MESSAGES.failMessage.insufficientPermissions);
     }
 
@@ -4298,8 +4360,12 @@ export class AccountsService {
     const parent = await this.accountRepository.findAccountById(managerId);
     if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
+    const clinicId = parent.parentId;
+    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
+    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
+
     const [accounts, total] = await this.accountRepository.findStaffByClinicWithFilters(
-      managerId,
+      validParentIds,
       (page - 1) * limit,
       limit,
       search,
@@ -4350,6 +4416,10 @@ export class AccountsService {
     const parent = await this.accountRepository.findAccountById(managerId);
     if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
+    const clinicAdminId = parent.parentId;
+    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicAdminId, AccountRole.CLINIC_MANAGER);
+    const validParentIds = [clinicAdminId, ...allManagers.map(m => m._id)];
+
     const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(managerId);
 
     const [accounts, total] = await this.accountRepository.findDoctorsWithFilters(
@@ -4357,7 +4427,7 @@ export class AccountsService {
       AccountStatus.ACTIVE,
       (page - 1) * limit,
       limit,
-      managerId,
+      validParentIds,
       undefined,
       search,
       academicDegree,

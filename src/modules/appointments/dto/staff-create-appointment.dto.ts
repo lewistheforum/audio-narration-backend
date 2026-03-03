@@ -15,6 +15,7 @@ import {
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PaymentType } from '../enums/payment-type.enum';
+import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
 
 /**
  * Service Item DTO
@@ -127,16 +128,17 @@ export class StaffCreateAppointmentDto {
 
   @ApiProperty({
     description: 'Payment status',
-    example: 'PAID',
+    example: AppointmentPackageStatus.PAID,
     required: false,
+    enum: AppointmentPackageStatus,
   })
   @IsOptional()
-  @IsString({ message: 'Payment status must be a string' })
-  paymentStatus?: string;
+  @IsEnum(AppointmentPackageStatus, { message: 'Payment status must be a valid AppointmentPackageStatus' })
+  paymentStatus?: AppointmentPackageStatus;
 
   @ApiProperty({
     description: 'Payment type (online or cod)',
-    example: 'online',
+    example: PaymentType.ONLINE,
     required: false,
     enum: PaymentType,
   })

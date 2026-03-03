@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { Appointment } from './appointment.entity';
 import { Transaction } from '../../transactions/entities/transaction.entity';
-import { PaymentType } from '../enums/payment-type.enum';
+import { PaymentType, AppointmentPackageStatus } from '../enums';
 
 /**
  * AppointmentPackage Entity
@@ -44,8 +44,13 @@ export class AppointmentPackage {
   @Column({ name: 'amount', type: 'bigint' })
   amount: number;
 
-  @Column({ name: 'status', type: 'text', nullable: true })
-  status?: string;
+  @Column({
+    name: 'status',
+    type: 'enum',
+    enum: AppointmentPackageStatus,
+    default: AppointmentPackageStatus.PENDING_PAYMENT,
+  })
+  status: AppointmentPackageStatus;
 
   @Column({
     name: 'payment_type',

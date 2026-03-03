@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere } from 'typeorm';
+import { Repository, FindOptionsWhere, FindOneOptions } from 'typeorm';
 import { Appointment } from '../entities';
 import { AppointmentStatus } from '../enums';
 
@@ -14,7 +14,24 @@ export class AppointmentRepository {
   constructor(
     @InjectRepository(Appointment)
     private readonly repository: Repository<Appointment>,
-  ) {}
+  ) { }
+
+  /**
+   * Find a single appointment with options
+   *
+   * @param options - Find options
+   * @returns Found appointment or null
+   */
+  async findOne(options: FindOneOptions<Appointment>): Promise<Appointment | null> {
+    return this.repository.findOne(options);
+  }
+
+  /**
+   * Create a query builder for the Appointment entity
+   */
+  createQueryBuilder(alias?: string) {
+    return this.repository.createQueryBuilder(alias);
+  }
 
   /**
    * Find appointments by clinic ID with filters and pagination

@@ -25,7 +25,7 @@ import { MESSAGES } from '../../common/message';
  */
 @Injectable()
 export class FeedbackService {
-  constructor(private readonly feedbackRepository: FeedbackRepository) {}
+  constructor(private readonly feedbackRepository: FeedbackRepository) { }
 
   /**
    * Create Feedback for Clinic
@@ -414,5 +414,9 @@ export class FeedbackService {
 
   async findAllFeedbacksById(id: string) {
     return this.feedbackRepository.findFeedbacksByClinicId(id);
+  }
+
+  async findFeedbacksByDoctorId(doctorId: string) {
+    return this.feedbackRepository.findFeedbacksByDoctorId(doctorId);
   }
 }

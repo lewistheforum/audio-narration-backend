@@ -23,10 +23,11 @@ import {
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
   AppointmentDetailResponseDto,
+  WorkHistoryQueryDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
-import { AppointmentStatus } from './enums';
+import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from './enums';
 import { BookingSessionService } from './booking-session.service';
 
 /**
@@ -51,7 +52,7 @@ export class AppointmentsService {
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
     private readonly accountRepository: AccountRepository,
     private readonly bookingSessionService: BookingSessionService,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for a clinic (Staff access)
@@ -185,7 +186,7 @@ export class AppointmentsService {
     if (existingAppointments.length > 0) {
       throw new ConflictException(
         MESSAGES.failMessage.appointmentTimeConflict ||
-          'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
+        'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
       );
     }
 
@@ -448,7 +449,7 @@ export class AppointmentsService {
 
     // Update appointment with new schedule
     appointment.appointmentDate = newAppointmentDate;
-    
+
     if (rescheduleDto.doctorShiftHourId !== undefined) {
       appointment.doctorShiftHourId = rescheduleDto.doctorShiftHourId || null;
     }
@@ -989,6 +990,115 @@ export class AppointmentsService {
   }
 
   /**
+   * Get work history of a doctor
+   */
+  async getDoctorWorkHistory(
+    userAccountId: string,
+    doctorId: string,
+    queryDto: WorkHistoryQueryDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    const userAccount = await this.accountRepository.findAccountById(userAccountId);
+    if (!userAccount) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const query = this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('appointment.clinic', 'clinic')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.deletedAt IS NULL');
+
+    // appointments.clinic_id stores Admin ID
+    // - CLINIC_ADMIN: filter by own _id
+    // - CLINIC_MANAGER: filter by parentId (= Admin ID)
+    let clinicId: string | undefined;
+    if (userAccount.role === AccountRole.CLINIC_ADMIN) {
+      clinicId = userAccount._id;
+    } else if (userAccount.role === AccountRole.CLINIC_MANAGER) {
+      clinicId = userAccount.parentId || undefined;
+    }
+
+    console.log(`[getDoctorWorkHistory] User details - ID: ${userAccount._id}, Role: ${userAccount.role}, ParentId: ${userAccount.parentId}`);
+    console.log(`[getDoctorWorkHistory] Resolved clinicId for filtering: ${clinicId}`);
+
+    if (clinicId) {
+      query.andWhere('appointment.clinicId = :clinicId', { clinicId });
+    }
+
+    if (queryDto.fromDate) {
+      query.andWhere('appointment.appointmentDate >= :fromDate', { fromDate: queryDto.fromDate });
+    }
+
+    if (queryDto.toDate) {
+      query.andWhere('appointment.appointmentDate <= :toDate', { toDate: queryDto.toDate });
+    }
+
+    if (queryDto.status) {
+      query.andWhere('appointment.status = :status', { status: queryDto.status });
+    }
+
+    query.orderBy('appointment.appointmentDate', 'DESC');
+    query.addOrderBy('appointment.appointmentHour', 'DESC');
+
+    console.log(`[getDoctorWorkHistory] Query parameters: doctorId=${doctorId}, clinicId=${clinicId}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`);
+    console.log(`[getDoctorWorkHistory] Raw SQL Query: `, query.getSql());
+    console.log(`[getDoctorWorkHistory] SQL Parameters: `, query.getParameters());
+
+    const total = await query.getCount();
+    console.log(`[getDoctorWorkHistory] Total appointments found: ${total}`);
+
+    // pagination
+    const page = queryDto.page || 1;
+    const limit = queryDto.limit || 10;
+    const skip = (page - 1) * limit;
+
+    query.skip(skip).take(limit);
+
+    const appointments = await query.getMany();
+
+    // Get appointment IDs
+    const appointmentIds = appointments.map((apt) => apt._id);
+
+    // Fetch services for all appointments
+    const servicesMap = appointmentIds.length > 0
+      ? await this.appointmentPackageRepository.findServicesByAppointmentIds(appointmentIds)
+      : new Map();
+
+    // Fetch clinic rooms for all appointments
+    const appointmentData = appointments.map((apt) => ({
+      appointmentId: apt._id,
+      doctorShiftHourId: apt.doctorShiftHourId,
+      doctorId: apt.doctorId,
+      appointmentDate: apt.appointmentDate,
+    }));
+
+    const clinicRoomsMap = appointmentIds.length > 0
+      ? await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(appointmentData)
+      : new Map();
+
+    // Transform to response DTOs
+    const data = appointments.map((appointment) => {
+      const clinicRooms = clinicRoomsMap.get(appointment._id) || [];
+      return this.transformToResponseDto(
+        appointment,
+        servicesMap.get(appointment._id),
+        clinicRooms,
+      );
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  /**
    * Create appointment from Redis booking session (Option 1: Service-first)
    *
    * This method finalizes the booking process by:
@@ -1040,8 +1150,8 @@ export class AppointmentsService {
       );
     }
 
-    if (!session.clinicServiceConfigId || !session.clinicId || !session.appointmentDate || 
-        !session.doctorShiftHourId || !session.doctorId) {
+    if (!session.clinicServiceConfigId || !session.clinicId || !session.appointmentDate ||
+      !session.doctorShiftHourId || !session.doctorId) {
       throw new BadRequestException(
         'Incomplete booking session. Please complete all steps before confirming.',
       );
@@ -1182,14 +1292,14 @@ export class AppointmentsService {
 
       // === STEP 8: Create Appointment Package ===
       const packageRepo = manager.getRepository('appointment_package');
-      
+
       // PAYMENT GATEWAY PENDING: transactionId will be set after payment webhook
       const appointmentPackage = packageRepo.create({
         appointmentId: savedAppointment._id,
         transactionId: null, // TODO: Set after payment completion
         amount: Math.round(finalPrice), // Convert to integer (cents/smallest unit)
-        status: 'pending_payment', // TODO: Update via payment webhook
-        paymentType: 'online',
+        status: AppointmentPackageStatus.PENDING_PAYMENT, // TODO: Update via payment webhook
+        paymentType: PaymentType.ONLINE,
       });
 
       const savedPackage = await packageRepo.save(appointmentPackage);
@@ -1343,6 +1453,90 @@ export class AppointmentsService {
         total_pages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Export doctor work history to CSV
+   */
+  async exportDoctorWorkHistoryCSV(
+    userAccountId: string,
+    doctorId: string,
+    queryDto: WorkHistoryQueryDto,
+  ): Promise<string> {
+    const userAccount = await this.accountRepository.findAccountById(userAccountId);
+    if (!userAccount) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const query = this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('appointment.clinic', 'clinic')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.deletedAt IS NULL');
+
+    // appointments.clinic_id stores Admin ID
+    // - CLINIC_ADMIN: filter by own _id
+    // - CLINIC_MANAGER: filter by parentId (= Admin ID)
+    let clinicId: string | undefined;
+    if (userAccount.role === AccountRole.CLINIC_ADMIN) {
+      clinicId = userAccount._id;
+    } else if (userAccount.role === AccountRole.CLINIC_MANAGER) {
+      clinicId = userAccount.parentId || undefined;
+    }
+
+    console.log(`[exportDoctorWorkHistoryCSV] User details - ID: ${userAccount._id}, Role: ${userAccount.role}, ParentId: ${userAccount.parentId}`);
+    console.log(`[exportDoctorWorkHistoryCSV] Resolved clinicId for filtering: ${clinicId}`);
+
+    if (clinicId) {
+      query.andWhere('appointment.clinicId = :clinicId', { clinicId });
+    }
+
+    if (queryDto.fromDate) {
+      query.andWhere('appointment.appointmentDate >= :fromDate', { fromDate: queryDto.fromDate });
+    }
+
+    if (queryDto.toDate) {
+      query.andWhere('appointment.appointmentDate <= :toDate', { toDate: queryDto.toDate });
+    }
+
+    if (queryDto.status) {
+      query.andWhere('appointment.status = :status', { status: queryDto.status });
+    }
+
+    query.orderBy('appointment.appointmentDate', 'DESC');
+    query.addOrderBy('appointment.appointmentHour', 'DESC');
+
+    console.log(`[exportDoctorWorkHistoryCSV] Query parameters: doctorId=${doctorId}, clinicId=${clinicId}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`);
+    console.log(`[exportDoctorWorkHistoryCSV] Raw SQL Query: `, query.getSql());
+    console.log(`[exportDoctorWorkHistoryCSV] SQL Parameters: `, query.getParameters());
+
+    const appointments = await query.getMany();
+    console.log(`[exportDoctorWorkHistoryCSV] Total appointments found: ${appointments.length}`);
+
+    const headers = ['Mã Ca Khám', 'Bệnh Nhân', 'Phòng Khám', 'Ngày Khám', 'Giờ Khám', 'Trạng Thái', 'Ghi Chú', 'Doanh Thu (VNĐ)'];
+
+    const rows = appointments.map(app => {
+      const patientName = app.patient?.username || app.patientId;
+      const clinicName = app.clinic?.username || app.clinicId;
+      const date = new Date(app.appointmentDate).toISOString().split('T')[0];
+      const time = new Date(app.appointmentHour).toLocaleTimeString('vi-VN');
+      const note = app.patientNote?.replace(/,/g, ' ') || '';
+      const amount = app.total || 0;
+
+      return [
+        app._id,
+        patientName,
+        clinicName,
+        date,
+        time,
+        app.status,
+        note,
+        amount
+      ].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
   }
 
   /**
@@ -2293,5 +2487,76 @@ export class AppointmentsService {
       limit,
       total_pages: Math.ceil(filteredClinics.length / limit),
     };
+  }
+
+  /**
+   * Add extra service to an existing appointment
+   *
+   * @param appointmentId - Appointment UUID
+   * @param clinicServiceConfigId - Clinic service config UUID
+   * @returns Created extra package and service link
+   */
+  async addExtraService(appointmentId: string, clinicServiceConfigId: string) {
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: appointmentId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Load service config
+      const serviceConfig = await manager.getRepository('clinic_service_config').findOne({
+        where: {
+          _id: clinicServiceConfigId,
+          clinicId: appointment.clinicId,
+        },
+        relations: ['service'],
+      });
+
+      if (!serviceConfig || !serviceConfig.isActive) {
+        throw new BadRequestException('Service is not available');
+      }
+
+      // 2. Calculate price
+      const basePrice = parseFloat(serviceConfig.price.toString());
+      const discount = serviceConfig.discount
+        ? parseFloat(serviceConfig.discount.toString())
+        : 0;
+      const finalPrice = basePrice - (basePrice * discount) / 100;
+
+      // 3. Create new AppointmentPackage
+      const packageRepo = manager.getRepository(AppointmentPackage);
+      const extraPackage = packageRepo.create({
+        appointmentId: appointment._id,
+        amount: Math.round(finalPrice),
+        status: AppointmentPackageStatus.PENDING_PAYMENT,
+        paymentType: PaymentType.ONLINE,
+      });
+      const savedPackage = await packageRepo.save(extraPackage);
+
+      // 4. Create ServiceAppointment link
+      const serviceAppointmentRepo = manager.getRepository(ServiceAppointment);
+      const serviceAppointment = serviceAppointmentRepo.create({
+        clinicServiceId: clinicServiceConfigId,
+        appointmentPackageId: savedPackage._id,
+      });
+      await serviceAppointmentRepo.save(serviceAppointment);
+
+      // 5. Update Appointment Total
+      const newTotal = parseFloat(appointment.total.toString()) + finalPrice;
+      await manager.getRepository(Appointment).update(
+        { _id: appointmentId },
+        { total: newTotal },
+      );
+
+      return {
+        packageId: savedPackage._id,
+        serviceName: serviceConfig.service?.serviceName || 'N/A',
+        amount: finalPrice,
+        newTotal,
+      };
+    });
   }
 }

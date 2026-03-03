@@ -11,7 +11,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiExtraModels, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiExtraModels,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
 import {
   CreateTransactionDto,
@@ -35,8 +42,8 @@ import { SeepayAuthGuard } from './guards/seepay-auth.guard';
 
 /**
  * Transactions Controller
- * 
- * Manages API endpoints for payment transactions, QR code generation, 
+ *
+ * Manages API endpoints for payment transactions, QR code generation,
  * webhooks, and history retrieval.
  */
 @ApiTags('Transactions')
@@ -45,10 +52,9 @@ import { SeepayAuthGuard } from './guards/seepay-auth.guard';
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) { }
 
-
   /**
    * Create payment QR for a specific prescription
-   * 
+   *
    * @param prescriptionId Prescription ID
    * @param body Transaction creation DTO
    * @returns Created payment response with QR payload (if applicable)
@@ -56,7 +62,11 @@ export class TransactionsController {
   @Post(':prescriptionId/qr')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @Roles(AccountRole.PATIENT, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @Roles(
+    AccountRole.PATIENT,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo QR thanh toán cho đơn thuốc' })
   @ApiResponseData({
@@ -83,19 +93,27 @@ export class TransactionsController {
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'DEPRECATED: Use /renew instead. Tạo QR thanh toán cho đăng ký gói dịch vụ (Renewal Logic)' })
+  @ApiOperation({
+    summary:
+      'DEPRECATED: Use /renew instead. Tạo QR thanh toán cho đăng ký gói dịch vụ (Renewal Logic)',
+  })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
     message: 'Subscription QR created successfully',
   })
-  async createSubscriptionQr(@User() user: Account, @Body() body: CreateSubscriptionTransactionDto) {
+  async createSubscriptionQr(
+    @User() user: Account,
+    @Body() body: CreateSubscriptionTransactionDto,
+  ) {
     let clinicId = user._id;
 
     // If Manager, use Parent's Clinic ID
     if (user.role === AccountRole.CLINIC_MANAGER) {
       if (!user.parentId) {
-        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+        throw new BadRequestException(
+          'Manager account must have a parent Clinic Admin',
+        );
       }
       clinicId = user.parentId;
     }
@@ -114,19 +132,28 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo QR cho đăng ký mới (Onboarding)' })
-  async createNewSubscriptionQr(@User() user: Account, @Body() body: CreateNewSubscriptionDto) {
+  async createNewSubscriptionQr(
+    @User() user: Account,
+    @Body() body: CreateNewSubscriptionDto,
+  ) {
     let clinicId = user._id;
 
     // If Manager, use Parent's Clinic ID
     if (user.role === AccountRole.CLINIC_MANAGER) {
       if (!user.parentId) {
-        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+        throw new BadRequestException(
+          'Manager account must have a parent Clinic Admin',
+        );
       }
       clinicId = user.parentId;
     }
 
     const duration = body.duration || 1;
-    const payment = await this.transactionsService.createNewSubscriptionQr(clinicId, body.serviceId, duration);
+    const payment = await this.transactionsService.createNewSubscriptionQr(
+      clinicId,
+      body.serviceId,
+      duration,
+    );
     return {
       data: payment,
       message: 'New Subscription QR created successfully',
@@ -145,7 +172,9 @@ export class TransactionsController {
     // If Manager, use Parent's Clinic ID
     if (user.role === AccountRole.CLINIC_MANAGER) {
       if (!user.parentId) {
-        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+        throw new BadRequestException(
+          'Manager account must have a parent Clinic Admin',
+        );
       }
       clinicId = user.parentId;
     }
@@ -163,19 +192,28 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo QR đổi gói dịch vụ' })
-  async createPackageChangeQr(@User() user: Account, @Body() body: ChangePackageDto) {
+  async createPackageChangeQr(
+    @User() user: Account,
+    @Body() body: ChangePackageDto,
+  ) {
     let clinicId = user._id;
 
     // If Manager, use Parent's Clinic ID
     if (user.role === AccountRole.CLINIC_MANAGER) {
       if (!user.parentId) {
-        throw new BadRequestException('Manager account must have a parent Clinic Admin');
+        throw new BadRequestException(
+          'Manager account must have a parent Clinic Admin',
+        );
       }
       clinicId = user.parentId;
     }
 
     const duration = body.duration || 1;
-    const payment = await this.transactionsService.createPackageChangeQr(clinicId, body.targetServiceId, duration);
+    const payment = await this.transactionsService.createPackageChangeQr(
+      clinicId,
+      body.targetServiceId,
+      duration,
+    );
     return {
       data: payment,
       message: 'Package Change QR created successfully',
@@ -184,7 +222,7 @@ export class TransactionsController {
 
   /**
    * Create verification QR (10,000 VND) for clinic account verification
-   * 
+   *
    * @param user Current logged-in user
    * @returns Verification payment response
    */
@@ -199,7 +237,9 @@ export class TransactionsController {
     message: 'Verification QR created successfully',
   })
   async createVerificationQr(@User() user: Account) {
-    const payment = await this.transactionsService.createVerificationQr(user._id);
+    const payment = await this.transactionsService.createVerificationQr(
+      user._id,
+    );
     return {
       data: payment,
       message: 'Verification QR created successfully',
@@ -208,7 +248,7 @@ export class TransactionsController {
 
   /**
    * Handle webhook callback from Seepay
-   * 
+   *
    * @param payload Webhook data from Seepay
    * @returns Payment response success confirmation
    */
@@ -232,7 +272,7 @@ export class TransactionsController {
 
   /**
    * Get all payment history with filters
-   * 
+   *
    * @param user Current logged-in user (Admin/Manager)
    * @param page Page number
    * @param limit Items per page
@@ -247,13 +287,25 @@ export class TransactionsController {
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lấy tất cả lịch sử giao dịch (Chỉ Clinic Admin & Manager)' })
+  @ApiOperation({
+    summary: 'Lấy tất cả lịch sử giao dịch (Chỉ Clinic Admin & Manager)',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'clinicId', required: false, type: String })
   @ApiQuery({ name: 'senderAccountId', required: false, type: String })
-  @ApiQuery({ name: 'fromDate', required: false, type: String, description: 'ISO date filter from (transaction_date)' })
-  @ApiQuery({ name: 'toDate', required: false, type: String, description: 'ISO date filter to (transaction_date)' })
+  @ApiQuery({
+    name: 'fromDate',
+    required: false,
+    type: String,
+    description: 'ISO date filter from (transaction_date)',
+  })
+  @ApiQuery({
+    name: 'toDate',
+    required: false,
+    type: String,
+    description: 'ISO date filter to (transaction_date)',
+  })
   @ApiResponseData({
     type: PaymentHistoryResponseDto,
     status: HttpStatus.OK,
@@ -270,26 +322,25 @@ export class TransactionsController {
   ) {
     let filterClinicId = clinicId;
 
+    // FIX: transactions.clinic_id stores the Account ID (not cai._id).
+    // Use Account ID directly as filter instead of looking up cai._id.
     if (user.role === AccountRole.CLINIC_ADMIN) {
-      const clinicAdminId = await this.transactionsService.getClinicAdminIdByAccountId(user._id);
-      if (clinicAdminId) {
-        filterClinicId = clinicAdminId;
-      }
+      filterClinicId = user._id;
     } else if (user.role === AccountRole.CLINIC_MANAGER) {
       if (!user.parentId) {
-        throw new BadRequestException('Manager account has no parent clinic assigned');
+        throw new BadRequestException(
+          'Manager account has no parent clinic assigned',
+        );
       }
-      const clinicAdminId = await this.transactionsService.getClinicAdminIdByAccountId(user.parentId);
-      if (clinicAdminId) {
-        filterClinicId = clinicAdminId;
-      }
+      filterClinicId = user.parentId; // parent Clinic Admin's Account ID
     }
 
-    const { items, total } = await this.transactionsService.getAllPaymentHistory(
-      Number(page),
-      Number(limit),
-      { clinicId: filterClinicId, senderAccountId, fromDate, toDate },
-    );
+    const { items, total } =
+      await this.transactionsService.getAllPaymentHistory(
+        Number(page),
+        Number(limit),
+        { clinicId: filterClinicId, senderAccountId, fromDate, toDate },
+      );
 
     return {
       data: {
@@ -318,7 +369,7 @@ export class TransactionsController {
 
   /**
    * Get transaction details by ID
-   * 
+   *
    * @param id Transaction ID
    * @param user Current logged-in user
    * @returns Transaction detail object
@@ -329,25 +380,34 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Xem chi tiết giao dịch' })
-  @ApiResponseData({ type: TransactionDetailDto, status: HttpStatus.OK, message: 'Transaction detail fetched successfully' })
+  @ApiResponseData({
+    type: TransactionDetailDto,
+    status: HttpStatus.OK,
+    message: 'Transaction detail fetched successfully',
+  })
   async getTransactionDetail(
     @Param('id', ParseUUIDPipe) id: string,
     @User() user: Account,
   ) {
     let filterClinicId: string | undefined;
 
+    // FIX: transactions.clinic_id stores the Account ID (not cai._id).
+    // Use Account ID directly as filter to match stored values.
     if (user.role === AccountRole.CLINIC_ADMIN) {
-      const clinicAdminId = await this.transactionsService.getClinicAdminIdByAccountId(user._id);
-      if (clinicAdminId) filterClinicId = clinicAdminId;
+      filterClinicId = user._id;
     } else if (user.role === AccountRole.CLINIC_MANAGER) {
       if (!user.parentId) {
-        throw new BadRequestException('Manager account has no parent clinic assigned');
+        throw new BadRequestException(
+          'Manager account has no parent clinic assigned',
+        );
       }
-      const clinicAdminId = await this.transactionsService.getClinicAdminIdByAccountId(user.parentId);
-      if (clinicAdminId) filterClinicId = clinicAdminId;
+      filterClinicId = user.parentId; // parent Clinic Admin's Account ID
     }
 
-    const data = await this.transactionsService.getTransactionDetail(id, filterClinicId);
+    const data = await this.transactionsService.getTransactionDetail(
+      id,
+      filterClinicId,
+    );
     return {
       data,
       message: 'Transaction detail fetched successfully',

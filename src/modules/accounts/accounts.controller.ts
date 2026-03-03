@@ -94,7 +94,7 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   PublicClinicInfo,
 )
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+  constructor(private readonly accountsService: AccountsService) { }
 
   @Post(':id/keys/generate')
   // @UseGuards(JwtAuthGuard, RolesGuard)
@@ -508,6 +508,116 @@ export class AccountsController {
     return this.accountsService.getPublicDoctorById(id);
   }
 
+  @Get('staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get list of staff for the manager\'s clinic' })
+  @ApiResponseData({
+    type: StaffListResponseDto,
+    status: 200,
+    message: 'Staff list retrieved successfully',
+  })
+  async getStaffList(
+    @Request() req: any,
+    @Query() query: GetStaffListDto,
+  ): Promise<{ data: StaffListResponseDto; message: string }> {
+    const managerId = req.user._id;
+    const result = await this.accountsService.findAllStaffByManager(
+      managerId,
+      query.page || 1,
+      query.limit || 10,
+      query.search,
+      undefined,
+      query.fromDate,
+      query.toDate,
+    );
+    return {
+      data: result,
+      message: 'Staff list retrieved successfully',
+    };
+  }
+
+  @Get('staff/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get staff details by ID' })
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: 200,
+    message: 'Staff details retrieved successfully',
+  })
+  async getStaffDetails(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const managerId = req.user._id;
+    const result = await this.accountsService.findStaffById(id, managerId);
+    return {
+      data: result,
+      message: 'Staff details retrieved successfully',
+    };
+  }
+
+  @Get('doctors-management')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get list of doctors for the manager\'s clinic' })
+  @ApiResponseData({
+    type: DoctorListResponseDto,
+    status: 200,
+    message: 'Doctor list retrieved successfully',
+  })
+  async getDoctorListManagement(
+    @Request() req: any,
+    @Query() query: GetDoctorListDto,
+  ): Promise<{ data: DoctorListResponseDto; message: string }> {
+    const managerId = req.user._id;
+    const result = await this.accountsService.findAllDoctorsByManager(
+      managerId,
+      query.page || 1,
+      query.limit || 10,
+      query.search,
+      query.academicDegree,
+      query.fromDate,
+      query.toDate,
+    );
+    return {
+      data: result,
+      message: 'Doctor list retrieved successfully',
+    };
+  }
+
+
+  @Get('clinic/:clinicId/employees')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get employees (doctors/staff) of a specific clinic',
+  })
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: 200,
+    message: 'Employees retrieved successfully',
+    isArray: true,
+  })
+  async getEmployeesByClinic(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query() query: GetEmployeesByClinicDto,
+  ): Promise<{ data: AccountResponseDto[]; message: string }> {
+    const result = await this.accountsService.findAllEmployeesByClinic(
+      clinicId,
+      query,
+    );
+    return {
+      data: result,
+      message: 'Employees retrieved successfully',
+    };
+  }
+
   /**
    * Get Account by ID
    *
@@ -830,6 +940,33 @@ export class AccountsController {
    * @response 403 - Forbidden - Requires ADMIN role
    * @response 404 - Account not found
    */
+  /**
+   * Delete Employee (Soft Delete) - Clinic Admin/Manager Only
+   *
+   * Allows a Clinic Admin or Clinic Manager to soft delete (deactivate) an employee
+   * (staff or doctor) belonging to their clinic.
+   *
+   * @param req The HTTP request object (for extracting the requestor's ID)
+   * @param id The UUID of the employee to delete
+   */
+  @Delete('employees/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Soft delete clinic employee (Admin/Manager only)' })
+  @ApiResponse({
+    status: MESSAGES.statusCode.success,
+    description: MESSAGES.successMessage.userDeleteSuccess,
+  })
+  async deleteEmployee(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ message: string }> {
+    const requestorId = req.user._id;
+    await this.accountsService.deleteEmployee(id, requestorId);
+    return { message: MESSAGES.successMessage.userDeleteSuccess };
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.ADMIN)
@@ -1092,7 +1229,7 @@ export class AccountsController {
     @Request() req: any,
   ): Promise<{ data: CancelRegistrationResponseDto; message: string }> {
     const result = await this.accountsService.cancelPendingRegistration(
-      req.user.accountId,
+      req.user._id,
     );
     return { data: result, message: result.message };
   }
@@ -1140,7 +1277,7 @@ export class AccountsController {
     @Body() dto: CancelSubscriptionDto,
   ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
     const result = await this.accountsService.cancelActiveSubscription(
-      req.user.accountId,
+      req.user._id,
       dto,
     );
     return { data: result, message: result.message };
@@ -1190,7 +1327,7 @@ export class AccountsController {
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
     @Body() dto: any,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1241,7 +1378,7 @@ export class AccountsController {
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.getLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1301,7 +1438,7 @@ export class AccountsController {
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
     @Body() dto: any,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.updateLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1314,114 +1451,6 @@ export class AccountsController {
     };
   }
 
-  @Get('staff')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_MANAGER)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get list of staff for the manager\'s clinic' })
-  @ApiResponseData({
-    type: StaffListResponseDto,
-    status: 200,
-    message: 'Staff list retrieved successfully',
-  })
-  async getStaffList(
-    @Request() req: any,
-    @Query() query: GetStaffListDto,
-  ): Promise<{ data: StaffListResponseDto; message: string }> {
-    const managerId = req.user.accountId;
-    const result = await this.accountsService.findAllStaffByManager(
-      managerId,
-      query.page || 1,
-      query.limit || 10,
-      query.search,
-      query.role,
-      query.fromDate,
-      query.toDate,
-    );
-    return {
-      data: result,
-      message: 'Staff list retrieved successfully',
-    };
-  }
 
-  @Get('staff/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_MANAGER)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get staff details by ID' })
-  @ApiResponseData({
-    type: AccountResponseDto,
-    status: 200,
-    message: 'Staff details retrieved successfully',
-  })
-  async getStaffDetails(
-    @Request() req: any,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{ data: AccountResponseDto; message: string }> {
-    const managerId = req.user.accountId;
-    const result = await this.accountsService.findStaffById(id, managerId);
-    return {
-      data: result,
-      message: 'Staff details retrieved successfully',
-    };
-  }
-
-  @Get('doctors-management')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_MANAGER)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get list of doctors for the manager\'s clinic' })
-  @ApiResponseData({
-    type: DoctorListResponseDto,
-    status: 200,
-    message: 'Doctor list retrieved successfully',
-  })
-  async getDoctorListManagement(
-    @Request() req: any,
-    @Query() query: GetDoctorListDto,
-  ): Promise<{ data: DoctorListResponseDto; message: string }> {
-    const managerId = req.user.accountId;
-    const result = await this.accountsService.findAllDoctorsByManager(
-      managerId,
-      query.page || 1,
-      query.limit || 10,
-      query.search,
-      query.academicDegree,
-      query.fromDate,
-      query.toDate,
-    );
-    return {
-      data: result,
-      message: 'Doctor list retrieved successfully',
-    };
-  }
-
-
-  @Get('clinic/:clinicId/employees')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_MANAGER)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({
-    summary: 'Get employees (doctors/staff) of a specific clinic',
-  })
-  @ApiResponseData({
-    type: AccountResponseDto,
-    status: 200,
-    message: 'Employees retrieved successfully',
-    isArray: true,
-  })
-  async getEmployeesByClinic(
-    @Param('clinicId', ParseUUIDPipe) clinicId: string,
-    @Query() query: GetEmployeesByClinicDto,
-  ): Promise<{ data: AccountResponseDto[]; message: string }> {
-    const result = await this.accountsService.findAllEmployeesByClinic(
-      clinicId,
-      query,
-    );
-    return {
-      data: result,
-      message: 'Employees retrieved successfully',
-    };
-  }
 }
 

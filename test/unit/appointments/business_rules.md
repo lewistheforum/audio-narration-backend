@@ -230,7 +230,7 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 - ❌ **Không Hỗ Trợ COD**: Từ chối request với `payment_method = 'cod'` → HTTP 400
 - 📌 **Trạng Thái Appointment**: `status = 'PENDING'` (chờ phòng khám xác nhận)
 - 📌 **Transaction ID**: `transactionId = null` (chờ webhook từ payment gateway)
-- 📌 **Package Status**: `appointment_package.status = 'pending_payment'`
+- 📌 **Package Status**: `appointment_package.status = `pending_payment``
 
 **Triển Khai Tương Lai (Khi Payment Gateway Sẵn Sàng):**
 
@@ -241,7 +241,7 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 
 2. **Xử Lý Webhook:**
    - Nhận thông báo thanh toán thành công từ payment gateway
-   - Cập nhật `transactionId`, `appointment_package.status = 'paid'`
+   - Cập nhật `transactionId`, `appointment_package.status = `paid``
    - Cập nhật `appointment.status = 'PENDING'` (chờ phòng khám xác nhận)
    - Gửi email xác nhận cho bệnh nhân
 
@@ -389,7 +389,7 @@ async createAppointmentFromSession(
     const appointmentPackage = await manager.getRepository('appointment_package').save({
       appointmentId: appointment._id,
       amount: finalPrice,
-      status: 'pending_payment',
+      status: `pending_payment`,
       paymentType: 'online',
     });
 
@@ -1186,7 +1186,7 @@ logger.warn('Booking failed', {
 ```typescript
 // Hiện tại:
 appointment.status = 'PENDING';
-appointmentPackage.status = 'pending_payment';
+appointmentPackage.status = `pending_payment`;
 
 // Sau khi có payment gateway:
 appointment.status = 'AWAITING_PAYMENT';
