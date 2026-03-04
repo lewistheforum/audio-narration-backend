@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import * as PdfPrinter from 'pdfmake';
-import { TDocumentDefinitions, Content, TFontDictionary } from 'pdfmake/interfaces';
+import {
+  TDocumentDefinitions,
+  Content,
+  TFontDictionary,
+} from 'pdfmake/interfaces';
 import { PatientEPrescriptionDetailResponseDto } from '../dto';
 
 /**
  * PDF Generator Service
- * 
+ *
  * Generates PDF documents for E-Prescriptions with medical/legal compliance
  * Supports Vietnamese characters using UTF-8 fonts
  */
@@ -18,21 +22,19 @@ export class PdfGeneratorService {
   private readonly fonts: TFontDictionary = {
     Roboto: {
       normal: Buffer.from(
-        require('pdfmake/build/vfs_fonts.js').pdfMake.vfs['Roboto-Regular.ttf'],
+        require('pdfmake/build/vfs_fonts.js')['Roboto-Regular.ttf'],
         'base64',
       ),
       bold: Buffer.from(
-        require('pdfmake/build/vfs_fonts.js').pdfMake.vfs['Roboto-Medium.ttf'],
+        require('pdfmake/build/vfs_fonts.js')['Roboto-Medium.ttf'],
         'base64',
       ),
       italics: Buffer.from(
-        require('pdfmake/build/vfs_fonts.js').pdfMake.vfs['Roboto-Italic.ttf'],
+        require('pdfmake/build/vfs_fonts.js')['Roboto-Italic.ttf'],
         'base64',
       ),
       bolditalics: Buffer.from(
-        require('pdfmake/build/vfs_fonts.js').pdfMake.vfs[
-          'Roboto-MediumItalic.ttf'
-        ],
+        require('pdfmake/build/vfs_fonts.js')['Roboto-MediumItalic.ttf'],
         'base64',
       ),
     },
@@ -40,10 +42,10 @@ export class PdfGeneratorService {
 
   /**
    * Generate E-Prescription PDF
-   * 
+   *
    * Creates a professionally formatted medical prescription document
    * with clinic, doctor, patient information and medicine details
-   * 
+   *
    * @param {Object} payload - Data payload for PDF generation
    * @param {PatientEPrescriptionDetailResponseDto} payload.ePrescription - E-Prescription details
    * @param {Object} payload.aggregatedData - Clinic, doctor, patient metadata
@@ -84,7 +86,12 @@ export class PdfGeneratorService {
         ...this.buildHeader(aggregatedData),
 
         // Divider
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1 }], margin: [0, 10, 0, 10] },
+        {
+          canvas: [
+            { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1 },
+          ],
+          margin: [0, 10, 0, 10],
+        },
 
         // Document Title
         {
@@ -233,7 +240,10 @@ export class PdfGeneratorService {
           {
             width: '50%',
             stack: [
-              { text: `Họ và tên: ${data.patient_name || 'N/A'}`, style: 'infoText' },
+              {
+                text: `Họ và tên: ${data.patient_name || 'N/A'}`,
+                style: 'infoText',
+              },
               { text: `Ngày sinh: ${patientDob}`, style: 'infoText' },
             ],
           },
@@ -241,7 +251,10 @@ export class PdfGeneratorService {
             width: '50%',
             stack: [
               { text: `Giới tính: ${patientGender}`, style: 'infoText' },
-              { text: `Điện thoại: ${data.patient_phone || 'N/A'}`, style: 'infoText' },
+              {
+                text: `Điện thoại: ${data.patient_phone || 'N/A'}`,
+                style: 'infoText',
+              },
             ],
           },
         ],
@@ -276,7 +289,13 @@ export class PdfGeneratorService {
           stack: [
             { text: detail.medicine.name || 'N/A', bold: true },
             ...(detail.medicine.subtitle_0
-              ? [{ text: detail.medicine.subtitle_0, fontSize: 8, italics: true }]
+              ? [
+                  {
+                    text: detail.medicine.subtitle_0,
+                    fontSize: 8,
+                    italics: true,
+                  },
+                ]
               : []),
           ],
         },
@@ -284,9 +303,19 @@ export class PdfGeneratorService {
         { text: detail.quantity?.toString() || 'N/A', alignment: 'center' },
         {
           stack: [
-            { text: detail.check_out || detail.medicine.usage || 'N/A', fontSize: 9 },
+            {
+              text: detail.check_out || detail.medicine.usage || 'N/A',
+              fontSize: 9,
+            },
             ...(detail.note
-              ? [{ text: `Ghi chú: ${detail.note}`, fontSize: 8, italics: true, margin: [0, 2, 0, 0] as [number, number, number, number] }]
+              ? [
+                  {
+                    text: `Ghi chú: ${detail.note}`,
+                    fontSize: 8,
+                    italics: true,
+                    margin: [0, 2, 0, 0] as [number, number, number, number],
+                  },
+                ]
               : []),
           ],
         },
@@ -303,7 +332,11 @@ export class PdfGeneratorService {
         },
         layout: {
           fillColor: (rowIndex: number) => {
-            return rowIndex === 0 ? '#3498db' : rowIndex % 2 === 0 ? '#ecf0f1' : null;
+            return rowIndex === 0
+              ? '#3498db'
+              : rowIndex % 2 === 0
+                ? '#ecf0f1'
+                : null;
           },
           hLineWidth: () => 0.5,
           vLineWidth: () => 0.5,

@@ -50,10 +50,12 @@ export class AdminRegistrationRepository {
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.children', 'childAccounts')
+      .leftJoinAndSelect('account.addresses', 'adminAddresses')
       .leftJoinAndSelect(
         'childAccounts.clinicManagerInformation',
         'clinicManagerInfo',
       )
+      .leftJoinAndSelect('childAccounts.addresses', 'managerAddresses')
       .leftJoinAndSelect(
         'clinic_subcriptions',
         'subscription',
@@ -108,6 +110,27 @@ export class AdminRegistrationRepository {
       clinicName: account.clinicAdminInformation?.clinicName || '',
       description: account.clinicAdminInformation?.description,
       specializedIn: account.clinicAdminInformation?.specializedIn,
+      dob: account.clinicAdminInformation?.dob,
+      profilePicture: account.clinicAdminInformation?.profilePicture,
+      bankName: account.clinicAdminInformation?.bankName,
+      bankNumber: account.clinicAdminInformation?.bankNumber,
+      bankBranch: account.clinicAdminInformation?.bankBranch,
+      sepayVa: account.clinicAdminInformation?.sepayVa,
+      isVerify: account.clinicAdminInformation?.isVerify,
+      pros: account.clinicAdminInformation?.pros,
+      paraclinical: account.clinicAdminInformation?.paraclinical,
+      address:
+        account.addresses && account.addresses.length > 0
+          ? {
+              address: account.addresses[0].address,
+              ward: account.addresses[0].ward,
+              wardName: account.addresses[0].wardName,
+              district: account.addresses[0].district,
+              districtName: account.addresses[0].districtName,
+              province: account.addresses[0].province,
+              provinceName: account.addresses[0].provinceName,
+            }
+          : undefined,
     };
 
     const clinicManager: ClinicManagerInfoDto = {
@@ -117,6 +140,19 @@ export class AdminRegistrationRepository {
       phone: clinicManagerAccount.phone || '',
       clinicBranchName:
         clinicManagerAccount.clinicManagerInformation?.clinicBranchName || '',
+      address:
+        clinicManagerAccount.addresses &&
+        clinicManagerAccount.addresses.length > 0
+          ? {
+              address: clinicManagerAccount.addresses[0].address,
+              ward: clinicManagerAccount.addresses[0].ward,
+              wardName: clinicManagerAccount.addresses[0].wardName,
+              district: clinicManagerAccount.addresses[0].district,
+              districtName: clinicManagerAccount.addresses[0].districtName,
+              province: clinicManagerAccount.addresses[0].province,
+              provinceName: clinicManagerAccount.addresses[0].provinceName,
+            }
+          : undefined,
     };
 
     const legalDocuments: LegalDocumentsInfoDto = {
@@ -124,6 +160,8 @@ export class AdminRegistrationRepository {
       operatingLicense: legalDocs.operatingLicense || '',
       businessLicense: legalDocs.businessLicense || '',
       taxIdUrl: legalDocs.taxIdUrl,
+      otherDocs: legalDocs.otherDocs,
+      rejectionReason: legalDocs.rejectionReason,
       verificationStatus: legalDocs.verificationStatus,
     };
 

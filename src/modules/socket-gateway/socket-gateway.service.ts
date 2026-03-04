@@ -43,7 +43,8 @@ import { MessageType } from '../messages/enums';
 })
 @Injectable()
 export class SocketGatewayService
-  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect {
+  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server<ClientToServerEvents, ServerToClientEvents>;
 
@@ -57,7 +58,7 @@ export class SocketGatewayService
     private readonly AccountsService: AccountsService,
     private readonly messagesService: MessagesService,
     private readonly conversationService: ConversationService,
-  ) { }
+  ) {}
 
   onModuleInit() {
     console.log('Socket Gateway initialized');
@@ -418,9 +419,8 @@ export class SocketGatewayService
   ): Promise<void> {
     try {
       // Get conversation details
-      const conversation = await this.conversationService.findOne(
-        conversationId,
-      );
+      const conversation =
+        await this.conversationService.findOne(conversationId);
 
       // Get sender information
       const sender = await this.AccountsService.findAccountEntityById(senderId);
@@ -560,9 +560,8 @@ export class SocketGatewayService
     conversationId: string,
   ): Promise<string[]> {
     try {
-      const conversation = await this.conversationService.findOne(
-        conversationId,
-      );
+      const conversation =
+        await this.conversationService.findOne(conversationId);
       return conversation.participants.map((participant) => participant.id);
     } catch (error) {
       console.error('Error getting conversation participants:', error);
