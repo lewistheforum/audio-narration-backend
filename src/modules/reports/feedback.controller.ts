@@ -31,7 +31,7 @@ import { Feedback } from './entities/feedback.entity';
 // @UseGuards(JwtAuthGuard)
 // @ApiBearerAuth('JWT-auth')
 export class FeedbackController {
-  constructor(private readonly feedbackService: FeedbackService) { }
+  constructor(private readonly feedbackService: FeedbackService) {}
 
   /**
    * Create Feedback for Clinic
@@ -219,7 +219,8 @@ export class FeedbackController {
   async getFeedbacksByDoctorId(
     @Param('doctorId', ParseUUIDPipe) doctorId: string,
   ): Promise<FeedbackAIResponseDto[]> {
-    const feedbacks = await this.feedbackService.findFeedbacksByDoctorId(doctorId);
+    const feedbacks =
+      await this.feedbackService.findFeedbacksByDoctorId(doctorId);
     return feedbacks.map((feedback) => new FeedbackAIResponseDto(feedback));
   }
 
@@ -239,5 +240,23 @@ export class FeedbackController {
   ): Promise<FeedbackResponseDto> {
     const feedback = await this.feedbackService.labelFeedbackById(id);
     return new FeedbackResponseDto(feedback);
+  }
+
+  @Get('admin/:adminId/managers-feedbacks')
+  @ApiOperation({
+    summary:
+      'Get clinic manager list by clinic admin id and all feedback in each clinic manager',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'List of clinic managers and their feedbacks retrieved successfully',
+  })
+  async getClinicManagersFeedbacksByAdminId(
+    @Param('adminId', ParseUUIDPipe) adminId: string,
+  ) {
+    const result =
+      await this.feedbackService.getClinicManagersFeedbacksByAdminId(adminId);
+    return result; // Depending on frontend needs, this could map feedbacks through FeedbackAIResponseDto
   }
 }
