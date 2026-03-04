@@ -145,6 +145,43 @@ export class AccountRepository {
   }
 
   /**
+   * Find Account by Phone Number
+   *
+   * Retrieves a single account by phone number.
+   * Phone is a unique field in the database.
+   *
+   * Use Cases:
+   * - Patient search for walk-in appointments
+   * - Phone verification
+   * - Duplicate account prevention
+   *
+   * @param {string} phone - Account phone number
+   * @returns {Promise<Account | null>} Account entity or null if not found
+   *
+   * @example
+   * ```typescript
+   * const account = await repository.findByPhone('0912345678');
+   * ```
+   */
+  async findByPhone(phone: string): Promise<Account | null> {
+    return this.accountRepository.findOne({
+      where: { phone },
+    });
+  }
+
+  /**
+   * Find Account by Email (Alias)
+   *
+   * Alias method for consistency with other find methods
+   *
+   * @param {string} email - Account email address
+   * @returns {Promise<Account | null>} Account entity or null if not found
+   */
+  async findByEmail(email: string): Promise<Account | null> {
+    return this.findAccountByEmail(email);
+  }
+
+  /**
    * Find Multiple Accounts by IDs
    *
    * Batch retrieval of accounts using SQL IN clause.

@@ -44,6 +44,8 @@ import {
   GetDoctorListDto,
   StaffListResponseDto,
   DoctorListResponseDto,
+  SearchPatientQueryDto,
+  PatientSearchResponseDto,
   GetEmployeesByClinicDto,
 } from './dto';
 
@@ -92,6 +94,7 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   PublicDoctorDetailData,
   PublicDoctorInfo,
   PublicClinicInfo,
+  PatientSearchResponseDto,
 )
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
@@ -1311,6 +1314,82 @@ export class AccountsController {
       data: legalDocs,
       message:
         'Legal documents updated successfully. Waiting for admin approval.',
+    };
+  }
+
+  /**
+   * Search Patient by Phone, Email, or Name (Staff Only)
+   *
+   * Allows clinic staff to search for existing patients before creating walk-in appointments
+   * Primary search is by phone number (unique identifier)
+   * Returns patient details if found, or suggests creating new account
+   *
+   * Query Parameters:
+   * - phone: Patient phone number (10-11 digits, starts with 0) - PRIMARY KEY
+   * - email: Patient email (optional)
+   * - fullName: Patient full name for fuzzy search (optional)
+   *
+   * Response Format:
+   * - If found: Returns patient data with account info
+   * - If not found: Returns suggested action to create new account
+   *
+   * Access Control:
+   * - Requires CLINIC_STAFF role
+   * - Requires valid JWT authentication
+   *
+   * Use Cases:
+   * - Check if walk-in patient already has account before creating
+   * - Prevent duplicate account creation
+   * - Quick patient lookup by phone
+   *
+   * @param {SearchPatientQueryDto} query - Search parameters
+   * @returns {Promise<{data: PatientSearchResponseDto, message: string}>} Search result
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Patient found or not found with suggested action
+   * @response 401 - Unauthorized - Missing or invalid JWT token
+   * @response 403 - Forbidden - Requires CLINIC_STAFF role
+   * @response 400 - Bad Request - Invalid query parameters
+   */
+  @Get('staff/patients/search')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Search patient by phone, email, or name (Staff)' })
+  @ApiQuery({
+    name: 'phone',
+    required: false,
+    type: String,
+    description: 'Patient phone number (10-11 digits, starts with 0)',
+    example: '0912345678',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+    type: String,
+    description: 'Patient email address',
+    example: 'nguyenvana@gmail.com',
+  })
+  @ApiQuery({
+    name: 'fullName',
+    required: false,
+    type: String,
+    description: 'Patient full name for fuzzy search',
+    example: 'Nguyễn Văn A',
+  })
+  @ApiResponseData({
+    type: PatientSearchResponseDto,
+    status: 200,
+    message: 'Patient search completed',
+  })
+  async searchPatient(
+    @Query() query: SearchPatientQueryDto,
+  ): Promise<{ data: PatientSearchResponseDto; message: string }> {
+    const result = await this.accountsService.searchPatientByPhone(query);
+    return {
+      data: result,
+      message: 'Patient search completed',
     };
   }
 
