@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { ErmsService } from './erms.service';
 import { PrescriptionsService } from './prescriptions.service';
 import { InitializeErmDto, ErmResponseDto, SaveErmDataDto, SaveErmResponseDto, CreatePrescriptionDto, PrescriptionResponseDto } from './dto';
 import { ConsultationFormTemplateDto } from './dto/consultation-form-template.dto';
@@ -46,7 +47,10 @@ import { AccountRole } from '../accounts/enums';
 @Roles(AccountRole.DOCTOR)
 @ApiBearerAuth('JWT-auth')
 export class ErmsController {
-  constructor(private readonly prescriptionsService: PrescriptionsService) {}
+  constructor(
+    private readonly ermsService: ErmsService,
+    private readonly prescriptionsService: PrescriptionsService,
+  ) {}
 
   /**
    * Initialize ERM (Step 3 - ERM Flow)
@@ -97,7 +101,7 @@ export class ErmsController {
     @Body() initializeErmDto: InitializeErmDto,
   ): Promise<ErmResponseDto> {
     const doctorId = req.user._id;
-    return this.prescriptionsService.initializeErm(initializeErmDto, doctorId);
+    return this.ermsService.initializeErm(initializeErmDto, doctorId);
   }
 
   /**
@@ -167,7 +171,7 @@ export class ErmsController {
     | BoneDensityFormTemplateDto
   > {
     const doctorId = req.user._id;
-    return this.prescriptionsService.getFormTemplate(id, doctorId);
+    return this.ermsService.getFormTemplate(id, doctorId);
   }
 
   /**
@@ -224,7 +228,7 @@ export class ErmsController {
     @Body() saveErmDataDto: SaveErmDataDto,
   ): Promise<SaveErmResponseDto> {
     const doctorId = req.user._id;
-    return this.prescriptionsService.saveErmData(id, saveErmDataDto, doctorId);
+    return this.ermsService.saveErmData(id, saveErmDataDto, doctorId);
   }
 
   /**

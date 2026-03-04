@@ -18,5 +18,7 @@ export * from './doctor-appointment-detail-response.dto';
 export * from './pending-services-response.dto';
 export * from './complete-examination.dto';
 export * from './complete-examination-response.dto';
+export * from './add-service.dto';
+export * from './add-service-response.dto';
 export * from './doctor-booking.dto';
 export * from './clinic-booking.dto';

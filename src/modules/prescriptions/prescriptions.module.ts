@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrescriptionsService } from './prescriptions.service';
+import { ErmsService } from './erms.service';
 import { PrescriptionsController } from './prescriptions.controller';
 import { ErmsController } from './erms.controller';
 import {
@@ -11,10 +12,11 @@ import {
   ERMConsultation,
   ERMXray,
   ERMUltrasound,
+  ERMLab,
   ERMProcedure,
   ERMBoneDensity,
 } from './entities';
-import { MedicineRepository } from './repositories';
+import { MedicineRepository, ErmRepository } from './repositories';
 import { ServiceAppointment } from '../appointments/entities/service-appointment.entity';
 import { Appointment } from '../appointments/entities/appointment.entity';
 
@@ -48,6 +50,7 @@ import { Appointment } from '../appointments/entities/appointment.entity';
       ERMConsultation,
       ERMXray,
       ERMUltrasound,
+      ERMLab,
       ERMProcedure,
       ERMBoneDensity,
       ServiceAppointment,
@@ -55,7 +58,7 @@ import { Appointment } from '../appointments/entities/appointment.entity';
     ]),
   ],
   controllers: [PrescriptionsController, ErmsController],
-  providers: [PrescriptionsService, MedicineRepository],
-  exports: [PrescriptionsService, TypeOrmModule],
+  providers: [PrescriptionsService, ErmsService, MedicineRepository, ErmRepository],
+  exports: [PrescriptionsService, ErmsService, TypeOrmModule],
 })
 export class PrescriptionsModule {}

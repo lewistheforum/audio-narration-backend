@@ -33,6 +33,8 @@ import {
   PendingServiceItemDto,
   CompleteExaminationDto,
   CompleteExaminationResponseDto,
+  AddServiceDto,
+  AddServiceResponseDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
@@ -40,6 +42,7 @@ import { AppointmentStatus } from './enums';
 import { ERMRecordType, ERMStatus } from '../prescriptions/enums';
 import { ERM } from '../prescriptions/entities/erm.entity';
 import { EPrescription } from '../prescriptions/entities/e-prescription.entity';
+import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { BookingSessionService } from './booking-session.service';
 
 /**
@@ -282,7 +285,57 @@ export class AppointmentsService {
           relations: ['patient', 'clinic', 'doctor'],
         });
 
-      return this.transformToResponseDto(appointmentWithRelations!);
+      // Fetch services for the created appointment (use manager to ensure transaction visibility)
+      const servicesRaw = await manager
+        .createQueryBuilder()
+        .select([
+          'clinicService._id AS id',
+          'clinicService.service_name AS serviceName',
+          'clinicService.description AS description',
+          'clinicServiceConfig.price AS price',
+        ])
+        .from('service_appointments', 'serviceAppointment')
+        .innerJoin(
+          'clinic_service_config',
+          'clinicServiceConfig',
+          'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+        )
+        .innerJoin(
+          'clinic_services',
+          'clinicService',
+          'clinicService._id = clinicServiceConfig.service_id',
+        )
+        .where('serviceAppointment.appointment_package_id = :packageId', {
+          packageId: savedPackage._id,
+        })
+        .andWhere('serviceAppointment.deleted_at IS NULL')
+        .getRawMany();
+
+      const services = servicesRaw.map((row) => ({
+        id: row.id,
+        serviceName: row.servicename,
+        description: row.description,
+        price: parseFloat(row.price),
+      }));
+
+      // Fetch clinic rooms if doctor shift is assigned
+      let clinicRooms = [];
+
+      if (savedAppointment.doctorShiftHourId) {
+        const appointmentData = [{
+          appointmentId: savedAppointment._id,
+          doctorShiftHourId: savedAppointment.doctorShiftHourId,
+          doctorId: savedAppointment.doctorId,
+          appointmentDate: savedAppointment.appointmentDate,
+        }];
+        const clinicRoomsMap =
+          await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+            appointmentData,
+          );
+        clinicRooms = clinicRoomsMap.get(savedAppointment._id) || [];
+      }
+
+      return this.transformToResponseDto(appointmentWithRelations!, services, clinicRooms);
     });
   }
 
@@ -744,8 +797,14 @@ export class AppointmentsService {
         AppointmentStatus.ABSENT,
       ],
       [AppointmentStatus.IN_PROGRESS]: [
+        AppointmentStatus.NEED_FINAL_PAYMENT,
         AppointmentStatus.COMPLETED,
         AppointmentStatus.CANCELLED,
+      ],
+
+      // Payment and completion
+      [AppointmentStatus.NEED_FINAL_PAYMENT]: [
+        AppointmentStatus.COMPLETED, // After payment is settled
       ],
 
       // Terminal states (empty array - no transitions allowed)
@@ -1165,7 +1224,6 @@ export class AppointmentsService {
       gender: appointment.patient?.generalAccount?.gender || null,
       phone: appointment.patient?.phone || null,
       email: appointment.patient?.email || 'No email',
-      medicalHistory: null, // TODO: Get from medical history if available
     };
 
     return {
@@ -1510,29 +1568,35 @@ export class AppointmentsService {
     // Determine if paid online (check if any package has transactionId)
     const hasPaidOnline = appointmentPackages.some((pkg) => pkg.transactionId !== null);
 
-    // Determine payment status and next step
-    // Note: Appointment status is always COMPLETED after examination
-    // Payment status is tracked separately
+    // Determine payment status, appointment status, and next step
     let paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL';
     let nextStep: 'EXPORT_PRESCRIPTION' | 'PROCEED_TO_PAYMENT';
+    let appointmentStatus: AppointmentStatus;
 
     if (hasPaidOnline && !hasAdditionalServices) {
-      // CASE 1: Paid online + No additional services
+      // CASE 1: Paid online + No additional services → Fully completed
       paymentStatus = 'PAID';
       nextStep = 'EXPORT_PRESCRIPTION';
+      appointmentStatus = AppointmentStatus.COMPLETED;
     } else if (!hasPaidOnline && !hasAdditionalServices) {
-      // CASE 2: Not paid online + No additional services
+      // CASE 2: Not paid online + No additional services → Need full payment
       paymentStatus = 'UNPAID';
       nextStep = 'PROCEED_TO_PAYMENT';
-    } else {
-      // CASE 3: Paid online + Has additional services
-      paymentStatus = hasPaidOnline ? 'PARTIAL' : 'UNPAID';
+      appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
+    } else if (hasPaidOnline && hasAdditionalServices) {
+      // CASE 3: Paid online + Has additional services → Need additional payment
+      paymentStatus = 'PARTIAL';
       nextStep = 'PROCEED_TO_PAYMENT';
+      appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
+    } else {
+      // CASE 4: Not paid online + Has additional services → Need full payment (including additional)
+      paymentStatus = 'UNPAID';
+      nextStep = 'PROCEED_TO_PAYMENT';
+      appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
     }
 
-    // 9. Update appointment status to COMPLETED
-    // Note: Appointment lifecycle is separate from payment lifecycle
-    appointment.status = AppointmentStatus.COMPLETED;
+    // 9. Update appointment status based on payment logic
+    appointment.status = appointmentStatus;
 
     await this.dataSource.getRepository(Appointment).save(appointment);
 
@@ -1556,7 +1620,7 @@ export class AppointmentsService {
     // 12. Return response
     return {
       appointmentId: appointment._id,
-      appointmentStatus: appointment.status, // Always COMPLETED after examination
+      appointmentStatus: appointment.status, // COMPLETED or NEED_FINAL_PAYMENT based on payment logic
       paymentStatus,
       completedAt: new Date(), // Current timestamp as completion time
       ermsSummary,
@@ -1565,6 +1629,140 @@ export class AppointmentsService {
       hasAdditionalServices,
       additionalAmount,
       nextStep,
+    };
+  }
+
+  /**
+   * Add additional service to appointment during examination
+   * 
+   * This method allows doctors to add new services (e.g., X-ray, Lab tests) 
+   * during the examination process. The service will be marked as "additional" 
+   * and will require payment processing by clinic staff.
+   * 
+   * Business Rules:
+   * 1. Only allowed when appointment status = IN_PROGRESS
+   * 2. Service must not already exist in the appointment
+   * 3. Service must belong to the current clinic
+   * 4. Creates new AppointmentPackage with transactionId = null
+   * 5. Creates new ServiceAppointment linked to the package
+   * 6. Service is identified as additional by comparing createdAt with appointment start time
+   * 
+   * @param appointmentId - UUID of the appointment
+   * @param doctorId - UUID of the doctor adding the service
+   * @param clinicServiceId - UUID of the clinic service to add
+   * @returns AddServiceResponseDto with created package and service details
+   * @throws NotFoundException if appointment or service not found
+   * @throws ForbiddenException if doctor not assigned to appointment
+   * @throws BadRequestException if validation fails
+   */
+  async addServiceToAppointment(
+    appointmentId: string,
+    doctorId: string,
+    clinicServiceId: string,
+  ): Promise<AddServiceResponseDto> {
+    // 1. Find and validate appointment
+    const appointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .where('appointment._id = :appointmentId', { appointmentId })
+      .andWhere('appointment.deleted_at IS NULL')
+      .getOne();
+
+    if (!appointment) {
+      throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound);
+    }
+
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(MESSAGES.failMessage.appointmentNotAssignedToDoctor);
+    }
+
+    // 2. Check appointment status must be IN_PROGRESS
+    if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
+      throw new BadRequestException(
+        'Can only add services when appointment status is IN_PROGRESS',
+      );
+    }
+
+    // 3. Validate clinic service exists and get details with relations
+    const clinicService = await this.dataSource
+      .getRepository(ClinicServiceConfig)
+      .createQueryBuilder('config')
+      .leftJoinAndSelect('config.service', 'service')
+      .leftJoinAndSelect('service.category', 'category')
+      .where('config._id = :clinicServiceId', { clinicServiceId })
+      .andWhere('config.deleted_at IS NULL')
+      .andWhere('config.is_active = true')
+      .getOne();
+
+    if (!clinicService) {
+      throw new NotFoundException('Clinic service not found or inactive');
+    }
+
+    // 4. Validate service belongs to the same clinic as appointment
+    if (clinicService.clinicId !== appointment.clinicId) {
+      throw new BadRequestException(
+        'Service does not belong to the appointment clinic',
+      );
+    }
+
+    // 5. Check if service already exists in this appointment
+    const existingServices = await this.dataSource
+      .getRepository(ServiceAppointment)
+      .createQueryBuilder('sa')
+      .innerJoin('sa.appointmentPackage', 'pkg')
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('sa.clinic_service_id = :clinicServiceId', { clinicServiceId })
+      .andWhere('sa.deleted_at IS NULL')
+      .getOne();
+
+    if (existingServices) {
+      throw new BadRequestException(
+        'This service already exists in the appointment',
+      );
+    }
+
+    // 6. Create new AppointmentPackage
+    const appointmentPackage = this.dataSource
+      .getRepository(AppointmentPackage)
+      .create({
+        appointmentId: appointment._id,
+        amount: clinicService.price,
+        transactionId: null, // Will be set by Clinic Staff during payment
+        status: null,
+        paymentType: null,
+      });
+
+    const savedPackage = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .save(appointmentPackage);
+
+    // 7. Create new ServiceAppointment
+    const serviceAppointment = this.dataSource
+      .getRepository(ServiceAppointment)
+      .create({
+        clinicServiceId: clinicServiceId,
+        appointmentPackageId: savedPackage._id,
+      });
+
+    const savedServiceAppointment = await this.dataSource
+      .getRepository(ServiceAppointment)
+      .save(serviceAppointment);
+
+    // 8. Get service type from category
+    const serviceType = (clinicService.service?.category?.type || 'CONSULTATION') as ERMRecordType;
+
+    // 9. Return response
+    return {
+      appointmentPackageId: savedPackage._id,
+      serviceAppointmentId: savedServiceAppointment._id,
+      appointmentId: appointment._id,
+      clinicServiceId: clinicServiceId,
+      serviceName: clinicService.service?.serviceName || 'Unknown Service',
+      serviceType: serviceType,
+      price: Number(clinicService.price),
+      addedDuringExamination: true, // Always true for this method
+      addedBy: doctorId,
+      createdAt: savedServiceAppointment.createdAt,
     };
   }
 

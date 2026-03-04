@@ -42,6 +42,8 @@ import {
   PendingServicesResponseDto,
   CompleteExaminationDto,
   CompleteExaminationResponseDto,
+  AddServiceDto,
+  AddServiceResponseDto,
   CreateBookingSessionDto,
   UpdateBookingSessionDto,
   CreateAppointmentFromSessionDto,
@@ -500,6 +502,105 @@ export class AppointmentsController {
     return this.appointmentsService.completeExamination(
       appointmentId,
       doctorId,
+    );
+  }
+
+  /**
+   * Add additional service to appointment
+   *
+   * Allows doctor to add new services (e.g., X-ray, Lab tests) during examination.
+   * The service will be marked as "additional" and require payment processing.
+   *
+   * API: POST /api/appointments/:id/add-service
+   *
+   * Business Rules:
+   * - Only allowed when appointment status = IN_PROGRESS
+   * - Service must not already exist in the appointment
+   * - Service must belong to the current clinic
+   * - Creates new AppointmentPackage with transactionId = null
+   * - Creates new ServiceAppointment linked to the package
+   *
+   * @param req - Request object with authenticated doctor
+   * @param appointmentId - UUID of the appointment
+   * @param addServiceDto - DTO containing clinic service ID to add
+   * @returns Created package and service appointment details
+   */
+  @Post(':id/add-service')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Add additional service to appointment (ERM Flow - Additional Service)',
+    description:
+      'Add new service during examination (e.g., X-ray, Lab tests). ' +
+      'Only allowed when appointment is IN_PROGRESS. ' +
+      'Creates new AppointmentPackage and ServiceAppointment. ' +
+      'Service will require payment processing by clinic staff after examination.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Service added successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        appointmentPackageId: { type: 'string', example: 'pkg-uuid' },
+        serviceAppointmentId: { type: 'string', example: 'sa-uuid' },
+        appointmentId: { type: 'string', example: 'appt-uuid' },
+        clinicServiceId: { type: 'string', example: 'service-uuid' },
+        serviceName: { type: 'string', example: 'X-ray Chest' },
+        serviceType: { type: 'string', enum: ['CONSULTATION', 'XRAY', 'ULTRASOUND', 'LAB', 'BONE_DENSITY', 'PROCEDURE'], example: 'XRAY' },
+        price: { type: 'number', example: 200000 },
+        addedDuringExamination: { type: 'boolean', example: true },
+        addedBy: { type: 'string', example: 'doctor-uuid' },
+        createdAt: { type: 'string', format: 'date-time', example: '2026-03-02T10:30:00Z' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid status, service already exists, or validation failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment not assigned to this doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment or service not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiBody({
+    type: AddServiceDto,
+    description: 'Service to add',
+    examples: {
+      xray: {
+        summary: 'Add X-ray service',
+        value: {
+          clinicServiceId: '550e8400-e29b-41d4-a716-446655440000',
+        },
+      },
+    },
+  })
+  async addServiceToAppointment(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Body() addServiceDto: AddServiceDto,
+  ): Promise<AddServiceResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.addServiceToAppointment(
+      appointmentId,
+      doctorId,
+      addServiceDto.clinicServiceId,
     );
   }
 

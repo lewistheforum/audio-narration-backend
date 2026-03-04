@@ -1,6 +1,55 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
+ * Patient Address DTO
+ *
+ * Contains patient address information
+ */
+export class PatientAddressDto {
+  @ApiProperty({
+    description: 'Full address',
+    example: '123 Đường ABC',
+  })
+  address: string;
+
+  @ApiProperty({
+    description: 'Ward code',
+    example: '00001',
+  })
+  ward: string;
+
+  @ApiProperty({
+    description: 'Ward name',
+    example: 'Phường Bến Nghé',
+  })
+  wardName: string;
+
+  @ApiProperty({
+    description: 'District code',
+    example: '001',
+  })
+  district: string;
+
+  @ApiProperty({
+    description: 'District name',
+    example: 'Quận 1',
+  })
+  districtName: string;
+
+  @ApiProperty({
+    description: 'Province code',
+    example: '79',
+  })
+  province: string;
+
+  @ApiProperty({
+    description: 'Province name',
+    example: 'Thành phố Hồ Chí Minh',
+  })
+  provinceName: string;
+}
+
+/**
  * Patient Info DTO
  *
  * Contains patient information for doctor's view
@@ -46,9 +95,16 @@ export class PatientInfoDto {
   email: string;
 
   @ApiProperty({
-    description: 'Medical history summary',
-    example: 'Tiền sử bệnh tim mạch',
+    description: 'Profile picture URL',
+    example: 'https://example.com/profile.jpg',
     nullable: true,
   })
-  medicalHistory?: string | null;
+  profilePicture?: string | null;
+
+  @ApiProperty({
+    description: 'Patient address',
+    type: PatientAddressDto,
+    nullable: true,
+  })
+  address?: PatientAddressDto | null;
 }
