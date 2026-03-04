@@ -1,0 +1,90 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { ERMRecordType, ERMStatus } from '../../prescriptions/enums';
+
+/**
+ * Pending Service Item DTO
+ *
+ * Represents a service with ERM status information for Step 6
+ */
+export class PendingServiceItemDto {
+  @ApiProperty({
+    description: 'Service appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  serviceAppointmentId: string;
+
+  @ApiProperty({
+    description: 'Service name',
+    example: 'Khám tư vấn',
+  })
+  serviceName: string;
+
+  @ApiProperty({
+    description: 'Service type/category',
+    enum: ERMRecordType,
+    example: ERMRecordType.CONSULTATION,
+  })
+  serviceType: ERMRecordType;
+
+  @ApiProperty({
+    description: 'Whether this service has an ERM record',
+    example: false,
+  })
+  hasErm: boolean;
+
+  @ApiProperty({
+    description: 'ERM ID if exists',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    required: false,
+    nullable: true,
+  })
+  ermId?: string | null;
+
+  @ApiProperty({
+    description: 'ERM status if exists',
+    enum: ERMStatus,
+    example: ERMStatus.IN_PROGRESS,
+    required: false,
+    nullable: true,
+  })
+  ermStatus?: ERMStatus | null;
+}
+
+/**
+ * Pending Services Response DTO
+ *
+ * Response for Step 6: Get pending and in-progress services
+ */
+export class PendingServicesResponseDto {
+  @ApiProperty({
+    description: 'Services that do not have ERM yet',
+    type: [PendingServiceItemDto],
+    example: [
+      {
+        serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
+        serviceName: 'X-quang khớp gối',
+        serviceType: 'XRAY',
+        hasErm: false,
+        ermId: null,
+        ermStatus: null,
+      },
+    ],
+  })
+  pendingServices: PendingServiceItemDto[];
+
+  @ApiProperty({
+    description: 'Services with ERM in IN_PROGRESS status',
+    type: [PendingServiceItemDto],
+    example: [
+      {
+        serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
+        serviceName: 'Khám tư vấn',
+        serviceType: 'CONSULTATION',
+        hasErm: true,
+        ermId: '123e4567-e89b-12d3-a456-426614174000',
+        ermStatus: 'IN_PROGRESS',
+      },
+    ],
+  })
+  inProgressServices: PendingServiceItemDto[];
+}

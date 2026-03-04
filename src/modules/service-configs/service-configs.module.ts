@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClinicServiceConfig } from './entities';
 import { ClinicServiceConfigRepository } from './repositories';
+import { ServiceConfigsService } from './service-configs.service';
+import { ServiceConfigsController } from './service-configs.controller';
 
 /**
  * Service Configs Module
@@ -10,8 +12,8 @@ import { ClinicServiceConfigRepository } from './repositories';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([ClinicServiceConfig])],
-  controllers: [],
-  providers: [ClinicServiceConfigRepository],
-  exports: [TypeOrmModule, ClinicServiceConfigRepository],
+  controllers: [ServiceConfigsController],
+  providers: [ClinicServiceConfigRepository, ServiceConfigsService],
+  exports: [TypeOrmModule, ClinicServiceConfigRepository, ServiceConfigsService],
 })
 export class ServiceConfigsModule {}

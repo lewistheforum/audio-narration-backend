@@ -83,6 +83,39 @@ export class GeneralAccountRepository {
   }
 
   /**
+   * Find GeneralAccount by Full Name (Fuzzy Search)
+   *
+   * Searches for a GeneralAccount using case-insensitive partial matching on full_name.
+   * Returns the first match found.
+   *
+   * Use Cases:
+   * - Patient search by name for walk-in appointments
+   * - Fallback search when phone/email not available
+   *
+   * Note:
+   * - Uses ILIKE for case-insensitive partial matching
+   * - Returns only the first match (may be multiple matches)
+   * - Consider using findAllByFullNameFuzzy for multiple results if needed
+   *
+   * @param {string} fullName - Full name to search for (partial match)
+   * @returns {Promise<GeneralAccount | null>} GeneralAccount entity or null if not found
+   *
+   * @example
+   * ```typescript
+   * const generalAccount = await repository.findByFullNameFuzzy('nguyễn văn');
+   * // Matches: "Nguyễn Văn A", "Nguyễn Văn B", etc.
+   * ```
+   */
+  async findByFullNameFuzzy(fullName: string): Promise<GeneralAccount | null> {
+    return this.generalAccountRepository
+      .createQueryBuilder('general_account')
+      .where('general_account.full_name ILIKE :fullName', {
+        fullName: `%${fullName}%`,
+      })
+      .getOne();
+  }
+
+  /**
    * Create GeneralAccount Entity
    *
    * Creates a GeneralAccount entity instance without persisting to database.

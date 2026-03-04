@@ -5,6 +5,7 @@ export * from './detail-e-prescription.entity';
 export * from './erm-consultation.entity';
 export * from './erm-xray.entity';
 export * from './erm-ultrasound.entity';
+export * from './erm-lab.entity';
 export * from './erm-procedure.entity';
 export * from './erm-bone-density.entity';
 export * from './erm-lab.entity';
