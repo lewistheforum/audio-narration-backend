@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   Put,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FeedbackResponseDto } from './dto/response-feedback.dto';
 import { FeedbackAIResponseDto } from './dto/response-ai-feedback.dto';
@@ -30,7 +31,7 @@ import { Feedback } from './entities/feedback.entity';
 // @UseGuards(JwtAuthGuard)
 // @ApiBearerAuth('JWT-auth')
 export class FeedbackController {
-  constructor(private readonly feedbackService: FeedbackService) {}
+  constructor(private readonly feedbackService: FeedbackService) { }
 
   /**
    * Create Feedback for Clinic
@@ -201,6 +202,24 @@ export class FeedbackController {
     @Param('id') id: string,
   ): Promise<FeedbackAIResponseDto[]> {
     const feedbacks = await this.feedbackService.findAllFeedbacksById(id);
+    return feedbacks.map((feedback) => new FeedbackAIResponseDto(feedback));
+  }
+
+  @Get('doctor/:doctorId')
+  @ApiOperation({ summary: 'Get feedbacks by doctor id' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of feedbacks retrieved successfully',
+    type: [FeedbackAIResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Missing or invalid token',
+  })
+  async getFeedbacksByDoctorId(
+    @Param('doctorId', ParseUUIDPipe) doctorId: string,
+  ): Promise<FeedbackAIResponseDto[]> {
+    const feedbacks = await this.feedbackService.findFeedbacksByDoctorId(doctorId);
     return feedbacks.map((feedback) => new FeedbackAIResponseDto(feedback));
   }
 

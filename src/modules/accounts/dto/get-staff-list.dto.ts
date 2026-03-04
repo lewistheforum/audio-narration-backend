@@ -13,15 +13,6 @@ export class GetStaffListDto {
     search?: string;
 
     @ApiProperty({
-        description: 'Filter by specific clinic role (e.g., RECEPTIONIST, NURSE)',
-        enum: ClinicRole,
-        required: false,
-    })
-    @IsOptional()
-    @IsEnum(ClinicRole)
-    role?: ClinicRole;
-
-    @ApiProperty({
         description: 'Filter by creation date (from)',
         required: false,
         example: '2023-01-01',

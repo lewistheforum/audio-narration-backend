@@ -21,8 +21,8 @@ export enum AiModel {
   GEMINI_25_PRO = 'gemini-2.5-pro',
 
   // ChatGPT models
-  GPT_4 = 'gpt-4',
-  GPT_o4_MINI = 'o4-mini',
+  GPT_4 = 'gpt-4.1-mini',
+  GPT_o4_MINI = 'gpt-4o-mini',
   GPT_4_TURBO = 'gpt-4-turbo-preview',
   GPT_3_5_TURBO = 'gpt-3.5-turbo',
   GPT_5_MINI = 'gpt-5-mini',

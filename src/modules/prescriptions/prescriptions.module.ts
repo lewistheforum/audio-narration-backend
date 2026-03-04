@@ -19,6 +19,7 @@ import {
 import { MedicineRepository, ErmRepository } from './repositories';
 import { ServiceAppointment } from '../appointments/entities/service-appointment.entity';
 import { Appointment } from '../appointments/entities/appointment.entity';
+import { PdfGeneratorService } from './services';
 
 /**
  * Prescriptions Module
@@ -58,7 +59,7 @@ import { Appointment } from '../appointments/entities/appointment.entity';
     ]),
   ],
   controllers: [PrescriptionsController, ErmsController],
-  providers: [PrescriptionsService, ErmsService, MedicineRepository, ErmRepository],
+  providers: [PrescriptionsService, ErmsService, MedicineRepository, ErmRepository, PdfGeneratorService],
   exports: [PrescriptionsService, ErmsService, TypeOrmModule],
 })
 export class PrescriptionsModule {}

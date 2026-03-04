@@ -41,6 +41,9 @@ const AI = {
 
   // SYNC DATA
   SYNC_DATA: `${BASE_URL}/rag/knowledge-base/sync`,
+
+  // Fracture Detection
+  FRACTURE_DETECTION: `${BASE_URL}/fracture-detection/detect`,
 };
 
 export const API = {

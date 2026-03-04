@@ -14,6 +14,8 @@ import { ClinicSubscription } from '../../../src/modules/subscriptions/entities/
 import { SubscriptionService } from '../../../src/modules/subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../../../src/modules/subscriptions/subscription-services.service';
 import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/subscription-status.enum';
+import { AppointmentPackage } from '../../../src/modules/appointments/entities/appointment-package.entity';
+import { AppointmentPackageStatus } from '../../../src/modules/appointments/enums';
 
 /**
  * Unit Tests for TransactionsService
@@ -29,6 +31,7 @@ describe('TransactionsService', () => {
     let appointmentRepo: any;
     let clinicSubscriptionRepo: any;
     let subscriptionServiceRepo: any;
+    let packageRepo: any;
     let subscriptionServicesService: any;
     let configService: any;
 
@@ -72,6 +75,11 @@ describe('TransactionsService', () => {
             handleSubscriptionPaymentSuccess: jest.fn(),
         };
 
+        packageRepo = {
+            find: jest.fn(),
+            update: jest.fn(),
+        };
+
         configService = {
             get: jest.fn((key) => {
                 if (key === 'SEEPAY_QR_BASE') return 'https://qr.seepay.vn';
@@ -91,6 +99,7 @@ describe('TransactionsService', () => {
                 { provide: getRepositoryToken(Appointment), useValue: appointmentRepo },
                 { provide: getRepositoryToken(ClinicSubscription), useValue: clinicSubscriptionRepo },
                 { provide: getRepositoryToken(SubscriptionService), useValue: subscriptionServiceRepo },
+                { provide: getRepositoryToken(AppointmentPackage), useValue: packageRepo },
                 { provide: SubscriptionServicesService, useValue: subscriptionServicesService },
                 { provide: ConfigService, useValue: configService },
             ],
@@ -107,7 +116,7 @@ describe('TransactionsService', () => {
     // BR 2.1: Prescription Payment (Dynamic QR)
     // ========================================
     describe('BR 2.1: createDynamicQr (Prescription Payment)', () => {
-        it('should use Appointment.total as source of truth for amount', async () => {
+        it('should use sum of pending AppointmentPackage as source of truth for amount', async () => {
             const dto: CreateTransactionDto = {
                 prescriptionId: 'uuid-prescription',
                 amount: 9999999, // Client sent a different amount
@@ -115,9 +124,14 @@ describe('TransactionsService', () => {
 
             appointmentRepo.findOne.mockResolvedValue({
                 _id: 'uuid-prescription',
-                total: 50000, // DB Source of Truth
+                total: 50000,
                 clinicId: 'uuid-clinic-account',
             });
+
+            packageRepo.find.mockResolvedValue([
+                { _id: 'pkg-1', amount: 20000, status: AppointmentPackageStatus.PENDING_PAYMENT },
+                { _id: 'pkg-2', amount: 30000, status: AppointmentPackageStatus.PENDING_PAYMENT },
+            ]);
 
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
@@ -128,7 +142,7 @@ describe('TransactionsService', () => {
 
             const result = await service.createDynamicQr(dto);
 
-            // Should use DB amount, not client amount
+            // Should use SUM of packages (20000 + 30000 = 50000)
             expect(result.amount).toBe(50000);
             expect(result.qrCodeUrl).toContain('amount=50000');
         });
@@ -139,6 +153,10 @@ describe('TransactionsService', () => {
                 total: 50000,
                 clinicId: 'uuid-clinic-account',
             });
+
+            packageRepo.find.mockResolvedValue([
+                { _id: 'pkg-1', amount: 50000, status: AppointmentPackageStatus.PENDING_PAYMENT },
+            ]);
 
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
@@ -160,6 +178,10 @@ describe('TransactionsService', () => {
                 total: 50000,
                 clinicId: 'uuid-clinic-account',
             });
+
+            packageRepo.find.mockResolvedValue([
+                { _id: 'pkg-1', amount: 50000, status: AppointmentPackageStatus.PENDING_PAYMENT },
+            ]);
 
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
@@ -529,7 +551,7 @@ describe('TransactionsService', () => {
                 await service.handleCallback(basePayload);
 
                 expect(clinicAdminRepo.update).toHaveBeenCalledWith(
-                    { _id: 'uuid-clinic' },
+                    { accountId: 'uuid-clinic' },
                     { isVerify: true }
                 );
             });
@@ -582,6 +604,10 @@ describe('TransactionsService', () => {
                 const result = await service.handleCallback(payload);
 
                 expect(transactionRepository.create).toHaveBeenCalled();
+                expect(packageRepo.update).toHaveBeenCalledWith(
+                    { appointmentId: 'uuid-appointment', status: AppointmentPackageStatus.PENDING_PAYMENT },
+                    { status: AppointmentPackageStatus.PAID, transactionId: 'new-tx' }
+                );
                 expect(result.status).toBe(PaymentStatus.SUCCESS);
             });
         });

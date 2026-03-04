@@ -3,11 +3,11 @@ import { RegistrationStatus } from '../../../subscriptions/enums';
 import { PaymentStatus } from '../../../transactions/entities/transaction.entity';
 
 /**
- * SubscriptionHistoryItemDto
+ * ClinicAdminSubscriptionHistoryItemDto
  *
  * Represents a single subscription registration history record
  */
-export class SubscriptionHistoryItemDto {
+export class ClinicAdminSubscriptionHistoryItemDto {
   @ApiProperty()
   id: string;
 

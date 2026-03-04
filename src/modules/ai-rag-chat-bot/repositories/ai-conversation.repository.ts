@@ -9,9 +9,19 @@ export class AiConversationRepository extends Repository<AiConversation> {
   }
 
   async createConversation(
+    userId: string,
     data: Partial<AiConversation>,
   ): Promise<AiConversation> {
-    const conversation = this.create(data);
+    const participants = Array.isArray(data.participants)
+      ? [...data.participants]
+      : [];
+    if (!participants.includes(userId)) {
+      participants.push(userId);
+    }
+    const conversation = this.create({
+      ...data,
+      participants,
+    });
     return this.save(conversation);
   }
 

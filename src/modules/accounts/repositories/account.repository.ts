@@ -666,7 +666,7 @@ export class AccountRepository {
     status: AccountStatus,
     skip: number = 0,
     take: number = 10,
-    clinicId?: string,
+    clinicId?: string | string[],
     gender?: string,
     search?: string,
     academicDegree?: string,
@@ -683,7 +683,15 @@ export class AccountRepository {
 
     // Apply clinicId filter
     if (clinicId) {
-      queryBuilder.andWhere('account.parentId = :clinicId', { clinicId });
+      if (Array.isArray(clinicId)) {
+        if (clinicId.length > 0) {
+          queryBuilder.andWhere('account.parentId IN (:...clinicId)', { clinicId });
+        } else {
+          queryBuilder.andWhere('1 = 0');
+        }
+      } else {
+        queryBuilder.andWhere('account.parentId = :clinicId', { clinicId });
+      }
     }
 
     // Apply gender filter (now in SQL directly via join)
@@ -735,7 +743,7 @@ export class AccountRepository {
    * @returns {Promise<[Account[], number]>} Array of staff accounts and total count
    */
   async findStaffByClinicWithFilters(
-    clinicId: string,
+    clinicId: string | string[],
     skip: number = 0,
     take: number = 10,
     search?: string,
@@ -746,8 +754,19 @@ export class AccountRepository {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicStaffInformation', 'staffInfo')
-      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
-      .where('account.parentId = :clinicId', { clinicId })
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount');
+
+    if (Array.isArray(clinicId)) {
+      if (clinicId.length > 0) {
+        queryBuilder.where('account.parentId IN (:...clinicId)', { clinicId });
+      } else {
+        queryBuilder.where('1 = 0'); // Empty result if no parent IDs
+      }
+    } else {
+      queryBuilder.where('account.parentId = :clinicId', { clinicId });
+    }
+
+    queryBuilder
       .andWhere('account.role = :accountRole', { accountRole: AccountRole.CLINIC_STAFF })
       .andWhere('account.deletedAt IS NULL');
 

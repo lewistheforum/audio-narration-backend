@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { Appointment } from '../appointments/entities/appointment.entity';
+import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { Transaction, TransactionType } from './entities';
@@ -25,6 +26,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
       TransactionType,
       ClinicAdminInformation,
       Appointment,
+      AppointmentPackage,
       ClinicSubscription,
       SubscriptionService,
     ]),

@@ -230,7 +230,7 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 - ❌ **Không Hỗ Trợ COD**: Từ chối request với `payment_method = 'cod'` → HTTP 400
 - 📌 **Trạng Thái Appointment**: `status = 'PENDING'` (chờ phòng khám xác nhận)
 - 📌 **Transaction ID**: `transactionId = null` (chờ webhook từ payment gateway)
-- 📌 **Package Status**: `appointment_package.status = 'pending_payment'`
+- 📌 **Package Status**: `appointment_package.status = `pending_payment``
 
 **Triển Khai Tương Lai (Khi Payment Gateway Sẵn Sàng):**
 
@@ -241,7 +241,7 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 
 2. **Xử Lý Webhook:**
    - Nhận thông báo thanh toán thành công từ payment gateway
-   - Cập nhật `transactionId`, `appointment_package.status = 'paid'`
+   - Cập nhật `transactionId`, `appointment_package.status = `paid``
    - Cập nhật `appointment.status = 'PENDING'` (chờ phòng khám xác nhận)
    - Gửi email xác nhận cho bệnh nhân
 
@@ -389,7 +389,7 @@ async createAppointmentFromSession(
     const appointmentPackage = await manager.getRepository('appointment_package').save({
       appointmentId: appointment._id,
       amount: finalPrice,
-      status: 'pending_payment',
+      status: `pending_payment`,
       paymentType: 'online',
     });
 
@@ -1186,7 +1186,7 @@ logger.warn('Booking failed', {
 ```typescript
 // Hiện tại:
 appointment.status = 'PENDING';
-appointmentPackage.status = 'pending_payment';
+appointmentPackage.status = `pending_payment`;
 
 // Sau khi có payment gateway:
 appointment.status = 'AWAITING_PAYMENT';
@@ -1474,10 +1474,300 @@ Hệ thống đặt lịch Medicare (Option 1, Option 2 & Option 3) đã đượ
 
 ---
 
+## Luồng Patient View Appointment (Patient View Appointment Flow)
+
+### Tổng Quan
+
+Module này triển khai hệ thống xem chi tiết cuộc hẹn toàn diện cho vai trò PATIENT, bao gồm danh sách cuộc hẹn với phân loại, chi tiết cuộc hẹn, đơn thuốc điện tử, xuất PDF, và xem hồ sơ bệnh án.
+
+**Ngày Cập Nhật**: 03/03/2026  
+**Trạng Thái**: Production Ready
+**API Endpoints**: 5 endpoints (2 trong Appointments, 3 trong Prescriptions)
+
+---
+
+### 1. Quy Tắc Quyền Sở Hữu Dữ Liệu (Data Ownership)
+
+**Nguyên Tắc Bảo Mật Chính:**
+- ✅ Tất cả APIs yêu cầu JWT Authentication
+- ✅ Role-based access control: chỉ PATIENT role
+- ✅ Data ownership verification: `appointmentId` phải thuộc về `patient_id` trong token
+- ✅ Multi-layer validation cho nested resources
+
+**Điều Kiện Bắt Buộc:**
+```typescript
+// Layer 1: Xác thực appointment ownership
+appointment.patient_id === req.user._id
+
+// Layer 2: Xác thực nested resource (e-prescription)
+e_prescription.appointment_id === appointmentId
+appointment.patient_id === req.user._id
+
+// Layer 3: Xác thực deeply nested resource (ERM)
+erm.appointment_id === appointmentId
+appointment.patient_id === req.user._id
+```
+
+**Mục Đích:**
+- Ngăn bệnh nhân A xem dữ liệu của bệnh nhân B
+- Bảo vệ thông tin y tế nhạy cảm (HIPAA/GDPR compliance)
+- Tạo audit trail cho medical record access
+
+**Thông Báo Lỗi:**
+- `NotFoundException`: "Appointment not found" (404) - Khi appointmentId không tồn tại hoặc không thuộc về patient
+- `ForbiddenException`: "Access denied" (403) - Khi patient cố truy cập dữ liệu không được phép
+
+---
+
+### 2. Quy Tắc Lọc Tab UPCOMING/HISTORY
+
+**Logic Phân Loại:**
+
+**Tab UPCOMING** (Cuộc Hẹn Sắp Tới):
+```sql
+WHERE patient_id = :patientId
+  AND status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')
+  AND appointment_date >= CURRENT_DATE
+  AND deleted_at IS NULL
+```
+
+**Tab HISTORY** (Lịch Sử):
+```sql
+WHERE patient_id = :patientId
+  AND (
+    -- Các cuộc hẹn đã hoàn thành/hủy/vắng mặt
+    status IN ('COMPLETED', 'CANCELLED', 'ABSENT')
+    OR
+    -- Các cuộc hẹn chưa hoàn thành nhưng đã qua ngày hẹn
+    (
+      status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')
+      AND appointment_date < CURRENT_DATE
+    )
+  )
+  AND deleted_at IS NULL
+```
+
+**Business Rules:**
+- ✅ UPCOMING: Chỉ hiển thị các cuộc hẹn chưa hoàn thành VÀ ngày hẹn >= hôm nay
+- ✅ HISTORY: Hiển thị tất cả cuộc hẹn đã hoàn thành HOẶC đã qua ngày hẹn (kể cả chưa hoàn thành)
+- ✅ Ưu tiên: `status` parameter > `tab` parameter (nếu cả 2 đều có)
+- ✅ Sắp xếp: `appointment_date DESC, appointment_hour DESC` (mới nhất trước)
+
+**Mục Đích:**
+- Tách biệt rõ ràng giữa cuộc hẹn sắp tới và lịch sử
+- Tự động chuyển cuộc hẹn quá hạn sang HISTORY (không cần cronjob)
+- UX tốt hơn: người dùng dễ dàng tìm thấy cuộc hẹn cần quan tâm
+
+---
+
+### 3. Quy Tắc Hiển Thị Theo Trạng Thái (Status-Based Visibility)
+
+**Quy Tắc 1: E-Prescription Visibility**
+```typescript
+// Đơn thuốc chỉ hiển thị khi appointment đã COMPLETED
+if (appointment.status === AppointmentStatus.COMPLETED) {
+  show_e_prescription_summary = true;
+  allow_view_e_prescription = true;
+  allow_export_pdf = true;
+} else {
+  throw new ForbiddenException(
+    'E-Prescription is only available for completed appointments'
+  );
+}
+```
+
+**Quy Tắc 2: ERM Visibility**
+```typescript
+// Hồ sơ bệnh án chỉ hiển thị khi ERM đã COMPLETED (hoặc SIGNED)
+if (erm.status === ERMStatus.COMPLETED || erm.status === ERMStatus.SIGNED) {
+  allow_view_erm_details = true;
+} else {
+  throw new ForbiddenException(
+    'ERM record is not available (status must be COMPLETED)'
+  );
+}
+```
+
+**Quy Tắc 3: Reject Reason Visibility**
+```typescript
+// Lý do hủy chỉ hiển thị khi appointment bị CANCELLED
+if (appointment.status === AppointmentStatus.CANCELLED) {
+  show_reject_reason = true;
+} else {
+  reject_reason = undefined; // Không trả về field này
+}
+```
+
+**Mục Đích:**
+- Bảo vệ dữ liệu chưa hoàn chỉnh (DRAFT ERMs, in-progress prescriptions)
+- Ngăn leaked thông tin nhạy cảm
+- Tuân thủ quy trình y tế (chỉ hiển thị kết quả đã được bác sĩ xác nhận)
+
+**Thông Báo Lỗi:**
+- `ForbiddenException`: "E-Prescription is only available for completed appointments" (403)
+- `ForbiddenException`: "ERM record is not available (status must be COMPLETED)" (403)
+
+---
+
+### 4. Quy Tắc Truy Xuất Đa Hình (Polymorphic ERM Retrieval)
+
+**6 Loại ERM Được Hỗ Trợ:**
+- `CONSULTATION`: Hồ sơ khám bệnh (erm_consultations)
+- `XRAY`: Hồ sơ X-quang (erm_xrays)
+- `LAB`: Hồ sơ xét nghiệm (erm_labs)
+- `ULTRASOUND`: Hồ sơ siêu âm (erm_ultrasounds)
+- `BONE_DENSITY`: Hồ sơ đo mật độ xương (erm_bone_densities)
+- `PROCEDURE`: Hồ sơ thủ thuật (erm_procedures)
+
+**Logic Mapping:**
+```typescript
+switch (erm.record_type) {
+  case ERMRecordType.XRAY:
+    repository = ermXrayRepository;
+    break;
+  case ERMRecordType.LAB:
+    repository = ermLabRepository;
+    break;
+  // ... (6 cases tổng cộng)
+}
+
+const ermDetails = await repository.findOne({
+  where: { ermId: erm._id, deletedAt: IsNull() }
+});
+```
+
+**Điều Kiện Bắt Buộc:**
+- ✅ Base ERM record phải tồn tại trong `erms` table
+- ✅ Child ERM record phải tồn tại trong bảng tương ứng (e.g., `erm_xrays`)
+- ✅ `record_type` trong base ERM xác định bảng child nào được query
+- ✅ Relationship: `erms.id (PK) === erm_xrays.erm_id (FK)` (1-1)
+
+**Mục Đích:**
+- Hỗ trợ nhiều loại hồ sơ y tế với cấu trúc dữ liệu khác nhau
+- Single Table Inheritance pattern với polymorphic associations
+- Dễ dàng mở rộng với loại ERM mới trong tương lai
+
+**Thông Báo Lỗi:**
+- `NotFoundException`: "ERM record not found" (404) - Base ERM không tồn tại
+- `NotFoundException`: "XRAY details not found" (404) - Child ERM không tồn tại
+- `ForbiddenException`: "ERM record is not available" (403) - ERM status không phải COMPLETED
+
+---
+
+### 5. Quy Tắc Tối Ưu Hóa Query
+
+**N+1 Query Prevention:**
+```typescript
+// ❌ BAD: N+1 queries
+for (const appointment of appointments) {
+  const services = await getServices(appointment.id); // N queries!
+}
+
+// ✅ GOOD: Bulk loading
+const appointmentIds = appointments.map(a => a.id);
+const allServices = await getServicesByAppointmentIds(appointmentIds); // 1 query!
+const servicesByAppointment = groupBy(allServices, 'appointmentId');
+```
+
+**Query Strategy:**
+- API 1 (List Appointments): 2 queries
+  - Query 1: Load appointments + clinic + doctor (LEFT JOIN)
+  - Query 2: Bulk load services cho tất cả appointments (1 query, không phải N)
+  
+- API 2 (Appointment Detail): 3-4 queries
+  - Query 1: Load appointment + clinic + doctor
+  - Query 2: Load appointment packages
+  - Query 3: Bulk load service appointments + ERM summaries
+  - Query 4 (conditional): Load e-prescription summary (chỉ khi COMPLETED)
+
+- API 3 (E-Prescription): 2 queries
+  - Query 1: Verify ownership
+  - Query 2: Load e-prescription + details + medicines (eager loading)
+
+- API 5 (ERM Detail): 3 queries
+  - Query 1: Verify appointment ownership
+  - Query 2: Verify ERM belongs to appointment + status check
+  - Query 3: Load polymorphic child record
+
+**Index Requirements:**
+```sql
+-- Critical indexes for performance
+CREATE INDEX idx_appointments_patient_date_status 
+  ON appointments(patient_id, appointment_date, status, deleted_at);
+
+CREATE INDEX idx_erms_appointment_status 
+  ON erms(appointment_id, status, deleted_at);
+
+CREATE INDEX idx_e_prescriptions_appointment 
+  ON e_prescriptions(appointment_id, deleted_at);
+
+CREATE INDEX idx_erm_xrays_erm_id 
+  ON erm_xrays(erm_id, deleted_at);
+-- (Tương tự cho 5 bảng ERM khác)
+```
+
+**Performance Targets:**
+- ✅ API response time: < 200ms (p95)
+- ✅ Total queries per request: ≤ 4 queries
+- ✅ No N+1 query patterns
+- ✅ Pagination support cho danh sách lớn
+
+---
+
+### 6. Quy Tắc Soft Delete Filtering
+
+**Điều Kiện Bắt Buộc:**
+```typescript
+// Tất cả queries phải filter soft-deleted records
+WHERE deleted_at IS NULL
+
+// Nested relations cũng phải filter
+.leftJoinAndSelect('ep.detailEPrescriptions', 'dep')
+.andWhere('(dep.deleted_at IS NULL OR dep IS NULL)')
+
+// Application-level filtering cho relations
+const activeDetails = ePrescription.detailEPrescriptions?.filter(
+  d => !d.deletedAt
+) || [];
+```
+
+**Mục Đích:**
+- Không hiển thị dữ liệu đã xóa mềm
+- Compliance với audit requirements (giữ lại dữ liệu đã xóa)
+- Tránh confusion cho người dùng
+
+---
+
+### 7. Quy Tắc PDF Generation
+
+**Business Rules cho E-Prescription PDF Export:**
+- ✅ Chỉ cho phép export khi appointment status = COMPLETED
+- ✅ Reuse validation logic từ getPatientEPrescription()
+- ✅ Load thêm thông tin: clinic, doctor, patient (cho PDF header)
+- ✅ Support tiếng Việt (Unicode UTF-8)
+- ✅ Không cache PDF (chứa thông tin bệnh nhân)
+
+**PDF Content Structure:**
+1. Header: Clinic logo, name, address, phone
+2. Patient info: full_name, dob, gender, phone
+3. Doctor info: full_name, academic_degree, signature
+4. Medicine table: STT | Tên thuốc | Liều lượng | Số lượng | Cách dùng | Ghi chú
+5. Doctor note (nếu có)
+6. Footer: Ngày cấp đơn, legal disclaimer
+
+**Security:**
+- ✅ Không lưu PDF trên server (generate on-demand)
+- ✅ Set headers: `Content-Disposition: attachment` (force download)
+- ✅ Verify ownership trước khi generate
+
+---
+
 ## Tài Liệu Tham Khảo
 
 - Kế Hoạch Triển Khai: `document/booking_implement.txt` (Phiên bản 3.1)
+- Kế Hoạch Patient View: `document/view_appointment_implementation.txt`
 - Schemas Entity: `src/modules/appointments/entities/`
 - Unit Tests Option 1: `test/unit/appointments/appointments.service.spec.ts`
 - Unit Tests Option 2: `test/unit/appointments/appointments-option2.service.spec.ts`
+- Unit Tests Patient View: Xem thêm trong file spec
 - Tài Liệu API: Swagger UI tại `/api`

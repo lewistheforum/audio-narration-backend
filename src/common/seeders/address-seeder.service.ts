@@ -6,7 +6,7 @@ import { AddressRepository } from '../../modules/accounts/repositories/address.r
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import {
   PROVINCES,
-  WARDS,
+  WARDS_D1_HCMC,
   STREET_NAMES,
   BUILDING_TYPES,
 } from '../constants/locations';
@@ -29,7 +29,7 @@ export class AddressSeederService {
 
   // English provinces and districts for realistic addresses
   private readonly PROVINCES = PROVINCES;
-  private readonly WARDS = WARDS;
+  private readonly WARDS = WARDS_D1_HCMC;
   private readonly STREET_NAMES = STREET_NAMES;
   private readonly BUILDING_TYPES = BUILDING_TYPES;
 
@@ -74,15 +74,17 @@ export class AddressSeederService {
         // }
 
         // Create address with realistic Vietnamese clinic address
+        const location = this.getRandomLocation();
+
         const address = this.addressRepository.create({
           accountId: manager._id,
           address: this.generateClinicAddress(),
-          ward: this.getRandomWardCode(),
-          district: this.getRandomDistrictCode(),
-          province: this.getRandomProvinceCode(),
-          provinceName: this.getRandomProvinceName(),
-          districtName: this.getRandomDistrictName(),
-          wardName: this.getRandomWard(),
+          ward: location.wardCode,
+          district: location.districtCode,
+          province: location.provinceCode,
+          provinceName: location.provinceName,
+          districtName: location.districtName,
+          wardName: location.wardName,
         });
 
         await this.addressRepository.save(address);
@@ -113,58 +115,22 @@ export class AddressSeederService {
   }
 
   /**
-   * Get random province code
+   * Get random cohesive location details
    */
-  private getRandomProvinceCode(): string {
+  private getRandomLocation() {
     const province =
       this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    return province.code;
-  }
-
-  /**
-   * Get random province name
-   */
-  private getRandomProvinceName(): string {
-    const province =
-      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    return province.name;
-  }
-
-  /**
-   * Get random district code (using first 2 chars of province code + district index)
-   */
-  private getRandomDistrictCode(): string {
-    const province =
-      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    const districtIndex = Math.floor(Math.random() * province.districts.length);
-    return `${province.code}${String(districtIndex + 1).padStart(2, '0')}`;
-  }
-
-  /**
-   * Get random district name
-   */
-  private getRandomDistrictName(): string {
-    const province =
-      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    return province.districts[
-      Math.floor(Math.random() * province.districts.length)
-    ];
-  }
-
-  /**
-   * Get random ward code (numeric code for ward)
-   */
-  private getRandomWardCode(): string {
-    const districtCode = this.getRandomDistrictCode();
-    const wardIndex = Math.floor(Math.random() * 20) + 1; // 1-20 wards per district
-    return `${districtCode}${String(wardIndex).padStart(2, '0')}`;
-  }
-
-  /**
-   * Get random ward name
-   */
-  private getRandomWard(): string {
+    const district =
+      province.districts[Math.floor(Math.random() * province.districts.length)];
     const ward = this.WARDS[Math.floor(Math.random() * this.WARDS.length)];
-    return ward;
+
+    return {
+      provinceCode: String(province.code),
+      provinceName: province.name,
+      districtCode: String(district.code),
+      districtName: district.name,
+      wardCode: String(ward.code),
+      wardName: ward.name,
+    };
   }
 }
