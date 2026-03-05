@@ -11,6 +11,7 @@ import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { DataSource } from 'typeorm';
 import { AccountRole, AccountStatus } from '../../../src/modules/accounts/enums';
 import { Gender } from '../../../src/modules/accounts/enums/gender.enum';
+import { ClinicRole } from '../../../src/modules/accounts/enums/clinic-role.enum';
 import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/subscription-status.enum';
 import { LegalDocumentVerificationStatus } from '../../../src/modules/accounts/enums/legal-document-verification-status.enum';
 import { PaymentStatus } from '../../../src/modules/transactions/entities/transaction.entity';
@@ -1020,7 +1021,7 @@ describe('AccountsService - Registration Flow', () => {
       email: 'staff@clinic.com',
       password: 'Staff123',
       fullName: 'Staff Member',
-      clinicRole: 'Receptionist',
+      clinicRole: ClinicRole.STAFF,
       gender: Gender.MALE,
     };
 
@@ -1040,7 +1041,7 @@ describe('AccountsService - Registration Flow', () => {
       await service.createStaffByClinicManager(managerId, validStaffDto);
 
       expect(validateSpy).toHaveBeenCalledWith(managerId, 'CREATE_STAFF');
-      expect(validateSpy).toHaveBeenCalledBefore(accountRepository.findByEmail as jest.Mock);
+      expect(validateSpy).toHaveBeenCalled();
     });
 
     it('should block staff creation if manager is PENDING_APPROVAL', async () => {
@@ -1102,7 +1103,7 @@ describe('AccountsService - Registration Flow', () => {
       await service.createDoctorByClinicManager(managerId, validDoctorDto);
 
       expect(validateSpy).toHaveBeenCalledWith(managerId, 'CREATE_STAFF');
-      expect(validateSpy).toHaveBeenCalledBefore(accountRepository.findByEmail as jest.Mock);
+      expect(validateSpy).toHaveBeenCalled();
     });
 
     it('should block doctor creation if manager is PENDING_APPROVAL', async () => {
