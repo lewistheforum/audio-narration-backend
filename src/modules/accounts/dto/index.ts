@@ -1,6 +1,8 @@
 export * from './create-account.dto';
 export * from './username-email-list.dto';
 export * from './get-employees-by-clinic.dto';
+export * from './search-patient-query.dto';
+export * from './patient-search-response.dto';
 
 export * from './get-staff-list.dto';
 export * from './get-doctor-list.dto';
