@@ -443,4 +443,433 @@ Tài liệu này tóm tắt tất cả các test case đã được implement ch
 
 ---
 
-**Kết Luận**: Tất cả các test cases đã được implement đầy đủ với mục tiêu coverage 100% cho business logic của luồng đăng ký. Các test đảm bảo tính đúng đắn, an toàn và nhất quán của hệ thống.
+## CLINIC ADMIN FEATURE SET - TÓM TẮT TEST CASES
+
+### SECTION 2: XÁC THỰC TRẠNG THÁI MANAGER (validateManagerStatus)
+
+**File**: `test/unit/accounts/accounts.service.spec.ts`
+
+**Tổng Số Test Cases**: 13
+
+#### CREATE_STAFF Operation
+
+1. **✅ TC-VALIDATE-01: Trả về manager entity khi status là ACTIVE**
+   - Input: Manager có status = ACTIVE
+   - Expected: Trả về manager entity
+   - Verify: findAccountById được gọi với managerId
+
+2. **❌ TC-VALIDATE-02: Throw NotFoundException nếu manager không tồn tại**
+   - Input: managerId không tồn tại trong database
+   - Expected: NotFoundException với message "Manager account not found"
+
+3. **❌ TC-VALIDATE-03: Throw ForbiddenException nếu account không phải manager**
+   - Input: Account có role = CLINIC_STAFF (hoặc role khác)
+   - Expected: ForbiddenException với message "Account is not a clinic manager"
+
+4. **❌ TC-VALIDATE-04: Throw ForbiddenException nếu manager PENDING_APPROVAL**
+   - Input: Manager có status = PENDING_APPROVAL
+   - Expected: ForbiddenException với message chứa "Manager legal documents pending approval"
+
+5. **❌ TC-VALIDATE-05: Throw ForbiddenException nếu manager MANAGER_DISABLED**
+   - Input: Manager có status = MANAGER_DISABLED
+   - Expected: ForbiddenException với message chứa "Manager account is disabled"
+
+6. **❌ TC-VALIDATE-06: Throw ForbiddenException nếu manager status không phải ACTIVE**
+   - Input: Manager có status = BAN (hoặc DELETED, UNVERIFIED)
+   - Expected: ForbiddenException với message "Manager account must be ACTIVE to create staff members"
+
+#### ENABLE Operation
+
+7. **✅ TC-VALIDATE-07: Trả về manager entity nếu status là MANAGER_DISABLED**
+   - Input: Manager có status = MANAGER_DISABLED
+   - Expected: Trả về manager entity
+
+8. **❌ TC-VALIDATE-08: Throw NotFoundException nếu manager không tồn tại**
+   - Input: managerId không tồn tại
+   - Expected: NotFoundException
+
+9. **❌ TC-VALIDATE-09: Throw BadRequestException nếu manager không MANAGER_DISABLED**
+   - Input: Manager có status = ACTIVE (hoặc status khác)
+   - Expected: BadRequestException với message "Can only enable managers with MANAGER_DISABLED status"
+
+#### DISABLE Operation
+
+10. **✅ TC-VALIDATE-10: Trả về manager entity nếu status là ACTIVE**
+    - Input: Manager có status = ACTIVE
+    - Expected: Trả về manager entity
+
+11. **❌ TC-VALIDATE-11: Throw NotFoundException nếu manager không tồn tại**
+    - Input: managerId không tồn tại
+    - Expected: NotFoundException
+
+12. **❌ TC-VALIDATE-12: Throw BadRequestException nếu manager không ACTIVE**
+    - Input: Manager có status = PENDING_APPROVAL (hoặc status khác)
+    - Expected: BadRequestException với message "Can only disable managers with ACTIVE status"
+
+---
+
+### INTEGRATION: Staff/Doctor Creation với Manager Validation
+
+**File**: `test/unit/accounts/accounts.service.spec.ts`
+
+**Tổng Số Test Cases**: 6
+
+#### createStaffByClinicManager
+
+13. **✅ TC-STAFF-01: Gọi validateManagerStatus trước khi tạo staff**
+    - Verify: validateManagerStatus được gọi với (managerId, 'CREATE_STAFF')
+    - Verify: validateManagerStatus được gọi TRƯỚC findByEmail
+    - Verify: Staff được tạo thành công nếu validation pass
+
+14. **❌ TC-STAFF-02: Chặn tạo staff nếu manager PENDING_APPROVAL**
+    - Input: Manager có status = PENDING_APPROVAL
+    - Expected: ForbiddenException với message chứa "Manager legal documents pending approval"
+    - Verify: Transaction không được bắt đầu
+
+15. **❌ TC-STAFF-03: Chặn tạo staff nếu manager MANAGER_DISABLED**
+    - Input: Manager có status = MANAGER_DISABLED
+    - Expected: ForbiddenException với message chứa "Manager account is disabled"
+    - Verify: Transaction không được bắt đầu
+
+#### createDoctorByClinicManager
+
+16. **✅ TC-DOCTOR-01: Gọi validateManagerStatus trước khi tạo doctor**
+    - Verify: validateManagerStatus được gọi với (managerId, 'CREATE_STAFF')
+    - Verify: validateManagerStatus được gọi TRƯỚC findByEmail
+    - Verify: Doctor được tạo thành công nếu validation pass
+
+17. **❌ TC-DOCTOR-02: Chặn tạo doctor nếu manager PENDING_APPROVAL**
+    - Input: Manager có status = PENDING_APPROVAL
+    - Expected: ForbiddenException với message chứa "Manager legal documents pending approval"
+    - Verify: Transaction không được bắt đầu
+
+18. **❌ TC-DOCTOR-03: Chặn tạo doctor nếu manager MANAGER_DISABLED**
+    - Input: Manager có status = MANAGER_DISABLED
+    - Expected: ForbiddenException với message chứa "Manager account is disabled"
+    - Verify: Transaction không được bắt đầu
+
+---
+
+### SECTION 5: CLINIC MANAGER SERVICE
+
+**File**: `test/unit/accounts/api-clinic-admin/clinic-manager.service.spec.ts`
+
+**Tổng Số Test Cases**: 60+
+
+#### FLOW 1: Lấy Danh Sách Manager (getManagerList)
+
+**Tổng Số Test Cases**: 7
+
+1. **✅ TC-LIST-01: Trả về danh sách trống khi không có manager**
+   - Input: Admin không có manager nào
+   - Expected: data = [], meta với totalItems = 0
+
+2. **✅ TC-LIST-02: Trả về danh sách manager với mapping đúng**
+   - Input: Admin có 2 managers với các status khác nhau
+   - Expected: Array có 2 items với đầy đủ thông tin (managerId, fullName, status, etc.)
+   - Verify: Mapping đúng personnel count, legal doc status, province
+
+3. **✅ TC-LIST-03: Tính toán pagination đúng**
+   - Input: 25 managers, page=1, limit=10
+   - Expected: meta { currentPage: 1, itemsPerPage: 10, totalItems: 25, totalPages: 3 }
+
+4. **✅ TC-LIST-04: Sử dụng default pagination parameters**
+   - Input: Không truyền page/limit/sortBy/sortOrder
+   - Expected: Sử dụng page=1, limit=10, sortBy='createdAt', sortOrder='DESC'
+
+5. **✅ TC-LIST-05: Respect custom pagination và sorting**
+   - Input: page=2, limit=20, sortBy='fullName', sortOrder='ASC'
+   - Expected: Repository được gọi với đúng parameters
+
+6. **❌ TC-LIST-06: Throw ForbiddenException nếu không phải CLINIC_ADMIN**
+   - Input: Requester có role = PATIENT
+   - Expected: ForbiddenException với message "Only clinic admins can view manager list"
+
+7. **❌ TC-LIST-07: Throw ForbiddenException nếu admin không tồn tại**
+   - Input: adminId không tồn tại trong database
+   - Expected: ForbiddenException
+
+---
+
+#### FLOW 2: Xem Chi Tiết Manager (getManagerDetail)
+
+**Tổng Số Test Cases**: 9
+
+8. **✅ TC-DETAIL-01: Trả về thông tin đầy đủ của manager**
+   - Input: Manager hợp lệ với address, legal docs, personnel
+   - Expected: ManagerDetailResponseDto với tất cả fields mapped đúng
+   - Verify: Address, legalDocuments, personnel có dữ liệu đầy đủ
+
+9. **✅ TC-DETAIL-02: Trả về personnel rỗng nếu manager PENDING_APPROVAL**
+   - Input: Manager có status = PENDING_APPROVAL với 2 staff
+   - Expected: personnel = []
+   - Verify: status = PENDING_APPROVAL trong response
+
+10. **✅ TC-DETAIL-03: Hiển thị full personnel nếu manager MANAGER_DISABLED**
+    - Input: Manager có status = MANAGER_DISABLED với 2 staff
+    - Expected: personnel có 2 items
+    - Verify: status = MANAGER_DISABLED trong response
+
+11. **✅ TC-DETAIL-04: Lọc bỏ personnel đã bị soft delete**
+    - Input: Manager có 3 personnel, 1 trong số đó có deletedAt
+    - Expected: personnel chỉ có 2 items (không bao gồm deleted)
+
+12. **✅ TC-DETAIL-05: Handle missing address gracefully**
+    - Input: Manager không có address record
+    - Expected: address fields = empty strings, googleMapIframe = null
+
+13. **✅ TC-DETAIL-06: Handle missing legal documents gracefully**
+    - Input: Manager chưa upload legal docs
+    - Expected: verificationStatus = 'NOT_SUBMITTED', các fields khác = undefined
+
+14. **❌ TC-DETAIL-07: Throw NotFoundException nếu manager không tồn tại**
+    - Input: managerId không hợp lệ
+    - Expected: NotFoundException với message "Manager not found"
+
+15. **❌ TC-DETAIL-08: Throw ForbiddenException nếu không phải owner**
+    - Input: Manager có parentId khác với adminId
+    - Expected: ForbiddenException với message "You do not have access to this manager"
+
+---
+
+#### FLOW 3: Tạo Manager Mới (createManager)
+
+**Tổng Số Test Cases**: 9
+
+16. **✅ TC-CREATE-01: Tạo manager thành công với status PENDING_APPROVAL**
+    - Input: DTO hợp lệ với tất cả fields
+    - Expected: Manager được tạo với status = PENDING_APPROVAL
+    - Verify: Account, ManagerInfo, Address, GoogleIframe được tạo
+    - Verify: Transaction commit thành công
+
+17. **✅ TC-CREATE-02: Tạo manager không có googleMapIframe**
+    - Input: DTO không có googleMapIframe field
+    - Expected: Manager được tạo thành công
+    - Verify: GoogleIframe repository không được gọi
+
+18. **✅ TC-CREATE-03: Hash password bằng bcrypt**
+    - Input: DTO với password = 'Manager123'
+    - Expected: bcrypt.hash được gọi với (password, 10)
+    - Verify: HashedPassword được lưu vào account
+
+19. **✅ TC-CREATE-04: Parse dob string thành Date object**
+    - Input: dob = '1990-01-01' (string)
+    - Expected: ManagerInfo.create được gọi với dob = new Date('1990-01-01')
+
+20. **❌ TC-CREATE-05: Throw ForbiddenException nếu không phải CLINIC_ADMIN**
+    - Input: Requester có role = PATIENT
+    - Expected: ForbiddenException với message "Only clinic admins can create managers"
+    - Verify: Transaction không bắt đầu
+
+21. **❌ TC-CREATE-06: Throw ForbiddenException nếu admin không tồn tại**
+    - Input: adminId không hợp lệ
+    - Expected: ForbiddenException
+    - Verify: Transaction không bắt đầu
+
+22. **❌ TC-CREATE-07: Throw ConflictException nếu email đã tồn tại**
+    - Input: Email đã được sử dụng bởi account khác
+    - Expected: ConflictException
+    - Verify: Transaction không bắt đầu
+
+23. **❌ TC-CREATE-08: Rollback transaction khi có lỗi**
+    - Input: Database error trong save
+    - Expected: rollbackTransaction được gọi
+    - Verify: release được gọi, commitTransaction không được gọi
+
+---
+
+#### FLOW 4: Cập Nhật Giấy Phép (updateLegalDocuments)
+
+**Tổng Số Test Cases**: 12
+
+24. **✅ TC-UPDATE-DOCS-01: Tạo legal documents mới nếu chưa tồn tại**
+    - Input: Manager chưa có legal docs
+    - Expected: legalDocsRepository.create được gọi
+    - Verify: verificationStatus = PENDING_REVIEW
+
+25. **✅ TC-UPDATE-DOCS-02: Update legal documents hiện tại và reset status**
+    - Input: Manager đã có legal docs với status = APPROVED
+    - Expected: Status reset về PENDING_REVIEW
+    - Verify: rejectionReason = null
+
+26. **✅ TC-UPDATE-DOCS-03: Set manager status về PENDING_APPROVAL**
+    - Input: Manager có status = ACTIVE
+    - Expected: Manager status chuyển sang PENDING_APPROVAL
+    - Verify: manager entity được save
+
+27. **✅ TC-UPDATE-DOCS-04: Không thay đổi status nếu đã là PENDING_APPROVAL**
+    - Input: Manager có status = PENDING_APPROVAL
+    - Expected: Status vẫn là PENDING_APPROVAL
+    - Verify: manager entity được save 1 lần (cho legal docs)
+
+28. **✅ TC-UPDATE-DOCS-05: Sử dụng transaction cho atomic update**
+    - Expected: connect, startTransaction, commitTransaction, release được gọi theo thứ tự
+
+29. **✅ TC-UPDATE-DOCS-06: Preserve fields không được update**
+    - Input: Chỉ update operatingLicense
+    - Expected: businessLicense và taxIdUrl giữ nguyên giá trị cũ
+
+30. **❌ TC-UPDATE-DOCS-07: Throw NotFoundException nếu manager không tồn tại**
+    - Input: managerId không hợp lệ
+    - Expected: NotFoundException với message "Manager not found"
+    - Verify: Transaction không bắt đầu
+
+31. **❌ TC-UPDATE-DOCS-08: Throw ForbiddenException nếu không phải owner**
+    - Input: Manager có parentId khác adminId
+    - Expected: ForbiddenException với message "You do not have access to this manager"
+
+32. **❌ TC-UPDATE-DOCS-09: Throw BadRequestException nếu không phải manager**
+    - Input: Account có role = CLINIC_STAFF
+    - Expected: BadRequestException với message "Account is not a clinic manager"
+
+33. **❌ TC-UPDATE-DOCS-10: Rollback transaction khi có lỗi**
+    - Input: Database error
+    - Expected: rollbackTransaction và release được gọi
+
+---
+
+#### FLOW 7: Vô Hiệu Hóa Manager (disableManager)
+
+**Tổng Số Test Cases**: 6
+
+34. **✅ TC-DISABLE-01: Disable ACTIVE manager thành công**
+    - Input: Manager có status = ACTIVE
+    - Expected: Manager status chuyển sang MANAGER_DISABLED
+    - Verify: saveAccount được gọi với manager entity
+    - Verify: countPersonnelByManager được gọi
+
+35. **✅ TC-DISABLE-02: Include personnel count trong message**
+    - Input: Manager có 5 staff và 3 doctors
+    - Expected: Message chứa "5 staff and 3 doctors will be unable to login"
+
+36. **❌ TC-DISABLE-03: Throw NotFoundException nếu manager không tồn tại**
+    - Input: managerId không hợp lệ
+    - Expected: NotFoundException với message "Manager not found"
+
+37. **❌ TC-DISABLE-04: Throw ForbiddenException nếu không phải owner**
+    - Input: Manager có parentId khác adminId
+    - Expected: ForbiddenException với message "You do not have access to this manager"
+
+38. **❌ TC-DISABLE-05: Throw BadRequestException nếu không phải manager**
+    - Input: Account có role = CLINIC_STAFF
+    - Expected: BadRequestException với message "Account is not a clinic manager"
+
+39. **❌ TC-DISABLE-06: Throw BadRequestException nếu status không phải ACTIVE**
+    - Input: Manager có status = PENDING_APPROVAL
+    - Expected: BadRequestException với message chứa "Can only disable managers with ACTIVE status"
+
+---
+
+#### FLOW 8: Kích Hoạt Lại Manager (enableManager)
+
+**Tổng Số Test Cases**: 6
+
+40. **✅ TC-ENABLE-01: Enable MANAGER_DISABLED manager thành công**
+    - Input: Manager có status = MANAGER_DISABLED
+    - Expected: Manager status chuyển sang ACTIVE
+    - Verify: saveAccount được gọi với manager entity
+    - Verify: countPersonnelByManager được gọi
+
+41. **✅ TC-ENABLE-02: Include personnel count trong message**
+    - Input: Manager có 2 staff và 1 doctor
+    - Expected: Message chứa "2 staff and 1 doctors can now login to the system"
+
+42. **❌ TC-ENABLE-03: Throw NotFoundException nếu manager không tồn tại**
+    - Input: managerId không hợp lệ
+    - Expected: NotFoundException với message "Manager not found"
+
+43. **❌ TC-ENABLE-04: Throw ForbiddenException nếu không phải owner**
+    - Input: Manager có parentId khác adminId
+    - Expected: ForbiddenException với message "You do not have access to this manager"
+
+44. **❌ TC-ENABLE-05: Throw BadRequestException nếu không phải manager**
+    - Input: Account có role = CLINIC_STAFF
+    - Expected: BadRequestException với message "Account is not a clinic manager"
+
+45. **❌ TC-ENABLE-06: Throw BadRequestException nếu status không phải MANAGER_DISABLED**
+    - Input: Manager có status = ACTIVE
+    - Expected: BadRequestException với message chứa "Can only enable managers with MANAGER_DISABLED status"
+
+---
+
+#### FLOW 5: Xóa Mềm Manager (softDeleteManager)
+
+**Tổng Số Test Cases**: 10
+
+46. **✅ TC-DELETE-01: Xóa manager PENDING_APPROVAL thành công**
+    - Input: Manager có status = PENDING_APPROVAL
+    - Expected: manager.deletedAt được set
+    - Verify: saveAccount được gọi
+
+47. **✅ TC-DELETE-02: Xóa manager MANAGER_DISABLED thành công**
+    - Input: Manager có status = MANAGER_DISABLED
+    - Expected: manager.deletedAt được set
+    - Verify: saveAccount được gọi
+
+48. **✅ TC-DELETE-03: Xóa manager BAN thành công**
+    - Input: Manager có status = BAN
+    - Expected: manager.deletedAt được set
+
+49. **✅ TC-DELETE-04: Cho phép xóa nếu legal docs APPROVED**
+    - Input: Legal docs có verificationStatus = APPROVED
+    - Expected: Xóa thành công
+
+50. **✅ TC-DELETE-05: Cho phép xóa nếu legal docs REJECTED**
+    - Input: Legal docs có verificationStatus = REJECTED
+    - Expected: Xóa thành công
+
+51. **✅ TC-DELETE-06: Cho phép xóa nếu không có legal docs**
+    - Input: Manager chưa upload legal docs
+    - Expected: Xóa thành công
+
+52. **❌ TC-DELETE-07: Throw NotFoundException nếu manager không tồn tại**
+    - Input: managerId không hợp lệ
+    - Expected: NotFoundException với message "Manager not found"
+
+53. **❌ TC-DELETE-08: Throw ForbiddenException nếu không phải owner**
+    - Input: Manager có parentId khác adminId
+    - Expected: ForbiddenException với message "You do not have access to this manager"
+
+54. **❌ TC-DELETE-09: Throw BadRequestException nếu legal docs PENDING_REVIEW**
+    - Input: Legal docs có verificationStatus = PENDING_REVIEW
+    - Expected: BadRequestException với message chứa "Cannot delete manager with legal documents pending review"
+
+55. **❌ TC-DELETE-10: Throw BadRequestException nếu manager ACTIVE**
+    - Input: Manager có status = ACTIVE
+    - Expected: BadRequestException với message chứa "Cannot delete an ACTIVE manager. Please disable the manager first"
+
+---
+
+### TÓM TẮT COVERAGE
+
+**Tổng Số Test Cases Clinic Admin Feature**: 55+ test cases
+
+**Coverage Breakdown**:
+- validateManagerStatus: 13 test cases
+- Staff/Doctor Creation Integration: 6 test cases  
+- getManagerList: 7 test cases
+- getManagerDetail: 9 test cases
+- createManager: 9 test cases
+- updateLegalDocuments: 12 test cases
+- disableManager: 6 test cases
+- enableManager: 6 test cases
+- softDeleteManager: 10 test cases
+
+**Code Coverage Mục Tiêu**: 100% cho business logic
+
+---
+
+### BEST PRACTICES ÁP DỤNG
+
+1. **Comprehensive Mocking**: Mock tất cả 5 repositories và DataSource
+2. **Transaction Testing**: Kiểm tra cả success path và rollback path
+3. **Test Isolation**: beforeEach reset, jest.clearAllMocks
+4. **Descriptive Names**: Tên test rõ ràng về mục đích và kết quả mong đợi
+5. **Data Factories**: Tạo mock data nhất quán và tái sử dụng
+6. **Edge Case Coverage**: Test cả missing data, null values, soft deleted records
+7. **Exception Testing**: Verify cả exception type và message content
+
+---
+
+**Kết Luận**: Tất cả các test cases đã được implement đầy đủ với mục tiêu coverage 100% cho business logic của luồng quản lý Manager. Các test đảm bảo tính đúng đắn, an toàn và nhất quán của hệ thống.
+

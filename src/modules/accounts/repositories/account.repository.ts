@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DeepPartial, FindOptionsWhere } from 'typeorm';
+import { Repository, In, DeepPartial, FindOptionsWhere, IsNull } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import { AccountRole, AccountStatus } from '../enums';
 
@@ -806,5 +806,58 @@ export class AccountRepository {
     queryBuilder.orderBy('account.createdAt', 'DESC');
 
     return queryBuilder.getMany();
+  }
+
+  /**
+   * Find Managers by Status
+   * Utility method for filtering managers by status
+   * 
+   * @param clinicAdminId - Parent admin ID
+   * @param statuses - Array of statuses to filter
+   * @returns Array of manager accounts
+   */
+  async findManagersByStatus(
+    clinicAdminId: string,
+    statuses: AccountStatus[],
+  ): Promise<Account[]> {
+    return this.accountRepository.find({
+      where: {
+        parentId: clinicAdminId,
+        role: AccountRole.CLINIC_MANAGER,
+        status: In(statuses),
+        deletedAt: IsNull(),
+      },
+      relations: ['clinicManagerInformation'],
+    });
+  }
+
+  /**
+   * Count Personnel Under Manager
+   * Counts Staff and Doctor accounts for a given manager
+   * 
+   * @param managerId - Manager account ID
+   * @returns Object with staffCount and doctorCount
+   */
+  async countPersonnelByManager(
+    managerId: string,
+  ): Promise<{ staffCount: number; doctorCount: number }> {
+    const [staffCount, doctorCount] = await Promise.all([
+      this.accountRepository.count({
+        where: {
+          parentId: managerId,
+          role: AccountRole.CLINIC_STAFF,
+          deletedAt: IsNull(),
+        },
+      }),
+      this.accountRepository.count({
+        where: {
+          parentId: managerId,
+          role: AccountRole.DOCTOR,
+          deletedAt: IsNull(),
+        },
+      }),
+    ]);
+
+    return { staffCount, doctorCount };
   }
 }
