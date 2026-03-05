@@ -1912,6 +1912,126 @@ export class AccountsService {
   }
 
   /**
+   * Validate Manager Status for Operations
+   * 
+   * Checks if a CLINIC_MANAGER account is in a valid state to allow:
+   * - Creating Staff/Doctor accounts
+   * - Being enabled/disabled by Admin
+   * 
+   * @param managerId - UUID of CLINIC_MANAGER account
+   * @param operation - Type of operation being performed
+   * @throws {NotFoundException} If manager not found
+   * @throws {ForbiddenException} If manager status blocks the operation
+   * @throws {BadRequestException} If operation is invalid for current status
+   * @returns {Promise<Account>} Validated manager account entity
+   */
+  private async validateManagerStatus(
+    managerId: string,
+    operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE'
+  ): Promise<Account> {
+    const manager = await this.accountRepository.findAccountById(managerId);
+    
+    if (!manager) {
+      throw new NotFoundException('Manager account not found');
+    }
+
+    if (manager.role !== AccountRole.CLINIC_MANAGER) {
+      throw new ForbiddenException('Account is not a clinic manager');
+    }
+
+    // Block staff/doctor creation if manager is not ACTIVE
+    if (operation === 'CREATE_STAFF') {
+      if (manager.status === AccountStatus.PENDING_APPROVAL) {
+        throw new ForbiddenException(
+          'Cannot create staff. Manager legal documents pending approval. ' +
+          'Please complete document verification first.'
+        );
+      }
+      if (manager.status === AccountStatus.MANAGER_DISABLED) {
+        throw new ForbiddenException(
+          'Cannot create staff. Manager account is disabled. ' +
+          'Please contact your clinic administrator.'
+        );
+      }
+      if (manager.status !== AccountStatus.ACTIVE) {
+        throw new ForbiddenException(
+          'Manager account must be ACTIVE to create staff members.'
+        );
+      }
+    }
+
+    // Validate enable/disable operations
+    if (operation === 'ENABLE' && manager.status !== AccountStatus.MANAGER_DISABLED) {
+      throw new BadRequestException(
+        'Can only enable managers with MANAGER_DISABLED status'
+      );
+    }
+    
+    if (operation === 'DISABLE' && manager.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Can only disable managers with ACTIVE status'
+      );
+    }
+
+    return manager;
+  }
+
+  /**
+   * Validate Parent Manager Status for Login
+   * 
+   * Ensures Staff/Doctor cannot login if their parent Manager is disabled.
+   * Implements cascading access control based on account hierarchy.
+   * 
+   * @param account - Account attempting to login
+   * @throws {ForbiddenException} If parent manager is disabled or pending approval
+   */
+  async validateParentManagerStatus(account: Account): Promise<void> {
+    // Only check for Staff and Doctor roles
+    if (
+      account.role !== AccountRole.CLINIC_STAFF &&
+      account.role !== AccountRole.DOCTOR
+    ) {
+      return;
+    }
+
+    // Verify parentId exists
+    if (!account.parentId) {
+      throw new ForbiddenException(
+        'Account hierarchy error. No parent manager found.'
+      );
+    }
+
+    // Fetch parent Manager account
+    const parentManager = await this.accountRepository.findAccountById(
+      account.parentId
+    );
+
+    if (!parentManager) {
+      throw new ForbiddenException(
+        'Parent manager not found. Please contact support.'
+      );
+    }
+
+    // Block login if parent Manager is MANAGER_DISABLED
+    if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
+      throw new ForbiddenException(
+        'Your clinic branch has been temporarily disabled. ' +
+        'Please contact your clinic administrator for assistance.'
+      );
+    }
+
+    // Block login if parent Manager is PENDING_APPROVAL
+    if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
+      throw new ForbiddenException(
+        'Your clinic branch is pending legal document approval. ' +
+        'You will be able to login once verification is complete.'
+      );
+    }
+
+    // Allow login if parent is ACTIVE
+  }
+
+  /**
    * Validate Clinic Subscription Status
    *
    * Validates that clinic-related roles have an active subscription before allowing login.
@@ -2729,6 +2849,9 @@ export class AccountsService {
       );
     }
 
+    // Step 1.5: Validate manager status allows staff creation
+    await this.validateManagerStatus(managerId, 'CREATE_STAFF');
+
     // Step 2: Validate email uniqueness
     const existingAccount = await this.findByEmail(dto.email);
     if (existingAccount) {
@@ -2828,6 +2951,9 @@ export class AccountsService {
     if (manager.role !== AccountRole.CLINIC_MANAGER) {
       throw new ForbiddenException('Only clinic managers can add doctors');
     }
+
+    // Step 1.5: Validate manager status allows doctor creation
+    await this.validateManagerStatus(managerId, 'CREATE_STAFF');
 
     // Step 2: Validate email uniqueness
     const existingAccount = await this.findByEmail(dto.email);
