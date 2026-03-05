@@ -658,5 +658,295 @@ Kiểm tra trạng thái của tài khoản CLINIC_MANAGER trước khi cho phé
 
 ---
 
+## BÁO CÁO DOANH THU CHO CLINIC ADMIN
+
+### TỔNG QUAN TÍNH NĂNG
+Tính năng cho phép CLINIC_ADMIN xem báo cáo doanh thu tổng hợp từ tất cả các chi nhánh (CLINIC_MANAGER) dưới quyền quản lý với khả năng phân tích chi tiết theo:
+- Phương thức thanh toán
+- Danh mục dịch vụ
+- Xu hướng theo thời gian
+- Trạng thái giao dịch
+- Chi nhánh cụ thể
+
+### SECTION 1: QUY TẮC TÍNH DOANH THU (ClinicRevenueService)
+
+#### Quy Tắc BR-34: Nguồn Dữ Liệu Doanh Thu
+**Nguồn Chính**: Transaction entity
+**Trường Dữ Liệu**: `Transaction.amount` (bigint - đơn vị: VND)
+**Liên Kết Dữ Liệu**:
+```
+Transaction → AppointmentPackage → Appointment → Account (CLINIC_MANAGER)
+```
+
+#### Quy Tắc BR-35: Chỉ Tính Giao Dịch THÀNH CÔNG
+**Điều Kiện Bắt Buộc**: `Transaction.status = SUCCESS`
+**Áp Dụng Cho**:
+- Tổng doanh thu (Total Revenue)
+- Phân tích theo phương thức thanh toán
+- Phân tích theo danh mục dịch vụ
+- Xu hướng doanh thu theo thời gian
+- Phân tích theo chi nhánh
+- Top dịch vụ
+
+**Ngoại Lệ**: Status Breakdown Report bao gồm TẤT CẢ các trạng thái (SUCCESS, PENDING, FAILED)
+
+**Lý Do**: Chỉ giao dịch thành công mới được tính vào doanh thu thực tế. Giao dịch PENDING hoặc FAILED không tạo ra doanh thu.
+
+#### Quy Tắc BR-36: Bao Gồm Chi Nhánh Bị Vô Hiệu Hóa
+**Điều Kiện**: Không filter theo `Account.status` của CLINIC_MANAGER
+**Bao Gồm**:
+- ACTIVE (đang hoạt động)
+- MANAGER_DISABLED (tạm ngừng)
+- PENDING_APPROVAL (chờ duyệt)
+- BAN (bị cấm)
+
+**Lý Do**: Admin cần xem doanh thu lịch sử của TẤT CẢ chi nhánh, bất kể trạng thái hiện tại. Doanh thu đã phát sinh không bị ảnh hưởng bởi trạng thái chi nhánh.
+
+#### Quy Tắc BR-37: Giới Hạn Khoảng Thời Gian
+**Ràng Buộc**: Khoảng thời gian lọc không được vượt quá 365 ngày
+**Validation**:
+- `startDate` phải nhỏ hơn `endDate`
+- `(endDate - startDate) <= 365 ngày`
+
+**Exception**: 
+- `BadRequestException` với message "startDate must be before endDate"
+- `BadRequestException` với message "Date range cannot exceed 365 days"
+
+**Lý Do**: Giới hạn để đảm bảo hiệu suất query và tránh timeout khi xử lý dữ liệu lớn.
+
+#### Quy Tắc BR-38: Phân Loại Phương Thức Thanh Toán
+**ONLINE Payment**:
+- Điều kiện: `Transaction.gateway IS NOT NULL`
+- Ví dụ: 'SEPAY', 'VNPAY', 'MOMO'
+
+**CASH/COD Payment**:
+- Điều kiện: `AppointmentPackage.paymentType = 'COD'`
+- Link: `AppointmentPackage.transactionId = Transaction._id`
+
+**Tính Toán Percentage**:
+- Online % = (onlineRevenue / totalRevenue) * 100
+- Cash % = (cashRevenue / totalRevenue) * 100
+- Làm tròn: 2 chữ số thập phân
+
+#### Quy Tắc BR-39: Phân Loại Theo Danh Mục Dịch Vụ
+**Chuỗi Liên Kết**:
+```
+Transaction → AppointmentPackage → ServiceAppointment → 
+ClinicServiceConfig → ClinicService → ClinicServiceCategory
+```
+
+**Loại Bỏ NULL**:
+- Chỉ tính các service có `categoryName IS NOT NULL`
+- Sắp xếp theo doanh thu giảm dần
+
+**Tính Toán**:
+- Revenue: `SUM(Transaction.amount)` cho mỗi category
+- Service Count: `COUNT(ServiceAppointment._id)` cho mỗi category
+- Percentage: `(categoryRevenue / totalRevenue) * 100`
+
+#### Quy Tắc BR-40: Xu Hướng Doanh Thu Theo Thời Gian
+**Nhóm Theo Thời Gian**:
+- DAY: Format 'YYYY-MM-DD'
+- WEEK: Format 'IYYY-IW' (ISO week)
+- MONTH: Format 'YYYY-MM'
+
+**Sắp Xếp**: Theo period tăng dần (từ cũ đến mới)
+**Dữ Liệu Trả Về**:
+- period: Chuỗi định dạng
+- revenue: Tổng doanh thu trong period
+- transactionCount: Số giao dịch
+- periodStart: Timestamp bắt đầu
+- periodEnd: Timestamp kết thúc
+
+#### Quy Tắc BR-41: Phân Tích Trạng Thái Giao Dịch
+**Trạng Thái Tracking**:
+- SUCCESS: Giao dịch thành công
+- PENDING: Đang chờ xử lý
+- FAILED: Thất bại
+
+**Dữ Liệu Cho Mỗi Trạng Thái**:
+- count: Số lượng giao dịch
+- amount: Tổng số tiền (bao gồm cả FAILED vì tracking)
+
+**Lưu Ý**: Đây là một trong những phần KHÔNG filter theo status SUCCESS.
+
+#### Quy Tắc BR-42: Top Services (Branch Report Only)
+**Giới Hạn**: 10 dịch vụ hàng đầu
+**Sắp Xếp**: Theo revenue giảm dần
+**Điều Kiện**: `serviceName IS NOT NULL`
+**Dữ Liệu Trả Về**:
+- serviceName: Tên dịch vụ
+- serviceCode: Mã dịch vụ
+- revenue: Doanh thu từ dịch vụ
+- count: Số lần sử dụng
+
+### SECTION 2: QUY TẮC XÁC THỰC VÀ PHÂN QUYỀN
+
+#### Quy Tắc BR-43: Authorization Check
+**Điều Kiện**: Người dùng phải là CLINIC_ADMIN
+**Validation**:
+1. Account tồn tại
+2. `account.role = CLINIC_ADMIN`
+
+**Exception**:
+- `NotFoundException`: "Admin account not found"
+- `ForbiddenException`: "Only CLINIC_ADMIN can access revenue reports"
+
+**Áp Dụng Cho**: Cả `getOverallRevenueReport` và `getBranchRevenueReport`
+
+#### Quy Tắc BR-44: Branch Ownership Validation
+**Scope**: `getBranchRevenueReport` only
+**Điều Kiện**: Manager phải thuộc về Admin đang request
+**Validation Steps**:
+1. Manager account tồn tại
+2. `manager.role = CLINIC_MANAGER`
+3. `manager.parentId = adminId`
+
+**Exception**:
+- `NotFoundException`: "Manager account not found"
+- `BadRequestException`: "Specified account is not a CLINIC_MANAGER"
+- `ForbiddenException`: "You do not have access to this branch"
+
+#### Quy Tắc BR-45: No Branches Found
+**Scenario**: Admin không có branch nào hoặc branch đã bị xóa hết
+**Condition**: `branchIds.length === 0`
+**Exception**: `NotFoundException` với message "No branches found under this admin"
+**Áp Dụng**: `getOverallRevenueReport` only
+
+### SECTION 3: QUY TẮC QUERY BUILDER
+
+#### Quy Tắc BR-46: Left Join Strategy
+**Mục Đích**: Đảm bảo không mất dữ liệu khi join nhiều bảng
+**Join Chain**:
+```sql
+LEFT JOIN appointment_package ap ON ap.transaction_id = t._id
+LEFT JOIN appointments a ON a._id = ap.appointment_id
+LEFT JOIN accounts acc ON acc._id = a.clinic_id
+LEFT JOIN clinic_manager_information cmi ON cmi.account_id = acc._id
+LEFT JOIN service_appointments sa ON sa.appointment_package_id = ap._id
+LEFT JOIN clinic_service_config csc_config ON csc_config._id = sa.clinic_service_id
+LEFT JOIN clinic_services cs ON cs._id = csc_config.service_id
+LEFT JOIN clinic_service_categories csc ON csc._id = cs.category_id
+```
+
+**Lợi Ích**: Giữ lại transaction ngay cả khi không có service mapping
+
+#### Quy Tắc BR-47: Deleted Data Filter
+**Điều Kiện**: Luôn filter `t.deleted_at IS NULL`
+**Áp Dụng**: Tất cả các query
+**Lý Do**: Không tính doanh thu từ transaction đã bị xóa (soft delete)
+
+#### Quy Tắc BR-48: Branch ID Filter
+**Điều Kiện**: `a.clinic_id IN (:...branchIds)`
+**Source**: `branchIds` từ `getAdminBranchIds()`
+**Quan Trọng**: Filter theo `Appointment.clinicId`, không phải `Transaction.clinicId`
+
+### SECTION 4: QUY TẮC DATA TRANSFORMATION
+
+#### Quy Tắc BR-49: String to Number Conversion
+**Lý Do**: PostgreSQL SUM() trả về string
+**Conversion**: `parseInt(value || '0', 10)`
+**Áp Dụng**:
+- totalRevenue
+- transactionCount
+- uniquePatients
+- revenue
+- count
+
+#### Quy Tắc BR-50: Average Calculation
+**Formula**: `totalRevenue / transactionCount`
+**Edge Case**: Nếu `transactionCount = 0`, return 0 (không phải divide by zero)
+**Làm Tròn**: `Math.round()` - làm tròn đến số nguyên gần nhất
+
+#### Quy Tắc BR-51: Percentage Calculation
+**Formula**: `(partialRevenue / totalRevenue) * 100`
+**Edge Case**: Nếu `totalRevenue = 0`, return 0
+**Làm Tròn**: `parseFloat(value.toFixed(2))` - 2 chữ số thập phân
+
+#### Quy Tắc BR-52: Date Formatting
+**Input**: ISO 8601 date strings ('YYYY-MM-DD')
+**Processing**: PostgreSQL `transaction_date` field (timestamptz)
+**Output**: ISO 8601 strings with timezone
+
+### SECTION 5: QUY TẮC RESPONSE STRUCTURE
+
+#### Quy Tắc BR-53: Overall Revenue Report Structure
+**Sections**:
+1. `period`: Metadata (startDate, endDate, groupBy, generatedAt)
+2. `summary`: Tổng quan (totalRevenue, transactionCount, uniquePatients, average)
+3. `paymentMethodBreakdown`: Online vs Cash
+4. `serviceCategoryBreakdown`: Phân tích theo category
+5. `revenueTrend`: Xu hướng theo thời gian
+6. `statusBreakdown`: Phân tích theo trạng thái
+7. `branchBreakdown`: Phân tích theo chi nhánh
+8. `totalBranches`: Số lượng chi nhánh
+
+#### Quy Tắc BR-54: Branch Revenue Report Structure
+**Sections**:
+1. `period`: Metadata (giống Overall)
+2. `branchInfo`: Thông tin chi nhánh (managerId, branchName, managerName, branchStatus)
+3. `summary`: Tổng quan chi nhánh
+4. `paymentMethodBreakdown`: Phân tích thanh toán
+5. `serviceCategoryBreakdown`: Phân tích dịch vụ
+6. `revenueTrend`: Xu hướng doanh thu
+7. `statusBreakdown`: Trạng thái giao dịch
+8. `topServices`: Top 10 dịch vụ (ONLY in branch report)
+
+#### Quy Tắc BR-55: Timestamp Generation
+**Field**: `period.generatedAt`
+**Format**: ISO 8601 string
+**Source**: `new Date().toISOString()`
+**Mục Đích**: Tracking thời điểm tạo báo cáo
+
+### SECTION 6: QUY TẮC EDGE CASES
+
+#### Quy Tắc BR-56: Zero Revenue Handling
+**Scenario**: Không có giao dịch SUCCESS trong khoảng thời gian
+**Behavior**:
+- `totalRevenue = 0`
+- `transactionCount = 0`
+- `averageTransactionValue = 0`
+- `percentage = 0` cho tất cả breakdowns
+
+**KHÔNG Throw Exception**: Trả về báo cáo với giá trị 0
+
+#### Quy Tắc BR-57: Missing Category Handling
+**Scenario**: Transaction không có service mapping
+**Behavior**: Transaction vẫn được tính vào `summary.totalRevenue`
+**Category Breakdown**: Chỉ hiển thị categories có `categoryName IS NOT NULL`
+
+#### Quy Tắc BR-58: Missing Branch Information
+**Scenario**: Manager không có ClinicManagerInformation
+**Fallback**:
+- `branchName = 'Unknown Branch'`
+- `managerName = 'Unknown Manager'`
+
+**KHÔNG Throw Exception**: Sử dụng placeholder
+
+### SECTION 7: QUY TẮC PERFORMANCE
+
+#### Quy Tắc BR-59: Separate Queries Per Metric
+**Lý Do**: TypeORM query builder phức tạp với nhiều aggregations
+**Strategy**: Tách thành nhiều query độc lập:
+- 1 query cho summary
+- 2 queries cho payment breakdown (online + cash)
+- 1 query cho category breakdown
+- 1 query cho trend
+- 3 queries cho status breakdown (SUCCESS + PENDING + FAILED)
+- 1 query cho branch breakdown / top services
+
+**Trade-off**: Nhiều queries nhưng dễ maintain và debug
+
+#### Quy Tắc BR-60: Index Optimization Requirements
+**Recommended Indexes**:
+- `transaction_date` (cho date range filter)
+- `status` (cho status filter)
+- `clinic_id` trong appointments (cho branch filter)
+- `deleted_at` (cho soft delete filter)
+
+**Purpose**: Đảm bảo query performance với dataset lớn
+
+---
+
 **LƯU Ý**: Tất cả các quy tắc này được kiểm tra và xác minh thông qua unit tests để đảm bảo tính đúng đắn và nhất quán của hệ thống.
 
