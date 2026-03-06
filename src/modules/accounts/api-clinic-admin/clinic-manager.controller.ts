@@ -33,6 +33,7 @@ import {
   UpdateManagerLegalDocumentsDto,
   ManagerListResponseDto,
   ManagerDetailResponseDto,
+  GetManagerListQueryDto,
 } from '../dto';
 import { ApiResponseData } from '../../../common/decorators/api-response.decorator';
 
@@ -42,7 +43,7 @@ import { ApiResponseData } from '../../../common/decorators/api-response.decorat
  * Endpoints for CLINIC_ADMIN to manage CLINIC_MANAGER accounts.
  * All endpoints require JWT authentication and CLINIC_ADMIN role.
  */
-@Controller('api/clinic-managers')
+@Controller('clinic-managers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiTags('Clinic Admin - Manager Management')
 @ApiBearerAuth('JWT-auth')
@@ -59,7 +60,7 @@ export class ClinicManagerController {
   @Roles(AccountRole.CLINIC_ADMIN)
   @ApiOperation({ 
     summary: 'Get all managers under clinic admin',
-    description: 'Returns paginated list of all managers in any status'
+    description: 'Returns paginated list of all managers with filtering support for all columns'
   })
   @ApiResponseData({
     type: ManagerListResponseDto,
@@ -68,19 +69,13 @@ export class ClinicManagerController {
   })
   async getManagerList(
     @Req() req: any,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('sortBy') sortBy: string = 'createdAt',
-    @Query('sortOrder') sortOrder: 'ASC' | 'DESC' = 'DESC',
+    @Query() query: GetManagerListQueryDto,
   ): Promise<{ data: ManagerListResponseDto; message: string }> {
     const clinicAdminId = req.user._id;
     
     const result = await this.clinicManagerService.getManagerList(
       clinicAdminId,
-      page,
-      limit,
-      sortBy,
-      sortOrder,
+      query,
     );
 
     return {
