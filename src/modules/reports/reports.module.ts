@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Feedback, Report } from './entities';
 import { FeedbackRepository, ReportRepository } from './repositories';
 import { MailerModule } from '../mailer/mailer.module';
+import { AccountsModule } from '../accounts/accounts.module';
 
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
@@ -15,7 +16,11 @@ import { ReportService } from './report.service';
  * Manages reports and feedback functionality
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Feedback, Report]), MailerModule],
+  imports: [
+    TypeOrmModule.forFeature([Feedback, Report]),
+    MailerModule,
+    AccountsModule,
+  ],
   controllers: [FeedbackController, ReportController],
   providers: [
     FeedbackRepository,
