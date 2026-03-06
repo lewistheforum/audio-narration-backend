@@ -21,7 +21,7 @@ export class AdminSeederService {
   // Default admin credentials - should be changed after first login
   private readonly DEFAULT_ADMIN = {
     username: 'admin',
-    email: 'admin@medicare.com',
+    email: 'admin@bonix.com',
     password: 'Admin@123456',
     fullName: 'System Administrator',
     role: AccountRole.ADMIN,
