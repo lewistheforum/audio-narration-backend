@@ -47,7 +47,7 @@ export class AiConversationSeederService {
         // Create a conversation for each patient
         const conversation =
           await this.aiConversationRepository.createConversation(patient._id, {
-            title: 'Welcome to Medicare AI',
+            title: 'Welcome to Bonix AI',
             description: 'Initial consultation and welcome message',
             participants: [patient._id],
             metadata: { seeded: true },
@@ -57,7 +57,7 @@ export class AiConversationSeederService {
         await this.aiMessageRepository.createMessage({
           conversationId: conversation._id,
           role: 'assistant',
-          content: `Hello ${patient.username}, I am your Medicare AI assistant. How can I help you today?`,
+          content: `Hello ${patient.username}, I am your Bonix AI assistant. How can I help you today?`,
           metadata: { type: 'welcome' },
         });
 

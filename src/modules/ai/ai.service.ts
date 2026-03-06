@@ -16,7 +16,7 @@ import { API } from '../../common/utils/ai-api';
 /**
  * AI Service
  *
- * Main service layer for AI operations in the Medicare Backend.
+ * Main service layer for AI operations in the Bonix Backend.
  *
  * Core Responsibilities:
  * - Route requests to appropriate AI provider (Gemini or ChatGPT)
