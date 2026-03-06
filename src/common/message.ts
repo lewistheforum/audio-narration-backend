@@ -27,6 +27,7 @@ const successMessage = {
   userRestoredSuccess: 'User restored successfully',
   // Authentication
   loginSuccess: 'User logged in successfully',
+  loginSuccessUnverified: 'Login successful. Please verify your email address to access full features.',
   googleLoginSuccess: 'Google login successful',
   paymentCreateSuccess: 'Payment QR created successfully',
   paymentUpdateSuccess: 'Payment status updated successfully',
@@ -79,6 +80,11 @@ const successMessage = {
   subscriptionHistoryFetchedSuccess: 'Subscription history fetched successfully',
   // Feedback
   feedbackCreatedSuccess: 'Feedback created successfully',
+  // Clinic Manager
+  managerCreated: 'Manager created successfully',
+  managerUpdated: 'Manager updated successfully',
+  managerDisabled: 'Manager disabled successfully',
+  managerEnabled: 'Manager enabled successfully',
 };
 
 const failMessage = {
@@ -200,6 +206,17 @@ const failMessage = {
   // Feedback Errors
   feedbackToxicContent: 'Feedback contains inappropriate content',
   feedbackNotFound: 'Feedback not found',
+  // Clinic Manager Errors
+  managerNotFound: 'Manager not found',
+  managerNotActive: 'Manager account is not active',
+  managerPendingApproval: 'Manager account is pending approval',
+  managerDisabled: 'Manager account is disabled',
+  branchDisabled: 'Branch is disabled',
+  cannotCreateStaffPending: 'Cannot create staff while manager account is pending',
+  cannotCreateStaffDisabled: 'Cannot create staff while manager account is disabled',
+  onlyAdminCanUpdateLegalDocs: 'Only admin can update legal documents',
+  cannotDeleteActiveManager: 'Cannot delete active manager',
+  cannotDeletePendingReview: 'Cannot delete manager pending review',
 };
 
 const MESSAGES = {

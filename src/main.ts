@@ -15,7 +15,7 @@ async function bootstrap(): Promise<void> {
 
   // config CORS
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: true, // Allows any origin
     credentials: true,
   });
 
@@ -38,13 +38,30 @@ async function bootstrap(): Promise<void> {
   // config Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('Medicare API')
-    .setDescription('A comprehensive healthcare platform API for patient management, clinic services, messaging, and doctor discovery')
+    .setDescription(
+      'A comprehensive healthcare platform API for patient management, clinic services, messaging, and doctor discovery',
+    )
     .setVersion('1.0.0')
-    .addTag('Authentication', 'Authentication endpoints - Login, Google OAuth, and session management')
-    .addTag('Users management', 'User management endpoints - CRUD operations for patients, clinic staff, doctors, and admins')
-    .addTag('Conversations', 'Conversation management - Create and manage conversations between users')
-    .addTag('Messages', 'Message management - Send, receive, and manage messages within conversations')
-    .addTag('Health', 'Health check endpoints - Monitor application and database health status')
+    .addTag(
+      'Authentication',
+      'Authentication endpoints - Login, Google OAuth, and session management',
+    )
+    .addTag(
+      'Users management',
+      'User management endpoints - CRUD operations for patients, clinic staff, doctors, and admins',
+    )
+    .addTag(
+      'Conversations',
+      'Conversation management - Create and manage conversations between users',
+    )
+    .addTag(
+      'Messages',
+      'Message management - Send, receive, and manage messages within conversations',
+    )
+    .addTag(
+      'Health',
+      'Health check endpoints - Monitor application and database health status',
+    )
     .addTag('Mailer', 'Mail service endpoints - Send emails and notifications')
     .addBearerAuth(
       {
@@ -77,7 +94,9 @@ async function bootstrap(): Promise<void> {
     console.log(`🏥 Health Check: http://localhost:${PORT}/api/health`);
     console.log(`🔐 Auth Routes: http://localhost:${PORT}/api/auth/*`);
     console.log(`👥 User Routes: http://localhost:${PORT}/api/users/*`);
-    console.log(`💳 Transaction Routes: http://localhost:${PORT}/transactions/*`);
+    console.log(
+      `💳 Transaction Routes: http://localhost:${PORT}/transactions/*`,
+    );
   });
 }
 

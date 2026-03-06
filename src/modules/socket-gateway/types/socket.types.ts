@@ -93,6 +93,7 @@ export interface ServerToClientEvents {
   userStatus: (data: UserStatusUpdate) => void;
   newMessage: (data: NewMessageEvent) => void;
   messageNotification: (data: MessageNotificationEvent) => void;
+  newBlogNotification: (data: { message: string; blog: any }) => void;
   conversationUpdated: (data: ConversationUpdateEvent) => void;
   messageRead: (data: {
     messageId: string;

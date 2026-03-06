@@ -30,28 +30,28 @@ export class UploadLegalDocumentDto {
   })
   @IsOptional()
   @IsString({ message: 'Operating license must be a string' })
-  @MaxLength(1000, { message: 'Operating license must not exceed 1000 characters' })
+  @MaxLength(1000, { message: 'Operating license URL must not exceed 1000 characters' })
   operatingLicense?: string;
 
   @ApiProperty({
     description: 'Business license document URL',
     example: 'https://example.com/business-license.pdf',
+    required: false,
   })
-  @IsNotEmpty({ message: 'Business license URL is required' })
-  @IsUrl({}, { message: 'Business license must be a valid URL' })
+  @IsOptional()
   @IsString({ message: 'Business license URL must be a string' })
   @MaxLength(1000, { message: 'Business license URL must not exceed 1000 characters' })
-  businessLicenseUrl: string;
+  businessLicense?: string;
 
   @ApiProperty({
     description: 'Tax ID document URL',
     example: 'https://example.com/tax-id.pdf',
+    required: false,
   })
-  @IsNotEmpty({ message: 'Tax ID URL is required' })
-  @IsUrl({}, { message: 'Tax ID must be a valid URL' })
+  @IsOptional()
   @IsString({ message: 'Tax ID URL must be a string' })
   @MaxLength(1000, { message: 'Tax ID URL must not exceed 1000 characters' })
-  taxIdUrl: string;
+  taxIdUrl?: string;
 
   @ApiProperty({
     description: 'Other supporting documents URLs',
@@ -61,7 +61,6 @@ export class UploadLegalDocumentDto {
   })
   @IsOptional()
   @IsArray({ message: 'Other docs must be an array' })
-  @IsUrl({}, { each: true, message: 'Each doc URL must be a valid URL' })
   @IsString({ each: true, message: 'Each doc URL must be a string' })
   @MaxLength(1000, { each: true, message: 'Each doc URL must not exceed 1000 characters' })
   otherDocs?: string[];

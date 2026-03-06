@@ -46,10 +46,10 @@ export class AiConversationSeederService {
       for (const patient of patientAccounts) {
         // Create a conversation for each patient
         const conversation =
-          await this.aiConversationRepository.createConversation({
+          await this.aiConversationRepository.createConversation(patient._id, {
             title: 'Welcome to Medicare AI',
             description: 'Initial consultation and welcome message',
-            participants: { patientId: patient._id },
+            participants: [patient._id],
             metadata: { seeded: true },
           });
 

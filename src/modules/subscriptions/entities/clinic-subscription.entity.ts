@@ -41,10 +41,10 @@ export class ClinicSubscription {
   @JoinColumn({ name: 'service_id' })
   service?: SubscriptionService;
 
-  @Column({ name: 'subscription_date', type: 'timestamptz' })
+  @Column({ name: 'subscription_date', type: 'timestamptz', nullable: true })
   subscriptionDate: Date;
 
-  @Column({ name: 'expiration_date', type: 'timestamptz' })
+  @Column({ name: 'expiration_date', type: 'timestamptz', nullable: true })
   expirationDate: Date;
 
   @Column({

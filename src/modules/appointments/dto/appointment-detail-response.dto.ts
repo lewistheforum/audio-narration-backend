@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaymentType } from '../enums/payment-type.enum';
+import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
 
 /**
  * Patient Detail DTO
@@ -109,8 +110,8 @@ export class AppointmentPackageDetailDto {
   @ApiProperty({ description: 'Payment amount' })
   amount: number;
 
-  @ApiProperty({ description: 'Payment status', required: false })
-  status?: string;
+  @ApiProperty({ description: 'Payment status', enum: AppointmentPackageStatus, required: false })
+  status?: AppointmentPackageStatus;
 
   @ApiProperty({
     description: 'Payment type (online or cod)',

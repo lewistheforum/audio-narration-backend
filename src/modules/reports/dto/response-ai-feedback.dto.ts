@@ -24,6 +24,16 @@ export class FeedbackAIResponseDto {
   description?: string;
 
   @ApiProperty({
+    description: 'Feedback images',
+    nullable: true,
+    example: [
+      'https://example.com/image.jpg',
+      'https://example.com/image2.jpg',
+    ],
+  })
+  feedbackImages?: any;
+
+  @ApiProperty({
     description: 'Description label result from AI',
     nullable: true,
     example: [{ label: 'Positive', score: 0.9 }],
@@ -49,13 +59,41 @@ export class FeedbackAIResponseDto {
   })
   rating: number;
 
+  @ApiProperty({
+    description: 'Doctor full name',
+    nullable: true,
+  })
+  doctorFullName?: string;
+
+  @ApiProperty({
+    description: 'Doctor email',
+    nullable: true,
+  })
+  doctorEmail?: string;
+
+  @ApiProperty({
+    description: 'Doctor username',
+    nullable: true,
+  })
+  doctorUsername?: string;
+
   constructor(feedback: Feedback) {
     this.id = feedback._id;
     this.clinicId = feedback.clinicId;
     this.doctorId = feedback.doctorId;
     this.rating = feedback.rating;
     this.description = feedback.description;
+    this.feedbackImages = feedback.feedbackImages;
     this.descriptionLabel = feedback.descriptionLabel;
     this.feedbackImagesLabel = feedback.feedbackImagesLabel;
+
+    // Map doctor info if relation is loaded
+    if (feedback.doctor) {
+      this.doctorUsername = feedback.doctor.username;
+      this.doctorEmail = feedback.doctor.email;
+      if (feedback.doctor.doctorInformation) {
+        this.doctorFullName = feedback.doctor.doctorInformation.fullName;
+      }
+    }
   }
 }

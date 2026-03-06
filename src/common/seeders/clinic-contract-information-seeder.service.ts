@@ -117,7 +117,7 @@ export class ClinicContractInformationSeederService {
 
         // Find existing contract package for this employee
         const contractPackage =
-          await this.contractPackageRepository.findByClinicAndEmployee(
+          await this.contractPackageRepository.findByManagerAndEmployee(
             employee.parentId,
             employee._id,
           );

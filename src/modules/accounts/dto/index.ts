@@ -1,4 +1,13 @@
 export * from './create-account.dto';
+export * from './username-email-list.dto';
+export * from './get-employees-by-clinic.dto';
+export * from './search-patient-query.dto';
+export * from './patient-search-response.dto';
+
+export * from './get-staff-list.dto';
+export * from './get-doctor-list.dto';
+export * from './staff-list-response.dto';
+export * from './doctor-list-response.dto';
 export * from './create-staff-by-manager.dto';
 export * from './create-doctor-by-manager.dto';
 export * from './update-clinic-admin-profile.dto';
@@ -22,3 +31,10 @@ export * from './legal-document-response.dto';
 export * from './cancel-registration-response.dto';
 export * from './cancel-subscription.dto';
 export * from './cancel-subscription-response.dto';
+export { ManagerListResponseDto, ManagerListItemDto, PaginationMetaDto } from './manager-list-response.dto';
+export { ManagerDetailResponseDto, ManagerPersonnelDto, ManagerLegalDocumentsDto, ManagerAddressDto } from './manager-detail-response.dto';
+export { CreateClinicManagerDto } from './create-clinic-manager.dto';
+export { UpdateManagerProfileDto } from './update-manager-profile.dto';
+export { UpdateManagerLocationDto } from './update-manager-location.dto';
+export { UpdateManagerLegalDocumentsDto } from './update-manager-legal-documents.dto';
+export { GetManagerListQueryDto } from './get-manager-list-query.dto';

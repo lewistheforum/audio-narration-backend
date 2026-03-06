@@ -7,6 +7,7 @@ import {
     Get,
     Query,
     Patch,
+    Put,
     Delete,
     Param,
     UseGuards,
@@ -20,6 +21,9 @@ import { GetSchedulesDto } from './dto/get-schedules.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { GetEmployeesDto } from './dto/get-employees.dto';
 import { CopyScheduleDto } from './dto/copy-schedule.dto';
+import { CreateClinicRoomDto } from './dto/create-clinic-room.dto';
+import { UpdateClinicRoomDto } from './dto/update-clinic-room.dto';
+import { ClinicRoomQueryDto } from './dto/clinic-room-query.dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -191,5 +195,47 @@ export class SchedulesController {
     @ApiResponse({ status: HttpStatus.OK, description: 'Schedule deleted' })
     remove(@Param('id') id: string) {
         return this.schedulesService.remove(id);
+    }
+
+    /**
+     * -------------------------------------------------------------
+     * CLINIC ROOM CRUD APIs
+     * -------------------------------------------------------------
+     */
+
+    @Post('rooms')
+    @Roles(AccountRole.CLINIC_MANAGER)
+    @ApiOperation({ summary: 'Create a new clinic room' })
+    @ApiResponse({ status: HttpStatus.CREATED, description: 'Room created successfully' })
+    createRoom(@Request() req, @Body() dto: CreateClinicRoomDto) {
+        return this.schedulesService.createClinicRoom(req.user, dto);
+    }
+
+    @Get('rooms')
+    @Roles(AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
+    @ApiOperation({ summary: 'Get paginated list of clinic rooms' })
+    getRoomsPaginated(@Request() req, @Query() query: ClinicRoomQueryDto) {
+        return this.schedulesService.getPaginatedClinicRooms(req.user, query);
+    }
+
+    @Get('rooms/:id')
+    @Roles(AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
+    @ApiOperation({ summary: 'Get details of a specific clinic room' })
+    getRoomById(@Request() req, @Param('id') id: string) {
+        return this.schedulesService.getClinicRoomById(id, req.user);
+    }
+
+    @Put('rooms/:id')
+    @Roles(AccountRole.CLINIC_MANAGER)
+    @ApiOperation({ summary: 'Update a clinic room' })
+    updateRoom(@Request() req, @Param('id') id: string, @Body() dto: UpdateClinicRoomDto) {
+        return this.schedulesService.updateClinicRoom(id, req.user, dto);
+    }
+
+    @Delete('rooms/:id')
+    @Roles(AccountRole.CLINIC_MANAGER)
+    @ApiOperation({ summary: 'Delete a clinic room' })
+    deleteRoom(@Request() req, @Param('id') id: string) {
+        return this.schedulesService.deleteClinicRoom(id, req.user);
     }
 }

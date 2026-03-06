@@ -10,7 +10,13 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ConversationService } from './conversation.service';
 import {
   CreateConversationDto,
@@ -64,7 +70,11 @@ export class ConversationController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a conversation by ID' })
-  @ApiParam({ name: 'id', description: 'Conversation ID (UUID)', type: 'string' })
+  @ApiParam({
+    name: 'id',
+    description: 'Conversation ID (UUID)',
+    type: 'string',
+  })
   @ApiResponse({
     status: 200,
     description: 'Conversation retrieved successfully',
@@ -106,7 +116,11 @@ export class ConversationController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a conversation' })
-  @ApiParam({ name: 'id', description: 'Conversation ID (UUID)', type: 'string' })
+  @ApiParam({
+    name: 'id',
+    description: 'Conversation ID (UUID)',
+    type: 'string',
+  })
   @ApiResponse({
     status: 200,
     description: 'Conversation updated successfully',
@@ -153,5 +167,110 @@ export class ConversationController {
     @Param('userId') userId: string,
   ): Promise<void> {
     return this.conversationService.delete(conversationId, userId);
+  }
+
+  // --- Account Fetching for Chat ---
+
+  @Get('accounts/admins-chatlist')
+  @ApiOperation({ summary: 'Get all admin and clinic admin accounts for chat' })
+  @ApiResponse({
+    status: 200,
+    description: 'Accounts retrieved successfully',
+  })
+  async getAdminChatlist(): Promise<any[]> {
+    return this.conversationService.getAdminChatlist();
+  }
+
+  @Get('accounts/clinic-admin-chatlist/:id/related')
+  @ApiOperation({
+    summary: 'Get the admin and all managers for a clinic admin',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Clinic Admin Account ID (UUID)',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Accounts retrieved successfully',
+  })
+  async getClinicAdminChatlist(
+    @Param('id') clinicAdminId: string,
+  ): Promise<any[]> {
+    return this.conversationService.getClinicAdminChatlist(clinicAdminId);
+  }
+
+  @Get('accounts/clinic-manager-chatlist/:id/related')
+  @ApiOperation({
+    summary: 'Get clinic admin, staff, and doctors by clinic manager ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Clinic Manager Account ID (UUID)',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Related accounts retrieved successfully',
+  })
+  async getClinicManagerRelatedAccounts(
+    @Param('id') managerId: string,
+  ): Promise<any[]> {
+    return this.conversationService.getClinicManagerRelatedAccounts(managerId);
+  }
+
+  @Get('accounts/staff-chatlist/:id/related')
+  @ApiOperation({
+    summary: 'Get clinic manager, other staff, and doctors by staff ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Staff or Doctor Account ID (UUID)',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Related accounts retrieved successfully',
+  })
+  async getStaffRelatedAccounts(@Param('id') staffId: string): Promise<any[]> {
+    return this.conversationService.getStaffRelatedAccounts(staffId);
+  }
+
+  @Get('accounts/doctor-chatlist/:id/related')
+  @ApiOperation({
+    summary: 'Get other doctors, staff, and patients for doctor chatlist',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Doctor Account ID (UUID)',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Related accounts retrieved successfully',
+  })
+  async getDoctorRelatedAccounts(
+    @Param('id') doctorId: string,
+  ): Promise<any[]> {
+    return this.conversationService.getDoctorChatlist(doctorId);
+  }
+
+  @Get('accounts/patient-chatlist/:id/related')
+  @ApiOperation({
+    summary: 'Get doctors that examined the patient by patient ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Patient Account ID (UUID)',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Related accounts retrieved successfully',
+  })
+  async getPatientRelatedAccounts(
+    @Param('id') patientId: string,
+  ): Promise<any[]> {
+    return this.conversationService.getPatientChatlist(patientId);
   }
 }

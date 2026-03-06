@@ -96,4 +96,68 @@ export class ClinicServiceConfigRepository {
   async count(): Promise<number> {
     return this.clinicServiceConfigRepository.count();
   }
+
+  /**
+   * Update Status by Service IDs
+   *
+   * Updates the isActive status for all configs associated with the given service IDs.
+   *
+   * @param {string[]} serviceIds - Array of Service IDs
+   * @param {boolean} isActive - New status
+   * @returns {Promise<void>}
+   */
+  async updateStatusByServiceIds(
+    serviceIds: string[],
+    isActive: boolean,
+  ): Promise<void> {
+    if (serviceIds.length === 0) return;
+
+    await this.clinicServiceConfigRepository
+      .createQueryBuilder()
+      .update(ClinicServiceConfig)
+      .set({ isActive })
+      .where('service_id IN (:...serviceIds)', { serviceIds })
+      .execute();
+  }
+
+  /**
+   * Find Clinics By Category ID
+   *
+   * Retrieves a list of clinics and their branches that are using services from a specific category.
+   *
+   * @param {string} categoryId - Category ID
+   * @returns {Promise<any[]>} List of clinics with details
+   */
+  async findClinicsByCategoryId(categoryId: string): Promise<any[]> {
+    return this.clinicServiceConfigRepository.query(
+      `
+      SELECT 
+          DISTINCT
+          CASE 
+              WHEN admin_info.clinic_name IS NOT NULL THEN admin_info.clinic_name
+              WHEN parent_admin_info.clinic_name IS NOT NULL THEN parent_admin_info.clinic_name
+              ELSE COALESCE(admin_info.clinic_name, parent_admin_info.clinic_name)
+          END AS "clinicName",
+          CASE 
+              WHEN manager_info.clinic_branch_name IS NOT NULL THEN manager_info.clinic_branch_name
+              ELSE 'Main Headquarters'
+          END AS "branchName",
+          cs.service_name AS "serviceName",
+          cs.service_code AS "serviceCode",
+          csc.category_name AS "categoryName",
+          a.email as "contactEmail"
+      FROM clinic_service_config csc2
+      JOIN clinic_services cs ON cs._id = csc2.service_id
+      JOIN clinic_service_category csc ON csc._id = cs.category_id
+      JOIN accounts a ON a._id = csc2.clinic_id
+      LEFT JOIN clinic_admin_information admin_info ON admin_info.account_id = a._id
+      LEFT JOIN clinic_manager_information manager_info ON manager_info.account_id = a._id
+      LEFT JOIN accounts parent_acc ON parent_acc._id = a.parent_id
+      LEFT JOIN clinic_admin_information parent_admin_info ON parent_admin_info.account_id = parent_acc._id
+      WHERE csc._id = $1
+      ORDER BY "clinicName", "branchName"
+      `,
+      [categoryId],
+    );
+  }
 }

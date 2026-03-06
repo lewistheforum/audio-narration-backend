@@ -3,10 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClinicServiceCategory, ClinicService } from './entities';
 import { ClinicServicesController } from './clinic-services.controller';
 import { ClinicServicesService } from './clinic-services.service';
-import {
-  ClinicServiceCategoryRepository,
-  ClinicServiceRepository,
-} from './repositories';
+import { ClinicServiceCategoryRepository } from './repositories/clinic-service-category.repository';
+import { ClinicServiceRepository } from './repositories/clinic-service.repository';
+import { ServiceConfigsModule } from '../service-configs/service-configs.module';
 
 /**
  * Clinic Services Module
@@ -14,7 +13,10 @@ import {
  * Manages clinic services and their categories
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([ClinicServiceCategory, ClinicService])],
+  imports: [
+    TypeOrmModule.forFeature([ClinicServiceCategory, ClinicService]),
+    ServiceConfigsModule,
+  ],
   controllers: [ClinicServicesController],
   providers: [
     ClinicServiceCategoryRepository,
@@ -27,4 +29,4 @@ import {
     ClinicServiceRepository,
   ],
 })
-export class ClinicServicesModule { }
+export class ClinicServicesModule {}

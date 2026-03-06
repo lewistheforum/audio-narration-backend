@@ -13,8 +13,6 @@ import {
   UseGuards,
   Request,
   Query,
-  Req,
-  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -42,7 +40,15 @@ import {
   CancelRegistrationResponseDto,
   CancelSubscriptionDto,
   CancelSubscriptionResponseDto,
+  GetStaffListDto,
+  GetDoctorListDto,
+  StaffListResponseDto,
+  DoctorListResponseDto,
+  SearchPatientQueryDto,
+  PatientSearchResponseDto,
+  GetEmployeesByClinicDto,
 } from './dto';
+
 import { MESSAGES } from 'src/common/message';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { AccountRole } from './enums';
@@ -88,6 +94,7 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   PublicDoctorDetailData,
   PublicDoctorInfo,
   PublicClinicInfo,
+  PatientSearchResponseDto,
 )
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) { }
@@ -102,10 +109,9 @@ export class AccountsController {
     const data = await this.accountsService.generateUserKeys(id);
     return {
       message: 'Digital signature keys generated successfully',
-      data
+      data,
     };
   }
-
 
   /**
    * Get All Accounts (Admin Only)
@@ -222,7 +228,7 @@ export class AccountsController {
   }
 
   /**
-   * Get All Clinics (Public)
+   * Get All Clinics Manager (Admin)
    *
    * Retrieves a paginated list of all active clinics.
    * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
@@ -237,7 +243,7 @@ export class AccountsController {
    * - Combines data from accounts + clinic_manager_information + addresses tables
    *
    * Access Control:
-   * - Public endpoint (no authentication required)
+   * - Admin endpoint (authentication required)
    *
    * Use Cases:
    * - Clinic directory listing
@@ -291,14 +297,104 @@ export class AccountsController {
     status: MESSAGES.statusCode.success,
     message: 'Clinics retrieved successfully',
   })
-  async getAllClinics(
+  async getAllClinicsManager(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('search') search?: string,
     @Query('province') province?: string,
     @Query('specialty') specialty?: string,
   ): Promise<{ data: ClinicListResponseDto; message: string }> {
-    const result = await this.accountsService.findAllClinics(
+    const result = await this.accountsService.findAllClinicsManager(
+      page,
+      limit,
+      search,
+      province,
+      specialty,
+    );
+    return {
+      data: result,
+      message: 'Clinics retrieved successfully',
+    };
+  }
+
+  /**
+   * Get All Clinics Admin (Admin)
+   *
+   * Retrieves a paginated list of all active clinics.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Query Parameters:
+   * - page: Page number (default: 1)
+   * - limit: Items per page (default: 10)
+   *
+   * Response Format:
+   * - Returns ClinicListResponseDto with clinics array and pagination metadata
+   * - Combines data from accounts + clinic_manager_information + addresses tables
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Clinic directory listing
+   * - Clinic search results
+   * - Clinic browsing
+   *
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @returns {Promise<{data: ClinicListResponseDto, message: string}>} Clinics with pagination
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved clinics
+   */
+  @Get('clinics-admin')
+  @ApiOperation({
+    summary: 'Get all clinics with pagination, search and filters',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description:
+      'Search keyword to match clinic name or description (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'province',
+    required: false,
+    type: String,
+    description: 'Filter clinics by province name or code',
+  })
+  @ApiQuery({
+    name: 'specialty',
+    required: false,
+    type: String,
+    description: 'Filter clinics by medical specialization',
+  })
+  @ApiResponseData({
+    type: ClinicListResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Clinics retrieved successfully',
+  })
+  async getAllClinicsAdmin(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string,
+    @Query('province') province?: string,
+    @Query('specialty') specialty?: string,
+  ): Promise<{ data: ClinicListResponseDto; message: string }> {
+    const result = await this.accountsService.findAllClinicsAdmin(
       page,
       limit,
       search,
@@ -359,7 +455,7 @@ export class AccountsController {
       message: 'Clinic details retrieved successfully',
     };
   }
-  
+
   /**
    * Get Doctor Details by ID (Public)
    *
@@ -415,6 +511,115 @@ export class AccountsController {
     return this.accountsService.getPublicDoctorById(id);
   }
 
+  @Get('staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get list of staff for the manager\'s clinic' })
+  @ApiResponseData({
+    type: StaffListResponseDto,
+    status: 200,
+    message: 'Staff list retrieved successfully',
+  })
+  async getStaffList(
+    @Request() req: any,
+    @Query() query: GetStaffListDto,
+  ): Promise<{ data: StaffListResponseDto; message: string }> {
+    const managerId = req.user._id;
+    const result = await this.accountsService.findAllStaffByManager(
+      managerId,
+      query.page || 1,
+      query.limit || 10,
+      query.search,
+      undefined,
+      query.fromDate,
+      query.toDate,
+    );
+    return {
+      data: result,
+      message: 'Staff list retrieved successfully',
+    };
+  }
+
+  @Get('staff/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get staff details by ID' })
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: 200,
+    message: 'Staff details retrieved successfully',
+  })
+  async getStaffDetails(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ data: AccountResponseDto; message: string }> {
+    const managerId = req.user._id;
+    const result = await this.accountsService.findStaffById(id, managerId);
+    return {
+      data: result,
+      message: 'Staff details retrieved successfully',
+    };
+  }
+
+  @Get('doctors-management')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get list of doctors for the manager\'s clinic' })
+  @ApiResponseData({
+    type: DoctorListResponseDto,
+    status: 200,
+    message: 'Doctor list retrieved successfully',
+  })
+  async getDoctorListManagement(
+    @Request() req: any,
+    @Query() query: GetDoctorListDto,
+  ): Promise<{ data: DoctorListResponseDto; message: string }> {
+    const managerId = req.user._id;
+    const result = await this.accountsService.findAllDoctorsByManager(
+      managerId,
+      query.page || 1,
+      query.limit || 10,
+      query.search,
+      query.academicDegree,
+      query.fromDate,
+      query.toDate,
+    );
+    return {
+      data: result,
+      message: 'Doctor list retrieved successfully',
+    };
+  }
+
+
+  @Get('clinic/:clinicId/employees')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get employees (doctors/staff) of a specific clinic',
+  })
+  @ApiResponseData({
+    type: AccountResponseDto,
+    status: 200,
+    message: 'Employees retrieved successfully',
+    isArray: true,
+  })
+  async getEmployeesByClinic(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query() query: GetEmployeesByClinicDto,
+  ): Promise<{ data: AccountResponseDto[]; message: string }> {
+    const result = await this.accountsService.findAllEmployeesByClinic(
+      clinicId,
+      query,
+    );
+    return {
+      data: result,
+      message: 'Employees retrieved successfully',
+    };
+  }
 
   /**
    * Get Account by ID
@@ -738,6 +943,33 @@ export class AccountsController {
    * @response 403 - Forbidden - Requires ADMIN role
    * @response 404 - Account not found
    */
+  /**
+   * Delete Employee (Soft Delete) - Clinic Admin/Manager Only
+   *
+   * Allows a Clinic Admin or Clinic Manager to soft delete (deactivate) an employee
+   * (staff or doctor) belonging to their clinic.
+   *
+   * @param req The HTTP request object (for extracting the requestor's ID)
+   * @param id The UUID of the employee to delete
+   */
+  @Delete('employees/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Soft delete clinic employee (Admin/Manager only)' })
+  @ApiResponse({
+    status: MESSAGES.statusCode.success,
+    description: MESSAGES.successMessage.userDeleteSuccess,
+  })
+  async deleteEmployee(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ message: string }> {
+    const requestorId = req.user._id;
+    await this.accountsService.deleteEmployee(id, requestorId);
+    return { message: MESSAGES.successMessage.userDeleteSuccess };
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.ADMIN)
@@ -999,7 +1231,9 @@ export class AccountsController {
   async cancelPendingRegistration(
     @Request() req: any,
   ): Promise<{ data: CancelRegistrationResponseDto; message: string }> {
-    const result = await this.accountsService.cancelPendingRegistration(req.user.accountId);
+    const result = await this.accountsService.cancelPendingRegistration(
+      req.user._id,
+    );
     return { data: result, message: result.message };
   }
 
@@ -1045,7 +1279,10 @@ export class AccountsController {
     @Request() req: any,
     @Body() dto: CancelSubscriptionDto,
   ): Promise<{ data: CancelSubscriptionResponseDto; message: string }> {
-    const result = await this.accountsService.cancelActiveSubscription(req.user.accountId, dto);
+    const result = await this.accountsService.cancelActiveSubscription(
+      req.user._id,
+      dto,
+    );
     return { data: result, message: result.message };
   }
 
@@ -1093,7 +1330,7 @@ export class AccountsController {
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
     @Body() dto: any,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1101,7 +1338,8 @@ export class AccountsController {
     );
     return {
       data: legalDocs,
-      message: 'Legal documents uploaded successfully. Waiting for admin approval.',
+      message:
+        'Legal documents uploaded successfully. Waiting for admin approval.',
     };
   }
 
@@ -1125,8 +1363,7 @@ export class AccountsController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get legal documents for clinic manager',
-    description:
-      'Retrieves legal documents for a specific clinic manager.',
+    description: 'Retrieves legal documents for a specific clinic manager.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiResponseData({
@@ -1144,7 +1381,7 @@ export class AccountsController {
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.getLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1204,7 +1441,7 @@ export class AccountsController {
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
     @Body() dto: any,
   ): Promise<{ data: any; message: string }> {
-    const clinicAdminId = req.user.accountId;
+    const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.updateLegalDocumentsForManager(
       clinicAdminId,
       managerAccountId,
@@ -1212,7 +1449,86 @@ export class AccountsController {
     );
     return {
       data: legalDocs,
-      message: 'Legal documents updated successfully. Waiting for admin approval.',
+      message:
+        'Legal documents updated successfully. Waiting for admin approval.',
     };
   }
+
+  /**
+   * Search Patient by Phone, Email, or Name (Staff Only)
+   *
+   * Allows clinic staff to search for existing patients before creating walk-in appointments
+   * Primary search is by phone number (unique identifier)
+   * Returns patient details if found, or suggests creating new account
+   *
+   * Query Parameters:
+   * - phone: Patient phone number (10-11 digits, starts with 0) - PRIMARY KEY
+   * - email: Patient email (optional)
+   * - fullName: Patient full name for fuzzy search (optional)
+   *
+   * Response Format:
+   * - If found: Returns patient data with account info
+   * - If not found: Returns suggested action to create new account
+   *
+   * Access Control:
+   * - Requires CLINIC_STAFF role
+   * - Requires valid JWT authentication
+   *
+   * Use Cases:
+   * - Check if walk-in patient already has account before creating
+   * - Prevent duplicate account creation
+   * - Quick patient lookup by phone
+   *
+   * @param {SearchPatientQueryDto} query - Search parameters
+   * @returns {Promise<{data: PatientSearchResponseDto, message: string}>} Search result
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Patient found or not found with suggested action
+   * @response 401 - Unauthorized - Missing or invalid JWT token
+   * @response 403 - Forbidden - Requires CLINIC_STAFF role
+   * @response 400 - Bad Request - Invalid query parameters
+   */
+  @Get('staff/patients/search')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Search patient by phone, email, or name (Staff)' })
+  @ApiQuery({
+    name: 'phone',
+    required: false,
+    type: String,
+    description: 'Patient phone number (10-11 digits, starts with 0)',
+    example: '0912345678',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+    type: String,
+    description: 'Patient email address',
+    example: 'nguyenvana@gmail.com',
+  })
+  @ApiQuery({
+    name: 'fullName',
+    required: false,
+    type: String,
+    description: 'Patient full name for fuzzy search',
+    example: 'Nguyễn Văn A',
+  })
+  @ApiResponseData({
+    type: PatientSearchResponseDto,
+    status: 200,
+    message: 'Patient search completed',
+  })
+  async searchPatient(
+    @Query() query: SearchPatientQueryDto,
+  ): Promise<{ data: PatientSearchResponseDto; message: string }> {
+    const result = await this.accountsService.searchPatientByPhone(query);
+    return {
+      data: result,
+      message: 'Patient search completed',
+    };
+  }
+
 }
+

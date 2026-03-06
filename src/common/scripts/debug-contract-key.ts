@@ -18,9 +18,9 @@ async function bootstrap() {
         console.error('Contract Package not found');
         return;
     }
-    console.log(`Clinic ID (Manager): ${contractPackage.clinicId}`);
+    console.log(`Clinic ID (Manager): ${contractPackage.clinicManagerId}`);
 
-    const manager = await accountRepo.findAccountById(contractPackage.clinicId);
+    const manager = await accountRepo.findAccountById(contractPackage.clinicManagerId);
     if (!manager) {
         console.error('Manager Account not found');
         return;

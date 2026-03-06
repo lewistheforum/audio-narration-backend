@@ -24,9 +24,9 @@ export class SubscriptionServiceRepository {
     status?: string,
   ): Promise<SubscriptionService[]> {
     const where: any = {};
-    if (status) {
-      where.status = status;
-    }
+    // if (status) {
+    //   where.status = status;
+    // }
 
     return this.repository.find({
       where,

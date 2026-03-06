@@ -17,7 +17,7 @@ export class ClinicServiceRepository {
   constructor(
     @InjectRepository(ClinicService)
     private readonly clinicServiceRepository: Repository<ClinicService>,
-  ) { }
+  ) {}
 
   /**
    * Find All Clinic Services
@@ -28,20 +28,6 @@ export class ClinicServiceRepository {
    */
   async findAll(): Promise<ClinicService[]> {
     return this.clinicServiceRepository.find();
-  }
-
-  /**
-   * Find Clinic Service by Service Code
-   *
-   * Retrieves a single service by its service code.
-   *
-   * @param {string} serviceCode - Service code
-   * @returns {Promise<ClinicService | null>} Service entity or null if not found
-   */
-  async findByServiceCode(serviceCode: string): Promise<ClinicService | null> {
-    return this.clinicServiceRepository.findOne({
-      where: { serviceCode },
-    });
   }
 
   /**
@@ -69,6 +55,20 @@ export class ClinicServiceRepository {
   async findByCategoryId(categoryId: string): Promise<ClinicService[]> {
     return this.clinicServiceRepository.find({
       where: { categoryId },
+    });
+  }
+
+  /**
+   * Find Clinic Service by Service Code
+   *
+   * Retrieves a single service by its unique service code.
+   *
+   * @param {string} serviceCode - Service Code
+   * @returns {Promise<ClinicService | null>} Service entity or null if not found
+   */
+  async findByServiceCode(serviceCode: string): Promise<ClinicService | null> {
+    return this.clinicServiceRepository.findOne({
+      where: { serviceCode },
     });
   }
 
@@ -105,5 +105,38 @@ export class ClinicServiceRepository {
    */
   async count(): Promise<number> {
     return this.clinicServiceRepository.count();
+  }
+
+  /**
+   * Soft Delete Clinic Service by ID
+   *
+   * Soft deletes a service by its ID.
+   *
+   * @param {string} id - Service ID
+   * @returns {Promise<void>}
+   */
+  async softDelete(id: string): Promise<void> {
+    await this.clinicServiceRepository.softDelete(id);
+  }
+
+  /**
+   * Update Status by Category ID
+   *
+   * Updates the isActive status for all services in a specific category.
+   *
+   * @param {string} categoryId - Category ID
+   * @param {boolean} isActive - New status
+   * @returns {Promise<void>}
+   */
+  async updateStatusByCategoryId(
+    categoryId: string,
+    isActive: boolean,
+  ): Promise<void> {
+    await this.clinicServiceRepository
+      .createQueryBuilder()
+      .update(ClinicService)
+      .set({ isActive })
+      .where('category_id = :categoryId', { categoryId })
+      .execute();
   }
 }
