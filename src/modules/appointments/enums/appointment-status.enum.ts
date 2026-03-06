@@ -1,8 +1,7 @@
 /**
- * Appointment Status Enum - Appointment Lifecycle Only
+ * Appointment Status Enum - Appointment Lifecycle
  * 
- * Note: Payment lifecycle has been separated into a dedicated payment module.
- * This enum only tracks the appointment/consultation workflow.
+ * Includes payment-related states for ERM (Electronic Medical Record) workflow
  */
 export enum AppointmentStatus {
   // Appointment lifecycle
@@ -13,8 +12,11 @@ export enum AppointmentStatus {
   CHECKED_IN = 'CHECKED_IN',                   // Checked in, waiting for consultation
   IN_PROGRESS = 'IN_PROGRESS',                 // Consultation in progress
   
-  // Final states
-  COMPLETED = 'COMPLETED',                     // Consultation completed
+  // Payment and completion
+  NEED_FINAL_PAYMENT = 'NEED_FINAL_PAYMENT',   // Examination completed, awaiting payment (unpaid or additional services)
+  COMPLETED = 'COMPLETED',                     // Consultation completed and payment settled
+  
+  // Cancellation states
   CANCELLED = 'CANCELLED',                     // Appointment cancelled
   ABSENT = 'ABSENT',                          // Patient did not attend
 }
