@@ -65,9 +65,9 @@ export class SchedulesController {
         const user = req.user;
         let clinicId = '';
 
-        // Enforce Clinic ID for Manager
+        // Enforce Clinic ID for Manager — Manager IS the clinic branch
         if (user.role === AccountRole.CLINIC_MANAGER) {
-            clinicId = user.parentId || user._id; // Fallback to ID if they are the clinic root
+            clinicId = user._id; // Manager._id = clinic branch ID
             if (!clinicId) throw new ForbiddenException('Clinic ID not found for this manager');
         } else {
             throw new ForbiddenException('Access denied');

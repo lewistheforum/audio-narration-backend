@@ -1009,21 +1009,20 @@ export class AppointmentsService {
       .where('appointment.doctorId = :doctorId', { doctorId })
       .andWhere('appointment.deletedAt IS NULL');
 
-    // appointments.clinic_id stores Admin ID
-    // - CLINIC_ADMIN: filter by own _id
-    // - CLINIC_MANAGER: filter by parentId (= Admin ID)
-    let clinicId: string | undefined;
-    if (userAccount.role === AccountRole.CLINIC_ADMIN) {
-      clinicId = userAccount._id;
-    } else if (userAccount.role === AccountRole.CLINIC_MANAGER) {
-      clinicId = userAccount.parentId || undefined;
-    }
-
-    console.log(`[getDoctorWorkHistory] User details - ID: ${userAccount._id}, Role: ${userAccount.role}, ParentId: ${userAccount.parentId}`);
-    console.log(`[getDoctorWorkHistory] Resolved clinicId for filtering: ${clinicId}`);
-
-    if (clinicId) {
-      query.andWhere('appointment.clinicId = :clinicId', { clinicId });
+    // appointments.clinic_id stores CLINIC_MANAGER ID (= clinic branch)
+    // - CLINIC_MANAGER: filter by own _id (= branch)
+    // - CLINIC_ADMIN: filter by all manager IDs under this admin
+    if (userAccount.role === AccountRole.CLINIC_MANAGER) {
+      query.andWhere('appointment.clinicId = :clinicId', { clinicId: userAccount._id });
+    } else if (userAccount.role === AccountRole.CLINIC_ADMIN) {
+      const managers = await this.accountRepository.findByParentIdAndRole(userAccount._id, AccountRole.CLINIC_MANAGER);
+      const managerIds = managers.map(m => m._id);
+      if (managerIds.length > 0) {
+        query.andWhere('appointment.clinicId IN (:...managerIds)', { managerIds });
+      } else {
+        // No managers → no results
+        query.andWhere('1 = 0');
+      }
     }
 
     if (queryDto.fromDate) {
@@ -1041,7 +1040,7 @@ export class AppointmentsService {
     query.orderBy('appointment.appointmentDate', 'DESC');
     query.addOrderBy('appointment.appointmentHour', 'DESC');
 
-    console.log(`[getDoctorWorkHistory] Query parameters: doctorId=${doctorId}, clinicId=${clinicId}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`);
+    console.log(`[getDoctorWorkHistory] Query parameters: doctorId=${doctorId}, role=${userAccount.role}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`);
     console.log(`[getDoctorWorkHistory] Raw SQL Query: `, query.getSql());
     console.log(`[getDoctorWorkHistory] SQL Parameters: `, query.getParameters());
 
@@ -1475,21 +1474,19 @@ export class AppointmentsService {
       .where('appointment.doctorId = :doctorId', { doctorId })
       .andWhere('appointment.deletedAt IS NULL');
 
-    // appointments.clinic_id stores Admin ID
-    // - CLINIC_ADMIN: filter by own _id
-    // - CLINIC_MANAGER: filter by parentId (= Admin ID)
-    let clinicId: string | undefined;
-    if (userAccount.role === AccountRole.CLINIC_ADMIN) {
-      clinicId = userAccount._id;
-    } else if (userAccount.role === AccountRole.CLINIC_MANAGER) {
-      clinicId = userAccount.parentId || undefined;
-    }
-
-    console.log(`[exportDoctorWorkHistoryCSV] User details - ID: ${userAccount._id}, Role: ${userAccount.role}, ParentId: ${userAccount.parentId}`);
-    console.log(`[exportDoctorWorkHistoryCSV] Resolved clinicId for filtering: ${clinicId}`);
-
-    if (clinicId) {
-      query.andWhere('appointment.clinicId = :clinicId', { clinicId });
+    // appointments.clinic_id stores CLINIC_MANAGER ID (= clinic branch)
+    // - CLINIC_MANAGER: filter by own _id (= branch)
+    // - CLINIC_ADMIN: filter by all manager IDs under this admin
+    if (userAccount.role === AccountRole.CLINIC_MANAGER) {
+      query.andWhere('appointment.clinicId = :clinicId', { clinicId: userAccount._id });
+    } else if (userAccount.role === AccountRole.CLINIC_ADMIN) {
+      const managers = await this.accountRepository.findByParentIdAndRole(userAccount._id, AccountRole.CLINIC_MANAGER);
+      const managerIds = managers.map(m => m._id);
+      if (managerIds.length > 0) {
+        query.andWhere('appointment.clinicId IN (:...managerIds)', { managerIds });
+      } else {
+        query.andWhere('1 = 0');
+      }
     }
 
     if (queryDto.fromDate) {
@@ -1507,7 +1504,7 @@ export class AppointmentsService {
     query.orderBy('appointment.appointmentDate', 'DESC');
     query.addOrderBy('appointment.appointmentHour', 'DESC');
 
-    console.log(`[exportDoctorWorkHistoryCSV] Query parameters: doctorId=${doctorId}, clinicId=${clinicId}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`);
+    console.log(`[exportDoctorWorkHistoryCSV] Query parameters: doctorId=${doctorId}, role=${userAccount.role}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`);
     console.log(`[exportDoctorWorkHistoryCSV] Raw SQL Query: `, query.getSql());
     console.log(`[exportDoctorWorkHistoryCSV] SQL Parameters: `, query.getParameters());
 

@@ -19,10 +19,11 @@ import {
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
-import { AppointmentPackageStatus } from '../appointments/enums';
+import { AppointmentPackageStatus, PaymentType } from '../appointments/enums';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
+import { Account } from '../accounts/entities/accounts.entity';
 
 /**
  * Transactions Service
@@ -50,6 +51,8 @@ export class TransactionsService {
     private readonly clinicSubscriptionRepo: Repository<ClinicSubscription>,
     @InjectRepository(SubscriptionService)
     private readonly subscriptionServiceRepo: Repository<SubscriptionService>,
+    @InjectRepository(Account)
+    private readonly accountRepository: Repository<Account>,
     private readonly configService: ConfigService,
     private readonly subscriptionServicesService: SubscriptionServicesService,
   ) {
@@ -439,10 +442,18 @@ export class TransactionsService {
 
     let clinicAdminId: string | undefined;
     if (appointment?.clinicId) {
-      const clinicAdmin = await this.clinicAdminRepo.findOne({
-        where: { accountId: appointment.clinicId },
+      // Find the CLINIC_MANAGER account
+      const managerAccount = await this.accountRepository.findOne({
+        where: { _id: appointment.clinicId },
       });
-      clinicAdminId = clinicAdmin?._id;
+
+      if (managerAccount && managerAccount.parentId) {
+        // Resolve CLINIC_ADMIN info using the parentId
+        const clinicAdmin = await this.clinicAdminRepo.findOne({
+          where: { accountId: managerAccount.parentId },
+        });
+        clinicAdminId = clinicAdmin?._id;
+      }
     }
 
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
@@ -709,7 +720,8 @@ export class TransactionsService {
           },
           {
             status: AppointmentPackageStatus.PAID,
-            transactionId: saved.id
+            transactionId: saved.id,
+            paymentType: PaymentType.ONLINE
           }
         );
       }
@@ -872,7 +884,8 @@ export class TransactionsService {
           },
           {
             status: AppointmentPackageStatus.PAID,
-            transactionId: savedTransaction.id
+            transactionId: savedTransaction.id,
+            paymentType: PaymentType.ONLINE
           }
         );
       }

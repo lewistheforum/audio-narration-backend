@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Account } from '../accounts/entities/accounts.entity';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
@@ -29,6 +30,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
       AppointmentPackage,
       ClinicSubscription,
       SubscriptionService,
+      Account,
     ]),
     ConfigModule.forFeature(seepayConfig),
     SubscriptionsModule,

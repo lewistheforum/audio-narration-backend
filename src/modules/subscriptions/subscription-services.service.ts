@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { SubscriptionService } from './entities/subscription-service.entity';
 import { SubscriptionServiceRepository } from './repositories/subscription-service.repository';
 import {
@@ -325,6 +329,63 @@ export class SubscriptionServicesService {
   // }
 
   /**
+   * Cancel Current Subscription
+   *
+   * Cancels the currently active subscription for a clinic admin.
+   * Updates status to NON_RENEWING and logs history.
+   *
+   * @param {string} clinicAdminId - UUID of the clinic admin
+   * @returns {Promise<any>} The updated subscription
+   * @throws {NotFoundException} If subscription not found
+   * @throws {BadRequestException} If subscription is not ACTIVE
+   */
+  async cancelCurrentSubscription(clinicAdminId: string): Promise<any> {
+    const subscription = await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+
+    if (!subscription) {
+      throw new NotFoundException(
+        'Không tìm thấy gói dịch vụ nào đang hoạt động.',
+      );
+    }
+
+    if (subscription.subscriptionStatus !== RegistrationStatus.ACTIVE) {
+      throw new BadRequestException(
+        `Không thể hủy gói dịch vụ đang ở trạng thái ${subscription.subscriptionStatus}. Chỉ gói đang hoạt động mới được phép hủy.`,
+      );
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Update status to NON_RENEWING
+      subscription.subscriptionStatus = RegistrationStatus.NON_RENEWING;
+      const updatedSubscription = await queryRunner.manager.save(
+        subscription,
+      );
+
+      // 2. Log History
+      const history = this.clinicSubscriptionHistoryRepository.create({
+        clinicId: clinicAdminId,
+        serviceId: subscription.serviceId,
+        subscriptionDate: subscription.subscriptionDate,
+        expirationDate: subscription.expirationDate,
+        subscriptionStatus: RegistrationStatus.NON_RENEWING,
+      });
+      await queryRunner.manager.save(ClinicSubscriptionHistory, history);
+
+      await queryRunner.commitTransaction();
+      return updatedSubscription;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
    * Get Current Subscription for Clinic Admin
    *
    * Retrieves the current active subscription for the logged-in clinic admin.
@@ -371,7 +432,25 @@ export class SubscriptionServicesService {
       throw new NotFoundException('Subscription service not found');
     }
 
-    return this.toSubscriptionResponseDto(subscription, service);
+    // Fetch queued subscription if any
+    const queuedRecord =
+      await this.clinicSubscriptionRenewalQueueRepository.findByClinicId(
+        clinicId,
+      );
+
+    let queuedServiceDetails = null;
+    if (queuedRecord) {
+      queuedServiceDetails = await this.subscriptionServiceRepository.findById(
+        queuedRecord.nextServiceId,
+      );
+    }
+
+    return this.toSubscriptionResponseDto(
+      subscription,
+      service,
+      queuedRecord,
+      queuedServiceDetails,
+    );
   }
 
   /**
@@ -705,6 +784,8 @@ export class SubscriptionServicesService {
    *
    * @param {ClinicSubscription} subscription - Clinic subscription entity
    * @param {SubscriptionService} service - Subscription service entity
+   * @param {any} queuedRecord - Optional queued renewal record
+   * @param {SubscriptionService} queuedService - Optional queued subscription service
    * @returns {SubscriptionResponseDto} Response DTO
    *
    * @private
@@ -712,11 +793,22 @@ export class SubscriptionServicesService {
   private toSubscriptionResponseDto(
     subscription: any,
     service: SubscriptionService,
+    queuedRecord?: any,
+    queuedService?: SubscriptionService,
   ): SubscriptionResponseDto {
     const priceAfterDiscount =
       service.price - (service.price * service.discount) / 100;
 
-    return {
+    let remainingDays = 0;
+    if (subscription.expirationDate) {
+      const now = new Date();
+      const expirationDate = new Date(subscription.expirationDate);
+      const diffTime = expirationDate.getTime() - now.getTime();
+      // Calculate remaining days (if expired, will be 0)
+      remainingDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    }
+
+    const response: SubscriptionResponseDto = {
       id: subscription._id,
       clinicId: subscription.clinicId,
       serviceId: service._id,
@@ -732,7 +824,19 @@ export class SubscriptionServicesService {
       subscriptionStatus: subscription.subscriptionStatus,
       createdAt: subscription.createdAt,
       updatedAt: subscription.updatedAt,
+      remainingDays,
     };
+
+    if (queuedRecord && queuedService) {
+      response.queuedSubscription = {
+        serviceId: queuedService._id,
+        serviceName: queuedService.serviceName,
+        targetStartDate: queuedRecord.targetStartDate,
+        targetEndDate: queuedRecord.targetEndDate,
+      };
+    }
+
+    return response;
   }
 
   /**
