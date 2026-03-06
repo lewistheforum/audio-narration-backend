@@ -244,14 +244,20 @@ describe('ClinicManagerService', () => {
   // ============================================================================
   describe('getManagerList', () => {
     const adminId = 'admin-123';
+    const defaultQuery = {
+      page: 1,
+      limit: 10,
+      sortBy: 'createdAt',
+      sortOrder: 'DESC' as const,
+    };
 
     it('should throw ForbiddenException if requester is not CLINIC_ADMIN', async () => {
       accountRepository.findAccountById.mockResolvedValue(
         createMockAccount({ role: AccountRole.PATIENT })
       );
 
-      await expect(service.getManagerList(adminId, 1, 10)).rejects.toThrow(ForbiddenException);
-      await expect(service.getManagerList(adminId, 1, 10)).rejects.toThrow(
+      await expect(service.getManagerList(adminId, defaultQuery)).rejects.toThrow(ForbiddenException);
+      await expect(service.getManagerList(adminId, defaultQuery)).rejects.toThrow(
         'Only clinic admins can view manager list'
       );
     });
@@ -259,13 +265,13 @@ describe('ClinicManagerService', () => {
     it('should throw ForbiddenException if admin account not found', async () => {
       accountRepository.findAccountById.mockResolvedValue(null);
 
-      await expect(service.getManagerList(adminId, 1, 10)).rejects.toThrow(ForbiddenException);
+      await expect(service.getManagerList(adminId, defaultQuery)).rejects.toThrow(ForbiddenException);
     });
 
     it('should return empty list when no managers exist', async () => {
       managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
 
-      const result = await service.getManagerList(adminId, 1, 10);
+      const result = await service.getManagerList(adminId, defaultQuery);
 
       expect(result.data).toEqual([]);
       expect(result.meta).toEqual({
@@ -300,7 +306,7 @@ describe('ClinicManagerService', () => {
 
       managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([mockManagers, 2]);
 
-      const result = await service.getManagerList(adminId, 1, 10);
+      const result = await service.getManagerList(adminId, defaultQuery);
 
       expect(result.data).toHaveLength(2);
       expect(result.data[0]).toMatchObject({
@@ -340,7 +346,7 @@ describe('ClinicManagerService', () => {
         25
       ]);
 
-      const result = await service.getManagerList(adminId, 1, 10);
+      const result = await service.getManagerList(adminId, defaultQuery);
 
       expect(result.meta).toEqual({
         currentPage: 1,
@@ -353,28 +359,113 @@ describe('ClinicManagerService', () => {
     it('should use default pagination parameters', async () => {
       managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
 
-      await service.getManagerList(adminId);
+      await service.getManagerList(adminId, defaultQuery);
 
       expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
         adminId,
-        1,    // default page
-        10,   // default limit
-        'createdAt',  // default sortBy
-        'DESC'        // default sortOrder
+        defaultQuery
       );
     });
 
     it('should respect custom pagination and sorting parameters', async () => {
       managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const customQuery = { page: 2, limit: 20, sortBy: 'fullName', sortOrder: 'ASC' as const };
 
-      await service.getManagerList(adminId, 2, 20, 'fullName', 'ASC');
+      await service.getManagerList(adminId, customQuery);
 
       expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
         adminId,
-        2,
-        20,
-        'fullName',
-        'ASC'
+        customQuery
+      );
+    });
+
+    // Filtering test cases
+    it('should pass fullName filter to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilter = { ...defaultQuery, fullName: 'John' };
+
+      await service.getManagerList(adminId, queryWithFilter);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilter
+      );
+    });
+
+    it('should pass clinicBranchName filter to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilter = { ...defaultQuery, clinicBranchName: 'Main Branch' };
+
+      await service.getManagerList(adminId, queryWithFilter);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilter
+      );
+    });
+
+    it('should pass email filter to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilter = { ...defaultQuery, email: 'manager@clinic.com' };
+
+      await service.getManagerList(adminId, queryWithFilter);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilter
+      );
+    });
+
+    it('should pass status filter to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilter = { ...defaultQuery, status: AccountStatus.ACTIVE };
+
+      await service.getManagerList(adminId, queryWithFilter);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilter
+      );
+    });
+
+    it('should pass legalDocStatus filter to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilter = { ...defaultQuery, legalDocStatus: 'APPROVED' };
+
+      await service.getManagerList(adminId, queryWithFilter);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilter
+      );
+    });
+
+    it('should pass province filter to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilter = { ...defaultQuery, province: 'Ho Chi Minh' };
+
+      await service.getManagerList(adminId, queryWithFilter);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilter
+      );
+    });
+
+    it('should pass multiple filters to repository', async () => {
+      managerInfoRepository.findManagersByAdminWithPagination.mockResolvedValue([[], 0]);
+      const queryWithFilters = {
+        ...defaultQuery,
+        fullName: 'John',
+        status: AccountStatus.ACTIVE,
+        province: 'Hanoi',
+      };
+
+      await service.getManagerList(adminId, queryWithFilters);
+
+      expect(managerInfoRepository.findManagersByAdminWithPagination).toHaveBeenCalledWith(
+        adminId,
+        queryWithFilters
       );
     });
   });
@@ -607,7 +698,7 @@ describe('ClinicManagerService', () => {
     it('should successfully create manager with PENDING_APPROVAL status', async () => {
       accountRepository.findAccountByEmail.mockResolvedValue(null);
       queryRunner.manager.save
-        .mockResolvedValueOnce({ _id: 'new-manager-123', ...createMockManager() }) // Account
+        .mockResolvedValueOnce({ ...createMockManager(), _id: 'new-manager-123' }) // Account - _id must come AFTER spread
         .mockResolvedValueOnce(createMockManagerInfo())  // ManagerInfo
         .mockResolvedValueOnce(createMockAddress())      // Address
         .mockResolvedValueOnce(createMockGoogleIframe()); // GoogleIframe

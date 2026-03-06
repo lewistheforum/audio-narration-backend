@@ -169,24 +169,44 @@ export class ClinicManagerInformationRepository {
   }
 
   /**
-   * Find Managers by Parent Admin with Pagination
+   * Find Managers by Parent Admin with Pagination and Filters
    * Used for manager list endpoint
    * 
    * @param clinicAdminId - Parent CLINIC_ADMIN account ID
-   * @param page - Page number (1-indexed)
-   * @param limit - Items per page
-   * @param sortBy - Sort field (default: createdAt)
-   * @param sortOrder - ASC or DESC
+   * @param query - Query parameters (pagination, sorting, filters)
    * @returns Tuple of [managers, totalCount]
    */
   async findManagersByAdminWithPagination(
     clinicAdminId: string,
-    page: number = 1,
-    limit: number = 10,
-    sortBy: string = 'createdAt',
-    sortOrder: 'ASC' | 'DESC' = 'DESC',
+    query: any,
   ): Promise<[any[], number]> {
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      fullName,
+      clinicBranchName,
+      email,
+      status,
+      legalDocStatus,
+      province,
+    } = query;
+
     const skip = (page - 1) * limit;
+
+    // Map sortBy field to correct entity alias
+    const sortFieldMap: Record<string, string> = {
+      'fullName': 'manager.fullName',
+      'clinicBranchName': 'manager.clinicBranchName',
+      'createdAt': 'manager.createdAt',
+      'email': 'account.email',
+      'status': 'account.status',
+      'verificationStatus': 'legal.verificationStatus',
+      'provinceName': 'address.provinceName',
+    };
+
+    const sortField = sortFieldMap[sortBy] || 'manager.createdAt';
 
     const queryBuilder = this.repository.createQueryBuilder('manager')
       .leftJoinAndSelect('manager.account', 'account')
@@ -194,7 +214,48 @@ export class ClinicManagerInformationRepository {
       .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
       .leftJoin('addresses', 'address', 'address.account_id = account._id')
       .where('account.parent_id = :clinicAdminId', { clinicAdminId })
-      .andWhere('account.deleted_at IS NULL')
+      .andWhere('account.deleted_at IS NULL');
+
+    // Apply filters dynamically
+    if (fullName) {
+      queryBuilder.andWhere('LOWER(manager.fullName) LIKE LOWER(:fullName)', {
+        fullName: `%${fullName}%`,
+      });
+    }
+
+    if (clinicBranchName) {
+      queryBuilder.andWhere('LOWER(manager.clinicBranchName) LIKE LOWER(:clinicBranchName)', {
+        clinicBranchName: `%${clinicBranchName}%`,
+      });
+    }
+
+    if (email) {
+      queryBuilder.andWhere('LOWER(account.email) LIKE LOWER(:email)', {
+        email: `%${email}%`,
+      });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('account.status = :status', { status });
+    }
+
+    if (legalDocStatus) {
+      if (legalDocStatus === 'NOT_SUBMITTED') {
+        queryBuilder.andWhere('legal.verificationStatus IS NULL');
+      } else {
+        queryBuilder.andWhere('legal.verificationStatus = :legalDocStatus', {
+          legalDocStatus,
+        });
+      }
+    }
+
+    if (province) {
+      queryBuilder.andWhere('LOWER(address.provinceName) LIKE LOWER(:province)', {
+        province: `%${province}%`,
+      });
+    }
+
+    queryBuilder
       .select([
         'manager._id',
         'manager.fullName',
@@ -214,7 +275,7 @@ export class ClinicManagerInformationRepository {
       .addGroupBy('account._id')
       .addGroupBy('legal.verificationStatus')
       .addGroupBy('address.provinceName')
-      .orderBy(`account.${sortBy}`, sortOrder)
+      .orderBy(sortField, sortOrder)
       .skip(skip)
       .take(limit);
 

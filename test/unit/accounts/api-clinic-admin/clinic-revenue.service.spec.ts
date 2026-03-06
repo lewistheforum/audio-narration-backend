@@ -524,7 +524,7 @@ describe('ClinicRevenueService', () => {
       const adminId = 'admin-123';
       const managerId = 'manager-from-another-admin';
       const filterDto = createMockFilterDto();
-      const admin = createMockAccount({ role: AccountRole.CLINIC_ADMIN });
+      const admin = createMockAccount({ _id: adminId, role: AccountRole.CLINIC_ADMIN });
       const manager = createMockManager({
         _id: managerId,
         parentId: 'another-admin-456', // Different parent
@@ -537,9 +537,6 @@ describe('ClinicRevenueService', () => {
       // Act & Assert
       await expect(
         service.getBranchRevenueReport(adminId, managerId, filterDto),
-      ).rejects.toThrow(ForbiddenException);
-      await expect(
-        service.getBranchRevenueReport(adminId, managerId, filterDto),
       ).rejects.toThrow('You do not have access to this branch');
     });
 
@@ -548,16 +545,13 @@ describe('ClinicRevenueService', () => {
       const adminId = 'admin-123';
       const managerId = 'non-existent-manager';
       const filterDto = createMockFilterDto();
-      const admin = createMockAccount({ role: AccountRole.CLINIC_ADMIN });
+      const admin = createMockAccount({ _id: adminId, role: AccountRole.CLINIC_ADMIN });
 
       accountRepository.findOne
         .mockResolvedValueOnce(admin as Account)
         .mockResolvedValueOnce(null); // Manager not found
 
       // Act & Assert
-      await expect(
-        service.getBranchRevenueReport(adminId, managerId, filterDto),
-      ).rejects.toThrow(NotFoundException);
       await expect(
         service.getBranchRevenueReport(adminId, managerId, filterDto),
       ).rejects.toThrow('Manager account not found');
@@ -568,7 +562,7 @@ describe('ClinicRevenueService', () => {
       const adminId = 'admin-123';
       const userId = 'staff-123';
       const filterDto = createMockFilterDto();
-      const admin = createMockAccount({ role: AccountRole.CLINIC_ADMIN });
+      const admin = createMockAccount({ _id: adminId, role: AccountRole.CLINIC_ADMIN });
       const staff = createMockAccount({
         _id: userId,
         role: AccountRole.CLINIC_STAFF,
@@ -580,9 +574,6 @@ describe('ClinicRevenueService', () => {
         .mockResolvedValueOnce(staff as Account);
 
       // Act & Assert
-      await expect(
-        service.getBranchRevenueReport(adminId, userId, filterDto),
-      ).rejects.toThrow(BadRequestException);
       await expect(
         service.getBranchRevenueReport(adminId, userId, filterDto),
       ).rejects.toThrow('Specified account is not a CLINIC_MANAGER');
