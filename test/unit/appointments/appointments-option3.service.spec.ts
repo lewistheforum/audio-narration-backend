@@ -373,12 +373,12 @@ describe('AppointmentsService - Option 3 (Date-first Booking)', () => {
         working_date: mockAppointmentDate,
         page: 1,
         limit: 20,
-        search: 'Medicare',
+        search: 'Bonix',
       });
 
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'clinic.full_name ILIKE :search',
-        { search: '%Medicare%' },
+        { search: '%Bonix%' },
       );
     });
 

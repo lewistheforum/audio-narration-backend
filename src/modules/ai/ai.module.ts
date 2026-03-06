@@ -10,7 +10,7 @@ import { HttpModule } from '@nestjs/axios';
 /**
  * AI Module
  *
- * Provides AI integration services for the Medicare Backend.
+ * Provides AI integration services for the Bonix Backend.
  *
  * Features:
  * - Google Gemini API integration

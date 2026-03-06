@@ -385,10 +385,10 @@ export class ClinicContractInformationSeederService {
       '/contracts/employment_agreement_' +
       Math.floor(Math.random() * 10000) +
       '.pdf',
-      'https://storage.medicare.vn/contracts/contract_' +
+      'https://storage.Bonix.vn/contracts/contract_' +
       Math.floor(Math.random() * 10000) +
       '.pdf',
-      'https://s3.medicare.vn/contracts/employment_' +
+      'https://s3.Bonix.vn/contracts/employment_' +
       Math.floor(Math.random() * 10000) +
       '.pdf',
       null, // 20% chance of no contract file

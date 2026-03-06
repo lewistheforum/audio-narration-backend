@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Tài liệu này mô tả các quy tắc nghiệp vụ được triển khai cho **Tùy chọn 1: Quy trình đặt lịch theo dịch vụ** trong hệ thống đặt lịch khám Medicare. Quy trình đặt lịch sử dụng quản lý phiên dựa trên Redis để tránh tạo dữ liệu rác trong PostgreSQL và áp dụng khóa bi quan (Pessimistic Locking) để ngăn chặn race conditions.
+Tài liệu này mô tả các quy tắc nghiệp vụ được triển khai cho **Tùy chọn 1: Quy trình đặt lịch theo dịch vụ** trong hệ thống đặt lịch khám Bonix. Quy trình đặt lịch sử dụng quản lý phiên dựa trên Redis để tránh tạo dữ liệu rác trong PostgreSQL và áp dụng khóa bi quan (Pessimistic Locking) để ngăn chặn race conditions.
 
 **Phiên Bản**: 3.1  
 **Ngày Cập Nhật**: 25/02/2026  
@@ -286,10 +286,10 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 | **Phù Hợp Khi** | Tranh chấp cao (nhiều user đặt cùng slot) | Tranh chấp thấp |
 | **Ưu Điểm** | 100% ngăn race condition | Hiệu năng cao hơn |
 | **Nhược Điểm** | User phải đợi khi có lock | Có thể fail và phải retry |
-| **Sử Dụng Trong Medicare** | ✅ Được chọn | ❌ Không dùng |
+| **Sử Dụng Trong Bonix** | ✅ Được chọn | ❌ Không dùng |
 
 **Lý Do Chọn Pessimistic Lock:**
-- Medicare là hệ thống đặt lịch → Khả năng cao nhiều người đặt cùng slot hot
+- Bonix là hệ thống đặt lịch → Khả năng cao nhiều người đặt cùng slot hot
 - Pessimistic lock đảm bảo **KHÔNG BAO GIỜ** overbooking
 - Trade-off: User phải đợi vài milliseconds (chấp nhận được)
 
@@ -1280,7 +1280,7 @@ available_slots = total_slots - booked_slots
   "data": [
     {
       "clinic_id": "uuid",
-      "clinic_name": "Phòng khám Đa khoa Medicare",
+      "clinic_name": "Phòng khám Đa khoa Bonix",
       "clinic_address": "123 Đường X, Quận 1, TP.HCM",
       "district": "Quận 1",
       "available_slots": 15,
@@ -1447,7 +1447,7 @@ WHERE limit > 0;
 
 ## Kết Luận
 
-Hệ thống đặt lịch Medicare (Option 1, Option 2 & Option 3) đã được thiết kế với:
+Hệ thống đặt lịch Bonix (Option 1, Option 2 & Option 3) đã được thiết kế với:
 
 ✅ **Độ Tin Cậy Cao**: Pessimistic locking + SERIALIZABLE transaction ngăn chặn 100% race conditions  
 ✅ **Hiệu Năng Tốt**: Redis session management giảm tải cho PostgreSQL  
