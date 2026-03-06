@@ -86,20 +86,69 @@ export class TransactionHistorySeederService {
           continue;
         }
 
-        // Check if history already exists for this clinic
-        const existingHistoryCount =
-          await this.clinicSubscriptionHistoryRepository.count({
+        // Find existing history records that need transactions
+        const existingHistories =
+          await this.clinicSubscriptionHistoryRepository.find({
             where: { clinicId: sub.clinicId },
+            order: { subscriptionDate: 'ASC' },
           });
 
-        if (existingHistoryCount > 0) {
+        // If histories exist but they don't have transactions, we link transactions to them
+        if (existingHistories.length > 0) {
           this.logger.log(
-            `Skipping transaction history for clinic ${sub.clinicId} (already has ${existingHistoryCount} history records)`,
+            `Found ${existingHistories.length} existing history records for clinic ${sub.clinicId}. Adding transactions if missing.`,
           );
+
+          let lastServiceId = null;
+          for (const history of existingHistories) {
+            // Check if transaction already linked
+            if (history.transactionId) {
+              lastServiceId = history.serviceId;
+              continue;
+            }
+
+            const currentService =
+              await this.subscriptionServiceRepository.findOne({
+                where: { _id: history.serviceId },
+              });
+            if (!currentService) continue;
+
+            const actionType =
+              lastServiceId && lastServiceId !== history.serviceId
+                ? 'Package Change'
+                : history.subscriptionStatus === RegistrationStatus.NON_RENEWING
+                  ? 'Cancelled Subscription'
+                  : 'Renewal';
+
+            const transaction = this.transactionRepository.create({
+              clinicId: sub.clinicId,
+              subscriptionId: sub._id,
+              transactionTypeId: transactionType._id,
+              amount: Math.round(Number(currentService.price)),
+              currency: 'VND',
+              status: PaymentStatus.SUCCESS,
+              transactionDate: history.subscriptionDate || history.createdAt,
+              code: `TRANS-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+              description: `${actionType} - ${currentService.serviceName} (${new Date(history.subscriptionDate || history.createdAt).toLocaleDateString('vi-VN')})`,
+              transferType: PaymentDirection.OUT,
+              gateway: 'SEPAY',
+            });
+
+            const savedTransaction =
+              await this.transactionRepository.save(transaction);
+            totalTransactionsCreated++;
+
+            history.transactionId = savedTransaction.id;
+            await this.clinicSubscriptionHistoryRepository.save(history);
+
+            lastServiceId = history.serviceId;
+          }
+
+          // Move to next subscription, since we already handled the existing ones
           continue;
         }
 
-        // Get current service
+        // Get current service (if no existing histories)
         let currentService = await this.subscriptionServiceRepository.findOne({
           where: { _id: sub.serviceId },
         });
@@ -127,7 +176,7 @@ export class TransactionHistorySeederService {
 
           // 70% chance of renewal (EXPIRED), 20% package change, 10% cancelled (NON_RENEWING)
           const rand = Math.random();
-          
+
           if (rand < 0.7) {
             // Case 1: Normal renewal - same package
             historyStatus = RegistrationStatus.EXPIRED;

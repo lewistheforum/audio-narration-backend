@@ -8,6 +8,8 @@ import axios from 'axios';
 import { FeedbackRepository } from './repositories';
 import { FeedbackType } from './enums';
 import { Feedback } from './entities/feedback.entity';
+import { AccountRepository } from '../accounts/repositories';
+import { AccountRole } from '../accounts/enums';
 import { CreateFeedbackClinicDto } from './dto/create-feedback-clinic.dto';
 import { CreateFeedbackDoctorDto } from './dto/create-feedback-doctor.dto';
 import { UpdateFeedbackDto } from './dto/update-feedback.dto';
@@ -25,7 +27,10 @@ import { MESSAGES } from '../../common/message';
  */
 @Injectable()
 export class FeedbackService {
-  constructor(private readonly feedbackRepository: FeedbackRepository) { }
+  constructor(
+    private readonly feedbackRepository: FeedbackRepository,
+    private readonly accountRepository: AccountRepository,
+  ) {}
 
   /**
    * Create Feedback for Clinic
@@ -418,5 +423,51 @@ export class FeedbackService {
 
   async findFeedbacksByDoctorId(doctorId: string) {
     return this.feedbackRepository.findFeedbacksByDoctorId(doctorId);
+  }
+
+  /**
+   * Get clinic manager list by clinic admin id and all feedback in each clinic manager
+   *
+   * @param adminId - Clinic Admin UUID
+   */
+  async getClinicManagersFeedbacksByAdminId(adminId: string) {
+    // 1. Find all clinic managers under this admin
+    const managers = await this.accountRepository.findAccounts({
+      where: {
+        parentId: adminId,
+        role: AccountRole.CLINIC_MANAGER,
+      },
+      relations: ['clinicManagerInformation'],
+    });
+
+    if (!managers || managers.length === 0) {
+      return [];
+    }
+
+    // 2. Map through managers to fetch feedbacks (empty array if none)
+    const result = await Promise.all(
+      managers.map(async (manager) => {
+        let feedbacks = [];
+        try {
+          feedbacks = await this.feedbackRepository.findFeedbacksByClinicId(
+            manager._id,
+          );
+        } catch {
+          feedbacks = [];
+        }
+
+        return {
+          clinicManagerId: manager._id,
+          clinicManagerEmail: manager.email,
+          clinicManagerName:
+            manager.clinicManagerInformation?.fullName || manager.username,
+          clinicBranchName:
+            manager.clinicManagerInformation?.clinicBranchName || '',
+          feedbacks: feedbacks || [],
+        };
+      }),
+    );
+
+    return result;
   }
 }
