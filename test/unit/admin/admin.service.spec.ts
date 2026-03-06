@@ -12,6 +12,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { LegalDocumentVerificationStatus } from '../../../src/modules/accounts/enums/legal-document-verification-status.enum';
 import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/subscription-status.enum';
 import { AccountRole } from '../../../src/modules/accounts/enums/account-role.enum';
+import { AccountStatus } from '../../../src/modules/accounts/enums/account-status.enum';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -34,6 +35,7 @@ describe('AdminService', () => {
         _id: 'manager-123',
         role: AccountRole.CLINIC_MANAGER,
         email: 'manager@clinic.com',
+        status: AccountStatus.PENDING_APPROVAL,
       },
     ],
     clinicAdminInformation: {
@@ -315,6 +317,189 @@ describe('AdminService', () => {
       await expect(service.getRegistrationById('invalid-id')).rejects.toThrow(
         'Registration not found',
       );
+    });
+  });
+
+  describe('approveRegistrationBySubscriptionId', () => {
+    it('TC-09: should approve registration and update Manager status to ACTIVE', async () => {
+      // Setup
+      const mockClinicAdmin = createMockClinicAdmin();
+      const mockLegalDocs = createMockLegalDocs();
+      const mockSubscription = createMockSubscription();
+      const mockManager = mockClinicAdmin.children[0];
+
+      clinicSubscriptionRepository.findById.mockResolvedValue(mockSubscription);
+      accountRepository.findOne.mockResolvedValue(mockClinicAdmin);
+      legalDocumentsRepository.findByAccountId.mockResolvedValue(mockLegalDocs);
+
+      // Execute
+      const result = await service.approveRegistrationBySubscriptionId('subscription-123');
+
+      // Verify
+      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          verificationStatus: LegalDocumentVerificationStatus.APPROVED,
+          rejectionReason: null,
+        }),
+      );
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          _id: 'manager-123',
+          status: AccountStatus.ACTIVE,
+        }),
+      );
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          subscriptionStatus: RegistrationStatus.PENDING_PAYMENT,
+        }),
+      );
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.data.newStatus).toBe('PENDING_PAYMENT');
+    });
+
+    it('TC-10: should throw NotFoundException when subscription not found', async () => {
+      // Setup
+      clinicSubscriptionRepository.findById.mockResolvedValue(null);
+
+      // Execute & Verify
+      await expect(
+        service.approveRegistrationBySubscriptionId('invalid-id'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('TC-11: should throw BadRequestException when subscription not in PENDING_APPROVAL', async () => {
+      // Setup
+      const mockSubscription = createMockSubscription({
+        subscriptionStatus: RegistrationStatus.ACTIVE,
+      });
+      clinicSubscriptionRepository.findById.mockResolvedValue(mockSubscription);
+
+      // Execute & Verify
+      await expect(
+        service.approveRegistrationBySubscriptionId('subscription-123'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('TC-12: should rollback transaction on error', async () => {
+      // Setup
+      const mockClinicAdmin = createMockClinicAdmin();
+      const mockLegalDocs = createMockLegalDocs();
+      const mockSubscription = createMockSubscription();
+
+      clinicSubscriptionRepository.findById.mockResolvedValue(mockSubscription);
+      accountRepository.findOne.mockResolvedValue(mockClinicAdmin);
+      legalDocumentsRepository.findByAccountId.mockResolvedValue(mockLegalDocs);
+      mockQueryRunner.manager.save.mockRejectedValueOnce(new Error('DB Error'));
+
+      // Execute & Verify
+      await expect(
+        service.approveRegistrationBySubscriptionId('subscription-123'),
+      ).rejects.toThrow('DB Error');
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.release).toHaveBeenCalled();
+    });
+  });
+
+  describe('rejectRegistrationBySubscriptionId', () => {
+    it('TC-13: should reject registration and keep Manager status as PENDING_APPROVAL', async () => {
+      // Setup
+      const mockClinicAdmin = createMockClinicAdmin();
+      const mockLegalDocs = createMockLegalDocs();
+      const mockSubscription = createMockSubscription();
+      const rejectionReason = 'Documents are unclear and incomplete';
+
+      clinicSubscriptionRepository.findById.mockResolvedValue(mockSubscription);
+      accountRepository.findOne.mockResolvedValue(mockClinicAdmin);
+      legalDocumentsRepository.findByAccountId.mockResolvedValue(mockLegalDocs);
+
+      // Execute
+      const result = await service.rejectRegistrationBySubscriptionId(
+        'subscription-123',
+        rejectionReason,
+      );
+
+      // Verify
+      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          verificationStatus: LegalDocumentVerificationStatus.REJECTED,
+          rejectionReason: rejectionReason,
+        }),
+      );
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          _id: 'manager-123',
+          status: AccountStatus.PENDING_APPROVAL,
+        }),
+      );
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          subscriptionStatus: RegistrationStatus.PENDING_LEGAL_SETUP,
+        }),
+      );
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.data.newStatus).toBe('PENDING_LEGAL_SETUP');
+      expect(result.data.rejectionReason).toBe(rejectionReason);
+    });
+
+    it('TC-14: should throw NotFoundException when subscription not found', async () => {
+      // Setup
+      clinicSubscriptionRepository.findById.mockResolvedValue(null);
+
+      // Execute & Verify
+      await expect(
+        service.rejectRegistrationBySubscriptionId('invalid-id', 'Some reason'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('TC-15: should throw BadRequestException when legal docs not in PENDING_REVIEW', async () => {
+      // Setup
+      const mockClinicAdmin = createMockClinicAdmin();
+      const mockLegalDocs = createMockLegalDocs({
+        verificationStatus: LegalDocumentVerificationStatus.APPROVED,
+      });
+      const mockSubscription = createMockSubscription();
+
+      clinicSubscriptionRepository.findById.mockResolvedValue(mockSubscription);
+      accountRepository.findOne.mockResolvedValue(mockClinicAdmin);
+      legalDocumentsRepository.findByAccountId.mockResolvedValue(mockLegalDocs);
+
+      // Execute & Verify
+      await expect(
+        service.rejectRegistrationBySubscriptionId('subscription-123', 'Some reason'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('TC-16: should rollback transaction on database error', async () => {
+      // Setup
+      const mockClinicAdmin = createMockClinicAdmin();
+      const mockLegalDocs = createMockLegalDocs();
+      const mockSubscription = createMockSubscription();
+
+      clinicSubscriptionRepository.findById.mockResolvedValue(mockSubscription);
+      accountRepository.findOne.mockResolvedValue(mockClinicAdmin);
+      legalDocumentsRepository.findByAccountId.mockResolvedValue(mockLegalDocs);
+      mockQueryRunner.manager.save.mockRejectedValueOnce(new Error('DB Error'));
+
+      // Execute & Verify
+      await expect(
+        service.rejectRegistrationBySubscriptionId('subscription-123', 'Test reason'),
+      ).rejects.toThrow('DB Error');
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.release).toHaveBeenCalled();
     });
   });
 

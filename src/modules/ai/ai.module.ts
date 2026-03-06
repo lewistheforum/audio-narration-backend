@@ -5,6 +5,7 @@ import { AiService } from './ai.service';
 import { GeminiService } from './services/gemini.service';
 import { ChatGptService } from './services/chatgpt.service';
 import { ReportsModule } from '../reports/reports.module';
+import { HttpModule } from '@nestjs/axios';
 
 /**
  * AI Module
@@ -26,7 +27,7 @@ import { ReportsModule } from '../reports/reports.module';
  * - POST /ai/chat - Generate AI chat completions
  */
 @Module({
-  imports: [ConfigModule, ReportsModule],
+  imports: [ConfigModule, ReportsModule, HttpModule],
   controllers: [AiController],
   providers: [AiService, GeminiService, ChatGptService],
   exports: [AiService],

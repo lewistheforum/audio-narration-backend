@@ -107,8 +107,7 @@ export class StaffCreateAppointmentDto {
   services: ServiceItemDto[];
 
   @ApiProperty({
-    description: 'Total amount for all services (optional - will be auto-calculated from services if not provided)',
-    example: 500000,
+    description: 'Total amount for all services (optional - will be auto-calculated from services if not provided). Leave empty to auto-calculate.',
     required: false,
   })
   @IsOptional()
@@ -117,8 +116,7 @@ export class StaffCreateAppointmentDto {
   total?: number;
 
   @ApiProperty({
-    description: 'Transaction ID for payment (optional - can be created later)',
-    example: '123e4567-e89b-12d3-a456-426614174020',
+    description: 'Transaction ID for payment (optional - can be created later). Leave empty if payment not yet processed.',
     required: false,
   })
   @IsOptional()
@@ -127,7 +125,7 @@ export class StaffCreateAppointmentDto {
   transactionId?: string;
 
   @ApiProperty({
-    description: 'Payment status',
+    description: 'Payment status (e.g., PAID, PENDING, UNPAID). Leave empty if not applicable.',
     example: AppointmentPackageStatus.PAID,
     required: false,
     enum: AppointmentPackageStatus,
@@ -137,7 +135,7 @@ export class StaffCreateAppointmentDto {
   paymentStatus?: AppointmentPackageStatus;
 
   @ApiProperty({
-    description: 'Payment type (online or cod)',
+    description: 'Payment type (online or cod). Leave empty if not applicable.',
     example: PaymentType.ONLINE,
     required: false,
     enum: PaymentType,
@@ -147,8 +145,7 @@ export class StaffCreateAppointmentDto {
   paymentType?: PaymentType;
 
   @ApiProperty({
-    description: 'Staff note or patient note for the appointment',
-    example: 'Patient has headache and fever',
+    description: 'Staff note or patient note for the appointment. Leave empty if no special notes.',
     required: false,
   })
   @IsOptional()

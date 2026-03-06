@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
 import { BookingSessionService } from './booking-session.service';
@@ -36,6 +37,15 @@ import {
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
   AppointmentDetailResponseDto,
+  QueryDoctorAppointmentDto,
+  DoctorAppointmentListResponseDto,
+  DoctorAppointmentDetailResponseDto,
+  PendingServicesResponseDto,
+  CompleteExaminationDto,
+  CompleteExaminationResponseDto,
+  AddServiceDto,
+  AddServiceResponseDto,
+  PatientAppointmentDetailResponseDto,
   CreateBookingSessionDto,
   UpdateBookingSessionDto,
   CreateAppointmentFromSessionDto,
@@ -206,6 +216,395 @@ export class AppointmentsController {
   ): Promise<AppointmentDetailResponseDto> {
     const staffAccountId = req.user._id;
     return this.appointmentsService.getAppointmentDetail(id, staffAccountId);
+  }
+
+  /**
+   * Get doctor's appointments (Step 1)
+   *
+   * Retrieves list of appointments assigned to the authenticated doctor
+   * with optional filtering by date and status
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param queryDto - Query parameters (date, status)
+   * @returns List of appointments with services and ERM status
+   */
+  @Get('doctor/me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get doctor\'s appointments (Step 1 - ERM Flow)',
+    description:
+      'Retrieve list of appointments assigned to the authenticated doctor. ' +
+      'Shows CHECKED_IN and IN_PROGRESS appointments by default. ' +
+      'Can filter by specific date and status.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointments retrieved successfully',
+    type: DoctorAppointmentListResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a doctor',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    type: String,
+    description: 'Filter by appointment date (YYYY-MM-DD)',
+    example: '2026-02-24',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['CHECKED_IN', 'IN_PROGRESS', 'CONFIRMED'],
+    description: 'Filter by appointment status',
+    example: 'CHECKED_IN',
+  })
+  async getDoctorAppointments(
+    @Request() req: any,
+    @Query() queryDto: QueryDoctorAppointmentDto,
+  ): Promise<DoctorAppointmentListResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getDoctorAppointments(doctorId, queryDto);
+  }
+
+  /**
+   * Get appointment detail for doctor (Step 2)
+   *
+   * Retrieves complete appointment information including patient details
+   * and all services. Automatically updates status from CHECKED_IN to IN_PROGRESS.
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param appointmentId - UUID of the appointment
+   * @returns Complete appointment details with patient info and services
+   */
+  @Get('doctor/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get appointment detail with auto-status update (Step 2 - ERM Flow)',
+    description:
+      'Retrieve complete appointment information including patient profile, ' +
+      'medical history, and all services with ERM status. ' +
+      'Automatically updates appointment status from CHECKED_IN to IN_PROGRESS ' +
+      'when doctor first accesses the appointment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment details retrieved successfully',
+    type: DoctorAppointmentDetailResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment not assigned to this doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async getAppointmentDetailForDoctor(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+  ): Promise<DoctorAppointmentDetailResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getAppointmentDetailForDoctor(
+      appointmentId,
+      doctorId,
+    );
+  }
+
+  /**
+   * Get pending and in-progress services (Step 6)
+   *
+   * Returns list of services that:
+   * - Do not have ERM yet (pending_services)
+   * - Have ERM with IN_PROGRESS status (in_progress_services)
+   *
+   * Allows doctor to see which services still need to be completed
+   * or are currently being worked on.
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param appointmentId - UUID of the appointment
+   * @returns Pending and in-progress services
+   */
+  @Get('doctor/:id/pending-services')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get pending and in-progress services (Step 6 - ERM Flow)',
+    description:
+      'Retrieve list of services for an appointment that either have no ERM yet ' +
+      'or have ERM with IN_PROGRESS status. Helps doctor track which services ' +
+      'still need to be completed or can be edited. Doctor can loop back to Step 3-5 ' +
+      'for pending services or edit in-progress ERMs.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending services retrieved successfully',
+    type: PendingServicesResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment not assigned to this doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async getPendingServices(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+  ): Promise<PendingServicesResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getPendingServices(appointmentId, doctorId);
+  }
+
+  /**
+   * Complete examination process (Step 8 - ERM Flow)
+   *
+   * Finalizes the examination after all ERMs are completed and prescription is created.
+   * This endpoint validates all requirements, locks ERMs and prescription (immutable),
+   * and determines appointment status based on payment logic.
+   *
+   * Validation requirements:
+   * - All service_appointments must have ERM with IN_PROGRESS status
+   * - If there's CONSULTATION ERM, e_prescription must exist
+   * - Appointment status must be IN_PROGRESS
+   *
+   * After completion:
+   * - All ERMs change from IN_PROGRESS to COMPLETED (immutable)
+   * - E-prescription is locked (immutable)
+   * - Appointment status is determined:
+   *   * COMPLETED: if paid online AND no additional services (can export prescription)
+   *   * AWAITING_PAYMENT: if not paid OR has additional services (go to payment)
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param appointmentId - Appointment UUID
+   * @returns CompleteExaminationResponseDto with appointment status and next steps
+   */
+  @Post(':id/complete-examination')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete examination process (Step 8 - ERM Flow)',
+    description:
+      'Finalize examination after all ERMs are completed and prescription is created. ' +
+      'Validates all requirements, locks ERMs and prescription (immutable), ' +
+      'and determines appointment status based on payment logic. ' +
+      '\n\nValidation:\n' +
+      '- All services must have ERM with IN_PROGRESS status\n' +
+      '- CONSULTATION ERM requires e_prescription\n' +
+      '\nAfter completion:\n' +
+      '- All ERMs → COMPLETED (immutable)\n' +
+      '- E-prescription locked (immutable)\n' +
+      '- Appointment status determined by payment logic\n' +
+      '\nPayment Logic:\n' +
+      '- COMPLETED: paid online + no additional services (can export prescription)\n' +
+      '- AWAITING_PAYMENT: not paid OR has additional services (proceed to payment)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Examination completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        appointmentId: { type: 'string', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
+        appointmentStatus: { type: 'string', enum: ['COMPLETED', 'AWAITING_PAYMENT'], example: 'COMPLETED' },
+        paymentStatus: { type: 'string', enum: ['PAID', 'UNPAID', 'PARTIAL'], example: 'PAID' },
+        completedAt: { type: 'string', format: 'date-time', example: '2026-02-25T10:30:00Z' },
+        ermsSummary: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              serviceName: { type: 'string', example: 'Khám tư vấn' },
+              ermId: { type: 'string', example: 'erm-uuid' },
+              status: { type: 'string', example: 'COMPLETED' },
+            },
+          },
+        },
+        hasPrescription: { type: 'boolean', example: true },
+        ePrescriptionId: { type: 'string', example: 'prescription-uuid' },
+        hasAdditionalServices: { type: 'boolean', example: false },
+        additionalAmount: { type: 'number', example: 0 },
+        nextStep: { type: 'string', enum: ['EXPORT_PRESCRIPTION', 'PROCEED_TO_PAYMENT'], example: 'EXPORT_PRESCRIPTION' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Validation failed (missing ERMs, DRAFT ERMs, or missing prescription)',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Cannot complete examination' },
+        missingRequirements: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['Service (ID: xxx) does not have ERM', 'E-prescription not created (required when there is consultation ERM)'],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment not assigned to this doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async completeExamination(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+  ): Promise<CompleteExaminationResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.completeExamination(
+      appointmentId,
+      doctorId,
+    );
+  }
+
+  /**
+   * Add additional service to appointment
+   *
+   * Allows doctor to add new services (e.g., X-ray, Lab tests) during examination.
+   * The service will be marked as "additional" and require payment processing.
+   *
+   * API: POST /api/appointments/:id/add-service
+   *
+   * Business Rules:
+   * - Only allowed when appointment status = IN_PROGRESS
+   * - Service must not already exist in the appointment
+   * - Service must belong to the current clinic
+   * - Creates new AppointmentPackage with transactionId = null
+   * - Creates new ServiceAppointment linked to the package
+   *
+   * @param req - Request object with authenticated doctor
+   * @param appointmentId - UUID of the appointment
+   * @param addServiceDto - DTO containing clinic service ID to add
+   * @returns Created package and service appointment details
+   */
+  @Post(':id/add-service')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Add additional service to appointment (ERM Flow - Additional Service)',
+    description:
+      'Add new service during examination (e.g., X-ray, Lab tests). ' +
+      'Only allowed when appointment is IN_PROGRESS. ' +
+      'Creates new AppointmentPackage and ServiceAppointment. ' +
+      'Service will require payment processing by clinic staff after examination.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Service added successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        appointmentPackageId: { type: 'string', example: 'pkg-uuid' },
+        serviceAppointmentId: { type: 'string', example: 'sa-uuid' },
+        appointmentId: { type: 'string', example: 'appt-uuid' },
+        clinicServiceId: { type: 'string', example: 'service-uuid' },
+        serviceName: { type: 'string', example: 'X-ray Chest' },
+        serviceType: { type: 'string', enum: ['CONSULTATION', 'XRAY', 'ULTRASOUND', 'LAB', 'BONE_DENSITY', 'PROCEDURE'], example: 'XRAY' },
+        price: { type: 'number', example: 200000 },
+        addedDuringExamination: { type: 'boolean', example: true },
+        addedBy: { type: 'string', example: 'doctor-uuid' },
+        createdAt: { type: 'string', format: 'date-time', example: '2026-03-02T10:30:00Z' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid status, service already exists, or validation failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment not assigned to this doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment or service not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiBody({
+    type: AddServiceDto,
+    description: 'Service to add',
+    examples: {
+      xray: {
+        summary: 'Add X-ray service',
+        value: {
+          clinicServiceId: '550e8400-e29b-41d4-a716-446655440000',
+        },
+      },
+    },
+  })
+  async addServiceToAppointment(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Body() addServiceDto: AddServiceDto,
+  ): Promise<AddServiceResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.addServiceToAppointment(
+      appointmentId,
+      doctorId,
+      addServiceDto.clinicServiceId,
+    );
   }
 
   /**
@@ -1008,12 +1407,14 @@ export class AppointmentsController {
    * Get patient's appointments (Step 5 - Patient appointment history)
    *
    * Returns list of patient's appointments with pagination and filtering.
-   * Includes clinic, doctor, services, and payment information.
+   * Includes clinic, doctor, and services information.
+   * Supports UPCOMING/HISTORY tab filtering for better user experience.
    *
    * @param req - Request object containing authenticated user
    * @param page - Page number for pagination
    * @param limit - Number of items per page
-   * @param status - Filter by status (optional)
+   * @param tab - Filter by tab: UPCOMING or HISTORY (optional)
+   * @param status - Filter by status (optional, overrides tab)
    * @param appointmentDate - Filter by appointment date (optional)
    * @returns Paginated list of patient's appointments
    */
@@ -1025,7 +1426,7 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Get my appointments (Patient)',
     description:
-      'Retrieve all appointments for the authenticated patient. Supports filtering and pagination.',
+      'Retrieve all appointments for the authenticated patient. Supports filtering by UPCOMING/HISTORY tabs, status, and date with pagination. UPCOMING tab shows active appointments (PENDING, CONFIRMED, CHECKED_IN, IN_PROGRESS) with dates >= today. HISTORY tab shows completed/cancelled appointments or past appointments.',
   })
   @ApiResponse({
     status: 200,
@@ -1034,38 +1435,45 @@ export class AppointmentsController {
       example: {
         data: [
           {
-            appointment_id: 'uuid',
-            clinic_id: 'uuid',
-            clinic_name: 'Phòng khám ABC',
-            doctor_id: 'uuid',
-            doctor_name: 'BS. Nguyễn Văn A',
+            _id: '550e8400-e29b-41d4-a716-446655440000',
+            clinic: {
+              _id: '550e8400-e29b-41d4-a716-446655440001',
+              name: 'Phòng khám ABC',
+              address: '123 Đường ABC, Quận 1, TP.HCM',
+            },
+            doctor: {
+              _id: '550e8400-e29b-41d4-a716-446655440002',
+              name: 'BS. Nguyễn Văn A',
+              profilePicture: 'https://example.com/doctor.jpg',
+            },
+            appointment_date: '2026-03-15',
+            appointment_hour: '2026-03-15T08:00:00.000Z',
+            status: 'PENDING',
+            total: 270000,
             services: [
               {
-                service_id: 'uuid',
+                service_id: '550e8400-e29b-41d4-a716-446655440003',
                 service_name: 'Khám Xương Khớp',
                 price: 270000,
               },
             ],
-            appointment_date: '2026-02-25',
-            appointment_hour: '2026-02-25T08:00:00.000Z',
-            start_time: '08:00:00',
-            end_time: '08:30:00',
-            total: 270000,
-            status: 'PENDING',
-            payment_type: 'online',
-            payment_status: null,
-            patient_note: 'Đau mỏi vai gáy',
-            created_at: '2026-02-24T10:00:00.000Z',
           },
         ],
         meta: {
-          total: 5,
+          total: 25,
           page: 1,
           limit: 10,
-          total_pages: 1,
+          total_pages: 3,
         },
       },
     },
+  })
+  @ApiQuery({
+    name: 'tab',
+    required: false,
+    enum: ['UPCOMING', 'HISTORY'],
+    description: 'Filter by tab: UPCOMING (active future appointments) or HISTORY (completed/past appointments)',
+    example: 'UPCOMING',
   })
   @ApiQuery({
     name: 'page',
@@ -1082,19 +1490,21 @@ export class AppointmentsController {
   @ApiQuery({
     name: 'status',
     required: false,
-    type: String,
-    description: 'Filter by status',
+    enum: AppointmentStatus,
+    description: 'Filter by specific appointment status (overrides tab filter)',
   })
   @ApiQuery({
     name: 'appointment_date',
     required: false,
     type: String,
     description: 'Filter by appointment date (YYYY-MM-DD)',
+    example: '2026-03-15',
   })
   async getMyAppointments(
     @Request() req: any,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @Query('tab') tab?: 'UPCOMING' | 'HISTORY',
     @Query('status') status?: string,
     @Query('appointment_date') appointmentDate?: string,
   ) {
@@ -1102,9 +1512,70 @@ export class AppointmentsController {
     return this.appointmentsService.getMyAppointments(patientId, {
       page: Number(page),
       limit: Number(limit),
+      tab,
       status,
       appointmentDate,
     });
+  }
+
+  /**
+   * Get My Appointment Detail (Patient)
+   *
+   * Returns comprehensive details of a specific appointment including:
+   * - Clinic and doctor information
+   * - Appointment packages with services
+   * - ERM summaries for each service
+   * - E-prescription summary (only when status is COMPLETED)
+   * - Reject reason (only when status is CANCELLED)
+   *
+   * Security:
+   * - JWT Authentication required
+   * - PATIENT role only
+   * - Strict ownership verification (appointment must belong to the authenticated patient)
+   *
+   * @param req - Request object with authenticated user
+   * @param id - Appointment ID (UUID)
+   * @returns PatientAppointmentDetailResponseDto
+   */
+  @Get('patients/me/appointments/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get appointment detail (Patient)',
+    description:
+      'Returns comprehensive details of a specific appointment for the authenticated patient. ' +
+      'Includes clinic/doctor info, services, ERM summaries, and conditional fields based on appointment status.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Appointment ID (UUID)',
+    example: 'a1a2b3c4-d5e6-7890-abcd-ef1234567890',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment details retrieved successfully',
+    type: PatientAppointmentDetailResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a patient',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found or access denied',
+  })
+  async getMyAppointmentDetail(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const patientId = req.user._id;
+    return this.appointmentsService.getMyAppointmentDetail(patientId, id);
   }
 
   /**

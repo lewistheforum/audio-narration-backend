@@ -12,6 +12,7 @@ import { ClinicAdminInformationRepository } from '../accounts/repositories';
 import { MailerService } from '../mailer/mailer.service';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole } from '../accounts/enums/account-role.enum';
+import { AccountStatus } from '../accounts/enums/account-status.enum';
 import { RegistrationDetailResponseDto } from './dto';
 import { LegalDocumentVerificationStatus } from '../accounts/enums/legal-document-verification-status.enum';
 import { RegistrationStatus } from '../subscriptions/enums/subscription-status.enum';
@@ -255,6 +256,10 @@ export class AdminService {
       legalDocs.rejectionReason = null;
       await queryRunner.manager.save(ClinicsLegalDocuments, legalDocs);
 
+      // Update Manager Account status to ACTIVE
+      clinicManager.status = AccountStatus.ACTIVE;
+      await queryRunner.manager.save(Account, clinicManager);
+
       // Update subscription
       subscription.subscriptionStatus = RegistrationStatus.PENDING_PAYMENT;
       await queryRunner.manager.save(ClinicSubscription, subscription);
@@ -364,6 +369,10 @@ export class AdminService {
       legalDocs.verificationStatus = LegalDocumentVerificationStatus.REJECTED;
       legalDocs.rejectionReason = reason;
       await queryRunner.manager.save(ClinicsLegalDocuments, legalDocs);
+
+      // Ensure Manager Account remains in PENDING_APPROVAL state
+      clinicManager.status = AccountStatus.PENDING_APPROVAL;
+      await queryRunner.manager.save(Account, clinicManager);
 
       // IMPORTANT: Revert to PENDING_LEGAL_SETUP to allow resubmission
       subscription.subscriptionStatus = RegistrationStatus.PENDING_LEGAL_SETUP;

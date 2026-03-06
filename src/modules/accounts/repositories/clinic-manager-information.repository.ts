@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ClinicManagerInformation } from '../entities/clinic_manager_information.entity';
+import { AccountRole } from '../enums/account-role.enum';
 
 /**
  * ClinicManagerInformation Repository
@@ -165,5 +166,101 @@ export class ClinicManagerInformationRepository {
       where: { accountId },
     });
     return count > 0;
+  }
+
+  /**
+   * Find Managers by Parent Admin with Pagination
+   * Used for manager list endpoint
+   * 
+   * @param clinicAdminId - Parent CLINIC_ADMIN account ID
+   * @param page - Page number (1-indexed)
+   * @param limit - Items per page
+   * @param sortBy - Sort field (default: createdAt)
+   * @param sortOrder - ASC or DESC
+   * @returns Tuple of [managers, totalCount]
+   */
+  async findManagersByAdminWithPagination(
+    clinicAdminId: string,
+    page: number = 1,
+    limit: number = 10,
+    sortBy: string = 'createdAt',
+    sortOrder: 'ASC' | 'DESC' = 'DESC',
+  ): Promise<[any[], number]> {
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.repository.createQueryBuilder('manager')
+      .leftJoinAndSelect('manager.account', 'account')
+      .leftJoin('account.children', 'children')
+      .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
+      .leftJoin('addresses', 'address', 'address.account_id = account._id')
+      .where('account.parent_id = :clinicAdminId', { clinicAdminId })
+      .andWhere('account.deleted_at IS NULL')
+      .select([
+        'manager._id',
+        'manager.fullName',
+        'manager.clinicBranchName',
+        'manager.createdAt',
+        'account._id',
+        'account.email',
+        'account.status',
+        'legal.verificationStatus',
+        'address.provinceName',
+      ])
+      .addSelect('COUNT(DISTINCT CASE WHEN children.role = :staffRole THEN children._id END)', 'staffCount')
+      .addSelect('COUNT(DISTINCT CASE WHEN children.role = :doctorRole THEN children._id END)', 'doctorCount')
+      .setParameter('staffRole', AccountRole.CLINIC_STAFF)
+      .setParameter('doctorRole', AccountRole.DOCTOR)
+      .groupBy('manager._id')
+      .addGroupBy('account._id')
+      .addGroupBy('legal.verificationStatus')
+      .addGroupBy('address.provinceName')
+      .orderBy(`account.${sortBy}`, sortOrder)
+      .skip(skip)
+      .take(limit);
+
+    const [data, totalCount] = await queryBuilder.getManyAndCount();
+
+    return [data, totalCount];
+  }
+
+  /**
+   * Find Manager Detail with All Relations
+   * Used for manager detail endpoint
+   * 
+   * @param managerId - Manager account ID
+   * @returns Complete manager data with relations
+   */
+  async findManagerDetailById(managerId: string): Promise<any> {
+    return this.repository.createQueryBuilder('manager')
+      .leftJoinAndSelect('manager.account', 'account')
+      .leftJoinAndSelect('account.children', 'children')
+      .leftJoin('children.doctorInformation', 'doctorInfo')
+      .leftJoin('children.clinicStaffInformation', 'staffInfo')
+      .leftJoin('addresses', 'address', 'address.account_id = account._id')
+      .leftJoin('google_iframe', 'iframe', 'iframe.address_id = address._id')
+      .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
+      .where('manager._id = :managerId', { managerId })
+      .andWhere('account.deleted_at IS NULL')
+      .select([
+        'manager',
+        'account._id',
+        'account.email',
+        'account.status',
+        'account.parentId',
+        'account.createdAt',
+        'account.updatedAt',
+        'children._id',
+        'children.email',
+        'children.role',
+        'children.status',
+        'doctorInfo.fullName',
+        'doctorInfo.specialization',
+        'staffInfo.fullName',
+        'staffInfo.clinicRole',
+        'address',
+        'iframe.googleMapIframe',
+        'legal',
+      ])
+      .getOne();
   }
 }

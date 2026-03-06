@@ -122,6 +122,8 @@ export class ChatGptService {
   async chatCompletionServiceImprovement(
     clinicId: string,
     model: AiModel = AiModel.GPT_5_MINI,
+    startDate?: string,
+    endDate?: string,
     temperature?: number,
     maxTokens?: number,
   ): Promise<string> {
@@ -131,8 +133,30 @@ export class ChatGptService {
       }
 
       // Fetch clinic feedback data
-      const clinicFeedbacks =
-        await this.feedbackRepository.findFeedbacksByClinicId(clinicId);
+      let clinicFeedbacks;
+      if (startDate && endDate) {
+        clinicFeedbacks =
+          await this.feedbackRepository.findFeedbacksByClinicIdAndDateRange(
+            clinicId,
+            new Date(startDate),
+            new Date(endDate),
+          );
+      } else {
+        clinicFeedbacks =
+          await this.feedbackRepository.findFeedbacksByClinicId(clinicId);
+      }
+
+      // Pre-checks for data size
+      if (!clinicFeedbacks || clinicFeedbacks.length === 0) {
+        return JSON.stringify({ message: 'Do not have data to analyze' });
+      }
+
+      if (clinicFeedbacks.length <= 5) {
+        return JSON.stringify({
+          message:
+            'there are only 5 feedback, do not have enough data to analyze for valuable improvement service',
+        });
+      }
 
       // Build the analysis prompt
       const prompt = `You are a Data Analyst and Operational Strategy Consultant for medical clinics (especially orthopedic clinics). Your task is to analyze customer feedback data to identify operational blind spots and propose solutions to improve customer satisfaction (CSAT). I have a JSON dataset containing customer feedback about an orthopedic clinic. The data includes: rating: Rating (1-5 stars). description: Detailed customer description. descriptionLabel: Pre-processed labels classifying aspects and sentiments (e.g., STAFF:Negative, DR_SKILL:Positive). feedbackImagesLabel: Text descriptions of customer-attached images (description of facilities, equipment, etc.). JSON Data: ${JSON.stringify(

@@ -4,26 +4,87 @@
  */
 
 export const PROVINCES = [
-  { code: '01', name: 'Hanoi City', districts: ['Ba Dinh', 'Cau Giay', 'Dong Da', 'Hai Ba Trung', 'Hoan Kiem', 'West Lake', 'Long Bien', 'Tay Ho', 'Thanh Xuan', 'Hoang Mai'] },
-  { code: '79', name: 'Ho Chi Minh City', districts: ['District 1', 'District 3', 'District 5', 'District 6', 'District 10', 'District 11', 'District 12', 'Binh Thanh', 'Go Vap', 'Phu Nhuan', 'Tan Binh', 'Tan Phu'] },
-  { code: '48', name: 'Da Nang City', districts: ['Hai Chau', 'Thanh Khe', 'Son Tra', 'Cam Le', 'Ngu Hanh Son', 'Lien Chieu'] },
-  { code: '43', name: 'Da Nang City', districts: ['Hai Chau', 'Thanh Khe', 'Son Tra', 'Cam Le', 'Ngu Hanh Son', 'Lien Chieu'] },
-  { code: '31', name: 'Hai Phong City', districts: ['Hong Bang', 'Ngo Quyen', 'Le Chan', 'Kien An', 'Do Son', 'An Duong', 'An Lao', 'Kien Thuy', 'Thuy Nguyen', 'Tien Lang', 'Vinh Bao'] },
-  { code: '54', name: 'Can Tho City', districts: ['Ninh Kieu', 'Cai Rang', 'Binh Thuy', 'O Mon', 'Thot Not'] },
+  {
+    code: 1,
+    name: 'Thành phố Hà Nội',
+    districts: [
+      { code: 1, name: 'Quận Ba Đình' },
+      { code: 5, name: 'Quận Cầu Giấy' },
+      { code: 6, name: 'Quận Đống Đa' },
+      { code: 7, name: 'Quận Hai Bà Trưng' },
+      { code: 2, name: 'Quận Hoàn Kiếm' },
+      { code: 3, name: 'Quận Tây Hồ' },
+      { code: 8, name: 'Quận Hoàng Mai' },
+      { code: 9, name: 'Quận Thanh Xuân' },
+      { code: 4, name: 'Quận Long Biên' },
+    ],
+  },
+  {
+    code: 79,
+    name: 'Thành phố Hồ Chí Minh',
+    districts: [
+      { code: 760, name: 'Quận 1' },
+      { code: 770, name: 'Quận 3' },
+      { code: 774, name: 'Quận 5' },
+      { code: 775, name: 'Quận 6' },
+      { code: 771, name: 'Quận 10' },
+      { code: 772, name: 'Quận 11' },
+      { code: 785, name: 'Quận 12' },
+      { code: 778, name: 'Quận Bình Thạnh' },
+      { code: 764, name: 'Quận Gò Vấp' },
+      { code: 768, name: 'Quận Phú Nhuận' },
+      { code: 766, name: 'Quận Tân Bình' },
+      { code: 767, name: 'Quận Tân Phú' },
+    ],
+  },
+  {
+    code: 48,
+    name: 'Thành phố Đà Nẵng',
+    districts: [
+      { code: 490, name: 'Quận Hải Châu' },
+      { code: 491, name: 'Quận Thanh Khê' },
+      { code: 492, name: 'Quận Sơn Trà' },
+      { code: 493, name: 'Quận Ngũ Hành Sơn' },
+      { code: 494, name: 'Quận Liên Chiểu' },
+      { code: 495, name: 'Quận Cẩm Lệ' },
+    ],
+  },
+  {
+    code: 31,
+    name: 'Thành phố Hải Phòng',
+    districts: [
+      { code: 303, name: 'Quận Hồng Bàng' },
+      { code: 304, name: 'Quận Ngô Quyền' },
+      { code: 305, name: 'Quận Lê Chân' },
+      { code: 306, name: 'Quận Hải An' },
+      { code: 307, name: 'Quận Kiến An' },
+      { code: 308, name: 'Quận Đồ Sơn' },
+    ],
+  },
+  {
+    code: 92,
+    name: 'Thành phố Cần Thơ',
+    districts: [
+      { code: 916, name: 'Quận Ninh Kiều' },
+      { code: 917, name: 'Quận Bình Thuỷ' },
+      { code: 918, name: 'Quận Cái Răng' },
+      { code: 919, name: 'Quận Ô Môn' },
+      { code: 923, name: 'Quận Thốt Nốt' },
+    ],
+  },
 ];
 
-export const WARDS = [
-  'Ward 1', 'Ward 2', 'Ward 3', 'Ward 4', 'Ward 5',
-  'Ward 6', 'Ward 7', 'Ward 8', 'Ward 9', 'Ward 10',
-  'Ward 11', 'Ward 12', 'Ward 13', 'Ward 14', 'Ward 15',
-  'Ward 16', 'Ward 17', 'Ward 18', 'Ward 19', 'Ward 20',
-  'An Loi Ward', 'An Phu Ward', 'Ben Nghe Ward', 'Binh An Ward', 'Binh Thanh Ward',
-  'Cau Kho Ward', 'Cau Ong Lanh Ward', 'Da Kao Ward', 'Hiep Phu Ward', 'Hoa Binh Ward',
-  'Hoa Thanh Ward', 'Long Binh Ward', 'Long Truong Ward', 'Long Thuong Ward', 'Long Uyen Ward',
-  'Phu Huu Ward', 'Phu My Ward', 'Phu Thanh Ward', 'Phu Tho Ward', 'Phu Xuan Ward',
-  'Tan An Ward', 'Tan Binh Ward', 'Tan Dan Ward', 'Tan Dinh Ward', 'Tan Kien Ward',
-  'Tan Phu Ward', 'Tan Thanh Ward', 'Tan Thoi Ward', 'Tan Thuan Ward', 'Thanh Loc Ward',
-  'Thanh My Loi Ward', 'Thoi An Ward', 'Thoi Dua Ward', 'Truong Van Thanh Ward', 'Vinh Loc Ward',
+export const WARDS_D1_HCMC = [
+  { code: 26734, name: 'Phường Tân Định', parent_code: 760 },
+  { code: 26737, name: 'Phường Đa Kao', parent_code: 760 },
+  { code: 26740, name: 'Phường Bến Nghé', parent_code: 760 },
+  { code: 26743, name: 'Phường Bến Thành', parent_code: 760 },
+  { code: 26746, name: 'Phường Nguyễn Thái Bình', parent_code: 760 },
+  { code: 26749, name: 'Phường Phạm Ngũ Lão', parent_code: 760 },
+  { code: 26752, name: 'Phường Cầu Ông Lãnh', parent_code: 760 },
+  { code: 26755, name: 'Phường Cô Giang', parent_code: 760 },
+  { code: 26758, name: 'Phường Nguyễn Cư Trinh', parent_code: 760 },
+  { code: 26761, name: 'Phường Cầu Kho', parent_code: 760 },
 ];
 
 export const STREET_NAMES = [

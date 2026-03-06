@@ -60,6 +60,9 @@ export class AuthService {
     // Check if user account is banned or deleted (UNVERIFIED is allowed)
     this.AccountsService.validateAccountAccess(user);
 
+    // Check if parent manager is disabled (for Staff/Doctor)
+    await this.AccountsService.validateParentManagerStatus(user);
+
     // Check clinic subscription status for clinic-related roles
     await this.AccountsService.validateClinicSubscription(user);
 

@@ -67,6 +67,13 @@ Module Admin chịu trách nhiệm quản lý quy trình phê duyệt đăng ký
 2. Phải có Clinic Manager (account con).
 3. Legal Documents phải tồn tại và có status = `PENDING_REVIEW`.
 4. Subscription phải có status = `PENDING_APPROVAL`.
+5. Manager Account phải có status = `PENDING_APPROVAL` (chờ phê duyệt).
+
+**🔐 Quy Tắc Trạng Thái Tài Khoản Manager:**
+- Manager Account được tạo với status `PENDING_APPROVAL`
+- Chỉ được chuyển sang `ACTIVE` sau khi System Admin phê duyệt giấy tờ pháp lý
+- Nếu bị từ chối, status vẫn giữ nguyên `PENDING_APPROVAL` để có thể nộp lại
+- Manager chỉ có thể đăng nhập và sử dụng hệ thống khi status = `ACTIVE`
 
 **Quy trình (Transaction):**
 1. **Tìm kiếm:**
@@ -79,6 +86,7 @@ Module Admin chịu trách nhiệm quản lý quy trình phê duyệt đăng ký
    - Subscription: `PENDING_APPROVAL` ✅
 3. **Update Database:**
    - Legal Documents: `verificationStatus` → `APPROVED`
+   - **Manager Account:** `status` → `ACTIVE` (Kích hoạt tài khoản Manager)
    - Subscription: `subscriptionStatus` → `PENDING_PAYMENT`
    - `rejectionReason` → `null` (xóa lý do từ chối cũ nếu có)
 4. **Commit Transaction.**
@@ -126,6 +134,8 @@ Module Admin chịu trách nhiệm quản lý quy trình phê duyệt đăng ký
    - Legal Documents:
      - `verificationStatus` → `REJECTED`
      - `rejectionReason` → `reason` (lưu lý do)
+   - **Manager Account:**
+     - `status` → `PENDING_APPROVAL` (Đảm bảo Manager vẫn ở trạng thái chờ duyệt)
    - **⚠️ QUAN TRỌNG:** Subscription:
      - `subscriptionStatus` → `PENDING_LEGAL_SETUP` (KHÔNG PHẢI `REJECTED`)
      - Cho phép user upload lại giấy tờ
@@ -200,16 +210,21 @@ Module Admin chịu trách nhiệm quản lý quy trình phê duyệt đăng ký
 ```
 Registration Flow (Admin Side):
 
-PENDING_APPROVAL (Subscription) + PENDING_REVIEW (Legal Docs)
+PENDING_APPROVAL (Subscription) + PENDING_REVIEW (Legal Docs) + PENDING_APPROVAL (Manager Account)
         │
-        ├─── APPROVE ──→ PENDING_PAYMENT (Subscription) + APPROVED (Legal Docs)
+        ├─── APPROVE ──→ PENDING_PAYMENT (Subscription) + APPROVED (Legal Docs) + ACTIVE (Manager Account)
         │                     │
-        │                     └──→ [User thanh toán]
+        │                     └──→ [User thanh toán] → Manager có thể đăng nhập
         │
-        └─── REJECT ──→ PENDING_LEGAL_SETUP (Subscription) + REJECTED (Legal Docs)
+        └─── REJECT ──→ PENDING_LEGAL_SETUP (Subscription) + REJECTED (Legal Docs) + PENDING_APPROVAL (Manager Account)
                              │
-                             └──→ [User upload lại giấy tờ]
+                             └──→ [User upload lại giấy tờ] → Manager vẫn chưa thể đăng nhập
 ```
+
+**Giải thích:**
+- **Manager Account Status = PENDING_APPROVAL:** Manager account đã được tạo nhưng chờ phê duyệt giấy tờ pháp lý
+- **Manager Account Status = ACTIVE:** Manager có thể đăng nhập và sử dụng hệ thống sau khi Admin phê duyệt
+- **Nếu bị từ chối:** Manager vẫn giữ status PENDING_APPROVAL và không thể đăng nhập cho đến khi giấy tờ được phê duyệt
 
 ---
 

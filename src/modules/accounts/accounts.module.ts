@@ -32,6 +32,8 @@ import {
 } from './repositories';
 import { MailerModule } from '../mailer/mailer.module';
 import { TransactionRepository } from '../transactions/repositories/transaction.repository';
+import { ClinicManagerService } from './api-clinic-admin/clinic-manager.service';
+import { ClinicManagerController } from './api-clinic-admin/clinic-manager.controller';
 
 /**
  * Accounts Module
@@ -81,7 +83,10 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
     forwardRef(() => SubscriptionsModule),
     forwardRef(() => TransactionsModule),
   ],
-  controllers: [AccountsController],
+  controllers: [
+    AccountsController,
+    ClinicManagerController,
+  ],
   providers: [
     AccountRepository,
     GeneralAccountRepository,
@@ -96,9 +101,11 @@ import { TransactionRepository } from '../transactions/repositories/transaction.
 
     TransactionRepository,
     AccountsService,
+    ClinicManagerService,
   ],
   exports: [
     AccountsService,
+    ClinicManagerService,
     CodeVerificationRepository,
     AccountRepository,
     GeneralAccountRepository,
