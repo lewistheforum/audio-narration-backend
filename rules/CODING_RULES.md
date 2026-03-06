@@ -1,4 +1,4 @@
-# Medicare Backend - Coding Rules & Standards
+# Bonix Backend - Coding Rules & Standards
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
@@ -21,7 +21,7 @@
 
 ## Project Overview
 
-Medicare Backend is a comprehensive healthcare management system built with NestJS, TypeORM, and PostgreSQL. The system manages accounts, appointments, prescriptions, medical records, and more.
+Bonix Backend is a comprehensive healthcare management system built with NestJS, TypeORM, and PostgreSQL. The system manages accounts, appointments, prescriptions, medical records, and more.
 
 **Core Principles:**
 - Clean Architecture

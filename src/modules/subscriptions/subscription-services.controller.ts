@@ -44,7 +44,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 /**
  * Subscription Services Controller
  *
- * RESTful API controller for managing subscription services in the Medicare system.
+ * RESTful API controller for managing subscription services in the Bonix system.
  * Provides subscription service listing and detail retrieval functionality for the Pricing screen.
  *
  * Features:

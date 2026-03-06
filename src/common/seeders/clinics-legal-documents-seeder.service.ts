@@ -120,7 +120,11 @@ export class ClinicsLegalDocumentsSeederService {
    * Distribute across all enum values for testing different registration states
    */
   private getRandomVerificationStatus(): LegalDocumentVerificationStatus {
-    const statuses = Object.values(LegalDocumentVerificationStatus);
+    const statuses = [
+      LegalDocumentVerificationStatus.NOT_SUBMITTED,
+      LegalDocumentVerificationStatus.PENDING_REVIEW,
+      LegalDocumentVerificationStatus.REJECTED,
+    ];
     return statuses[Math.floor(Math.random() * statuses.length)];
   }
 

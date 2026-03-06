@@ -45,7 +45,7 @@ export class AiRagChatBotService {
       }
     }
 
-    const welcomeMessageText = `Hello ${patientName ? patientName : 'patient'}, I am your Medicare AI assistant. How can I help you today?`;
+    const welcomeMessageText = `Hello ${patientName ? patientName : 'patient'}, I am your Bonix AI assistant. How can I help you today?`;
 
     await this.aiMessageRepository.createMessage({
       conversationId: conversation._id,

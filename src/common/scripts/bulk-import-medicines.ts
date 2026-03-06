@@ -9,13 +9,13 @@ dotenv.config();
 
 /**
  * Bulk Import Medicines from CSV
- * 
+ *
  * Imports large datasets (250k+ rows) efficiently using:
  * - Batch processing (1000 records per batch)
  * - Transaction support
  * - Progress tracking
  * - Error handling
- * 
+ *
  * Usage:
  * 1. Place CSV file in: data/medicines.csv
  * 2. Run: npx ts-node src/common/scripts/bulk-import-medicines.ts
@@ -46,7 +46,9 @@ async function importMedicines() {
   if (!fs.existsSync(CSV_FILE_PATH)) {
     console.error(`❌ CSV file not found: ${CSV_FILE_PATH}`);
     console.log('\n📝 Please create the file with the following structure:');
-    console.log('name,subtitle0,subtitle1,subtitle2,subtitle3,subtitle4,fullSideEffect,fullUse,chemicalClass,habitForming,therapeuticClass,actionClass\n');
+    console.log(
+      'name,subtitle0,subtitle1,subtitle2,subtitle3,subtitle4,fullSideEffect,fullUse,chemicalClass,habitForming,therapeuticClass,actionClass\n',
+    );
     process.exit(1);
   }
 
@@ -58,6 +60,10 @@ async function importMedicines() {
     username: process.env.POSTGRES_USERNAME,
     password: process.env.POSTGRES_PASSWORD,
     database: process.env.POSTGRES_DATABASE,
+    ssl:
+      process.env.POSTGRES_SSL === 'true'
+        ? { rejectUnauthorized: false }
+        : false,
     entities: [Medicine],
     synchronize: false, // Don't auto-sync in production
   });
@@ -90,7 +96,7 @@ async function importMedicines() {
         skip_empty_lines: true,
         trim: true,
         relax_column_count: true, // Handle inconsistent column counts
-      })
+      }),
     );
 
     console.log('📥 Reading CSV file...\n');
@@ -122,7 +128,9 @@ async function importMedicines() {
           sideEffect: toNullIfEmpty(medicineRow.fullSideEffect),
           used: toNullIfEmpty(medicineRow.fullUse),
           chemicalClass: toNullIfEmpty(medicineRow.chemicalClass),
-          habitForming: medicineRow.habitForming?.toLowerCase() === 'yes' || medicineRow.habitForming?.toLowerCase() === 'true',
+          habitForming:
+            medicineRow.habitForming?.toLowerCase() === 'yes' ||
+            medicineRow.habitForming?.toLowerCase() === 'true',
           therapeuticClass: toNullIfEmpty(medicineRow.therapeuticClass),
           actionClass: toNullIfEmpty(medicineRow.actionClass),
         });
@@ -138,13 +146,18 @@ async function importMedicines() {
           // Progress update
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           const rate = (totalProcessed / parseFloat(elapsed)).toFixed(0);
-          console.log(`✅ Processed: ${totalProcessed.toLocaleString()} | Inserted: ${totalInserted.toLocaleString()} | Rate: ${rate} rec/sec | Errors: ${errorCount}`);
+          console.log(
+            `✅ Processed: ${totalProcessed.toLocaleString()} | Inserted: ${totalInserted.toLocaleString()} | Rate: ${rate} rec/sec | Errors: ${errorCount}`,
+          );
 
           batch = []; // Clear batch
         }
       } catch (error) {
         errorCount++;
-        console.error(`❌ Error processing row ${totalProcessed}:`, error.message);
+        console.error(
+          `❌ Error processing row ${totalProcessed}:`,
+          error.message,
+        );
       }
     }
 
@@ -162,7 +175,9 @@ async function importMedicines() {
     console.log('🎉 IMPORT COMPLETE');
     console.log('='.repeat(60));
     console.log(`✅ Total processed: ${totalProcessed.toLocaleString()} rows`);
-    console.log(`✅ Total inserted: ${totalInserted.toLocaleString()} medicines`);
+    console.log(
+      `✅ Total inserted: ${totalInserted.toLocaleString()} medicines`,
+    );
     console.log(`❌ Errors: ${errorCount}`);
     console.log(`⏱️  Time: ${totalTime}s`);
     console.log(`📊 Average rate: ${avgRate} records/second`);
@@ -170,8 +185,9 @@ async function importMedicines() {
 
     // Verify final count
     const finalCount = await repository.count();
-    console.log(`📊 Database count: ${finalCount.toLocaleString()} medicines\n`);
-
+    console.log(
+      `📊 Database count: ${finalCount.toLocaleString()} medicines\n`,
+    );
   } catch (error) {
     console.error('❌ Fatal error:', error);
     process.exit(1);

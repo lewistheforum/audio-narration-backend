@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Tài liệu này mô tả các quy tắc nghiệp vụ cho **API Lịch Sử Công Việc Bác Sĩ** trong hệ thống Medicare.
+Tài liệu này mô tả các quy tắc nghiệp vụ cho **API Lịch Sử Công Việc Bác Sĩ** trong hệ thống Bonix.
 
 **Endpoint**: `GET /api/appointments/doctors/{doctorId}/work-history`  
 **Phiên Bản**: 1.0  

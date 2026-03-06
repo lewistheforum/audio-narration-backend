@@ -34,6 +34,10 @@ async function main(): Promise<void> {
     username: process.env.POSTGRES_USERNAME!,
     password: process.env.POSTGRES_PASSWORD!,
     database: process.env.POSTGRES_DATABASE!,
+    ssl:
+      process.env.POSTGRES_SSL === 'true'
+        ? { rejectUnauthorized: false }
+        : false,
     entities: [join(__dirname, '../../**/*.entity{.ts,.js}')],
     synchronize: false,
     logging: false,

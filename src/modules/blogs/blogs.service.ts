@@ -22,7 +22,7 @@ import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 /**
  * Blogs Service
  *
- * Centralized service layer for managing all blog-related operations in the Medicare system.
+ * Centralized service layer for managing all blog-related operations in the Bonix system.
  * This service implements the business logic layer between controllers and the data access layer (repository).
  *
  * Core Responsibilities:

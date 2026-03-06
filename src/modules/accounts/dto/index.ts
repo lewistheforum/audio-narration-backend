@@ -37,3 +37,4 @@ export { CreateClinicManagerDto } from './create-clinic-manager.dto';
 export { UpdateManagerProfileDto } from './update-manager-profile.dto';
 export { UpdateManagerLocationDto } from './update-manager-location.dto';
 export { UpdateManagerLegalDocumentsDto } from './update-manager-legal-documents.dto';
+export { GetManagerListQueryDto } from './get-manager-list-query.dto';
