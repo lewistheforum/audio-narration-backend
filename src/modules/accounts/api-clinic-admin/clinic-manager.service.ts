@@ -51,13 +51,11 @@ export class ClinicManagerService {
    * 
    * Returns paginated list of all managers under the authenticated CLINIC_ADMIN.
    * Shows managers in all statuses (ACTIVE, PENDING_APPROVAL, MANAGER_DISABLED, etc.)
+   * Supports filtering on all accessible columns
    */
   async getManagerList(
     clinicAdminId: string,
-    page: number = 1,
-    limit: number = 10,
-    sortBy: string = 'createdAt',
-    sortOrder: 'ASC' | 'DESC' = 'DESC',
+    query: any,
   ): Promise<ManagerListResponseDto> {
     // Validate CLINIC_ADMIN exists
     const admin = await this.accountRepository.findAccountById(clinicAdminId);
@@ -65,17 +63,14 @@ export class ClinicManagerService {
       throw new ForbiddenException('Only clinic admins can view manager list');
     }
 
-    // Fetch managers with pagination
+    // Fetch managers with pagination and filters
     const [managers, totalItems] = 
       await this.managerInfoRepository.findManagersByAdminWithPagination(
         clinicAdminId,
-        page,
-        limit,
-        sortBy,
-        sortOrder,
+        query,
       );
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(totalItems / query.limit);
 
     // Transform to DTO
     const data = managers.map((manager) => ({
@@ -94,8 +89,8 @@ export class ClinicManagerService {
     return {
       data,
       meta: {
-        currentPage: page,
-        itemsPerPage: limit,
+        currentPage: query.page,
+        itemsPerPage: query.limit,
         totalItems,
         totalPages,
       },
