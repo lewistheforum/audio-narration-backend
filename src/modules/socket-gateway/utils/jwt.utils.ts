@@ -1,5 +1,4 @@
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 
 export interface DecodedToken {
   sub: string;
