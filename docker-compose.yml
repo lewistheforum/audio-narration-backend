@@ -1,5 +1,3 @@
-name: bonix-backend
-
 services:
   db:
     # pgvector image with PostgreSQL 16 (most stable with pgvector support)
