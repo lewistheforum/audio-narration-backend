@@ -292,36 +292,18 @@ export class ClinicManagerInformationRepository {
    * @returns Complete manager data with relations
    */
   async findManagerDetailById(managerId: string): Promise<any> {
-    return this.repository.createQueryBuilder('manager')
+    const manager = await this.repository.createQueryBuilder('manager')
       .leftJoinAndSelect('manager.account', 'account')
       .leftJoinAndSelect('account.children', 'children')
-      .leftJoin('children.doctorInformation', 'doctorInfo')
-      .leftJoin('children.clinicStaffInformation', 'staffInfo')
-      .leftJoin('addresses', 'address', 'address.account_id = account._id')
-      .leftJoin('google_iframe', 'iframe', 'iframe.address_id = address._id')
-      .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
-      .where('manager._id = :managerId', { managerId })
+      .leftJoinAndSelect('children.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('children.clinicStaffInformation', 'staffInfo')
+      .leftJoinAndSelect('account.legalDocuments', 'legal')
+      .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('address.googleIframe', 'iframe')
+      .where('account._id = :managerId', { managerId })
       .andWhere('account.deleted_at IS NULL')
-      .select([
-        'manager',
-        'account._id',
-        'account.email',
-        'account.status',
-        'account.parentId',
-        'account.createdAt',
-        'account.updatedAt',
-        'children._id',
-        'children.email',
-        'children.role',
-        'children.status',
-        'doctorInfo.fullName',
-        'doctorInfo.specialization',
-        'staffInfo.fullName',
-        'staffInfo.clinicRole',
-        'address',
-        'iframe.googleMapIframe',
-        'legal',
-      ])
       .getOne();
+    
+    return manager;
   }
 }
