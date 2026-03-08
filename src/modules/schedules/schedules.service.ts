@@ -592,5 +592,497 @@ export class SchedulesService {
         return { message: 'Clinic room deleted successfully' };
     }
 
+    /**
+     * Get Doctor Schedules (Staff Only)
+     *
+     * Retrieves list of doctors with their available schedules for appointment booking
+     * Includes time slots, rooms, and availability information
+     *
+     * Query Logic:
+     * - Get all employee schedules for clinic within date range (today + 60 days)
+     * - JOIN clinic_shift, clinic_shift_hour, clinic_room
+     * - Calculate available slots (limit - booked appointments)
+     * - Filter by serviceConfigId (doctors who can perform service)
+     * - Filter by shiftType if provided
+     * - Group by doctor
+     *
+     * @param {string} clinicId - Clinic UUID
+     * @param {object} query - Query parameters (serviceConfigId, shiftType)
+     * @returns {Promise<DoctorSchedulesResponseDto>} Doctors with schedules
+     */
+    async getDoctorSchedules(
+        clinicId: string,
+        query: {
+            serviceConfigId?: string;
+            shiftType?: string;
+        },
+    ): Promise<any> {
+        const { serviceConfigId, shiftType } = query;
+
+        // === STEP 1: Get clinic info ===
+        const clinicInfo = await this.dataSource
+            .createQueryBuilder()
+            .select([
+                'a._id AS clinic_id',
+                'COALESCE(ga.full_name, a.email) AS clinic_name',
+                'COALESCE(addr.address, \'\') AS address',
+                'COALESCE(a.phone, \'\') AS phone',
+            ])
+            .from('accounts', 'a')
+            .leftJoin('general_accounts', 'ga', 'ga.account_id = a._id AND ga.deleted_at IS NULL')
+            .leftJoin('addresses', 'addr', 'addr.account_id = a._id AND addr.deleted_at IS NULL')
+            .where('a._id = :clinicId', { clinicId })
+            .andWhere('a.deleted_at IS NULL')
+            .getRawOne();
+
+        if (!clinicInfo) {
+            throw new NotFoundException('Clinic not found');
+        }
+
+        // === STEP 2: Calculate date range ===
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const maxDate = new Date(today);
+        maxDate.setDate(maxDate.getDate() + 30); // Limited to 30 days ahead
+
+        const dateRangeStart = today.toISOString().split('T')[0];
+        const dateRangeEnd = maxDate.toISOString().split('T')[0];
+
+        // === STEP 3: Build complex query to get schedules ===
+        let queryBuilder = this.dataSource
+            .createQueryBuilder()
+            .select([
+                'es._id AS employee_schedule_id',
+                'es.employee_id AS doctor_id',
+                'es.work_date AS work_date',
+                'es.week_day AS week_day',
+                'cs._id AS shift_id',
+                'cs.shift AS shift_type',
+                'csh._id AS shift_hour_id',
+                'csh.start_hour AS start_hour',
+                'csh.end_hour AS end_hour',
+                'csh.limit AS limit',
+                'COALESCE(COUNT(DISTINCT app._id), 0) AS booked_count',
+                'COALESCE(ga.full_name, di.full_name, a.email) AS doctor_name',
+                'a.email AS doctor_email',
+                'a.phone AS doctor_phone',
+                'di.profile_picture AS doctor_avatar',
+                'di.position AS specialization',
+                'di.experience AS years_of_experience',
+            ])
+            .from('employee_schedule', 'es')
+            .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+            .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+            .innerJoin('accounts', 'a', 'a._id = es.employee_id')
+            .leftJoin('general_accounts', 'ga', 'ga.account_id = a._id AND ga.deleted_at IS NULL')
+            .leftJoin('doctor_information', 'di', 'di.account_id = a._id AND di.deleted_at IS NULL')
+            .leftJoin(
+                'appointments',
+                'app',
+                'app.doctor_shift_hour_id = csh._id AND app.deleted_at IS NULL',
+            )
+            .where('es.clinic_id = :clinicId', { clinicId })
+            .andWhere('es.work_date >= :today', { today: dateRangeStart })
+            .andWhere('es.work_date <= :maxDate', { maxDate: dateRangeEnd })
+            .andWhere('es.deleted_at IS NULL')
+            .andWhere('cs.deleted_at IS NULL')
+            .andWhere('csh.deleted_at IS NULL')
+            .andWhere('a.role = :role', { role: AccountRole.DOCTOR })
+            .groupBy('es._id, es.employee_id, es.work_date, es.week_day, cs._id, cs.shift, csh._id, csh.start_hour, csh.end_hour, csh.limit, a._id, a.email, a.phone, ga.full_name, di.full_name, di.profile_picture, di.position, di.experience')
+            .having('csh.limit > COALESCE(COUNT(DISTINCT app._id), 0)'); // Only slots with availability
+
+        // Filter by shift type if provided
+        if (shiftType) {
+            queryBuilder = queryBuilder.andWhere('cs.shift = :shiftType', { shiftType });
+        }
+
+        // Filter by service if provided
+        if (serviceConfigId) {
+            // Get service_id from service config (this points to clinic_services._id)
+            const serviceConfig = await this.dataSource
+                .createQueryBuilder()
+                .select('csc.service_id')
+                .from('clinic_service_config', 'csc')
+                .where('csc._id = :serviceConfigId', { serviceConfigId })
+                .andWhere('csc.deleted_at IS NULL')
+                .getRawOne();
+
+            if (serviceConfig && serviceConfig.service_id) {
+                // Filter doctors who can perform this service
+                queryBuilder = queryBuilder.andWhere(
+                    'EXISTS (SELECT 1 FROM doctor_services dcs WHERE dcs.doctor_id = es.employee_id AND dcs.clinic_service_id = :clinicServiceId AND dcs.deleted_at IS NULL)',
+                    { clinicServiceId: serviceConfig.service_id },
+                );
+            }
+        }
+
+        queryBuilder = queryBuilder.orderBy('es.work_date', 'ASC').addOrderBy('csh.start_hour', 'ASC');
+
+        const schedules = await queryBuilder.getRawMany();
+
+        // === STEP 4: Get room information for each schedule ===
+        const scheduleIds = [...new Set(schedules.map((s) => s.employee_schedule_id))];
+        
+        let roomsData: any[] = [];
+        if (scheduleIds.length > 0) {
+            roomsData = await this.dataSource
+                .createQueryBuilder()
+                .select([
+                    'cres.employee_schedule_id AS employee_schedule_id',
+                    'cr._id AS room_id',
+                    'cr.room_name AS room_name',
+                ])
+                .from('clinic_room_employee_schedule', 'cres')
+                .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+                .where('cres.employee_schedule_id IN (:...scheduleIds)', { scheduleIds })
+                .andWhere('cr.deleted_at IS NULL')
+                .getRawMany();
+        }
+
+        // === STEP 5: Group schedules by doctor ===
+        const doctorMap = new Map<string, any>();
+
+        schedules.forEach((schedule) => {
+            const doctorId = schedule.doctor_id;
+
+            if (!doctorMap.has(doctorId)) {
+                doctorMap.set(doctorId, {
+                    doctor: {
+                        doctorId: schedule.doctor_id,
+                        fullName: schedule.doctor_name,
+                        email: schedule.doctor_email,
+                        phone: schedule.doctor_phone,
+                        avatar: schedule.doctor_avatar,
+                        specialization: schedule.specialization,
+                        yearsOfExperience: schedule.years_of_experience,
+                    },
+                    schedules: [],
+                    totalSchedules: 0,
+                });
+            }
+
+            const doctorData = doctorMap.get(doctorId);
+            
+            // Find or create schedule entry for this date/shift
+            let scheduleEntry = doctorData.schedules.find(
+                (s: any) =>
+                    s.employeeScheduleId === schedule.employee_schedule_id,
+            );
+
+            if (!scheduleEntry) {
+                // Get rooms for this schedule
+                const scheduleRooms = roomsData
+                    .filter((r) => r.employee_schedule_id === schedule.employee_schedule_id)
+                    .map((r) => ({
+                        roomId: r.room_id,
+                        roomNumber: r.room_name,
+                        roomName: r.room_name,
+                    }));
+
+                scheduleEntry = {
+                    employeeScheduleId: schedule.employee_schedule_id,
+                    workDate: schedule.work_date,
+                    weekDay: schedule.week_day,
+                    shiftType: schedule.shift_type,
+                    shiftId: schedule.shift_id,
+                    timeSlots: [],
+                    rooms: scheduleRooms,
+                    totalAvailableSlots: 0,
+                };
+                doctorData.schedules.push(scheduleEntry);
+                doctorData.totalSchedules++;
+            }
+
+            // Add time slot
+            const availableSlots = schedule.limit - schedule.booked_count;
+            scheduleEntry.timeSlots.push({
+                shiftHourId: schedule.shift_hour_id,
+                startHour: schedule.start_hour,
+                endHour: schedule.end_hour,
+                limit: schedule.limit,
+                availableSlots: availableSlots,
+                isFullyBooked: availableSlots === 0,
+            });
+            scheduleEntry.totalAvailableSlots += availableSlots;
+        });
+
+        // === STEP 6: Convert map to array ===
+        const doctors = Array.from(doctorMap.values());
+
+        return {
+            doctors,
+            totalDoctors: doctors.length,
+            clinicInfo: {
+                clinicId: clinicInfo.clinic_id,
+                clinicName: clinicInfo.clinic_name,
+                address: clinicInfo.address,
+                phone: clinicInfo.phone,
+            },
+            dateRangeStart,
+            dateRangeEnd,
+        };
+    }
+
+    /**
+     * Get doctor schedules by specific date
+     * Optimized query for single date with detailed slot information
+     */
+    async getDoctorSchedulesByDate(
+        clinicId: string,
+        query: {
+            date: string;
+            doctorId?: string;
+            shiftType?: string;
+            serviceConfigId?: string;
+        },
+    ): Promise<any> {
+        const { date, doctorId, shiftType, serviceConfigId } = query;
+
+        // Validate date format and not in past
+        const queryDate = new Date(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (isNaN(queryDate.getTime())) {
+            throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+        }
+
+        if (queryDate < today) {
+            throw new BadRequestException('Cannot query schedules for past dates');
+        }
+
+        // Calculate week day
+        const weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const weekDay = weekDays[queryDate.getDay()];
+
+        // === QUERY: Get all schedules for the specific date ===
+        let queryBuilder = this.dataSource
+            .createQueryBuilder()
+            .select([
+                'es._id AS employee_schedule_id',
+                'es.employee_id AS doctor_id',
+                'es.work_date AS work_date',
+                'COALESCE(ga.full_name, di.full_name, a.email) AS doctor_name',
+                'a.email AS doctor_email',
+                'a.phone AS doctor_phone',
+                'di.profile_picture AS doctor_avatar',
+                'di.position AS doctor_specialty',
+                'di.experience AS doctor_experience',
+                'cs._id AS shift_id',
+                'cs.shift AS shift_type',
+                'csh._id AS shift_hour_id',
+                'csh.start_hour AS slot_start_time',
+                'csh.end_hour AS slot_end_time',
+                'csh.limit AS slot_limit',
+                'app._id AS appointment_id',
+                'app.status AS appointment_status',
+                'COALESCE(patient_ga.full_name, patient_a.email) AS booked_by_patient_name',
+            ])
+            .from('employee_schedule', 'es')
+            .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+            .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+            .innerJoin('accounts', 'a', 'a._id = es.employee_id')
+            .leftJoin('general_accounts', 'ga', 'ga.account_id = a._id AND ga.deleted_at IS NULL')
+            .leftJoin('doctor_information', 'di', 'di.account_id = a._id AND di.deleted_at IS NULL')
+            .leftJoin(
+                'appointments',
+                'app',
+                'app.doctor_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
+                { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
+            )
+            .leftJoin('accounts', 'patient_a', 'patient_a._id = app.patient_id')
+            .leftJoin('general_accounts', 'patient_ga', 'patient_ga.account_id = app.patient_id AND patient_ga.deleted_at IS NULL')
+            .where('es.clinic_id = :clinicId', { clinicId })
+            .andWhere('es.work_date = :date', { date })
+            .andWhere('es.deleted_at IS NULL')
+            .andWhere('cs.deleted_at IS NULL')
+            .andWhere('csh.deleted_at IS NULL')
+            .andWhere('a.role = :role', { role: AccountRole.DOCTOR })
+            .andWhere('a.deleted_at IS NULL');
+
+        // Apply optional filters
+        if (doctorId) {
+            queryBuilder = queryBuilder.andWhere('es.employee_id = :doctorId', { doctorId });
+        }
+
+        if (shiftType) {
+            queryBuilder = queryBuilder.andWhere('cs.shift = :shiftType', { shiftType });
+        }
+
+        // Filter by service if provided
+        if (serviceConfigId) {
+            const serviceConfig = await this.dataSource
+                .createQueryBuilder()
+                .select('csc.service_id')
+                .from('clinic_service_config', 'csc')
+                .where('csc._id = :serviceConfigId', { serviceConfigId })
+                .andWhere('csc.deleted_at IS NULL')
+                .getRawOne();
+
+            if (serviceConfig && serviceConfig.service_id) {
+                queryBuilder = queryBuilder.andWhere(
+                    'EXISTS (SELECT 1 FROM doctor_services dcs WHERE dcs.doctor_id = es.employee_id AND dcs.clinic_service_id = :clinicServiceId AND dcs.deleted_at IS NULL)',
+                    { clinicServiceId: serviceConfig.service_id },
+                );
+            }
+        }
+
+        queryBuilder = queryBuilder.orderBy('a.email', 'ASC')
+            .addOrderBy('cs.shift', 'ASC')
+            .addOrderBy('csh.start_hour', 'ASC');
+
+        const schedules = await queryBuilder.getRawMany();
+
+        if (schedules.length === 0) {
+            return {
+                date,
+                weekDay,
+                doctors: [],
+                summary: {
+                    totalDoctorsAvailable: 0,
+                    totalSlotsAvailable: 0,
+                    earliestSlot: null,
+                    latestSlot: null,
+                },
+            };
+        }
+
+        // === Get room information ===
+        const scheduleIds = [...new Set(schedules.map((s) => s.employee_schedule_id))];
+        let roomsData: any[] = [];
+
+        if (scheduleIds.length > 0) {
+            roomsData = await this.dataSource
+                .createQueryBuilder()
+                .select([
+                    'cres.employee_schedule_id AS employee_schedule_id',
+                    'cr._id AS room_id',
+                    'cr.room_name AS room_name',
+                ])
+                .from('clinic_room_employee_schedule', 'cres')
+                .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+                .where('cres.employee_schedule_id IN (:...scheduleIds)', { scheduleIds })
+                .andWhere('cr.deleted_at IS NULL')
+                .getRawMany();
+        }
+
+        // === Process data and group by doctor → shift ===
+        const doctorMap = new Map<string, any>();
+        let totalAvailableSlots = 0;
+        let earliestTime = '23:59:59';
+        let latestTime = '00:00:00';
+
+        schedules.forEach((schedule) => {
+            const doctorId = schedule.doctor_id;
+            const employeeScheduleId = schedule.employee_schedule_id;
+            const shiftId = schedule.shift_id;
+
+            // Initialize doctor entry
+            if (!doctorMap.has(doctorId)) {
+                doctorMap.set(doctorId, {
+                    doctorId: schedule.doctor_id,
+                    doctorFullName: schedule.doctor_name,
+                    doctorSpecialty: schedule.doctor_specialty || 'Chưa cập nhật',
+                    doctorAvatar: schedule.doctor_avatar,
+                    doctorEmail: schedule.doctor_email,
+                    doctorPhone: schedule.doctor_phone,
+                    shifts: [],
+                    totalAvailableSlots: 0,
+                });
+            }
+
+            const doctorData = doctorMap.get(doctorId);
+
+            // Find or create shift entry
+            let shiftEntry = doctorData.shifts.find(
+                (s: any) => s.employeeScheduleId === employeeScheduleId && s.shiftId === shiftId,
+            );
+
+            if (!shiftEntry) {
+                // Get room for this schedule
+                const scheduleRoom = roomsData.find((r) => r.employee_schedule_id === employeeScheduleId);
+
+                shiftEntry = {
+                    employeeScheduleId,
+                    shiftId,
+                    shiftType: schedule.shift_type,
+                    shiftStartTime: '23:59:59', // Will be calculated from slots
+                    shiftEndTime: '00:00:00',   // Will be calculated from slots
+                    room: scheduleRoom
+                        ? {
+                              roomId: scheduleRoom.room_id,
+                              roomName: scheduleRoom.room_name,
+                          }
+                        : null,
+                    availableSlots: [],
+                    bookedSlots: [],
+                    totalSlots: 0,
+                    availableCount: 0,
+                    bookedCount: 0,
+                };
+                doctorData.shifts.push(shiftEntry);
+            }
+
+            // Create time slot object
+            const appointmentHour = `${date}T${schedule.slot_start_time}.000Z`;
+            const isBooked = !!schedule.appointment_id;
+
+            const timeSlot = {
+                shiftHourId: schedule.shift_hour_id,
+                startTime: schedule.slot_start_time,
+                endTime: schedule.slot_end_time,
+                appointmentHour,
+                isAvailable: !isBooked,
+            };
+
+            // Add to appropriate array
+            if (isBooked) {
+                shiftEntry.bookedSlots.push({
+                    ...timeSlot,
+                    bookedBy: schedule.booked_by_patient_name,
+                    appointmentId: schedule.appointment_id,
+                });
+                shiftEntry.bookedCount++;
+            } else {
+                shiftEntry.availableSlots.push(timeSlot);
+                shiftEntry.availableCount++;
+                doctorData.totalAvailableSlots++;
+                totalAvailableSlots++;
+            }
+
+            shiftEntry.totalSlots++;
+
+            // Update shift time range from slots
+            if (schedule.slot_start_time < shiftEntry.shiftStartTime) {
+                shiftEntry.shiftStartTime = schedule.slot_start_time;
+            }
+            if (schedule.slot_end_time > shiftEntry.shiftEndTime) {
+                shiftEntry.shiftEndTime = schedule.slot_end_time;
+            }
+
+            // Track earliest and latest times
+            if (schedule.slot_start_time < earliestTime) {
+                earliestTime = schedule.slot_start_time;
+            }
+            if (schedule.slot_end_time > latestTime) {
+                latestTime = schedule.slot_end_time;
+            }
+        });
+
+        // Convert map to array and filter doctors with no available slots
+        const doctors = Array.from(doctorMap.values()).filter((d) => d.totalAvailableSlots > 0);
+
+        return {
+            date,
+            weekDay,
+            doctors,
+            summary: {
+                totalDoctorsAvailable: doctors.length,
+                totalSlotsAvailable: totalAvailableSlots,
+                earliestSlot: totalAvailableSlots > 0 ? earliestTime : null,
+                latestSlot: totalAvailableSlots > 0 ? latestTime : null,
+            },
+        };
+    }
 
 }

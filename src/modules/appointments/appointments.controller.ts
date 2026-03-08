@@ -2159,4 +2159,156 @@ export class AppointmentsController {
   ) {
     return this.appointmentsService.getDoctorSlots(doctorId, date, clinicId);
   }
+
+  /**
+   * Get all payment packages for an appointment (Clinic Staff)
+   * 
+   * Returns list of all payment packages associated with the appointment,
+   * including their services and payment status.
+   */
+  @Get(':id/packages')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get all payment packages for appointment (Clinic Staff)',
+    description: 'Returns list of all payment packages with their services and payment status for the specified appointment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment packages retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        appointmentId: { type: 'string', example: '550e8400-e29b-41d4-a716-446655440000' },
+        packages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              packageId: { type: 'string' },
+              appointmentId: { type: 'string' },
+              paymentTransactionId: { type: 'string', nullable: true },
+              amount: { type: 'number' },
+              status: { type: 'string', enum: ['pending_payment', 'paid'] },
+              paymentType: { type: 'string', enum: ['online', 'cod'], nullable: true },
+              services: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    serviceAppointmentId: { type: 'string' },
+                    clinicServiceId: { type: 'string' },
+                    serviceName: { type: 'string' },
+                    servicePrice: { type: 'number' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        summary: {
+          type: 'object',
+          properties: {
+            totalPackages: { type: 'number' },
+            totalAmount: { type: 'number' },
+            paidAmount: { type: 'number' },
+            pendingAmount: { type: 'number' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Appointment not found',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Staff does not belong to the clinic of this appointment',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+  })
+  async getAppointmentPackages(
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Request() req: any,
+  ) {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.getAppointmentPackages(appointmentId, staffAccountId);
+  }
+
+  /**
+   * Confirm cash payment for a specific package (Clinic Staff)
+   * 
+   * Updates a specific payment package status to PAID with payment type COD.
+   * If all packages are paid, the appointment status will be updated to COMPLETED.
+   */
+  @Post(':id/packages/:packageId/confirm-cash-payment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Confirm cash payment for specific package (Clinic Staff)',
+    description: 'Confirms cash payment for a specific package. Updates package status to PAID and payment type to COD. If all packages are paid, appointment status becomes COMPLETED.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cash payment confirmed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Xác nhận thanh toán tiền mặt thành công' },
+        appointmentId: { type: 'string' },
+        package: {
+          type: 'object',
+          properties: {
+            packageId: { type: 'string' },
+            amount: { type: 'number' },
+            status: { type: 'string', enum: ['paid'] },
+            paymentType: { type: 'string', enum: ['cod'] },
+            paymentTransactionId: { type: 'null' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        appointmentStatus: { type: 'string', enum: ['in_progress', 'need_final_payment', 'completed'] },
+        allPackagesPaid: { type: 'boolean' },
+        remainingPendingPackages: { type: 'number' }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Package or appointment not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Package is not in PENDING_PAYMENT status or does not belong to this appointment',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Staff does not belong to the clinic of this appointment',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+  })
+  @ApiParam({
+    name: 'packageId',
+    type: String,
+    description: 'Payment Package UUID',
+  })
+  async confirmCashPayment(
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Param('packageId', ParseUUIDPipe) packageId: string,
+    @Request() req: any,
+  ) {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.confirmCashPayment(appointmentId, packageId, staffAccountId);
+  }
 }
