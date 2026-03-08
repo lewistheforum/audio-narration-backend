@@ -1,6 +1,11 @@
 import {
   Controller,
   Get,
+  Post,
+  Put,
+  Patch,
+  Param,
+  Body,
   Query,
   UseGuards,
   Request,
@@ -23,6 +28,10 @@ import {
   GetClinicServicesQueryDto,
   ClinicServicesResponseDto,
 } from './dto';
+import { CreateClinicServiceDto } from '../clinic-services/dto/create-clinic-service.dto';
+import { UpdateClinicServiceDto } from '../clinic-services/dto/update-clinic-service.dto';
+import { ClinicServiceResponseDto } from '../clinic-services/dto/clinic-service-response.dto';
+import { UpdateClinicServiceStatusDto } from '../clinic-services/dto/update-clinic-service-status.dto';
 
 /**
  * Service Configs Controller
@@ -35,7 +44,7 @@ import {
 export class ServiceConfigsController {
   constructor(
     private readonly serviceConfigsService: ServiceConfigsService,
-  ) {}
+  ) { }
 
   /**
    * Get Clinic Services (Staff Only)
@@ -137,7 +146,7 @@ export class ServiceConfigsController {
     // Get clinic ID from staff JWT token
     // Assuming staff info is attached to req.user by JWT strategy
     const staffAccountId = req.user._id;
-    
+
     // Get staff's clinic ID from clinic_staff_information table
     const staffInfo = await this.serviceConfigsService['dataSource']
       .createQueryBuilder()
@@ -163,3 +172,98 @@ export class ServiceConfigsController {
     };
   }
 }
+
+@ApiTags('Service Configs (Manager)')
+@Controller('manager/clinic-services')
+export class ManagerServiceConfigsController {
+  constructor(
+    private readonly serviceConfigsService: ServiceConfigsService,
+  ) { }
+
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get clinic services for manager' })
+  @ApiResponse({
+    status: 200,
+    description: 'Services retrieved successfully',
+    type: [ClinicServiceResponseDto],
+  })
+  async getServicesByManager(@Request() req: any): Promise<ClinicServiceResponseDto[]> {
+    const clinicManagerId = req.user._id;
+    return this.serviceConfigsService.getServicesByManager(clinicManagerId);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get clinic service detail for manager' })
+  @ApiResponse({
+    status: 200,
+    description: 'Service retrieved successfully',
+    type: ClinicServiceResponseDto,
+  })
+  async getServiceDetail(@Request() req: any, @Param('id') id: string): Promise<ClinicServiceResponseDto> {
+    const clinicManagerId = req.user._id;
+    return this.serviceConfigsService.getServiceDetail(clinicManagerId, id);
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Create clinic service for manager' })
+  @ApiResponse({
+    status: 201,
+    description: 'Service created successfully',
+    type: ClinicServiceResponseDto,
+  })
+  async createService(
+    @Request() req: any,
+    @Body() dto: CreateClinicServiceDto
+  ): Promise<ClinicServiceResponseDto> {
+    const clinicManagerId = req.user._id;
+    return this.serviceConfigsService.createService(clinicManagerId, dto);
+  }
+
+  @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update clinic service for manager' })
+  @ApiResponse({
+    status: 200,
+    description: 'Service updated successfully',
+    type: ClinicServiceResponseDto,
+  })
+  async updateService(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateClinicServiceDto
+  ): Promise<ClinicServiceResponseDto> {
+    const clinicManagerId = req.user._id;
+    return this.serviceConfigsService.updateService(clinicManagerId, id, dto);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Toggle clinic service status for manager' })
+  @ApiResponse({
+    status: 200,
+    description: 'Service status toggled successfully',
+    type: ClinicServiceResponseDto,
+  })
+  async toggleServiceStatus(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateClinicServiceStatusDto
+  ): Promise<ClinicServiceResponseDto> {
+    const clinicManagerId = req.user._id;
+    return this.serviceConfigsService.toggleServiceStatus(clinicManagerId, id, dto.isActive);
+  }
+}
+
