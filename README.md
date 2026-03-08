@@ -257,7 +257,7 @@ pnpm run script:convert-excel-to-csv
 ## Project Structure
 
 ```
-medicare-backend/
+bonix-backend/
 ├── src/
 │   ├── common/              # Shared utilities, guards, interceptors
 │   │   ├── scripts/         # Utility scripts (schema sync, Excel tools, etc.)

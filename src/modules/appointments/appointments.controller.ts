@@ -1605,7 +1605,7 @@ export class AppointmentsController {
         data: [
           {
             clinic_id: 'uuid',
-            clinic_name: 'Phòng khám Đa khoa Medicare',
+            clinic_name: 'Phòng khám Đa khoa Bonix',
             clinic_address: '123 Đường X, Quận 1, TP.HCM',
             district: 'Quận 1',
             available_slots: 15,

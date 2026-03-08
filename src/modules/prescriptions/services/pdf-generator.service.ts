@@ -440,7 +440,7 @@ export class PdfGeneratorService {
         margin: [0, 30, 0, 0],
       },
       {
-        text: `Tài liệu được tạo tự động bởi hệ thống Medicare - ${new Date().toLocaleDateString('vi-VN')}`,
+        text: `Tài liệu được tạo tự động bởi hệ thống Bonix - ${new Date().toLocaleDateString('vi-VN')}`,
         style: 'footer',
         margin: [0, 10, 0, 0],
       },

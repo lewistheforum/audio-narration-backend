@@ -44,7 +44,7 @@ const successMessage = {
     'Doctor account created successfully with PENDING status. Doctor must complete profile before login.',
   // Email Verification
   emailVerifiedSuccess:
-    'Email verified successfully. Your account is now ACTIVE. Welcome to Medicare!',
+    'Email verified successfully. Your account is now ACTIVE. Welcome to Bonix!',
   verificationCodeSentSuccess:
     'Verification code sent to your email. Code expires in 10 minutes. Please check your inbox.',
   // Password Management
@@ -80,6 +80,11 @@ const successMessage = {
   subscriptionHistoryFetchedSuccess: 'Subscription history fetched successfully',
   // Feedback
   feedbackCreatedSuccess: 'Feedback created successfully',
+  // Clinic Manager
+  managerCreated: 'Manager created successfully',
+  managerUpdated: 'Manager updated successfully',
+  managerDisabled: 'Manager disabled successfully',
+  managerEnabled: 'Manager enabled successfully',
 };
 
 const failMessage = {
@@ -112,7 +117,7 @@ const failMessage = {
   userAlreadyBanned: 'User is already banned',
   userNotBanned: 'User is not banned',
   userAccountBanned:
-    'Your account has been banned. Please contact support at support@medicare.com',
+    'Your account has been banned. Please contact support at support@bonix.com',
   userAccountInactive:
     'Your account is suspended. Please contact support to reactivate',
   userAccountDeleted:
@@ -201,6 +206,17 @@ const failMessage = {
   // Feedback Errors
   feedbackToxicContent: 'Feedback contains inappropriate content',
   feedbackNotFound: 'Feedback not found',
+  // Clinic Manager Errors
+  managerNotFound: 'Manager not found',
+  managerNotActive: 'Manager account is not active',
+  managerPendingApproval: 'Manager account is pending approval',
+  managerDisabled: 'Manager account is disabled',
+  branchDisabled: 'Branch is disabled',
+  cannotCreateStaffPending: 'Cannot create staff while manager account is pending',
+  cannotCreateStaffDisabled: 'Cannot create staff while manager account is disabled',
+  onlyAdminCanUpdateLegalDocs: 'Only admin can update legal documents',
+  cannotDeleteActiveManager: 'Cannot delete active manager',
+  cannotDeletePendingReview: 'Cannot delete manager pending review',
 };
 
 const MESSAGES = {

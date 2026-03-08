@@ -3,6 +3,34 @@ import { LegalDocumentVerificationStatus } from '../../accounts/enums/legal-docu
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 
 /**
+ * Address Info DTO
+ *
+ * Account address information
+ */
+export class AddressInfoDto {
+  @ApiProperty({ description: 'Specific address details' })
+  address: string;
+
+  @ApiProperty({ description: 'Ward code' })
+  ward: string;
+
+  @ApiProperty({ description: 'Ward name' })
+  wardName: string;
+
+  @ApiProperty({ description: 'District code' })
+  district: string;
+
+  @ApiProperty({ description: 'District name' })
+  districtName: string;
+
+  @ApiProperty({ description: 'Province/City code' })
+  province: string;
+
+  @ApiProperty({ description: 'Province/City name' })
+  provinceName: string;
+}
+
+/**
  * Clinic Admin Info DTO
  *
  * Clinic admin account information
@@ -28,6 +56,36 @@ export class ClinicAdminInfoDto {
 
   @ApiProperty({ description: 'Specialized in', required: false })
   specializedIn?: string[];
+
+  @ApiProperty({ description: 'Date of birth', required: false })
+  dob?: Date;
+
+  @ApiProperty({ description: 'Profile picture URL', required: false })
+  profilePicture?: string;
+
+  @ApiProperty({ description: 'Bank name', required: false })
+  bankName?: string;
+
+  @ApiProperty({ description: 'Bank account number', required: false })
+  bankNumber?: string;
+
+  @ApiProperty({ description: 'Bank branch', required: false })
+  bankBranch?: string;
+
+  @ApiProperty({ description: 'SePay Virtual Account', required: false })
+  sepayVa?: string;
+
+  @ApiProperty({ description: 'Verification status', required: false })
+  isVerify?: boolean;
+
+  @ApiProperty({ description: 'Pros', required: false })
+  pros?: string[];
+
+  @ApiProperty({ description: 'Paraclinical', required: false })
+  paraclinical?: string[];
+
+  @ApiProperty({ type: () => AddressInfoDto, required: false })
+  address?: AddressInfoDto;
 }
 
 /**
@@ -50,6 +108,9 @@ export class ClinicManagerInfoDto {
 
   @ApiProperty({ description: 'Clinic branch name' })
   clinicBranchName: string;
+
+  @ApiProperty({ type: () => AddressInfoDto, required: false })
+  address?: AddressInfoDto;
 }
 
 /**
@@ -69,6 +130,12 @@ export class LegalDocumentsInfoDto {
 
   @ApiProperty({ description: 'Tax ID URL', required: false })
   taxIdUrl?: string;
+
+  @ApiProperty({ description: 'Other documents URLs', required: false })
+  otherDocs?: string[];
+
+  @ApiProperty({ description: 'Rejection reason', required: false })
+  rejectionReason?: string;
 
   @ApiProperty({
     description: 'Verification status',

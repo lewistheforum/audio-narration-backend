@@ -193,7 +193,7 @@ export class AccountSeederService {
     const clinicAdmins: Account[] = [];
 
     for (let i = 1; i <= CLINIC_ADMIN_COUNT; i++) {
-      const email = `clinic_admin_${i}@medicare.test`;
+      const email = `clinic_admin_${i}@bonix.test`;
       const existing = await this.accountRepository.findAccountByEmail(email);
 
       if (existing) {
@@ -243,7 +243,7 @@ export class AccountSeederService {
       for (let i = 1; i <= count; i++) {
         const email = `clinic_manager_${
           clinicAdmins.indexOf(clinicAdmin) + 1
-        }_${i}@medicare.test`;
+        }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -294,7 +294,7 @@ export class AccountSeederService {
       for (let i = 1; i <= count; i++) {
         const email = `clinic_staff_${
           clinicManagers.indexOf(clinicManager) + 1
-        }_${i}@medicare.test`;
+        }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -341,7 +341,7 @@ export class AccountSeederService {
       for (let i = 1; i <= count; i++) {
         const email = `doctor_${
           clinicManagers.indexOf(clinicManager) + 1
-        }_${i}@medicare.test`;
+        }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -400,7 +400,7 @@ export class AccountSeederService {
     let createdCount = 0;
 
     for (let i = 1; i <= PATIENT_COUNT; i++) {
-      const email = `patient_${i}@medicare.test`;
+      const email = `patient_${i}@bonix.test`;
       const existing = await this.accountRepository.findAccountByEmail(email);
 
       if (existing) {

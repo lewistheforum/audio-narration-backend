@@ -1,16 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountsService } from '../../../src/modules/accounts/accounts.service';
 import { AccountRepository } from '../../../src/modules/accounts/repositories/account.repository';
+import { GeneralAccountRepository } from '../../../src/modules/accounts/repositories/general-account.repository';
+import { CodeVerificationRepository } from '../../../src/modules/accounts/repositories/code-verification.repository';
 import { ClinicAdminInformationRepository } from '../../../src/modules/accounts/repositories/clinic-admin-information.repository';
 import { ClinicManagerInformationRepository } from '../../../src/modules/accounts/repositories/clinic-manager-information.repository';
+import { ClinicStaffInformationRepository } from '../../../src/modules/accounts/repositories/clinic-staff-information.repository';
+import { DoctorInformationRepository } from '../../../src/modules/accounts/repositories/doctor-information.repository';
 import { ClinicsLegalDocumentsRepository } from '../../../src/modules/accounts/repositories/clinics-legal-documents.repository';
 import { AddressRepository } from '../../../src/modules/accounts/repositories/address.repository';
+import { GoogleIframeRepository } from '../../../src/modules/accounts/repositories/google-iframe.repository';
 import { ClinicSubscriptionRepository } from '../../../src/modules/subscriptions/repositories/clinic-subscription.repository';
+import { ClinicSubscriptionHistoryRepository } from '../../../src/modules/subscriptions/repositories/clinic-subscription-history.repository';
+import { SubscriptionServiceRepository } from '../../../src/modules/subscriptions/repositories/subscription-service.repository';
 import { TransactionRepository } from '../../../src/modules/transactions/repositories/transaction.repository';
 import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { DataSource } from 'typeorm';
 import { AccountRole, AccountStatus } from '../../../src/modules/accounts/enums';
 import { Gender } from '../../../src/modules/accounts/enums/gender.enum';
+import { ClinicRole } from '../../../src/modules/accounts/enums/clinic-role.enum';
 import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/subscription-status.enum';
 import { LegalDocumentVerificationStatus } from '../../../src/modules/accounts/enums/legal-document-verification-status.enum';
 import { PaymentStatus } from '../../../src/modules/transactions/entities/transaction.entity';
@@ -88,6 +96,9 @@ describe('AccountsService - Registration Flow', () => {
     ...overrides,
   });
 
+  // Alias for validateManagerStatus tests
+  const createMockManager = createMockClinicManager;
+
   const createMockManagerInfo = (overrides = {}) => ({
     accountId: 'manager-1',
     clinicBranchName: 'Main Branch',
@@ -129,7 +140,9 @@ describe('AccountsService - Registration Flow', () => {
     accountRepository = {
       createAccount: jest.fn().mockReturnValue(createMockAccount()),
       findByEmail: jest.fn().mockResolvedValue(null),
+      findAccountByEmail: jest.fn().mockResolvedValue(null),
       findById: jest.fn().mockResolvedValue(createMockAccount()),
+      findAccountById: jest.fn().mockResolvedValue(createMockAccount()),
       findByParentIdAndRole: jest.fn().mockResolvedValue([]),
     };
 
@@ -178,22 +191,21 @@ describe('AccountsService - Registration Flow', () => {
       providers: [
         AccountsService,
         { provide: AccountRepository, useValue: accountRepository },
+        { provide: GeneralAccountRepository, useValue: {} },
+        { provide: CodeVerificationRepository, useValue: {} },
         { provide: ClinicAdminInformationRepository, useValue: clinicAdminInfoRepository },
         { provide: ClinicManagerInformationRepository, useValue: clinicManagerInfoRepository },
+        { provide: ClinicStaffInformationRepository, useValue: { create: jest.fn().mockReturnValue({ accountId: 'staff-1', fullName: 'Staff', clinicRole: ClinicRole.STAFF }) } },
+        { provide: DoctorInformationRepository, useValue: { create: jest.fn().mockReturnValue({ accountId: 'doctor-1', fullName: 'Doctor', specialization: 'Cardiology' }) } },
         { provide: ClinicsLegalDocumentsRepository, useValue: clinicLegalDocsRepository },
         { provide: AddressRepository, useValue: addressRepository },
+        { provide: GoogleIframeRepository, useValue: {} },
         { provide: ClinicSubscriptionRepository, useValue: clinicSubscriptionRepository },
+        { provide: ClinicSubscriptionHistoryRepository, useValue: {} },
+        { provide: SubscriptionServiceRepository, useValue: {} },
         { provide: TransactionRepository, useValue: transactionRepository },
         { provide: MailerService, useValue: mailerService },
         { provide: DataSource, useValue: dataSource },
-        // Add other required dependencies as mock
-        { provide: 'GeneralAccountRepository', useValue: {} },
-        { provide: 'CodeVerificationRepository', useValue: {} },
-        { provide: 'ClinicStaffInformationRepository', useValue: {} },
-        { provide: 'DoctorInformationRepository', useValue: {} },
-        { provide: 'GoogleIframeRepository', useValue: {} },
-        { provide: 'SubscriptionServiceRepository', useValue: {} },
-        { provide: 'ClinicSubscriptionHistoryRepository', useValue: {} },
       ],
     }).compile();
 
@@ -282,7 +294,7 @@ describe('AccountsService - Registration Flow', () => {
 
     it('should enforce email uniqueness - reject if email used by CLINIC_ADMIN', async () => {
       // Setup: Existing CLINIC_ADMIN with same email
-      accountRepository.findByEmail.mockResolvedValue(
+      accountRepository.findAccountByEmail.mockResolvedValue(
         createMockAccount({ role: AccountRole.CLINIC_ADMIN }),
       );
 
@@ -292,7 +304,7 @@ describe('AccountsService - Registration Flow', () => {
 
     it('should enforce email uniqueness - reject if email used by CLINIC_MANAGER', async () => {
       // Setup: Existing CLINIC_MANAGER with same email
-      accountRepository.findByEmail.mockResolvedValue(
+      accountRepository.findAccountByEmail.mockResolvedValue(
         createMockAccount({ role: AccountRole.CLINIC_MANAGER }),
       );
 
@@ -302,7 +314,7 @@ describe('AccountsService - Registration Flow', () => {
 
     it('should allow email reuse if existing account has different role (PATIENT)', async () => {
       // Setup: Existing PATIENT with same email
-      accountRepository.findByEmail.mockResolvedValue(
+      accountRepository.findAccountByEmail.mockResolvedValue(
         createMockAccount({ role: AccountRole.PATIENT }),
       );
       queryRunner.manager.save.mockResolvedValueOnce(createMockAccount({ _id: 'new-account-1' }));
@@ -444,7 +456,7 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if actor is not CLINIC_ADMIN', async () => {
-      accountRepository.findById.mockResolvedValue(
+      accountRepository.findAccountById.mockResolvedValue(
         createMockAccount({ role: AccountRole.PATIENT }),
       );
 
@@ -474,7 +486,7 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if email already exists', async () => {
-      accountRepository.findByEmail.mockResolvedValue(createMockAccount());
+      accountRepository.findAccountByEmail.mockResolvedValue(createMockAccount());
 
       await expect(
         service.createClinicManagerForRegistration(clinicAdminId, validDto),
@@ -544,6 +556,10 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should successfully upload legal documents for manager', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
+
       const result = await service.uploadLegalDocumentsForManager(
         clinicAdminId,
         managerAccountId,
@@ -575,7 +591,7 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if actor is not CLINIC_ADMIN', async () => {
-      accountRepository.findById
+      accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ role: AccountRole.PATIENT }))
         .mockResolvedValueOnce(createMockClinicManager());
 
@@ -585,7 +601,7 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if manager is not CLINIC_MANAGER role', async () => {
-      accountRepository.findById
+      accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(createMockAccount({ role: AccountRole.PATIENT }));
 
@@ -595,7 +611,7 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if manager is not owned by admin (parentId mismatch)', async () => {
-      accountRepository.findById
+      accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(
           createMockClinicManager({ parentId: 'different-admin-id' }),
@@ -607,6 +623,10 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if subscription status is not PENDING_LEGAL_SETUP', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
+      
       clinicSubscriptionRepository.findByClinicId.mockResolvedValue(
         createMockClinicSubscription({
           subscriptionStatus: RegistrationStatus.PENDING_MANAGER_SETUP,
@@ -619,6 +639,10 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should update existing legal documents if already exist', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
+      
       const existingDocs = createMockLegalDocs({
         verificationStatus: LegalDocumentVerificationStatus.REJECTED,
       });
@@ -637,6 +661,10 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should transition subscription status to PENDING_APPROVAL', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
+      
       await service.uploadLegalDocumentsForManager(clinicAdminId, managerAccountId, validDto);
 
       expect(queryRunner.manager.save).toHaveBeenCalledWith(
@@ -647,6 +675,10 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should set verification status to PENDING_REVIEW', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
+      
       await service.uploadLegalDocumentsForManager(clinicAdminId, managerAccountId, validDto);
 
       expect(clinicLegalDocsRepository.create).toHaveBeenCalledWith(
@@ -657,6 +689,10 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should rollback transaction on error', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
+      
       queryRunner.manager.save.mockRejectedValue(new Error('Database error'));
 
       await expect(
@@ -809,7 +845,7 @@ describe('AccountsService - Registration Flow', () => {
     });
 
     it('should reject if actor is not CLINIC_ADMIN', async () => {
-      accountRepository.findById.mockResolvedValue(
+      accountRepository.findAccountById.mockResolvedValue(
         createMockAccount({ role: AccountRole.PATIENT }),
       );
 
@@ -857,6 +893,248 @@ describe('AccountsService - Registration Flow', () => {
       expect(subscriptionIndex).toBeGreaterThan(managerAccountIndex);
       expect(adminInfoIndex).toBeGreaterThan(subscriptionIndex);
       expect(adminAccountIndex).toBeGreaterThan(adminInfoIndex);
+    });
+  });
+
+  // ============================================================================
+  // SECTION 2: MANAGER STATUS VALIDATION (validateManagerStatus)
+  // ============================================================================
+  describe('validateManagerStatus', () => {
+    const managerId = 'manager-123';
+
+    describe('CREATE_STAFF operation', () => {
+      it('should throw NotFoundException if manager not found', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(null);
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'CREATE_STAFF')
+        ).rejects.toThrow('Manager account not found');
+      });
+
+      it('should throw ForbiddenException if account is not a manager', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(
+          createMockAccount({ role: AccountRole.CLINIC_STAFF })
+        );
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'CREATE_STAFF')
+        ).rejects.toThrow('Account is not a clinic manager');
+      });
+
+      it('should throw ForbiddenException if manager is PENDING_APPROVAL', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(
+          createMockManager({ status: AccountStatus.PENDING_APPROVAL })
+        );
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'CREATE_STAFF')
+        ).rejects.toThrow('Manager legal documents pending approval');
+      });
+
+      it('should throw ForbiddenException if manager is MANAGER_DISABLED', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(
+          createMockManager({ status: AccountStatus.MANAGER_DISABLED })
+        );
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'CREATE_STAFF')
+        ).rejects.toThrow('Manager account is disabled');
+      });
+
+      it('should throw ForbiddenException if manager status is not ACTIVE', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(
+          createMockManager({ status: AccountStatus.BAN })
+        );
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'CREATE_STAFF')
+        ).rejects.toThrow('Manager account must be ACTIVE to create staff members');
+      });
+
+      it('should return manager entity if status is ACTIVE', async () => {
+        const mockManager = createMockManager({ status: AccountStatus.ACTIVE });
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(mockManager);
+
+        const result = await (service as any).validateManagerStatus(managerId, 'CREATE_STAFF');
+
+        expect(result).toEqual(mockManager);
+        expect(accountRepository.findAccountById).toHaveBeenCalledWith(managerId);
+      });
+    });
+
+    describe('ENABLE operation', () => {
+      it('should throw NotFoundException if manager not found', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(null);
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'ENABLE')
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('should throw BadRequestException if manager is not MANAGER_DISABLED', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(
+          createMockManager({ status: AccountStatus.ACTIVE })
+        );
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'ENABLE')
+        ).rejects.toThrow('Can only enable managers with MANAGER_DISABLED status');
+      });
+
+      it('should return manager entity if status is MANAGER_DISABLED', async () => {
+        const mockManager = createMockManager({ status: AccountStatus.MANAGER_DISABLED });
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(mockManager);
+
+        const result = await (service as any).validateManagerStatus(managerId, 'ENABLE');
+
+        expect(result).toEqual(mockManager);
+      });
+    });
+
+    describe('DISABLE operation', () => {
+      it('should throw NotFoundException if manager not found', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(null);
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'DISABLE')
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('should throw BadRequestException if manager is not ACTIVE', async () => {
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(
+          createMockManager({ status: AccountStatus.PENDING_APPROVAL })
+        );
+
+        await expect(
+          (service as any).validateManagerStatus(managerId, 'DISABLE')
+        ).rejects.toThrow('Can only disable managers with ACTIVE status');
+      });
+
+      it('should return manager entity if status is ACTIVE', async () => {
+        const mockManager = createMockManager({ status: AccountStatus.ACTIVE });
+        accountRepository.findAccountById = jest.fn().mockResolvedValue(mockManager);
+
+        const result = await (service as any).validateManagerStatus(managerId, 'DISABLE');
+
+        expect(result).toEqual(mockManager);
+      });
+    });
+  });
+
+  // ============================================================================
+  // SECTION 2: STAFF/DOCTOR CREATION WITH MANAGER VALIDATION
+  // ============================================================================
+  describe('createStaffByClinicManager - with validateManagerStatus', () => {
+    const managerId = 'manager-123';
+    const mockManager = createMockManager({ status: AccountStatus.ACTIVE });
+
+    const validStaffDto = {
+      email: 'staff@clinic.com',
+      password: 'Staff123',
+      fullName: 'Staff Member',
+      clinicRole: ClinicRole.STAFF,
+      gender: Gender.MALE,
+    };
+
+    beforeEach(() => {
+      accountRepository.findAccountById = jest.fn().mockResolvedValue(mockManager);
+      accountRepository.findByEmail = jest.fn().mockResolvedValue(null);
+    });
+
+    it('should call validateManagerStatus before creating staff', async () => {
+      const validateSpy = jest.spyOn(service as any, 'validateManagerStatus');
+
+      // Mock successful staff creation
+      accountRepository.findAccountByEmail.mockResolvedValue(null);
+      queryRunner.manager.save
+        .mockResolvedValueOnce(createMockAccount({ role: AccountRole.CLINIC_STAFF }))
+        .mockResolvedValueOnce({ accountId: 'staff-1', fullName: 'Staff Member', clinicRole: ClinicRole.STAFF });
+
+      await service.createStaffByClinicManager(managerId, validStaffDto);
+
+      expect(validateSpy).toHaveBeenCalledWith(managerId, 'CREATE_STAFF');
+      expect(validateSpy).toHaveBeenCalled();
+    });
+
+    it('should block staff creation if manager is PENDING_APPROVAL', async () => {
+      accountRepository.findAccountById = jest.fn().mockResolvedValue(
+        createMockManager({ status: AccountStatus.PENDING_APPROVAL })
+      );
+
+      await expect(
+        service.createStaffByClinicManager(managerId, validStaffDto)
+      ).rejects.toThrow('Manager legal documents pending approval');
+
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+    });
+
+    it('should block staff creation if manager is MANAGER_DISABLED', async () => {
+      accountRepository.findAccountById = jest.fn().mockResolvedValue(
+        createMockManager({ status: AccountStatus.MANAGER_DISABLED })
+      );
+
+      await expect(
+        service.createStaffByClinicManager(managerId, validStaffDto)
+      ).rejects.toThrow('Manager account is disabled');
+
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createDoctorByClinicManager - with validateManagerStatus', () => {
+    const managerId = 'manager-123';
+    const mockManager = createMockManager({ status: AccountStatus.ACTIVE });
+
+    const validDoctorDto = {
+      email: 'doctor@clinic.com',
+      password: 'Doctor123',
+      fullName: 'Dr. John Doe',
+      specialization: 'Cardiology',
+      gender: Gender.MALE,
+    };
+
+    beforeEach(() => {
+      accountRepository.findAccountById = jest.fn().mockResolvedValue(mockManager);
+      accountRepository.findByEmail = jest.fn().mockResolvedValue(null);
+    });
+
+    it('should call validateManagerStatus before creating doctor', async () => {
+      const validateSpy = jest.spyOn(service as any, 'validateManagerStatus');
+
+      // Mock successful doctor creation
+      accountRepository.findAccountByEmail.mockResolvedValue(null);
+      queryRunner.manager.save
+        .mockResolvedValueOnce(createMockAccount({ role: AccountRole.DOCTOR }))
+        .mockResolvedValueOnce({ accountId: 'doctor-1', fullName: 'Dr. John Doe', specialization: 'Cardiology' });
+
+      await service.createDoctorByClinicManager(managerId, validDoctorDto);
+
+      expect(validateSpy).toHaveBeenCalledWith(managerId, 'CREATE_STAFF');
+      expect(validateSpy).toHaveBeenCalled();
+    });
+
+    it('should block doctor creation if manager is PENDING_APPROVAL', async () => {
+      accountRepository.findAccountById = jest.fn().mockResolvedValue(
+        createMockManager({ status: AccountStatus.PENDING_APPROVAL })
+      );
+
+      await expect(
+        service.createDoctorByClinicManager(managerId, validDoctorDto)
+      ).rejects.toThrow('Manager legal documents pending approval');
+
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+    });
+
+    it('should block doctor creation if manager is MANAGER_DISABLED', async () => {
+      accountRepository.findAccountById = jest.fn().mockResolvedValue(
+        createMockManager({ status: AccountStatus.MANAGER_DISABLED })
+      );
+
+      await expect(
+        service.createDoctorByClinicManager(managerId, validDoctorDto)
+      ).rejects.toThrow('Manager account is disabled');
+
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
     });
   });
 });

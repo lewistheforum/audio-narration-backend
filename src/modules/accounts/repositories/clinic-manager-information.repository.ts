@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ClinicManagerInformation } from '../entities/clinic_manager_information.entity';
+import { AccountRole } from '../enums/account-role.enum';
 
 /**
  * ClinicManagerInformation Repository
@@ -165,5 +166,144 @@ export class ClinicManagerInformationRepository {
       where: { accountId },
     });
     return count > 0;
+  }
+
+  /**
+   * Find Managers by Parent Admin with Pagination and Filters
+   * Used for manager list endpoint
+   * 
+   * @param clinicAdminId - Parent CLINIC_ADMIN account ID
+   * @param query - Query parameters (pagination, sorting, filters)
+   * @returns Tuple of [managers, totalCount]
+   */
+  async findManagersByAdminWithPagination(
+    clinicAdminId: string,
+    query: any,
+  ): Promise<[any[], number]> {
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      fullName,
+      clinicBranchName,
+      email,
+      status,
+      legalDocStatus,
+      province,
+    } = query;
+
+    const skip = (page - 1) * limit;
+
+    // Map sortBy field to correct entity alias
+    const sortFieldMap: Record<string, string> = {
+      'fullName': 'manager.fullName',
+      'clinicBranchName': 'manager.clinicBranchName',
+      'createdAt': 'manager.createdAt',
+      'email': 'account.email',
+      'status': 'account.status',
+      'verificationStatus': 'legal.verificationStatus',
+      'provinceName': 'address.provinceName',
+    };
+
+    const sortField = sortFieldMap[sortBy] || 'manager.createdAt';
+
+    const queryBuilder = this.repository.createQueryBuilder('manager')
+      .leftJoinAndSelect('manager.account', 'account')
+      .leftJoin('account.children', 'children')
+      .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
+      .leftJoin('addresses', 'address', 'address.account_id = account._id')
+      .where('account.parent_id = :clinicAdminId', { clinicAdminId })
+      .andWhere('account.deleted_at IS NULL');
+
+    // Apply filters dynamically
+    if (fullName) {
+      queryBuilder.andWhere('LOWER(manager.fullName) LIKE LOWER(:fullName)', {
+        fullName: `%${fullName}%`,
+      });
+    }
+
+    if (clinicBranchName) {
+      queryBuilder.andWhere('LOWER(manager.clinicBranchName) LIKE LOWER(:clinicBranchName)', {
+        clinicBranchName: `%${clinicBranchName}%`,
+      });
+    }
+
+    if (email) {
+      queryBuilder.andWhere('LOWER(account.email) LIKE LOWER(:email)', {
+        email: `%${email}%`,
+      });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('account.status = :status', { status });
+    }
+
+    if (legalDocStatus) {
+      if (legalDocStatus === 'NOT_SUBMITTED') {
+        queryBuilder.andWhere('legal.verificationStatus IS NULL');
+      } else {
+        queryBuilder.andWhere('legal.verificationStatus = :legalDocStatus', {
+          legalDocStatus,
+        });
+      }
+    }
+
+    if (province) {
+      queryBuilder.andWhere('LOWER(address.provinceName) LIKE LOWER(:province)', {
+        province: `%${province}%`,
+      });
+    }
+
+    queryBuilder
+      .select([
+        'manager._id',
+        'manager.fullName',
+        'manager.clinicBranchName',
+        'manager.createdAt',
+        'account._id',
+        'account.email',
+        'account.status',
+        'legal.verificationStatus',
+        'address.provinceName',
+      ])
+      .addSelect('COUNT(DISTINCT CASE WHEN children.role = :staffRole THEN children._id END)', 'staffCount')
+      .addSelect('COUNT(DISTINCT CASE WHEN children.role = :doctorRole THEN children._id END)', 'doctorCount')
+      .setParameter('staffRole', AccountRole.CLINIC_STAFF)
+      .setParameter('doctorRole', AccountRole.DOCTOR)
+      .groupBy('manager._id')
+      .addGroupBy('account._id')
+      .addGroupBy('legal.verificationStatus')
+      .addGroupBy('address.provinceName')
+      .orderBy(sortField, sortOrder)
+      .skip(skip)
+      .take(limit);
+
+    const [data, totalCount] = await queryBuilder.getManyAndCount();
+
+    return [data, totalCount];
+  }
+
+  /**
+   * Find Manager Detail with All Relations
+   * Used for manager detail endpoint
+   * 
+   * @param managerId - Manager account ID
+   * @returns Complete manager data with relations
+   */
+  async findManagerDetailById(managerId: string): Promise<any> {
+    const manager = await this.repository.createQueryBuilder('manager')
+      .leftJoinAndSelect('manager.account', 'account')
+      .leftJoinAndSelect('account.children', 'children')
+      .leftJoinAndSelect('children.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('children.clinicStaffInformation', 'staffInfo')
+      .leftJoinAndSelect('account.legalDocuments', 'legal')
+      .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('address.googleIframe', 'iframe')
+      .where('account._id = :managerId', { managerId })
+      .andWhere('account.deleted_at IS NULL')
+      .getOne();
+    
+    return manager;
   }
 }

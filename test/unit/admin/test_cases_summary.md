@@ -93,21 +93,23 @@ File test: `admin.service.spec.ts`
 
 #### 3.1. `approveRegistration()` - Happy Path
 
-**TC-09: ✅ SUCCESS - Phê duyệt thành công**
+**TC-09: ✅ SUCCESS - Phê duyệt thành công và kích hoạt Manager Account**
 - **Setup:**
   - Mock Clinic Admin tồn tại
-  - Mock Clinic Manager tồn tại (child account)
+  - Mock Clinic Manager tồn tại (child account, status = `PENDING_APPROVAL`)
   - Mock Legal Docs: `verificationStatus = PENDING_REVIEW`
   - Mock Subscription: `subscriptionStatus = PENDING_APPROVAL`
   - Mock transaction commit thành công
   - Mock email service
 - **Expected:**
   - Legal Docs: `verificationStatus` → `APPROVED`
+  - **Manager Account: `status` → `ACTIVE` (Manager có thể đăng nhập)**
   - Subscription: `subscriptionStatus` → `PENDING_PAYMENT`
   - `rejectionReason` → `null`
   - Transaction được commit
   - `mailerService.sendRegistrationApprovedEmail()` được gọi với đúng params
   - Response: `{ success: true, newStatus: "PENDING_PAYMENT" }`
+- **Assertion Quan Trọng:** Verify `queryRunner.manager.save()` được gọi với Manager Account có `status = ACTIVE`
 
 **TC-10: ✅ SUCCESS - Email thất bại không ảnh hưởng approve**
 - **Setup:** Mock email service throw error
@@ -172,10 +174,12 @@ File test: `admin.service.spec.ts`
   - Legal Docs:
     - `verificationStatus` → `REJECTED`
     - `rejectionReason` → "Giấy tờ không rõ ràng"
+  - **Manager Account: `status` → `PENDING_APPROVAL` (Manager vẫn chưa thể đăng nhập)**
   - **⚠️ QUAN TRỌNG:** Subscription: `subscriptionStatus` → `PENDING_LEGAL_SETUP` (KHÔNG PHẢI `REJECTED`)
   - Transaction commit
   - `mailerService.sendRegistrationRejectedEmail()` được gọi với reason
   - Response: `{ success: true, newStatus: "PENDING_LEGAL_SETUP", nextStep: "RESUBMIT_DOCUMENTS" }`
+- **Assertion Quan Trọng:** Verify `queryRunner.manager.save()` được gọi với Manager Account có `status = PENDING_APPROVAL`
 
 **TC-19: ✅ SUCCESS - Email thất bại không ảnh hưởng reject**
 - **Setup:** Mock email throw error

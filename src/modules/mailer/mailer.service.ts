@@ -108,16 +108,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '⚠️ Account Warning - Medicare',
+      subject: '⚠️ Account Warning - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -144,7 +144,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -170,16 +170,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '🚫 Account Banned - Medicare',
+      subject: '🚫 Account Banned - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -206,7 +206,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -228,16 +228,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '✅ Account Restored - Medicare',
+      subject: '✅ Account Restored - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -266,7 +266,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -293,16 +293,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '⚠️ Clinic Account Warning - Medicare',
+      subject: '⚠️ Clinic Account Warning - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -329,7 +329,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -355,16 +355,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '🚫 Clinic Account Suspended - Medicare',
+      subject: '🚫 Clinic Account Suspended - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -394,7 +394,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -419,16 +419,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '✅ Clinic Account Restored - Medicare',
+      subject: '✅ Clinic Account Restored - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -457,7 +457,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -486,16 +486,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Verify Your Email - Medicare',
+      subject: 'Verify Your Email - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -507,7 +507,7 @@ export class MailerService {
               Hi ${displayName},
             </p>
             <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              Thank you for registering with Medicare. Please use the verification code below to verify your email address:
+              Thank you for registering with Bonix. Please use the verification code below to verify your email address:
             </p>
             
             <div style="background: white; border: 2px dashed #4F46E5; border-radius: 8px; padding: 20px; margin: 30px 0;">
@@ -520,13 +520,13 @@ export class MailerService {
               This code will expire in <strong>15 minutes</strong>.
             </p>
             <p style="color: #6B7280; font-size: 14px; margin: 10px 0 0 0;">
-              If you didn't create an account with Medicare, please ignore this email.
+              If you didn't create an account with Bonix, please ignore this email.
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -556,16 +556,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Password Reset Request - Medicare',
+      subject: 'Password Reset Request - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -598,14 +598,14 @@ export class MailerService {
             <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Security Tips:</h3>
             <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
               <li>Never share your reset code with anyone</li>
-              <li>Medicare will never ask for your password via email</li>
+              <li>Bonix will never ask for your password via email</li>
               <li>Use a strong, unique password for your account</li>
             </ul>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -636,16 +636,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Contract Signing OTP - Medicare',
+      subject: 'Contract Signing OTP - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -676,7 +676,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -706,23 +706,23 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Welcome to Medicare!',
+      subject: 'Welcome to Bonix!',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
           </div>
           
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🎉 Welcome to Medicare!</h1>
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🎉 Welcome to Bonix!</h1>
             <p style="font-size: 18px; margin: 0 0 10px 0;">
               Hi ${fullName},
             </p>
@@ -774,13 +774,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need help? Contact us at 
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -804,17 +804,17 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: [targetMail],
-      subject: 'Medicare Subject',
-      text: 'Medicare Text',
+      subject: 'Bonix Subject',
+      text: 'Bonix Text',
       html: ` 
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="margin: 16px 0;">
                 <img 
-                  alt="Medicare" 
+                  alt="Bonix" 
                   style="width: 100%; border-radius: 12px; object-fit: cover;"
                   height="320"
                   src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
@@ -844,7 +844,7 @@ export class MailerService {
             `,
       attachments: [
         {
-          filename: 'logo-medicare.png',
+          filename: 'logo-Bonix.png',
           path: 'https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png',
           contentType: 'image/png',
         },
@@ -891,16 +891,16 @@ export class MailerService {
             <tr>
               <td style="padding:24px 28px 16px 28px;">
                 <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;">
-                  Medicare App
+                  Bonix App
                 </p>
                 <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
                   Email Verification for Account Registration
                 </h1>
                 <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
-                  Hello from Medicare,
+                  Hello from Bonix,
                 </p>
                 <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
-                  Thank you for registering an account on <strong>Medicare</strong>.<br/>
+                  Thank you for registering an account on <strong>Bonix</strong>.<br/>
                   Your email verification code is:
                 </p>
               </td>
@@ -933,7 +933,7 @@ export class MailerService {
 </html>`;
 
     const mailOptions = {
-      from: `"Medicare App" <${user}>`,
+      from: `"Bonix App" <${user}>`,
       to: email,
       subject: 'Email Verification for Account Registration',
       text: `Your verification code is: ${code}. Code is valid for 10 minutes.`,
@@ -975,13 +975,13 @@ export class MailerService {
             <tr>
               <td style="padding:24px 28px 16px 28px;">
                 <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;">
-                  Medicare App
+                  Bonix App
                 </p>
                 <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
                   Password Reset Request
                 </h1>
                 <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
-                  Hello from Medicare,
+                  Hello from Bonix,
                 </p>
                 <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
                   We received a password reset request for the account using email:
@@ -1018,7 +1018,7 @@ export class MailerService {
 </html>`;
 
     const mailOptions = {
-      from: `"Medicare App" <${user}>`,
+      from: `"Bonix App" <${user}>`,
       to: email,
       subject: 'Password Reset Request',
       text: `Your password reset code is: ${code}. Code is valid for 10 minutes.`,
@@ -1041,23 +1041,23 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Welcome to Medicare - Clinic Registration Initiated',
+      subject: 'Welcome to Bonix - Clinic Registration Initiated',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img
-              alt="Medicare Logo"
+              alt="Bonix Logo"
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
           </div>
           
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🏥 Welcome to Medicare!</h1>
+            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🏥 Welcome to Bonix!</h1>
             <p style="font-size: 18px; margin: 0 0 10px 0;">
               ${displayName}
             </p>
@@ -1105,13 +1105,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need help? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1141,7 +1141,7 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
@@ -1150,7 +1150,7 @@ export class MailerService {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1176,7 +1176,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1206,7 +1206,7 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
@@ -1215,7 +1215,7 @@ export class MailerService {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1241,7 +1241,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1270,16 +1270,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: managerEmail,
-      subject: 'Your Clinic Manager Account Credentials - Medicare',
+      subject: 'Your Clinic Manager Account Credentials - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img
-              alt="Medicare Logo"
+              alt="Bonix Logo"
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1330,13 +1330,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need help? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1365,16 +1365,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: adminEmail,
-      subject: '🎉 Registration Approved - Medicare',
+      subject: '🎉 Registration Approved - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img
-              alt="Medicare Logo"
+              alt="Bonix Logo"
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1386,7 +1386,7 @@ export class MailerService {
               ${displayName}
             </p>
             <p style="font-size: 16px; margin: 0; opacity: 0.9;">
-              Your clinic registration has been approved by Medicare!
+              Your clinic registration has been approved by Bonix!
             </p>
           </div>
           
@@ -1414,7 +1414,7 @@ export class MailerService {
             <div style="background: #ECFDF5; border: 2px solid #10B981; border-radius: 8px; padding: 20px; margin-top: 20px;">
               <h3 style="margin: 0 0 10px 0; color: #065F46; font-size: 16px;">Payment Required</h3>
               <p style="margin: 0; color: #047857; font-size: 14px;">
-                Your clinic is ready to go! Please complete the payment process to activate your subscription and start using Medicare services.
+                Your clinic is ready to go! Please complete the payment process to activate your subscription and start using Bonix services.
               </p>
             </div>
           </div>
@@ -1432,13 +1432,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need help? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1468,16 +1468,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: adminEmail,
-      subject: 'Registration Update - Medicare',
+      subject: 'Registration Update - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img
-              alt="Medicare Logo"
+              alt="Bonix Logo"
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1550,13 +1550,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need help? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Medicare. All rights reserved.
+              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1594,16 +1594,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: `${urgentFlag}Your Medicare Subscription Expires in ${daysText}`,
+      subject: `${urgentFlag}Your Bonix Subscription Expires in ${daysText}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1617,7 +1617,7 @@ export class MailerService {
               Hi <strong>${context.clinicName}</strong>,
             </p>
             <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Your Medicare subscription (<strong>${context.planName}</strong>) will expire in <strong style="color: ${isUrgent ? '#DC2626' : '#F59E0B'};">${daysText}</strong>.
+              Your Bonix subscription (<strong>${context.planName}</strong>) will expire in <strong style="color: ${isUrgent ? '#DC2626' : '#F59E0B'};">${daysText}</strong>.
             </p>
             
             <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
@@ -1643,7 +1643,7 @@ export class MailerService {
                 : `
               <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0;">
                 <p style="color: #92400E; font-size: 14px; margin: 0;">
-                  💡 <strong>Tip:</strong> Renew now to ensure uninterrupted access to your Medicare services.
+                  💡 <strong>Tip:</strong> Renew now to ensure uninterrupted access to your Bonix services.
                 </p>
               </div>
             `
@@ -1670,13 +1670,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need help? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1711,16 +1711,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: `✅ Your Medicare Subscription Renews ${daysText}`,
+      subject: `✅ Your Bonix Subscription Renews ${daysText}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1734,7 +1734,7 @@ export class MailerService {
               Hi <strong>${context.clinicName}</strong>,
             </p>
             <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Good news! Your Medicare subscription renewal is already scheduled. No action needed from your side.
+              Good news! Your Bonix subscription renewal is already scheduled. No action needed from your side.
             </p>
             
             <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D1FAE5;">
@@ -1779,13 +1779,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Questions? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1816,16 +1816,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: '❌ Your Medicare Subscription Has Expired',
+      subject: '❌ Your Bonix Subscription Has Expired',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1839,7 +1839,7 @@ export class MailerService {
               Hi <strong>${context.clinicName}</strong>,
             </p>
             <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Your Medicare subscription (<strong>${context.planName}</strong>) has expired as of <strong>${context.expirationDate}</strong>.
+              Your Bonix subscription (<strong>${context.planName}</strong>) has expired as of <strong>${context.expirationDate}</strong>.
             </p>
             
             <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 2px solid #FEE2E2;">
@@ -1870,7 +1870,7 @@ export class MailerService {
           <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
             <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Renew Today to:</h3>
             <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-              <li>Restore full access to all Medicare features</li>
+              <li>Restore full access to all Bonix features</li>
               <li>Resume managing patient appointments</li>
               <li>Access your clinic data and reports</li>
               <li>Continue providing quality healthcare services</li>
@@ -1880,13 +1880,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Need assistance? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1914,16 +1914,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: '✅ Your Medicare Subscription Has Been Renewed',
+      subject: '✅ Your Bonix Subscription Has Been Renewed',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -1937,7 +1937,7 @@ export class MailerService {
               Hi <strong>${context.clinicName}</strong>,
             </p>
             <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Great news! Your Medicare subscription has been successfully renewed. Your services continue uninterrupted.
+              Great news! Your Bonix subscription has been successfully renewed. Your services continue uninterrupted.
             </p>
             
             <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D1FAE5;">
@@ -1970,7 +1970,7 @@ export class MailerService {
             
             <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
               <p style="color: #065F46; font-size: 14px; margin: 0;">
-                ✅ <strong>All Services Active:</strong> You have full access to all Medicare features until ${context.endDate}.
+                ✅ <strong>All Services Active:</strong> You have full access to all Bonix features until ${context.endDate}.
               </p>
             </div>
             
@@ -1987,7 +1987,7 @@ export class MailerService {
           </div>
           
           <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Thank You for Choosing Medicare</h3>
+            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Thank You for Choosing Bonix</h3>
             <p style="color: #6B7280; font-size: 14px; margin: 10px 0;">
               We're committed to providing you with the best healthcare management platform. Your continued trust means everything to us!
             </p>
@@ -1996,13 +1996,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Questions? Reach out at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -2035,16 +2035,16 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: `${icon} Your Medicare Subscription Plan Has Changed`,
+      subject: `${icon} Your Bonix Subscription Plan Has Changed`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -2139,13 +2139,13 @@ export class MailerService {
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
               Questions about your new plan? Contact us at
-              <a href="mailto:support@medicare.com" style="color: #4F46E5; text-decoration: none;">support@medicare.com</a>
+              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
             </p>
           </div>
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -2175,16 +2175,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare',
+        name: 'Bonix',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '🗑️ Incomplete Registration Data Removed - Medicare',
+      subject: '🗑️ Incomplete Registration Data Removed - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -2222,7 +2222,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -2253,16 +2253,16 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Medicare Support',
+        name: 'Bonix Support',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Update on Your Report - Medicare',
+      subject: 'Update on Your Report - Bonix',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <img 
-              alt="Medicare Logo" 
+              alt="Bonix Logo" 
               style="width: 150px; height: auto;"
               src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
             />
@@ -2288,7 +2288,7 @@ export class MailerService {
           
           <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Medicare. All rights reserved.
+              © 2026 Bonix. All rights reserved.
             </p>
           </div>
         </div>

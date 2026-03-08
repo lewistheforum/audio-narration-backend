@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Tài liệu này mô tả các quy tắc nghiệp vụ được triển khai cho **Prescriptions Module - Patient View Flow** trong hệ thống Medicare. Module này xử lý việc xem đơn thuốc điện tử (E-Prescription), xuất PDF, và xem chi tiết hồ sơ bệnh án đa hình (Polymorphic ERM).
+Tài liệu này mô tả các quy tắc nghiệp vụ được triển khai cho **Prescriptions Module - Patient View Flow** trong hệ thống Bonix. Module này xử lý việc xem đơn thuốc điện tử (E-Prescription), xuất PDF, và xem chi tiết hồ sơ bệnh án đa hình (Polymorphic ERM).
 
 **Phiên Bản**: 1.0  
 **Ngày Cập Nhật**: 03/03/2026  

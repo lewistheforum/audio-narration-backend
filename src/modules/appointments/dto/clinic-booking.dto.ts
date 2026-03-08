@@ -74,7 +74,7 @@ export class ClinicItemDto {
 
   @ApiProperty({
     description: 'Clinic name',
-    example: 'Phòng khám Đa khoa Medicare',
+    example: 'Phòng khám Đa khoa Bonix',
   })
   clinic_name: string;
 

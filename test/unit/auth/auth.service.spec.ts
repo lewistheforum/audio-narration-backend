@@ -60,6 +60,7 @@ describe('AuthService', () => {
         accountsService = {
             findByEmail: jest.fn().mockResolvedValue(createMockAccount()),
             validateAccountAccess: jest.fn().mockReturnValue(undefined),
+            validateParentManagerStatus: jest.fn().mockResolvedValue(undefined),
             validateClinicSubscription: jest.fn().mockResolvedValue(undefined),
             findGeneralAccountByUserId: jest.fn().mockResolvedValue(createMockGeneralAccount()),
             findAccountEntityById: jest.fn().mockResolvedValue(createMockAccount()),
@@ -588,6 +589,179 @@ describe('AuthService', () => {
                 // Execute & Verify
                 await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
                 await expect(service.login(loginDto)).rejects.toThrow('No parent account found');
+            });
+        });
+
+        describe('Case: Parent Manager Status Validation', () => {
+            it('should block CLINIC_STAFF when parent manager is MANAGER_DISABLED', async () => {
+                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+
+                const mockStaff = createMockAccount({
+                    role: AccountRole.CLINIC_STAFF,
+                    parentId: 'manager-123',
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockStaff);
+                accountsService.validateParentManagerStatus.mockRejectedValue(
+                    new ForbiddenException(
+                        'Your clinic branch has been temporarily disabled. ' +
+                        'Please contact your clinic administrator for assistance.'
+                    ),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+                await expect(service.login(loginDto)).rejects.toThrow('temporarily disabled');
+                expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockStaff);
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockStaff);
+                expect(jwtService.sign).not.toHaveBeenCalled();
+                expect(socketGatewayService.markUserOnline).not.toHaveBeenCalled();
+            });
+
+            it('should block CLINIC_STAFF when parent manager is PENDING_APPROVAL', async () => {
+                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+
+                const mockStaff = createMockAccount({
+                    role: AccountRole.CLINIC_STAFF,
+                    parentId: 'manager-123',
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockStaff);
+                accountsService.validateParentManagerStatus.mockRejectedValue(
+                    new ForbiddenException(
+                        'Your clinic branch is pending legal document approval. ' +
+                        'You will be able to login once verification is complete.'
+                    ),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+                await expect(service.login(loginDto)).rejects.toThrow('pending legal document approval');
+                expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockStaff);
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockStaff);
+                expect(accountsService.validateClinicSubscription).not.toHaveBeenCalled();
+            });
+
+            it('should block DOCTOR when parent manager is MANAGER_DISABLED', async () => {
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+
+                const mockDoctor = createMockAccount({
+                    role: AccountRole.DOCTOR,
+                    parentId: 'manager-123',
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockDoctor);
+                accountsService.validateParentManagerStatus.mockRejectedValue(
+                    new ForbiddenException(
+                        'Your clinic branch has been temporarily disabled. ' +
+                        'Please contact your clinic administrator for assistance.'
+                    ),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+                await expect(service.login(loginDto)).rejects.toThrow('temporarily disabled');
+                expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockDoctor);
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockDoctor);
+                expect(jwtService.sign).not.toHaveBeenCalled();
+            });
+
+            it('should block DOCTOR when parent manager is PENDING_APPROVAL', async () => {
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+
+                const mockDoctor = createMockAccount({
+                    role: AccountRole.DOCTOR,
+                    parentId: 'manager-123',
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockDoctor);
+                accountsService.validateParentManagerStatus.mockRejectedValue(
+                    new ForbiddenException(
+                        'Your clinic branch is pending legal document approval. ' +
+                        'You will be able to login once verification is complete.'
+                    ),
+                );
+
+                // Execute & Verify
+                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+                await expect(service.login(loginDto)).rejects.toThrow('pending legal document approval');
+                expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockDoctor);
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockDoctor);
+            });
+
+            it('should allow CLINIC_STAFF login when parent manager is ACTIVE', async () => {
+                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+
+                const mockStaff = createMockAccount({
+                    role: AccountRole.CLINIC_STAFF,
+                    parentId: 'manager-123',
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockStaff);
+                accountsService.validateParentManagerStatus.mockResolvedValue(undefined);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+                expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockStaff);
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockStaff);
+                expect(accountsService.validateClinicSubscription).toHaveBeenCalledWith(mockStaff);
+                expect(socketGatewayService.markUserOnline).toHaveBeenCalled();
+            });
+
+            it('should NOT check parent status for CLINIC_ADMIN role', async () => {
+                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+
+                const mockAdmin = createMockAccount({
+                    role: AccountRole.CLINIC_ADMIN,
+                    parentId: null,
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockAdmin);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify - validateParentManagerStatus should be called but will return early
+                expect(result).toBeDefined();
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockAdmin);
+                expect(result.data.accessToken).toBe('mock-jwt-token');
+            });
+
+            it('should NOT check parent status for PATIENT role', async () => {
+                const loginDto = { email: 'patient@example.com', password: 'password123' };
+
+                const mockPatient = createMockAccount({
+                    role: AccountRole.PATIENT,
+                    parentId: null,
+                    status: AccountStatus.ACTIVE,
+                });
+
+                jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+                accountsService.findByEmail.mockResolvedValue(mockPatient);
+
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify - validateParentManagerStatus should be called but will return early
+                expect(result).toBeDefined();
+                expect(accountsService.validateParentManagerStatus).toHaveBeenCalledWith(mockPatient);
+                expect(result.data.accessToken).toBe('mock-jwt-token');
             });
         });
 
