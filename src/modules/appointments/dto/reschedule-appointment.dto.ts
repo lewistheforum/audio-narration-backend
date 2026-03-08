@@ -16,11 +16,11 @@ export class RescheduleAppointmentDto {
   appointmentDate: string;
 
   @ApiProperty({
-    description: 'New doctor shift hour ID (UUID)',
+    description: 'New clinic shift hour ID (UUID)',
     example: '123e4567-e89b-12d3-a456-426614174000',
     required: false,
   })
   @IsOptional()
-  @IsUUID('4', { message: 'Doctor shift hour ID must be a valid UUID' })
-  doctorShiftHourId?: string;
+  @IsUUID('4', { message: 'Clinic shift hour ID must be a valid UUID' })
+  clinicShiftHourId?: string;
 }

@@ -1,0 +1,705 @@
+
+> capstone-backend@0.0.1 test D:\Study\FPTU\2026\SP26\SEP\medicare-backend
+> jest "--" "test/unit/appointments"
+
+PASS test/unit/appointments/booking-sessions.spec.ts (6.913 s)
+PASS test/unit/appointments/schedules-api.spec.ts (6.971 s)
+PASS test/unit/appointments/work-history/work-history.service.spec.ts (7.105 s)
+  ΓùÅ Console
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: manager-uuid, Role: CLINIC_MANAGER, ParentId: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: manager-uuid, Role: CLINIC_MANAGER, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=undefined, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid-123, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=2026-02-01, toDate=2026-02-28, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=COMPLETED
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 5
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 1
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 1
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 1
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 12
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 12
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: admin-uuid, Role: CLINIC_ADMIN, ParentId: null
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-uuid, clinicId=admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 0
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+    console.log
+      [getDoctorWorkHistory] User details - ID: manager-uuid, Role: CLINIC_MANAGER, ParentId: clinic-A-admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1800:13)
+
+    console.log
+      [getDoctorWorkHistory] Resolved clinicId for filtering: clinic-A-admin-uuid
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1801:13)
+
+    console.log
+      [getDoctorWorkHistory] Query parameters: doctorId=doctor-in-clinic-B, clinicId=clinic-A-admin-uuid, fromDate=undefined, toDate=undefined, status=undefined
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1822:13)
+
+    console.log
+      [getDoctorWorkHistory] Raw SQL Query:  SELECT * FROM appointments ...
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1823:13)
+
+    console.log
+      [getDoctorWorkHistory] SQL Parameters:  { doctorId: 'doctor-uuid' }
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1824:13)
+
+    console.log
+      [getDoctorWorkHistory] Total appointments found: 0
+
+      at AppointmentsService.getDoctorWorkHistory (src/modules/appointments/appointments.service.ts:1827:13)
+
+FAIL test/unit/appointments/appointments-cod.spec.ts (9.418 s)
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Session validation ΓÇ║ should validate session is complete (all 4 steps)
+
+    expect(received).rejects.toThrow(expected)
+
+    Expected constructor: ForbiddenException
+    Received constructor: TypeError
+
+    Received message: "this.dataSource.transaction is not a function"
+
+          2008 |     // Execute transaction with SERIALIZABLE isolation level
+          2009 |     // This ensures ACID compliance and prevents race conditions
+        > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+               |                                          ^
+          2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+          2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+          2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:209:9)
+      at Object.toThrow (node_modules/.pnpm/expect@30.2.0/node_modules/expect/build/index.js:2155:20)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:211:19)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Session validation ΓÇ║ should validate payment method is COD
+
+    expect(received).rejects.toThrow(expected)
+
+    Expected constructor: ForbiddenException
+    Received constructor: TypeError
+
+    Received message: "Cannot read properties of undefined (reading 'ttl')"
+
+          2237 |     // Save updated session back to Redis (keep TTL)
+          2238 |     const key = `booking:session:${sessionId}`;
+        > 2239 |     const ttl = await this.bookingSessionService['redisClient'].ttl(key);
+               |                                                                 ^
+          2240 |     await this.bookingSessionService['redisClient'].setex(
+          2241 |       key,
+          2242 |       ttl > 0 ? ttl : 1800,
+
+      at AppointmentsService.createPaymentRequestOnline (src/modules/appointments/appointments.service.ts:2239:65)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1973:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:217:9)
+      at Object.toThrow (node_modules/.pnpm/expect@30.2.0/node_modules/expect/build/index.js:2155:20)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:219:19)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Pessimistic locking and slot availability ΓÇ║ should use FOR UPDATE lock when checking slot availability
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:233:9)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Pessimistic locking and slot availability ΓÇ║ should throw ConflictException if slot is fully booked
+
+    expect(received).rejects.toThrow(expected)
+
+    Expected constructor: ConflictException
+    Received constructor: TypeError
+
+    Received message: "this.dataSource.transaction is not a function"
+
+          2008 |     // Execute transaction with SERIALIZABLE isolation level
+          2009 |     // This ensures ACID compliance and prevents race conditions
+        > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+               |                                          ^
+          2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+          2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+          2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:252:9)
+      at Object.toThrow (node_modules/.pnpm/expect@30.2.0/node_modules/expect/build/index.js:2155:20)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:254:19)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Pessimistic locking and slot availability ΓÇ║ should increment booked_count after successful booking
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:270:9)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Appointment creation ΓÇ║ should create appointment with correct data from session
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:301:24)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Appointment creation ΓÇ║ should set status to pending_confirmation for COD
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:322:24)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Appointment creation ΓÇ║ should include patient_note if provided
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:338:24)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Transaction management ΓÇ║ should commit transaction on successful booking
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:354:9)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Transaction management ΓÇ║ should rollback transaction on error
+
+    expect(received).rejects.toThrow(expected)
+
+    Expected substring: "Database error"
+    Received message:   "this.dataSource.transaction is not a function"
+
+          2008 |     // Execute transaction with SERIALIZABLE isolation level
+          2009 |     // This ensures ACID compliance and prevents race conditions
+        > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+               |                                          ^
+          2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+          2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+          2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:371:9)
+      at Object.toThrow (node_modules/.pnpm/expect@30.2.0/node_modules/expect/build/index.js:2155:20)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:373:19)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Session cleanup ΓÇ║ should delete session from Redis after successful booking
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:390:9)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Session cleanup ΓÇ║ should keep session in Redis if transaction fails
+
+    expect(received).rejects.toThrow(expected)
+
+    Expected substring: "Database error"
+    Received message:   "this.dataSource.transaction is not a function"
+
+          2008 |     // Execute transaction with SERIALIZABLE isolation level
+          2009 |     // This ensures ACID compliance and prevents race conditions
+        > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+               |                                          ^
+          2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+          2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+          2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:404:9)
+      at Object.toThrow (node_modules/.pnpm/expect@30.2.0/node_modules/expect/build/index.js:2155:20)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:406:19)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Duplicate prevention ΓÇ║ should prevent multiple requests with same session_id
+
+    TypeError: this.dataSource.transaction is not a function
+
+      2008 |     // Execute transaction with SERIALIZABLE isolation level
+      2009 |     // This ensures ACID compliance and prevents race conditions
+    > 2010 |     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+           |                                          ^
+      2011 |       // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+      2012 |       // SELECT ... FOR UPDATE prevents concurrent bookings
+      2013 |       const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+
+      at AppointmentsService.createAppointmentCOD (src/modules/appointments/appointments.service.ts:2010:42)
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1966:25)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:424:9)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ createAppointmentFromSession (COD Flow) ΓÇ║ Business rules validation ΓÇ║ should validate patient has no overlapping appointments
+
+    Property `checkOverlappingAppointment` does not exist in the provided object
+
+      447 |         
+      448 |         // Mock existing appointment at same time
+    > 449 |         jest.spyOn(service as any, 'checkOverlappingAppointment').mockResolvedValue(true);
+          |              ^
+      450 |
+      451 |         await expect(
+      452 |           service.createAppointmentFromSession(mockSessionId, mockPatientId)
+
+      at ModuleMocker.spyOn (node_modules/.pnpm/jest-mock@30.2.0/node_modules/jest-mock/build/index.js:593:13)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:449:14)
+
+  ΓùÅ POST Appointments API (V4.3) - Unit Tests ΓÇ║ Edge cases ΓÇ║ should handle very high concurrent booking requests
+
+    TypeError: Cannot read properties of undefined (reading 'patientId')
+
+      1909 |
+      1910 |     // Verify session ownership
+    > 1911 |     if (session.patientId !== patientId) {
+           |                 ^
+      1912 |       throw new ForbiddenException('You do not have permission to access this session');
+      1913 |     }
+      1914 |
+
+      at AppointmentsService.createAppointmentFromSession (src/modules/appointments/appointments.service.ts:1911:17)
+      at Object.<anonymous> (test/unit/appointments/appointments-cod.spec.ts:480:7)
+
+Test Suites: 1 failed, 3 passed, 4 total
+Tests:       15 failed, 52 passed, 67 total
+Snapshots:   0 total
+Time:        10.183 s
+Ran all test suites matching test/unit/appointments.
+ΓÇëELIFECYCLEΓÇë Test failed. See above for more details.

@@ -36,7 +36,8 @@ export interface BookingSession {
   clinicId?: string;
   doctorId?: string;
   appointmentDate?: string; // YYYY-MM-DD
-  doctorShiftHourId?: string;
+  clinicShiftHourId?: string;
+  paymentMethod?: 'cod' | 'online'; // NEW in v4.0 - Required before finalizing
   patientNote?: string;
   
   // Metadata
@@ -146,16 +147,17 @@ export class BookingSessionService {
       throw new ForbiddenException('You do not have permission to access this session');
     }
 
-    // Validate step sequence
-    this.validateStepSequence(session.currentStep, updateDto.step);
+    // Validate step sequence (pass bookingOption for proper validation)
+    this.validateStepSequence(session.currentStep, updateDto.step, session.bookingOption);
 
-    // Update session based on booking option and step
+    // Update session based on booking option and step (VERSION 4.4)
     if (session.bookingOption === BookingOption.DATE) {
-      // Option 3: Date-first flow
+      // Option 3: Date-first flow (remains 5 steps)
       // Step 1 (initial): appointment_date is already set
       // Step 2: Add clinic_id
       // Step 3: Add clinic_service_config_id
-      // Step 4: Add doctor_shift_hour_id + doctor_id
+      // Step 4: Add clinic_shift_hour_id + doctor_id
+      // Step 5: Add payment_method + patient_note
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
         session.clinicId = data.clinic_id;
@@ -166,37 +168,122 @@ export class BookingSessionService {
         session.currentStep = 3;
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        session.doctorShiftHourId = data.doctor_shift_hour_id;
+        session.clinicShiftHourId = data.clinic_shift_hour_id;
         session.doctorId = data.doctor_id;
         session.currentStep = 4;
+      } else if (updateDto.step === 5) {
+        const data = updateDto.data as any;
+        
+        // Payment method is REQUIRED
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 5');
+        }
+        
+        session.paymentMethod = data.payment_method;
+        
+        // Patient note is optional
+        if (data.patient_note) {
+          session.patientNote = data.patient_note;
+        }
+        
+        session.currentStep = 5;
       }
-    } else {
-      // Option 1 (service-first) and Option 2 (doctor-first) flows
-      // Step 2: Add appointment_date
-      // Step 3: Add doctor_shift_hour_id + (doctor_id OR clinic_service_config_id)
-      // Step 4: Add patient_note (optional)
+    } else if (session.bookingOption === BookingOption.DOCTOR) {
+      // VERSION 4.4: Option 2 (doctor-first) - TÁCH RỜI THÀNH 5 STEPS
+      // Step 1 (initial): doctor_id + clinic_id already set
+      // Step 2: Add appointment_date + clinic_shift_hour_id (chọn lịch)
+      // Step 3: Add clinic_service_config_id (chọn dịch vụ)
+      // Step 4: Add payment_method (chọn thanh toán)
+      // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
+        
+        // Validate required fields for Step 2
+        if (!data.appointment_date) {
+          throw new BadRequestException('Appointment date is required in step 2');
+        }
+        if (!data.clinic_shift_hour_id) {
+          throw new BadRequestException('Clinic shift hour ID is required in step 2');
+        }
+        
         session.appointmentDate = data.appointment_date;
+        session.clinicShiftHourId = data.clinic_shift_hour_id;
         session.currentStep = 2;
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        session.doctorShiftHourId = data.doctor_shift_hour_id;
         
-        // For service-first flow: doctor_id is provided
+        // Validate clinic_service_config_id is required in step 3
+        if (!data.clinic_service_config_id) {
+          throw new BadRequestException('Service config ID is required in step 3');
+        }
+        
+        session.clinicServiceConfigId = data.clinic_service_config_id;
+        session.currentStep = 3;
+      } else if (updateDto.step === 4) {
+        const data = updateDto.data as any;
+        
+        // Payment method is REQUIRED in step 4
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 4');
+        }
+        
+        session.paymentMethod = data.payment_method;
+        session.currentStep = 4;
+      } else if (updateDto.step === 5) {
+        const data = updateDto.data as any;
+        
+        // Patient note is optional in step 5
+        if (data.patient_note !== undefined) {
+          session.patientNote = data.patient_note;
+        }
+        
+        session.currentStep = 5;
+      }
+    } else {
+      // VERSION 4.3: Option 1 (service-first) flow (remains 4 steps)
+      // Step 2: GỘP appointment_date + clinic_shift_hour_id + doctor_id
+      // Step 3: Add payment_method (REQUIRED)
+      // Step 4: Add patient_note (OPTIONAL)
+      if (updateDto.step === 2) {
+        const data = updateDto.data as any;
+        
+        // Validate required fields for Step 2
+        if (!data.appointment_date) {
+          throw new BadRequestException('Appointment date is required in step 2');
+        }
+        if (!data.clinic_shift_hour_id) {
+          throw new BadRequestException('Clinic shift hour ID is required in step 2');
+        }
+        
+        session.appointmentDate = data.appointment_date;
+        session.clinicShiftHourId = data.clinic_shift_hour_id;
+        
+        // For service-first flow (Option 1): doctor_id is provided
         if (data.doctor_id) {
           session.doctorId = data.doctor_id;
         }
         
-        // For doctor-first flow: clinic_service_config_id is provided
-        if (data.clinic_service_config_id) {
-          session.clinicServiceConfigId = data.clinic_service_config_id;
+        session.currentStep = 2;
+      } else if (updateDto.step === 3) {
+        const data = updateDto.data as any;
+        
+        // Payment method is REQUIRED in step 3
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 3');
         }
+        
+        session.paymentMethod = data.payment_method;
         
         session.currentStep = 3;
       } else if (updateDto.step === 4) {
+        // Step 4: Add patient_note (OPTIONAL)
         const data = updateDto.data as any;
-        session.patientNote = data.patient_note;
+        
+        // Patient note is optional - can be empty string or any text
+        if (data.patient_note !== undefined) {
+          session.patientNote = data.patient_note;
+        }
+        
         session.currentStep = 4;
       }
     }
@@ -270,9 +357,12 @@ export class BookingSessionService {
         throw new BadRequestException('This service is currently not available');
       }
 
-      // Verify clinic exists and is active
+      // Verify clinic exists and is active (can be CLINIC_ADMIN or CLINIC_MANAGER)
       const clinic = await this.dataSource.getRepository(Account).findOne({
-        where: { _id: serviceData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+        where: [
+          { _id: serviceData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+          { _id: serviceData.clinic_id, role: AccountRole.CLINIC_MANAGER },
+        ],
       });
 
       if (!clinic || clinic.status !== 'ACTIVE') {
@@ -290,10 +380,13 @@ export class BookingSessionService {
         throw new BadRequestException('Doctor not found or inactive');
       }
 
-      // If clinic_id provided, verify it exists
+      // If clinic_id provided, verify it exists (can be CLINIC_ADMIN or CLINIC_MANAGER)
       if (doctorData.clinic_id) {
         const clinic = await this.dataSource.getRepository(Account).findOne({
-          where: { _id: doctorData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+          where: [
+            { _id: doctorData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+            { _id: doctorData.clinic_id, role: AccountRole.CLINIC_MANAGER },
+          ],
         });
 
         if (!clinic || clinic.status !== 'ACTIVE') {
@@ -323,23 +416,38 @@ export class BookingSessionService {
   }
 
   /**
-   * Validate step sequence
-   *
-   * Ensures steps are executed in order
-   *
+   * Validate step sequence (VERSION 4.4)
+   * 
+   * THAY ĐỔI: 
+   * - Option 1 (service-first): Step range là 2-4 (chưa thay đổi)
+   * - Option 2 (doctor-first): Step range là 2-5 (mới thay đổi từ 4.3)
+   * - Option 3 (date-first): Step range là 2-5 (chưa thay đổi)
+   * 
    * @param currentStep - Current step number
    * @param nextStep - Next step number
+   * @param bookingOption - Booking option type
    * @throws BadRequestException if step sequence is invalid
    */
-  private validateStepSequence(currentStep: number, nextStep: number): void {
+  private validateStepSequence(currentStep: number, nextStep: number, bookingOption?: BookingOption): void {
     if (nextStep !== currentStep + 1) {
       throw new BadRequestException(
         `Invalid step sequence. Current step: ${currentStep}, expected next step: ${currentStep + 1}`,
       );
     }
 
-    if (nextStep < 2 || nextStep > 4) {
-      throw new BadRequestException('Step must be 2, 3, or 4');
+    // Different step ranges for different booking options (VERSION 4.4)
+    if (bookingOption === BookingOption.DATE || bookingOption === BookingOption.DOCTOR) {
+      // Option 2 & 3: Doctor-first or Date-first - up to step 5
+      if (nextStep < 2 || nextStep > 5) {
+        throw new BadRequestException(
+          `Step must be between 2 and 5 for ${bookingOption}-first booking`,
+        );
+      }
+    } else {
+      // Option 1: Service-first - step 2-4
+      if (nextStep < 2 || nextStep > 4) {
+        throw new BadRequestException('Step must be between 2 and 4 for service-first booking');
+      }
     }
   }
 
@@ -364,10 +472,13 @@ export class BookingSessionService {
     if (session.appointmentDate) {
       bookingData.appointment_date = session.appointmentDate;
     }
-    if (session.doctorShiftHourId) {
-      bookingData.doctor_shift_hour_id = session.doctorShiftHourId;
+    if (session.clinicShiftHourId) {
+      bookingData.clinic_shift_hour_id = session.clinicShiftHourId;
     }
-    if (session.patientNote) {
+    if (session.paymentMethod) {
+      bookingData.payment_method = session.paymentMethod;
+    }
+    if (session.patientNote !== undefined) {
       bookingData.patient_note = session.patientNote;
     }
 

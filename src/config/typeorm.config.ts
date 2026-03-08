@@ -15,6 +15,12 @@ export const buildTypeOrmOptions = (
   entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
   synchronize: true,
   logging: false,
+  // Store timestamps in UTC, application handles timezone conversion
+  // This ensures consistency regardless of DB server timezone
+  extra: {
+    // Set PostgreSQL session timezone
+    timezone: config.get('TZ') || 'UTC',
+  },
   ssl:
     config.get('POSTGRES_SSL') === 'true'
       ? {
@@ -34,6 +40,11 @@ export const AppDataSource = new DataSource({
   migrations: [join(__dirname, '../database/migrations/*{.ts,.js}')],
   synchronize: true,
   logging: process.env.NODE_ENV === 'development',
+  // Store timestamps in UTC, application handles timezone conversion
+  extra: {
+    // Set PostgreSQL session timezone
+    timezone: process.env.TZ || 'UTC',
+  },
   // ssl:
   //   process.env.POSTGRES_SSL === 'true'
   //     ? {
