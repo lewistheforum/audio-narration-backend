@@ -118,7 +118,7 @@ describe('TransactionsService', () => {
     describe('BR 2.1: createDynamicQr (Prescription Payment)', () => {
         it('should use sum of pending AppointmentPackage as source of truth for amount', async () => {
             const dto: CreateTransactionDto = {
-                prescriptionId: 'uuid-prescription',
+                appointmentId: 'uuid-prescription',
                 amount: 9999999, // Client sent a different amount
             };
 
@@ -165,7 +165,7 @@ describe('TransactionsService', () => {
                 bankName: 'TCB',
             });
 
-            const result = await service.createDynamicQr({ prescriptionId: 'uuid-prescription', amount: 50000 } as any);
+            const result = await service.createDynamicQr({ appointmentId: 'uuid-prescription', amount: 50000 } as any);
 
             // QR should contain Clinic's account, NOT Company's
             expect(result.qrCodeUrl).toContain('CLINIC_VA123');
@@ -189,7 +189,7 @@ describe('TransactionsService', () => {
                 bankName: 'TCB',
             });
 
-            const result = await service.createDynamicQr({ prescriptionId: 'uuid-prescription', amount: 50000 } as any);
+            const result = await service.createDynamicQr({ appointmentId: 'uuid-prescription', amount: 50000 } as any);
 
             // Should return id: null
             expect(result.id).toBeNull();
@@ -199,7 +199,7 @@ describe('TransactionsService', () => {
         it('should throw NotFoundException if Appointment not found', async () => {
             appointmentRepo.findOne.mockResolvedValue(null);
 
-            await expect(service.createDynamicQr({ prescriptionId: 'invalid', amount: 100 } as any))
+            await expect(service.createDynamicQr({ appointmentId: 'invalid', amount: 100 } as any))
                 .rejects.toThrow(NotFoundException);
         });
     });
@@ -510,7 +510,7 @@ describe('TransactionsService', () => {
             transferAmount: 50000,
             accumulated: 100000,
             referenceCode: 'REF123',
-            prescriptionId: 'uuid-tx-id',
+            appointmentId: 'uuid-tx-id',
             currency: 'VND',
         } as any;
 
@@ -600,7 +600,7 @@ describe('TransactionsService', () => {
                     status: PaymentStatus.SUCCESS,
                 });
 
-                const payload = { ...basePayload, prescriptionId: 'uuid-appointment' };
+                const payload = { ...basePayload, appointmentId: 'uuid-appointment' };
                 const result = await service.handleCallback(payload);
 
                 expect(transactionRepository.create).toHaveBeenCalled();
