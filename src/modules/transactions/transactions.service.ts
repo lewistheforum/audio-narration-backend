@@ -135,7 +135,10 @@ export class TransactionsService {
    * Renewal always uses 1 month duration by default
    * @param clinicId Clinic ID
    */
-  async createRenewalQr(clinicId: string): Promise<PaymentResponseDto> {
+  async createRenewalQr(
+    clinicId: string,
+    duration?: number,
+  ): Promise<PaymentResponseDto> {
     const subscription = await this.clinicSubscriptionRepo.findOne({
       where: { clinicId },
     });
@@ -158,7 +161,10 @@ export class TransactionsService {
       );
     }
 
-    const transaction = await this.handleRenewalTransaction(subscription);
+    const transaction = await this.handleRenewalTransaction(
+      subscription,
+      duration,
+    );
     return this.generateQrResponse(subscription, transaction);
   }
 
@@ -306,8 +312,10 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Target service not found');
 
-    // 2. Calculate Amount: price * duration (NO discount)
-    const amount = service.price * duration;
+    // 2. Calculate Amount: price * duration (Apply discount)
+    const discount = service.discount ? parseFloat(service.discount.toString()) : 0;
+    const finalPrice = service.price - (service.price * discount) / 100;
+    const amount = finalPrice * duration;
 
     // 3. Create Transaction Content (store targetServiceId AND duration for later processing)
     const content = JSON.stringify({ targetServiceId, duration });
@@ -328,6 +336,7 @@ export class TransactionsService {
    */
   async handleRenewalTransaction(
     subscription: ClinicSubscription,
+    duration?: number,
   ): Promise<any> {
     // 1. Get Current Service
     const service = await this.subscriptionServiceRepo.findOne({
@@ -335,28 +344,32 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Current service not found');
 
-    // 3. Calculate Duration from current subscription dates
-    // If user bought 12 months, renew for 12 months.
-    const startDate = new Date(subscription.subscriptionDate);
-    const expirationDate = new Date(subscription.expirationDate);
+    // 3. Calculate/Set Duration
+    if (!duration) {
+      // If no duration provided, calculate from current subscription dates
+      const startDate = new Date(subscription.subscriptionDate);
+      const expirationDate = new Date(subscription.expirationDate);
 
-    // Calculate months difference
-    let duration =
-      (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
-    duration -= startDate.getMonth();
-    duration += expirationDate.getMonth();
+      // Calculate months difference
+      duration = (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
+      duration -= startDate.getMonth();
+      duration += expirationDate.getMonth();
 
-    // Round to handle edge cases (e.g. Feb 28 to Feb 28 next year)
-    // If days difference is significant, adjust. But simple month diff is usually enough for billing.
-    // Ensure duration is at least 1
-    duration = duration <= 0 ? 1 : duration;
+      // Ensure duration is at least 1
+      duration = duration <= 0 ? 1 : duration;
 
-    console.log(
-      `[DEBUG] Calculated renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`,
-    );
+      console.log(
+        `[DEBUG] Calculated base renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`,
+      );
+    } else {
+      duration = Math.max(1, duration);
+      console.log(`[DEBUG] Using provided renewal duration: ${duration} months`);
+    }
 
-    // 2. Calculate Amount: price * duration (NO discount)
-    const amount = service.price * duration;
+    // 2. Calculate Amount: price * duration (Apply discount)
+    const discount = service.discount ? parseFloat(service.discount.toString()) : 0;
+    const finalPrice = service.price - (service.price * discount) / 100;
+    const amount = finalPrice * duration;
 
     // 3. Content
     const content = JSON.stringify({ duration });
@@ -433,7 +446,7 @@ export class TransactionsService {
   ): Promise<PaymentResponseDto> {
     // Verify appointment and get real amount & clinic
     const appointment = await this.appointmentRepository.findOne({
-      where: { _id: dto.prescriptionId },
+      where: { _id: dto.appointmentId },
     });
 
     if (!appointment) {
@@ -461,7 +474,7 @@ export class TransactionsService {
     // Calculate sum of all pending packages for this appointment
     const pendingPackages = await this.packageRepo.find({
       where: {
-        appointmentId: dto.prescriptionId,
+        appointmentId: dto.appointmentId,
         status: AppointmentPackageStatus.PENDING_PAYMENT
       }
     });
@@ -474,10 +487,10 @@ export class TransactionsService {
     // Ignore dto.amount, use source of truth from DB packages
 
     const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(amount, dto.prescriptionId, acc, bank);
+    const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
     const qrPayload = this.buildQrPayload(
       amount,
-      dto.prescriptionId,
+      dto.appointmentId,
       acc,
       bank,
     );
