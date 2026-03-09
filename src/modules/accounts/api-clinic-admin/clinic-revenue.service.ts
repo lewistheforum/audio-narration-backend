@@ -389,7 +389,7 @@ export class ClinicRevenueService {
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
-      .andWhere('ap.payment_type = :paymentType', { paymentType: 'COD' })
+      .andWhere('ap.payment_type = :paymentType', { paymentType: 'cod' })
       .andWhere('t.deleted_at IS NULL')
       .getRawOne();
 
@@ -449,7 +449,7 @@ export class ClinicRevenueService {
       )
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
       .leftJoin(
-        'clinic_service_categories',
+        'clinic_service_category',
         'csc',
         'csc._id = cs.category_id',
       )
