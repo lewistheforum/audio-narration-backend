@@ -150,27 +150,60 @@ export class BookingSessionService {
     // Validate step sequence (pass bookingOption for proper validation)
     this.validateStepSequence(session.currentStep, updateDto.step, session.bookingOption);
 
-    // Update session based on booking option and step (VERSION 4.4)
+    // Update session based on booking option and step (VERSION 4.6)
+    // FIX: Use Object.assign to explicitly merge new data while preserving all existing fields
     if (session.bookingOption === BookingOption.DATE) {
-      // Option 3: Date-first flow (remains 5 steps)
+      // Option 3: Date-first flow (VERSION 4.6 - SWAPPED STEPS 3-4)
       // Step 1 (initial): appointment_date is already set
       // Step 2: Add clinic_id
-      // Step 3: Add clinic_service_config_id
-      // Step 4: Add clinic_shift_hour_id + doctor_id
+      // Step 3: Add clinic_shift_hour_id + doctor_id (MOVED UP from V4.4)
+      // Step 4: Add clinic_service_config_id (MOVED DOWN from V4.4)
       // Step 5: Add payment_method + patient_note
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        session.clinicId = data.clinic_id;
-        session.currentStep = 2;
+        
+        // Validate clinic_id is required
+        if (!data.clinic_id) {
+          throw new BadRequestException('Clinic ID is required in step 2');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicId: data.clinic_id,
+          currentStep: 2,
+        });
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        session.clinicServiceConfigId = data.clinic_service_config_id;
-        session.currentStep = 3;
+        
+        // VERSION 4.6: Step 3 now handles clinic_shift_hour_id + doctor_id
+        // Validate required fields
+        if (!data.clinic_shift_hour_id) {
+          throw new BadRequestException('Clinic shift hour ID is required in step 3');
+        }
+        if (!data.doctor_id) {
+          throw new BadRequestException('Doctor ID is required in step 3');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicShiftHourId: data.clinic_shift_hour_id,
+          doctorId: data.doctor_id,
+          currentStep: 3,
+        });
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        session.clinicShiftHourId = data.clinic_shift_hour_id;
-        session.doctorId = data.doctor_id;
-        session.currentStep = 4;
+        
+        // VERSION 4.6: Step 4 now handles clinic_service_config_id
+        // Validate clinic_service_config_id is required
+        if (!data.clinic_service_config_id) {
+          throw new BadRequestException('Service config ID is required in step 4');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicServiceConfigId: data.clinic_service_config_id,
+          currentStep: 4,
+        });
       } else if (updateDto.step === 5) {
         const data = updateDto.data as any;
         
@@ -179,14 +212,18 @@ export class BookingSessionService {
           throw new BadRequestException('Payment method is required in step 5');
         }
         
-        session.paymentMethod = data.payment_method;
+        // MERGE: Explicitly preserve all existing fields
+        const updateFields: any = {
+          paymentMethod: data.payment_method,
+          currentStep: 5,
+        };
         
         // Patient note is optional
-        if (data.patient_note) {
-          session.patientNote = data.patient_note;
+        if (data.patient_note !== undefined) {
+          updateFields.patientNote = data.patient_note;
         }
         
-        session.currentStep = 5;
+        Object.assign(session, updateFields);
       }
     } else if (session.bookingOption === BookingOption.DOCTOR) {
       // VERSION 4.4: Option 2 (doctor-first) - TÁCH RỜI THÀNH 5 STEPS
@@ -206,9 +243,12 @@ export class BookingSessionService {
           throw new BadRequestException('Clinic shift hour ID is required in step 2');
         }
         
-        session.appointmentDate = data.appointment_date;
-        session.clinicShiftHourId = data.clinic_shift_hour_id;
-        session.currentStep = 2;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          appointmentDate: data.appointment_date,
+          clinicShiftHourId: data.clinic_shift_hour_id,
+          currentStep: 2,
+        });
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         
@@ -217,8 +257,11 @@ export class BookingSessionService {
           throw new BadRequestException('Service config ID is required in step 3');
         }
         
-        session.clinicServiceConfigId = data.clinic_service_config_id;
-        session.currentStep = 3;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicServiceConfigId: data.clinic_service_config_id,
+          currentStep: 3,
+        });
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
         
@@ -227,17 +270,25 @@ export class BookingSessionService {
           throw new BadRequestException('Payment method is required in step 4');
         }
         
-        session.paymentMethod = data.payment_method;
-        session.currentStep = 4;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          paymentMethod: data.payment_method,
+          currentStep: 4,
+        });
       } else if (updateDto.step === 5) {
         const data = updateDto.data as any;
         
         // Patient note is optional in step 5
+        const updateFields: any = {
+          currentStep: 5,
+        };
+        
         if (data.patient_note !== undefined) {
-          session.patientNote = data.patient_note;
+          updateFields.patientNote = data.patient_note;
         }
         
-        session.currentStep = 5;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, updateFields);
       }
     } else {
       // VERSION 4.3: Option 1 (service-first) flow (remains 4 steps)
@@ -255,15 +306,19 @@ export class BookingSessionService {
           throw new BadRequestException('Clinic shift hour ID is required in step 2');
         }
         
-        session.appointmentDate = data.appointment_date;
-        session.clinicShiftHourId = data.clinic_shift_hour_id;
+        // MERGE: Explicitly preserve all existing fields
+        const updateFields: any = {
+          appointmentDate: data.appointment_date,
+          clinicShiftHourId: data.clinic_shift_hour_id,
+          currentStep: 2,
+        };
         
         // For service-first flow (Option 1): doctor_id is provided
         if (data.doctor_id) {
-          session.doctorId = data.doctor_id;
+          updateFields.doctorId = data.doctor_id;
         }
         
-        session.currentStep = 2;
+        Object.assign(session, updateFields);
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         
@@ -272,19 +327,26 @@ export class BookingSessionService {
           throw new BadRequestException('Payment method is required in step 3');
         }
         
-        session.paymentMethod = data.payment_method;
-        
-        session.currentStep = 3;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          paymentMethod: data.payment_method,
+          currentStep: 3,
+        });
       } else if (updateDto.step === 4) {
         // Step 4: Add patient_note (OPTIONAL)
         const data = updateDto.data as any;
         
         // Patient note is optional - can be empty string or any text
+        const updateFields: any = {
+          currentStep: 4,
+        };
+        
         if (data.patient_note !== undefined) {
-          session.patientNote = data.patient_note;
+          updateFields.patientNote = data.patient_note;
         }
         
-        session.currentStep = 4;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, updateFields);
       }
     }
 
@@ -456,31 +518,21 @@ export class BookingSessionService {
    *
    * @param session - Booking session object
    * @returns Formatted response DTO
+   * 
+   * FIX: Always return ALL fields (even if undefined/null) so Frontend can see complete state
    */
   private buildSessionResponse(session: BookingSession): BookingSessionResponseDto {
     const bookingData: Record<string, any> = {};
 
-    if (session.clinicServiceConfigId) {
-      bookingData.clinic_service_config_id = session.clinicServiceConfigId;
-    }
-    if (session.clinicId) {
-      bookingData.clinic_id = session.clinicId;
-    }
-    if (session.doctorId) {
-      bookingData.doctor_id = session.doctorId;
-    }
-    if (session.appointmentDate) {
-      bookingData.appointment_date = session.appointmentDate;
-    }
-    if (session.clinicShiftHourId) {
-      bookingData.clinic_shift_hour_id = session.clinicShiftHourId;
-    }
-    if (session.paymentMethod) {
-      bookingData.payment_method = session.paymentMethod;
-    }
-    if (session.patientNote !== undefined) {
-      bookingData.patient_note = session.patientNote;
-    }
+    // FIX v4.5: Always include ALL possible fields to prevent data loss visibility
+    // If a field is not set yet, it will be undefined (helps Frontend track progress)
+    bookingData.clinic_id = session.clinicId ?? null;
+    bookingData.doctor_id = session.doctorId ?? null;
+    bookingData.clinic_service_config_id = session.clinicServiceConfigId ?? null;
+    bookingData.appointment_date = session.appointmentDate ?? null;
+    bookingData.clinic_shift_hour_id = session.clinicShiftHourId ?? null;
+    bookingData.payment_method = session.paymentMethod ?? null;
+    bookingData.patient_note = session.patientNote ?? null;
 
     return {
       session_id: session.sessionId,

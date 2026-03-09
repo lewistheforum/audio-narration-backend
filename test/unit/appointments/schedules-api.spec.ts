@@ -260,45 +260,27 @@ describe('Schedules API (V4.3) - Unit Tests', () => {
     });
   });
 
-  describe('getDoctorSchedules (Option 2: Doctor-first)', () => {
-    const mockServices = mockServicesList();
-
-    it('should return both schedules and available services', async () => {
-      // Mock query builder to return schedules first, then services
+  describe('getDoctorSchedules (Option 2: Doctor-first - VERSION 4.4+)', () => {
+    it('should return only schedules without services', async () => {
+      // Mock query builder to return schedules
       const queryBuilder = dataSource.createQueryBuilder();
       jest.spyOn(queryBuilder, 'getRawMany')
-        .mockResolvedValueOnce(mockRawScheduleData())
-        .mockResolvedValueOnce(mockServices);
+        .mockResolvedValueOnce(mockRawScheduleData());
 
-      const result = await service.getDoctorSchedules(mockDoctorId);
+      const result = await service.getDoctorSchedules(mockDoctorId, mockClinicId);
 
-      // Verify structure
+      // Verify structure - should NOT have available_services in v4.4+
       expect(result.data).toBeDefined();
-      expect(result.available_services).toBeDefined();
       expect(Array.isArray(result.data)).toBe(true);
-      expect(Array.isArray(result.available_services)).toBe(true);
+      // Services are fetched separately via getClinicServices API
     });
 
-    it('should include clinic information in schedule data', async () => {
-      const queryBuilder = dataSource.createQueryBuilder();
-      jest.spyOn(queryBuilder, 'getRawMany')
-        .mockResolvedValueOnce(mockRawScheduleData())
-        .mockResolvedValueOnce(mockServices);
-
-      const result = await service.getDoctorSchedules(mockDoctorId);
-
-      const firstDate = result.data[0];
-      expect(firstDate).toHaveProperty('clinic_id');
-      expect(firstDate).toHaveProperty('clinic_name');
-    });
-
-    it('should filter by clinic_id when provided', async () => {
+    it('should require clinic_id parameter', async () => {
       const queryBuilder = dataSource.createQueryBuilder();
       const whereSpy = jest.spyOn(queryBuilder, 'andWhere');
       
       jest.spyOn(queryBuilder, 'getRawMany')
-        .mockResolvedValueOnce(mockRawScheduleData())
-        .mockResolvedValueOnce(mockServices);
+        .mockResolvedValueOnce(mockRawScheduleData());
 
       await service.getDoctorSchedules(mockDoctorId, mockClinicId);
 
@@ -306,18 +288,18 @@ describe('Schedules API (V4.3) - Unit Tests', () => {
       expect(whereSpy).toHaveBeenCalled();
     });
 
-    it('should calculate final_price for services with discount', async () => {
+    it('should group schedules by date and shift', async () => {
       const queryBuilder = dataSource.createQueryBuilder();
       jest.spyOn(queryBuilder, 'getRawMany')
-        .mockResolvedValueOnce(mockRawScheduleData())
-        .mockResolvedValueOnce(mockServices);
+        .mockResolvedValueOnce(mockRawScheduleData());
 
-      const result = await service.getDoctorSchedules(mockDoctorId);
+      const result = await service.getDoctorSchedules(mockDoctorId, mockClinicId);
 
-      const firstService = result.available_services[0];
-      expect(firstService.price).toBeDefined();
-      expect(firstService.discount).toBeDefined();
-      expect(firstService.final_price).toBeDefined();
+      const firstDate = result.data[0];
+      expect(firstDate).toHaveProperty('date');
+      expect(firstDate).toHaveProperty('week_day');
+      expect(firstDate).toHaveProperty('shifts');
+      expect(Array.isArray(firstDate.shifts)).toBe(true);
     });
   });
 

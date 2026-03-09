@@ -74,10 +74,12 @@ import { AppointmentStatus } from './enums';
  * - PATCH /appointments/:id/decline - Decline appointment (Doctor only)
  * - PATCH /appointments/:id/status - Update appointment status (Admin/Staff)
  *
- * Patient Booking Flow (VERSION 4.3):
+ * Patient Booking Flow (VERSION 4.5):
  * - GET /patients/services - List available services
- * - GET /patients/clinics/:clinicId/schedules - Get schedules (merged dates + shifts + slots)
- * - GET /patients/doctors/:doctorId/schedules - Get doctor schedules + services
+ * - GET /patients/clinics - Get clinics with available slots (optional working_date filter for Option 3)
+ * - GET /patients/clinics/:clinicId/schedules - Get schedules (merged dates + shifts + slots, supports working_date query)
+ * - GET /patients/clinics/:clinicId/services - Get clinic services (used by Option 1, 2, and 3)
+ * - GET /patients/doctors/:doctorId/schedules - Get doctor schedules
  * - GET /patients/me/appointments - Get patient's appointments
  * - POST /patients/booking-sessions - Create booking session
  * - PATCH /patients/booking-sessions/:sessionId - Update booking session
@@ -1264,12 +1266,17 @@ export class AppointmentsController {
   }
 
   /**
-   * Get clinic schedules (VERSION 4.3 - Option 1: Service-first - Step 2)
+   * Get clinic schedules (VERSION 4.5 - Option 1 & Option 3)
    * 
    * Gộp 2 API cũ (working-days + slots) thành 1 API duy nhất.
    * Returns nested structure: Dates -> Shifts -> Slots with Doctor info.
    * 
+   * VERSION 4.5: Thêm query parameter working_date
+   * - Nếu có working_date: Trả về lịch của ngày cụ thể (Option 3)
+   * - Nếu không có working_date: Trả về lịch 60 ngày tới (Option 1)
+   * 
    * @param clinicId - Clinic UUID
+   * @param workingDate - Optional date filter (YYYY-MM-DD)
    * @returns Nested schedule structure
    */
   @Get('patients/clinics/:clinicId/schedules')
@@ -1278,9 +1285,9 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get clinic schedules (Patient) - VERSION 4.3',
+    summary: 'Get clinic schedules (Patient) - VERSION 4.5',
     description:
-      'Get all available schedules for a clinic in nested structure: Dates -> Shifts -> Slots. Combines working days and time slots into a single API call.',
+      'Get all available schedules for a clinic in nested structure: Dates -> Shifts -> Slots. Supports optional working_date query parameter for filtering by specific date.',
   })
   @ApiResponse({
     status: 200,
@@ -1345,10 +1352,17 @@ export class AppointmentsController {
     type: String,
     description: 'Clinic UUID',
   })
+  @ApiQuery({
+    name: 'working_date',
+    required: false,
+    type: String,
+    description: 'Filter by specific date (YYYY-MM-DD, optional)',
+  })
   async getClinicSchedules(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query('working_date') workingDate?: string,
   ) {
-    return this.appointmentsService.getClinicSchedules(clinicId);
+    return this.appointmentsService.getClinicSchedules(clinicId, workingDate);
   }
 
   /**
@@ -1543,25 +1557,39 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Get clinics by working date (Patient)',
     description:
-      'Get list of clinics that have available slots on a specific date. Used for Option 3: Date-first booking. Supports search and district filtering.',
+      'Get list of clinic branches (CLINIC_MANAGER) that have available slots. ' +
+      'If working_date is provided, returns clinics with slots on that specific date (Option 3: Date-first booking). ' +
+      'If working_date is omitted, returns all clinics with any available slots (Option 1 & 2). ' +
+      'Returns branch IDs instead of parent clinic IDs to match service configs. ' +
+      'Display name format: "Parent Clinic Name - Branch Name". Supports search and district filtering.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Clinics retrieved successfully',
+    description: 'Clinic branches retrieved successfully',
     schema: {
       example: {
         data: [
           {
-            clinic_id: 'uuid',
-            clinic_name: 'Phòng khám Đa khoa Bonix',
+            clinic_id: 'branch-uuid-1',  // CLINIC_MANAGER._id
+            clinic_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',  // Parent + Branch name
+            clinic_admin_id: 'admin-uuid',  // Parent CLINIC_ADMIN._id (optional)
             clinic_address: '123 Đường X, Quận 1, TP.HCM',
             district: 'Quận 1',
             available_slots: 15,
             available_doctors: 3,
           },
+          {
+            clinic_id: 'branch-uuid-2',
+            clinic_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 2',
+            clinic_admin_id: 'admin-uuid',
+            clinic_address: '456 Đường Y, Quận 2, TP.HCM',
+            district: 'Quận 2',
+            available_slots: 10,
+            available_doctors: 2,
+          },
         ],
         meta: {
-          total: 10,
+          total: 2,
           page: 1,
           limit: 20,
           total_pages: 1,
@@ -1579,9 +1607,9 @@ export class AppointmentsController {
   })
   @ApiQuery({
     name: 'working_date',
-    required: true,
+    required: false,
     type: String,
-    description: 'Working date in YYYY-MM-DD format',
+    description: 'Optional working date in YYYY-MM-DD format. If provided, filters clinics with slots on this date. If omitted, returns all clinics with any available slots.',
     example: '2026-02-25',
   })
   @ApiQuery({
@@ -1609,7 +1637,7 @@ export class AppointmentsController {
     description: 'Filter by district',
   })
   async getClinicsByWorkingDate(
-    @Query('working_date') workingDate: string,
+    @Query('working_date') workingDate?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
     @Query('search') search?: string,
@@ -2047,63 +2075,5 @@ export class AppointmentsController {
     @Query('clinic_id', ParseUUIDPipe) clinicId: string,
   ) {
     return this.appointmentsService.getDoctorSchedules(doctorId, clinicId);
-  }
-
-  /**
-   * Get doctor services (VERSION 4.4 - Option 2: Doctor-first - Step 3)
-   * 
-   * NEW ENDPOINT: API MỚI - TÁCH RỜI DỊCH VỤ RA KHỎI LỊCH KHÁM
-   * API này CHỈ trả về danh sách dịch vụ mà bác sĩ cung cấp tại phòng khám.
-   * 
-   * @param doctorId - Doctor UUID
-   * @param clinicId - Clinic UUID (REQUIRED)
-   * @returns Array of services with pricing info
-   */
-  @Get('patients/doctors/:doctorId/services')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get doctor services (Patient) - VERSION 4.4',
-    description:
-      'Get all available services for a doctor at a specific clinic. Returns services with pricing information.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Services retrieved successfully',
-    schema: {
-      example: {
-        data: [
-          {
-            clinic_service_config_id: 'uuid',
-            service_id: 'uuid',
-            service_name: 'Khám Xương Khớp',
-            category_name: 'Khám Chuyên Khoa',
-            price: 300000,
-            discount: 10,
-            final_price: 270000,
-            description: 'Khám và tư vấn về xương khớp',
-          },
-        ],
-      },
-    },
-  })
-  @ApiParam({
-    name: 'doctorId',
-    type: String,
-    description: 'Doctor UUID',
-  })
-  @ApiQuery({
-    name: 'clinic_id',
-    required: true,
-    type: String,
-    description: 'Clinic UUID (required)',
-  })
-  async getDoctorServices(
-    @Param('doctorId', ParseUUIDPipe) doctorId: string,
-    @Query('clinic_id', ParseUUIDPipe) clinicId: string,
-  ) {
-    return this.appointmentsService.getDoctorServices(doctorId, clinicId);
   }
 }
