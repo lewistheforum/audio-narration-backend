@@ -41,13 +41,13 @@ export class CreateAppointmentDto {
   doctorId?: string;
 
   @ApiProperty({
-    description: 'Doctor shift hour ID (optional)',
+    description: 'Clinic shift hour ID (optional)',
     example: '123e4567-e89b-12d3-a456-426614174003',
     required: false,
   })
   @IsOptional()
-  @IsUUID('4', { message: 'Invalid doctor shift hour ID format' })
-  doctorShiftHourId?: string;
+  @IsUUID('4', { message: 'Invalid clinic shift hour ID format' })
+  clinicShiftHourId?: string;
 
   @ApiProperty({
     description: 'Appointment date (YYYY-MM-DD)',

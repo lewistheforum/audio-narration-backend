@@ -190,7 +190,7 @@ export class AppointmentSeederService {
         patientId: patient._id,
         clinicId: clinic._id,
         doctorId: doctor?._id || null,
-        doctorShiftHourId: null, // Not setting shift hour for seeded appointments
+        clinicShiftHourId: null, // Not setting shift hour for seeded appointments
         appointmentDate,
         appointmentHour,
         extraHour: null,

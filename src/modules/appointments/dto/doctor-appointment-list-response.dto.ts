@@ -45,11 +45,11 @@ export class DoctorAppointmentItemDto {
   clinicId: string;
 
   @ApiProperty({
-    description: 'Doctor shift hour ID',
+    description: 'Clinic shift hour ID',
     example: '123e4567-e89b-12d3-a456-426614174000',
     nullable: true,
   })
-  doctorShiftHourId: string | null;
+  clinicShiftHourId: string | null;
 
   @ApiProperty({
     description: 'List of services in this appointment',
