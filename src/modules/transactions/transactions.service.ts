@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository, Like } from 'typeorm';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
-import { PaymentDirection, PaymentStatus, TransactionType } from './entities';
+import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
 import { RegistrationStatus } from '../subscriptions/enums';
 import {
   CreateTransactionDto,
@@ -411,10 +411,10 @@ export class TransactionsService {
 
     if (!transaction) {
       const transactionType = await this.transactionTypeRepo.findOne({
-        where: { name: Like('SUBSCRIPTION%') },
+        where: { code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
       });
       if (!transactionType) {
-        throw new NotFoundException('Transaction Type SUBSCRIPTION not found');
+        throw new NotFoundException('Transaction Type SUBSCRIPTION PAYMENT not found');
       }
 
       transaction = this.transactionRepository.create({
@@ -547,7 +547,7 @@ export class TransactionsService {
     // 3. Create Pending Transaction
     // Resolve Transaction Type (VERIFICATION)
     const transactionType = await this.transactionTypeRepo.findOne({
-      where: { name: Like('VERIFICATION%') },
+      where: { code: TransactionTypeCode.VERIFICATION },
     });
 
     if (!transactionType) {
@@ -642,9 +642,7 @@ export class TransactionsService {
 
       const saved = await this.transactionRepository.save(existingTransaction);
 
-      const isVerification = existingTransaction.transactionType?.name
-        ?.toUpperCase()
-        .startsWith('VERIFICATION');
+      const isVerification = existingTransaction.transactionType?.code === TransactionTypeCode.VERIFICATION;
       console.log('handleCallback Debug - Is Verification:', isVerification);
 
       if (status === PaymentStatus.SUCCESS && isVerification) {
@@ -691,9 +689,8 @@ export class TransactionsService {
       // Logic for Subscription Status Update (Existing Transaction)
       if (
         status === PaymentStatus.SUCCESS &&
-        existingTransaction.transactionType?.name
-          ?.toUpperCase()
-          .startsWith('SUBSCRIPTION')
+        (existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
+          existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION)
       ) {
         if (existingTransaction.subscriptionId) {
           console.log(
@@ -775,13 +772,8 @@ export class TransactionsService {
       clinicAdminId = clinicAdmin?._id;
     }
 
-    // Resolve Transaction Type (ONLINE for appointments)
-    let typeName = 'ONLINE';
-
-    // Fallback logic for VERIFICATION based on amount/content is REMOVED.
-
     const transactionType = await this.transactionTypeRepo.findOne({
-      where: { name: Like(typeName + '%') },
+      where: { code: TransactionTypeCode.ONLINE },
     });
 
     // Note: If appointment not found, we still save transaction but with null sender/clinic
@@ -838,7 +830,10 @@ export class TransactionsService {
         savedTransaction.subscriptionId,
       );
 
-      if (transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
+      if (
+        transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
+        transactionType?.code === TransactionTypeCode.SUBSCRIPTION
+      ) {
         if (savedTransaction.subscriptionId) {
           console.log(
             'handleCallback Debug - Updating Subscription Status for:',

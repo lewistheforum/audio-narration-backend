@@ -4,11 +4,13 @@ import { Repository } from 'typeorm';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
 import { AppointmentPackage } from '../../modules/appointments/entities/appointment-package.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
-import { AppointmentStatus } from '../../modules/appointments/enums';
+import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from '../../modules/appointments/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 import { ClinicServiceConfigRepository } from '../../modules/service-configs/repositories/clinic-service-config.repository';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
+import { Transaction, PaymentStatus, PaymentDirection } from '../../modules/transactions/entities/transaction.entity';
+import { TransactionType, TransactionTypeCode } from '../../modules/transactions/entities/transaction-type.entity';
 import {
   APPOINTMENTS_PER_PATIENT,
   APPOINTMENT_STATUS,
@@ -54,10 +56,14 @@ export class AppointmentSeederService {
     private readonly appointmentPackageRepository: Repository<AppointmentPackage>,
     @InjectRepository(ServiceAppointment)
     private readonly serviceAppointmentRepository: Repository<ServiceAppointment>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepository: Repository<Transaction>,
+    @InjectRepository(TransactionType)
+    private readonly transactionTypeRepository: Repository<TransactionType>,
     private readonly accountRepository: AccountRepository,
     private readonly clinicServiceConfigRepository: ClinicServiceConfigRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
-  ) {}
+  ) { }
 
   /**
    * Seed all appointment-related data
@@ -120,6 +126,22 @@ export class AppointmentSeederService {
       }
       this.logger.log(`Found ${serviceConfigs.length} service configs`);
 
+      // Fetch transaction types for appointment packages
+      const onlineTxType = await this.transactionTypeRepository.findOne({
+        where: { code: TransactionTypeCode.ONLINE },
+      });
+      const cashTxType = await this.transactionTypeRepository.findOne({
+        where: { code: TransactionTypeCode.CASH },
+      });
+
+      if (!onlineTxType || !cashTxType) {
+        this.logger.warn(
+          'Transaction types ONLINE or CASH not found. Please run seed-transaction-types first.',
+        );
+      }
+
+      const txTypes = { online: onlineTxType, cash: cashTxType };
+
       // Step 3: Create appointments for each patient
       const appointmentsCreated: Appointment[] = [];
       for (const patient of patients) {
@@ -128,6 +150,7 @@ export class AppointmentSeederService {
           clinics,
           doctors,
           serviceConfigs,
+          txTypes,
         );
         appointmentsCreated.push(...patientAppointments);
       }
@@ -154,6 +177,7 @@ export class AppointmentSeederService {
     clinics: any[],
     doctors: any[],
     serviceConfigs: any[],
+    txTypes: { online: TransactionType; cash: TransactionType },
   ): Promise<Appointment[]> {
     const appointments: Appointment[] = [];
     const numAppointments = APPOINTMENTS_PER_PATIENT;
@@ -210,6 +234,7 @@ export class AppointmentSeederService {
         savedAppointment,
         clinic,
         serviceConfigs,
+        txTypes,
       );
     }
 
@@ -258,6 +283,7 @@ export class AppointmentSeederService {
     appointment: Appointment,
     clinic: any,
     serviceConfigs: any[],
+    txTypes: { online: TransactionType; cash: TransactionType },
   ): Promise<void> {
     // Check if package already exists
     const existingPackage = await this.appointmentPackageRepository.findOne({
@@ -286,13 +312,37 @@ export class AppointmentSeederService {
       SERVICES_PER_APPOINTMENT_MAX,
     );
 
+    const amount = getRandomPackageAmount();
+    const status = getRandomItem(APPOINTMENT_PACKAGE_STATUSES);
+    const paymentType = getRandomItem(PAYMENT_TYPES);
+    let transactionId = null;
+
+    if (status === AppointmentPackageStatus.PAID && txTypes.online && txTypes.cash) {
+      const txType = paymentType === PaymentType.ONLINE ? txTypes.online : txTypes.cash;
+      const transaction = this.transactionRepository.create({
+        clinicId: clinic._id,
+        transactionTypeId: txType._id,
+        amount: amount,
+        currency: 'VND',
+        status: PaymentStatus.SUCCESS,
+        transactionDate: appointment.appointmentDate,
+        code: `TRANS-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        description: `Payment for appointment ${appointment._id} (${paymentType})`,
+        transferType: PaymentDirection.IN,
+        gateway: paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH',
+        prescriptionId: appointment._id,
+      });
+      const savedTransaction = await this.transactionRepository.save(transaction);
+      transactionId = savedTransaction.id;
+    }
+
     // Create appointment package
     const appointmentPackage = this.appointmentPackageRepository.create({
       appointmentId: appointment._id,
-      transactionId: null, // Not linking to transactions for seeded data
-      amount: getRandomPackageAmount(),
-      status: getRandomItem(APPOINTMENT_PACKAGE_STATUSES),
-      paymentType: getRandomItem(PAYMENT_TYPES),
+      transactionId: transactionId,
+      amount: amount,
+      status: status,
+      paymentType: paymentType,
     });
 
     const savedPackage =

@@ -9,13 +9,16 @@ import { Appointment } from '../../../src/modules/appointments/entities/appointm
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CreateTransactionDto } from '../../../src/modules/transactions/dto/create-transaction.dto';
 import { PaymentDirection, PaymentStatus } from '../../../src/modules/transactions/entities/transaction.entity';
+import { TransactionTypeCode } from '../../../src/modules/transactions/entities/transaction-type.entity';
 import { SeepayCallbackDto } from '../../../src/modules/transactions/dto/seepay-callback.dto';
+import { PaymentType } from '../../../src/modules/appointments/enums';
 import { ClinicSubscription } from '../../../src/modules/subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../../../src/modules/subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../../../src/modules/subscriptions/subscription-services.service';
 import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/subscription-status.enum';
 import { AppointmentPackage } from '../../../src/modules/appointments/entities/appointment-package.entity';
 import { AppointmentPackageStatus } from '../../../src/modules/appointments/enums';
+import { Account } from '../../../src/modules/accounts/entities/accounts.entity';
 
 /**
  * Unit Tests for TransactionsService
@@ -34,6 +37,7 @@ describe('TransactionsService', () => {
     let packageRepo: any;
     let subscriptionServicesService: any;
     let configService: any;
+    let accountRepo: any;
 
     // ========================================
     // SETUP
@@ -80,6 +84,12 @@ describe('TransactionsService', () => {
             update: jest.fn(),
         };
 
+        accountRepo = {
+            findOne: jest.fn(),
+            save: jest.fn(),
+            update: jest.fn(),
+        };
+
         configService = {
             get: jest.fn((key) => {
                 if (key === 'SEEPAY_QR_BASE') return 'https://qr.seepay.vn';
@@ -100,6 +110,7 @@ describe('TransactionsService', () => {
                 { provide: getRepositoryToken(ClinicSubscription), useValue: clinicSubscriptionRepo },
                 { provide: getRepositoryToken(SubscriptionService), useValue: subscriptionServiceRepo },
                 { provide: getRepositoryToken(AppointmentPackage), useValue: packageRepo },
+                { provide: getRepositoryToken(Account), useValue: accountRepo },
                 { provide: SubscriptionServicesService, useValue: subscriptionServicesService },
                 { provide: ConfigService, useValue: configService },
             ],
@@ -133,9 +144,14 @@ describe('TransactionsService', () => {
                 { _id: 'pkg-2', amount: 30000, status: AppointmentPackageStatus.PENDING_PAYMENT },
             ]);
 
+            accountRepo.findOne.mockResolvedValue({
+                _id: 'uuid-clinic-account',
+                parentId: 'uuid-clinic-parent',
+            });
+
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
-                accountId: 'uuid-clinic-account',
+                accountId: 'uuid-clinic-parent',
                 sepayVa: 'CLINIC_VA123',
                 bankName: 'TCB',
             });
@@ -158,9 +174,14 @@ describe('TransactionsService', () => {
                 { _id: 'pkg-1', amount: 50000, status: AppointmentPackageStatus.PENDING_PAYMENT },
             ]);
 
+            accountRepo.findOne.mockResolvedValue({
+                _id: 'uuid-clinic-account',
+                parentId: 'uuid-clinic-parent',
+            });
+
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
-                accountId: 'uuid-clinic-account',
+                accountId: 'uuid-clinic-parent',
                 sepayVa: 'CLINIC_VA123',
                 bankName: 'TCB',
             });
@@ -183,8 +204,14 @@ describe('TransactionsService', () => {
                 { _id: 'pkg-1', amount: 50000, status: AppointmentPackageStatus.PENDING_PAYMENT },
             ]);
 
+            accountRepo.findOne.mockResolvedValue({
+                _id: 'uuid-clinic-account',
+                parentId: 'uuid-clinic-parent',
+            });
+
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
+                accountId: 'uuid-clinic-parent',
                 sepayVa: 'CLINIC_VA123',
                 bankName: 'TCB',
             });
@@ -215,7 +242,7 @@ describe('TransactionsService', () => {
                 bankName: 'MB',
             });
 
-            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION' });
+            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION });
             (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-trans-id', amount: 10000 });
             (transactionRepository.save as jest.Mock).mockResolvedValue({
                 id: 'new-trans-id',
@@ -235,7 +262,7 @@ describe('TransactionsService', () => {
                 bankName: 'MB',
             });
 
-            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION' });
+            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION });
             (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-trans-id', amount: 10000 });
             (transactionRepository.save as jest.Mock).mockResolvedValue({
                 id: 'new-trans-id',
@@ -257,7 +284,7 @@ describe('TransactionsService', () => {
                 bankName: 'TCB',
             });
 
-            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION' });
+            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION });
             (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-trans-id', amount: 10000 });
             (transactionRepository.save as jest.Mock).mockResolvedValue({
                 id: 'new-trans-id',
@@ -510,7 +537,7 @@ describe('TransactionsService', () => {
             transferAmount: 50000,
             accumulated: 100000,
             referenceCode: 'REF123',
-            appointmentId: 'uuid-tx-id',
+            prescriptionId: 'uuid-tx-id',
             currency: 'VND',
         } as any;
 
@@ -520,7 +547,7 @@ describe('TransactionsService', () => {
                     id: 'uuid-tx-id',
                     status: PaymentStatus.PENDING,
                     clinicId: 'uuid-clinic',
-                    transactionType: { name: 'ONLINE' },
+                    transactionType: { name: 'ONLINE', code: TransactionTypeCode.ONLINE },
                 };
 
                 (transactionRepository.findOne as jest.Mock).mockResolvedValue(existingTrans);
@@ -539,7 +566,7 @@ describe('TransactionsService', () => {
                     id: 'uuid-tx-id',
                     status: PaymentStatus.PENDING,
                     clinicId: 'uuid-clinic',
-                    transactionType: { name: 'VERIFICATION' },
+                    transactionType: { name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION },
                 };
 
                 (transactionRepository.findOne as jest.Mock).mockResolvedValue(existingTrans);
@@ -563,7 +590,7 @@ describe('TransactionsService', () => {
                     clinicId: 'uuid-clinic',
                     subscriptionId: 'sub-123',
                     content: JSON.stringify({ targetServiceId: 'service-new', duration: 2 }),
-                    transactionType: { name: 'SUBSCRIPTION' },
+                    transactionType: { name: 'SUBSCRIPTION', code: TransactionTypeCode.SUBSCRIPTION },
                 };
 
                 (transactionRepository.findOne as jest.Mock).mockResolvedValue(existingTrans);
@@ -593,20 +620,20 @@ describe('TransactionsService', () => {
                     patient: { _id: 'uuid-patient' },
                 });
 
-                transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-online', name: 'ONLINE' });
+                transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-online', name: 'ONLINE', code: TransactionTypeCode.ONLINE });
                 (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-tx', amount: 50000 });
                 (transactionRepository.save as jest.Mock).mockResolvedValue({
                     id: 'new-tx',
                     status: PaymentStatus.SUCCESS,
                 });
 
-                const payload = { ...basePayload, appointmentId: 'uuid-appointment' };
+                const payload = { ...basePayload, prescriptionId: 'uuid-appointment' };
                 const result = await service.handleCallback(payload);
 
                 expect(transactionRepository.create).toHaveBeenCalled();
                 expect(packageRepo.update).toHaveBeenCalledWith(
                     { appointmentId: 'uuid-appointment', status: AppointmentPackageStatus.PENDING_PAYMENT },
-                    { status: AppointmentPackageStatus.PAID, transactionId: 'new-tx' }
+                    { status: AppointmentPackageStatus.PAID, transactionId: 'new-tx', paymentType: PaymentType.ONLINE }
                 );
                 expect(result.status).toBe(PaymentStatus.SUCCESS);
             });
