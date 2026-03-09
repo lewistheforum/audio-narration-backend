@@ -9,6 +9,9 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Bật tính năng nhận diện proxy từ Nginx
+  app.set('trust proxy', 1);
+
   // Increase payload size limit to 50MB (for PDF uploads)
   app.useBodyParser('json', { limit: '50mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '50mb' });
