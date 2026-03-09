@@ -37,6 +37,8 @@ describe('ContractsService', () => {
             findByContractId: jest.fn(),
             create: jest.fn(),
             save: jest.fn(),
+            findExpiredCurrentContracts: jest.fn(),
+            updateStatusBulk: jest.fn(),
         };
 
         accountsService = {
@@ -368,6 +370,28 @@ describe('ContractsService', () => {
                 .rejects.toThrow(BadRequestException);
         });
 
+        it('should throw BadRequestException if Manager has no private key during sign', async () => {
+            const managerId = 'mgr-1';
+            contractPackageRepo.findById.mockResolvedValue({
+                _id: contractId,
+                employeeId: 'emp-1',
+                clinicManagerId: managerId
+            });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                contractStatus: ContractStatus.PENDING_MANAGER_SIGNATURE
+            });
+            codeVerificationRepo.findValidByUserIdAndCode.mockResolvedValue({ _id: 'code-1' });
+
+            accountsService.findAccountEntityById.mockImplementation((id) => {
+                if (id === managerId) return Promise.resolve({ encryptedPrivateKey: null }); // Missing Manager Private Key
+                if (id === 'emp-1') return Promise.resolve({ publicKey: mockKeyPair.publicKey });
+                return Promise.resolve(null);
+            });
+
+            await expect(service.signContract(contractId, managerId, '123456'))
+                .rejects.toThrow(new BadRequestException('Clinic Manager does not have digital keys generated'));
+        });
+
         it('should throw BadRequestException if Employee Public Key is missing during Manager sign', async () => {
             const managerId = 'mgr-1';
             contractPackageRepo.findById.mockResolvedValue({
@@ -489,6 +513,38 @@ describe('ContractsService', () => {
             expect(result.managerValid).toBe(false);
             expect(result.employeeValid).toBe(false);
             expect(result.integrity).toBe(false);
+        });
+    });
+
+    // ========================================
+    // updateExpiredContractsToOld
+    // ========================================
+    describe('updateExpiredContractsToOld', () => {
+        it('should return 0 if there are no expired contracts', async () => {
+            contractInfoRepo.findExpiredCurrentContracts.mockResolvedValue([]);
+
+            const result = await service.updateExpiredContractsToOld();
+
+            expect(contractInfoRepo.findExpiredCurrentContracts).toHaveBeenCalled();
+            expect(contractInfoRepo.updateStatusBulk).not.toHaveBeenCalled();
+            expect(result).toBe(0);
+        });
+
+        it('should call updateStatusBulk with extracted IDs and return count', async () => {
+            contractInfoRepo.findExpiredCurrentContracts.mockResolvedValue([
+                { _id: 'id-1' },
+                { _id: 'id-2' },
+            ]);
+            contractInfoRepo.updateStatusBulk.mockResolvedValue(2);
+
+            const result = await service.updateExpiredContractsToOld();
+
+            expect(contractInfoRepo.findExpiredCurrentContracts).toHaveBeenCalled();
+            expect(contractInfoRepo.updateStatusBulk).toHaveBeenCalledWith(
+                ['id-1', 'id-2'],
+                ContractStatus.OLD
+            );
+            expect(result).toBe(2);
         });
     });
 });

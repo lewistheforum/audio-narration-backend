@@ -60,6 +60,12 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
 -   **Chặn chỉnh sửa:** Không được phép chỉnh sửa thông tin hợp đồng khi trạng thái là `PENDING_MANAGER_SIGNATURE` (Nhân viên đã ký) hoặc `CURRENT` (Đã hoàn tất).
 -   **Reset khi sửa:** Nếu chỉnh sửa khi đang ở trạng thái `PENDING_SIGNATURE` (Đã upload file nhưng chưa ký), hệ thống phải cảnh báo và tự động reset trạng thái về `DRAFT`, đồng thời xóa file hợp đồng cũ.
 
+### 3.2 Hết Hạn Hợp Đồng (Expiration)
+-   Hệ thống có một **Cron Job** chạy ngầm định kỳ vào lúc 00:00:00 (nửa đêm) mỗi ngày (Theo múi giờ `Asia/Ho_Chi_Minh`).
+-   Cron Job sẽ quét toàn bộ các hợp đồng có trạng thái đang là `CURRENT`.
+-   Nếu `contractEndDate` của hợp đồng đã nhỏ hơn thời điểm hiện tại, hệ thống sẽ tự động cập nhật trạng thái hợp đồng thành `OLD`.
+-   Nhân viên sẽ không thấy được hợp đồng `DRAFT` nhưng vẫn có thể xem lại các hợp đồng `OLD` của mình.
+
 ### 3.2 Bảo Mật & Xác Thực
 -   Mọi hành động ký đều yêu cầu xác thực OTP (gửi qua email).
 -   Chữ ký số sử dụng thuật toán RSA/SHA-256.
