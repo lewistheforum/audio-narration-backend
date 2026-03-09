@@ -6,9 +6,11 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { Account } from './accounts.entity';
+import { GoogleIframe } from './google_iframe.entity';
 
 /**
  * Address Entity
@@ -28,6 +30,9 @@ export class Address {
   })
   @JoinColumn({ name: 'account_id' })
   account?: Account;
+
+  @OneToOne(() => GoogleIframe, (iframe) => iframe.address)
+  googleIframe?: GoogleIframe;
 
   @Column({ name: 'address', type: 'text' })
   address: string;

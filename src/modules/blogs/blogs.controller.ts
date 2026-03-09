@@ -34,7 +34,7 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 /**
  * Blogs Controller
  *
- * RESTful API controller for managing blog posts in the Medicare system.
+ * RESTful API controller for managing blog posts in the Bonix system.
  * Provides blog listing and detail retrieval functionality.
  *
  * Features:

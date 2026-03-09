@@ -33,7 +33,7 @@ export class HealthController {
             details: {
               type: 'object',
               properties: {
-                postgres: { type: 'string', example: 'postgres on localhost:5432/medicare_db' },
+                postgres: { type: 'string', example: 'postgres on localhost:5432/bonix_db' },
               },
             },
           },
@@ -89,7 +89,7 @@ export class HealthController {
     schema: {
       type: 'object',
       properties: {
-        postgres: { type: 'string', example: 'postgres on localhost:5432/medicare_db' },
+        postgres: { type: 'string', example: 'postgres on localhost:5432/bonix_db' },
       },
     },
   })

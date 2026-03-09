@@ -37,7 +37,7 @@ async function bootstrap(): Promise<void> {
 
   // config Swagger documentation
   const config = new DocumentBuilder()
-    .setTitle('Medicare API')
+    .setTitle('Bonix API')
     .setDescription(
       'A comprehensive healthcare platform API for patient management, clinic services, messaging, and doctor discovery',
     )
