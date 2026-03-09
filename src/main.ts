@@ -1,3 +1,9 @@
+// Force Node.js to use timezone from environment variable
+if (process.env.TZ) {
+  process.env.TZ = process.env.TZ;
+  console.log(`Application timezone set to: ${process.env.TZ}`);
+}
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';

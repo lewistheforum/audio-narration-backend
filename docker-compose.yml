@@ -12,6 +12,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DATABASE:-bonix}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
       # Performance optimization
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
     volumes:
@@ -43,6 +44,8 @@ services:
     image: redis:7-alpine
     container_name: ${REDIS_CONTAINER_NAME:-bonix_redis}
     restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
       - '${REDIS_PORT:-6379}:6379'
     command:

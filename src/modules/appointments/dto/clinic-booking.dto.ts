@@ -168,11 +168,11 @@ export class UpdateSessionOption3Step3Dto {
  */
 export class UpdateSessionOption3Step4Dto {
   @ApiProperty({
-    description: 'Doctor shift hour ID (time slot)',
+    description: 'Clinic shift hour ID (time slot)',
     example: '123e4567-e89b-12d3-a456-426614174003',
   })
   @IsString()
-  doctor_shift_hour_id: string;
+  clinic_shift_hour_id: string;
 
   @ApiProperty({
     description: 'Doctor ID',

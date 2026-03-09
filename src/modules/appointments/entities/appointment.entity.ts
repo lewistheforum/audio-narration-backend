@@ -50,15 +50,15 @@ export class Appointment {
   @JoinColumn({ name: 'doctor_id' })
   doctor?: Account | null;
 
-  @Column({ name: 'doctor_shift_hour_id', type: 'uuid', nullable: true })
-  doctorShiftHourId: string | null;
+  @Column({ name: 'clinic_shift_hour_id', type: 'uuid', nullable: true })
+  clinicShiftHourId: string | null;
 
   @ManyToOne(() => ClinicShiftHour, {
     onDelete: 'CASCADE',
     nullable: true,
   })
-  @JoinColumn({ name: 'doctor_shift_hour_id' })
-  doctorShiftHour?: ClinicShiftHour | null;
+  @JoinColumn({ name: 'clinic_shift_hour_id' })
+  clinicShiftHour?: ClinicShiftHour | null;
 
   @Column({ name: 'appointment_date', type: 'date' })
   appointmentDate: Date;
