@@ -45,6 +45,8 @@ import { ERM } from '../prescriptions/entities/erm.entity';
 import { EPrescription } from '../prescriptions/entities/e-prescription.entity';
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { BookingSessionService } from './booking-session.service';
+import { MailerService, AppointmentReminderContext } from '../mailer/mailer.service';
+import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
 
 /**
  * Appointments Service
@@ -68,6 +70,7 @@ export class AppointmentsService {
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
     private readonly accountRepository: AccountRepository,
     private readonly bookingSessionService: BookingSessionService,
+    private readonly mailerService: MailerService,
   ) { }
 
   /**
@@ -1727,10 +1730,10 @@ export class AppointmentsService {
       .getRepository(AppointmentPackage)
       .create({
         appointmentId: appointment._id,
-        amount: clinicService.price,
+        amount: Math.round(Number(clinicService.price)),
         transactionId: null, // Will be set by Clinic Staff during payment
-        status: null,
         paymentType: null,
+        // status will use default value: PENDING_PAYMENT
       });
 
     const savedPackage = await this.dataSource
@@ -3864,6 +3867,488 @@ export class AppointmentsService {
       };
     });
   }
+
+  /**
+   * Send email reminder for a single appointment
+   * 
+   * @param appointmentId - Appointment UUID
+   * @param staffAccountId - Staff account UUID (for authorization)
+   * @returns Send reminder response
+   */
+  async sendAppointmentReminder(
+    appointmentId: string,
+    staffAccountId: string,
+  ): Promise<SendReminderResponseDto> {
+    // 1. Validate staff authorization - Get account directly
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
+
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
+      throw new ForbiddenException('Staff not authorized or not linked to a clinic');
+    }
+
+    const clinicId = staffAccount.parentId;
+
+    // 2. Find appointment with all relations
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: appointmentId, clinicId },
+      relations: [
+        'patient',
+        'patient.generalAccount',
+        'clinic',
+        'clinic.clinicManagerInformation',
+        'clinic.addresses',
+        'doctor',
+        'doctor.doctorInformation',
+      ],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found or not in your clinic');
+    }
+
+    // 3. Validate appointment status and time
+    if (!['PENDING', 'CONFIRMED'].includes(appointment.status)) {
+      throw new BadRequestException(
+        'Appointment must be PENDING or CONFIRMED to send reminder',
+      );
+    }
+
+    if (new Date(appointment.appointmentHour) <= new Date()) {
+      throw new BadRequestException('Cannot send reminder for past appointments');
+    }
+
+    // 4. Validate patient email
+    const patientEmail = appointment.patient?.email;
+    if (!patientEmail) {
+      throw new BadRequestException('Patient does not have email address');
+    }
+
+    // 5. Get services for this appointment
+    const services = await this.dataSource.query(
+      `
+      SELECT cs.service_name, cat.type as service_type
+      FROM service_appointments sa
+      INNER JOIN appointment_package ap ON sa.appointment_package_id = ap._id
+      INNER JOIN clinic_service_config csc ON sa.clinic_service_id = csc._id
+      INNER JOIN clinic_services cs ON csc.service_id = cs._id
+      INNER JOIN clinic_service_category cat ON cs.category_id = cat._id
+      WHERE ap.appointment_id = $1
+      AND sa.deleted_at IS NULL
+      `,
+      [appointmentId],
+    );
+
+    // 6. Prepare email context
+    const clinicAddress = appointment.clinic?.addresses?.[0];
+    const doctorInfo = appointment.doctor?.doctorInformation;
+    const patientInfo = appointment.patient?.generalAccount;
+
+    // Get clinic name from clinicManagerInformation
+    let clinicName = 'Phòng khám';
+    if (appointment.clinic?.clinicManagerInformation) {
+      clinicName = appointment.clinic.clinicManagerInformation.clinicBranchName;
+    }
+
+    const context: AppointmentReminderContext = {
+      patientName: patientInfo?.fullName || 'Bệnh nhân',
+      clinicName: clinicName,
+      clinicAddress: clinicAddress
+        ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
+        : 'Chưa có địa chỉ',
+      clinicPhone: appointment.clinic?.phone || 'Chưa có SĐT',
+      appointmentDate: new Date(appointment.appointmentDate).toLocaleDateString('vi-VN'),
+      appointmentHour: new Date(appointment.appointmentHour).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      doctorName: doctorInfo?.fullName || 'Bác sĩ',
+      doctorSpecialization: undefined,
+      services: services.map((s: any) => ({
+        serviceName: s.service_name,
+        serviceType: s.service_type,
+      })),
+    };
+
+    // 7. Send email
+    const sentAt = new Date();
+    try {
+      await this.mailerService.sendAppointmentReminderEmail(patientEmail, context);
+
+      // 8. Update isReminder flag  
+      await this.dataSource
+        .getRepository(Appointment)
+        .update({ _id: appointmentId }, { isRemider: true });
+
+      return {
+        success: true,
+        appointment_id: appointmentId,
+        patient_email: patientEmail,
+        sent_at: sentAt.toISOString(),
+        message: 'Email nhắc nhở đã được gửi thành công',
+      };
+    } catch (error) {
+      console.error('Failed to send reminder email:', error);
+      throw new BadRequestException('Không thể gửi email. Vui lòng thử lại sau.');
+    }
+  }
+
+  /**
+   * Send email reminder for multiple appointments (bulk)
+   * 
+   * @param appointmentIds - Array of appointment UUIDs
+   * @param staffAccountId - Staff account UUID (for authorization)
+   * @returns Bulk send summary
+   */
+  async sendAppointmentReminderBulk(
+    appointmentIds: string[],
+    staffAccountId: string,
+  ): Promise<SendReminderBulkResponseDto> {
+    const sentAt = new Date();
+
+    // 1. Validate staff authorization once (optimization)
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
+
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
+      throw new ForbiddenException('Staff not authorized or not linked to a clinic');
+    }
+
+    const clinicId = staffAccount.parentId;
+
+    // 2. Initialize counters
+    let totalSent = 0;
+    let totalFailed = 0;
+    let totalSkipped = 0;
+
+    // 3. Process appointments in batches (rate limiting)
+    const batchSize = 50;
+    for (let i = 0; i < appointmentIds.length; i += batchSize) {
+      const batch = appointmentIds.slice(i, i + batchSize);
+
+      await Promise.allSettled(
+        batch.map(async (appointmentId) => {
+          try {
+            // Find appointment and validate
+            const appointment = await this.appointmentRepository.findOne({
+              where: { _id: appointmentId, clinicId },
+              relations: [
+                'patient',
+                'patient.generalAccount',
+                'clinic',
+                'clinic.clinicManagerInformation',
+                'clinic.addresses',
+                'doctor',
+                'doctor.doctorInformation',
+              ],
+            });
+
+            // Skip if not found or not in clinic
+            if (!appointment) {
+              totalSkipped++;
+              return;
+            }
+
+            // Skip if status not valid
+            if (!['PENDING', 'CONFIRMED', 'RESCHEDULED'].includes(appointment.status)) {
+              totalSkipped++;
+              return;
+            }
+
+            // Skip if past appointment
+            if (new Date(appointment.appointmentHour) <= new Date()) {
+              totalSkipped++;
+              return;
+            }
+
+            // Skip if no patient email
+            const patientEmail = appointment.patient?.email;
+            if (!patientEmail) {
+              totalSkipped++;
+              return;
+            }
+
+            // Get services
+            const services = await this.dataSource.query(
+              `
+              SELECT cs.service_name, cat.type as service_type
+              FROM service_appointments sa
+              INNER JOIN appointment_package ap ON sa.appointment_package_id = ap._id
+              INNER JOIN clinic_service_config csc ON sa.clinic_service_id = csc._id
+              INNER JOIN clinic_services cs ON csc.service_id = cs._id
+              INNER JOIN clinic_service_category cat ON cs.category_id = cat._id
+              WHERE ap.appointment_id = $1
+              AND sa.deleted_at IS NULL
+              `,
+              [appointmentId],
+            );
+
+            // Prepare email context
+            const clinicAddress = appointment.clinic?.addresses?.[0];
+            const doctorInfo = appointment.doctor?.doctorInformation;
+            const patientInfo = appointment.patient?.generalAccount;
+
+            let clinicName = 'Phòng khám';
+            if (appointment.clinic?.clinicManagerInformation) {
+              clinicName = appointment.clinic.clinicManagerInformation.clinicBranchName;
+            }
+
+            const context: AppointmentReminderContext = {
+              patientName: patientInfo?.fullName || 'Bệnh nhân',
+              clinicName: clinicName,
+              clinicAddress: clinicAddress
+                ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
+                : 'Chưa có địa chỉ',
+              clinicPhone: appointment.clinic?.phone || 'Chưa có SĐT',
+              appointmentDate: new Date(appointment.appointmentDate).toLocaleDateString('vi-VN'),
+              appointmentHour: new Date(appointment.appointmentHour).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              doctorName: doctorInfo?.fullName || 'Bác sĩ',
+              doctorSpecialization: undefined,
+              services: services.map((s: any) => ({
+                serviceName: s.service_name,
+                serviceType: s.service_type,
+              })),
+            };
+
+            // Send email
+            await this.mailerService.sendAppointmentReminderEmail(patientEmail, context);
+
+            // Update reminder flag
+            await this.dataSource
+              .getRepository(Appointment)
+              .update({ _id: appointmentId }, { isRemider: true });
+
+            totalSent++;
+          } catch (error) {
+            // Log error but continue processing
+            console.error(`Failed to send reminder for appointment ${appointmentId}:`, error.message);
+            totalFailed++;
+          }
+        }),
+      );
+
+      // Delay between batches to avoid rate limiting
+      if (i + batchSize < appointmentIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // 4. Log summary
+    console.log(`Bulk send completed: ${totalSent} sent, ${totalFailed} failed, ${totalSkipped} skipped out of ${appointmentIds.length} total`);
+
+    return {
+      total_requested: appointmentIds.length,
+      total_sent: totalSent,
+      total_failed: totalFailed,
+      total_skipped: totalSkipped,
+      sent_at: sentAt.toISOString(),
+      message: `Đã gửi ${totalSent}/${appointmentIds.length} email thành công`,
+    };
+  }
+  
+  /**
+   * Get all packages of an appointment with payment status
+   * 
+   * Returns all payment packages for a specific appointment, including:
+   * - Package details (ID, amount, status, payment type)
+   * - Services included in each package
+   * - Payment summary (total packages, total amount, paid amount, pending amount)
+   * 
+   * @param appointmentId - Appointment UUID
+   * @param staffAccountId - Staff account UUID (for authorization)
+   * @returns Packages list with summary
+   * @throws NotFoundException if appointment not found or staff has no access
+   */
+  async getAppointmentPackages(
+    appointmentId: string,
+    staffAccountId: string,
+  ): Promise<any> {
+    // 1. Verify staff has access to this appointment
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
+
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const clinicId = staffAccount.parentId;
+
+    // 2. Verify appointment belongs to staff's clinic
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: appointmentId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Không tìm thấy lịch hẹn');
+    }
+
+    if (appointment.clinicId !== clinicId) {
+      throw new ForbiddenException('Bạn không có quyền truy cập lịch hẹn này');
+    }
+
+    // 3. Get all packages with services (raw data)
+    const rawPackages = await this.appointmentPackageRepository.findAllByAppointmentIdWithServices(appointmentId);
+
+    if (rawPackages.length === 0) {
+      throw new NotFoundException('Không tìm thấy gói thanh toán nào cho lịch hẹn này');
+    }
+
+    // 4. Transform raw data to DTOs
+    const packages = rawPackages.map((pkg) => ({
+      packageId: pkg.package_id,
+      appointmentId: pkg.appointment_id,
+      paymentTransactionId: pkg.transaction_id,
+      amount: Number(pkg.amount),
+      status: pkg.status,
+      paymentType: pkg.payment_type,
+      services: (pkg.services || []).map((svc: any) => ({
+        serviceAppointmentId: svc.service_appointment_id,
+        clinicServiceId: svc.clinic_service_id,
+        serviceName: svc.service_name,
+        servicePrice: Number(svc.service_price),
+      })),
+    }));
+
+    // 5. Calculate summary
+    let totalAmount = 0;
+    let paidAmount = 0;
+    let pendingAmount = 0;
+    let paidPackages = 0;
+    let pendingPackages = 0;
+
+    packages.forEach((pkg) => {
+      totalAmount += pkg.amount;
+
+      if (pkg.status === AppointmentPackageStatus.PAID) {
+        paidAmount += pkg.amount;
+        paidPackages++;
+      } else if (pkg.status === AppointmentPackageStatus.PENDING_PAYMENT) {
+        pendingAmount += pkg.amount;
+        pendingPackages++;
+      }
+    });
+
+    // 6. Return response
+    return {
+      appointmentId,
+      packages,
+      summary: {
+        totalPackages: packages.length,
+        totalAmount,
+        paidAmount,
+        pendingAmount,
+        paidPackages,
+        pendingPackages,
+      },
+    };
+  }
+
+  /**
+   * Confirm cash payment for a specific package
+   * 
+   * Staff confirms that they have received cash payment from patient for a specific package.
+   * This method:
+   * 1. Updates the package status to "paid" with payment_type = "cod"
+   * 2. Sets transaction_id to NULL (cash doesn't have transaction)
+   * 3. Checks if all packages are now paid
+   * 4. If all paid, updates appointment status to COMPLETED
+   * 
+   * IMPORTANT: This targets a SPECIFIC packageId to avoid updating wrong packages
+   * when 1 appointment has multiple packages with different payment statuses.
+   * 
+   * @param appointmentId - Appointment UUID
+   * @param packageId - Specific package UUID to confirm payment for
+   * @param staffAccountId - Staff account UUID (for authorization)
+   * @returns Confirmation details with updated package info
+   * @throws NotFoundException if appointment or package not found
+   * @throws ForbiddenException if staff has no access
+   * @throws BadRequestException if package is not pending or doesn't belong to appointment
+   */
+  async confirmCashPayment(
+    appointmentId: string,
+    packageId: string,
+    staffAccountId: string,
+  ): Promise<any> {
+    // 1. Verify staff has access to this appointment
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
+
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const clinicId = staffAccount.parentId;
+
+    // 2. Verify appointment belongs to staff's clinic
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: appointmentId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Không tìm thấy lịch hẹn');
+    }
+
+    if (appointment.clinicId !== clinicId) {
+      throw new ForbiddenException('Bạn không có quyền truy cập lịch hẹn này');
+    }
+
+    // 3. Verify package exists and belongs to this appointment
+    const packageData = await this.appointmentPackageRepository.findByIdForUpdate(packageId);
+
+    if (!packageData) {
+      throw new NotFoundException('Không tìm thấy gói thanh toán');
+    }
+
+    if (packageData.appointmentId !== appointmentId) {
+      throw new BadRequestException('Gói thanh toán không thuộc lịch hẹn này');
+    }
+
+    // 4. Check if package is pending payment
+    if (packageData.status !== AppointmentPackageStatus.PENDING_PAYMENT) {
+      throw new BadRequestException(
+        `Không thể xác nhận thanh toán: Gói thanh toán đã ở trạng thái "${packageData.status}"`,
+      );
+    }
+
+    // 5. Update package: Set as paid with COD payment type
+    const updatedPackage = await this.appointmentPackageRepository.updatePackage(packageId, {
+      transactionId: null,
+      paymentType: PaymentType.COD,
+      status: AppointmentPackageStatus.PAID,
+    });
+
+    // 6. Check if all packages are now paid
+    const remainingPendingCount = await this.appointmentPackageRepository.countPendingPackages(appointmentId);
+
+    const allPackagesPaid = remainingPendingCount === 0;
+
+    // 7. If all packages paid, update appointment status to COMPLETED
+    let updatedAppointmentStatus = appointment.status;
+
+    if (allPackagesPaid) {
+      appointment.status = AppointmentStatus.COMPLETED;
+      await this.appointmentRepository.save(appointment);
+      updatedAppointmentStatus = AppointmentStatus.COMPLETED;
+    }
+
+    // 8. Return confirmation details
+    return {
+      message: 'Xác nhận thanh toán tiền mặt thành công',
+      appointmentId,
+      package: {
+        packageId: updatedPackage._id,
+        amount: updatedPackage.amount,
+        status: updatedPackage.status,
+        paymentType: updatedPackage.paymentType,
+        paymentTransactionId: updatedPackage.transactionId,
+        updatedAt: updatedPackage.updatedAt,
+      },
+      appointmentStatus: updatedAppointmentStatus,
+      allPackagesPaid,
+      remainingPendingPackages: remainingPendingCount,
+    };
+  }
+
+  
 
   /**
    * Get Clinic Schedules (VERSION 4.5 - Option 1 & Option 3)
