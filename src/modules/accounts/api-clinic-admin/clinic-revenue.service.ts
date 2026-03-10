@@ -35,7 +35,7 @@ export class ClinicRevenueService {
   /**
    * Get Overall Revenue Report
    *
-   * Aggregates revenue data across all branches under the CLINIC_ADMIN
+   * Aggregates revenue data across ALL branches under the CLINIC_ADMIN
    * Provides comprehensive financial overview with multiple breakdowns
    */
   async getOverallRevenueReport(
@@ -48,8 +48,8 @@ export class ClinicRevenueService {
     // Validate date range
     this.validateDateRange(filterDto.startDate, filterDto.endDate);
 
-    // Get all branch IDs under this admin
-    const branchIds = await this.getAdminBranchIds(adminId, filterDto.managerId);
+    // Get ALL branch IDs under this admin (no filtering by specific manager)
+    const branchIds = await this.getAdminBranchIds(adminId);
 
     if (branchIds.length === 0) {
       throw new NotFoundException('No branches found under this admin');
@@ -240,23 +240,15 @@ export class ClinicRevenueService {
    * Get Admin Branch IDs
    *
    * Retrieves all CLINIC_MANAGER account IDs under this admin
-   * Optionally filters by specific managerId
    * CRITICAL: Does NOT filter by account status (historical data requirement)
    */
-  private async getAdminBranchIds(
-    adminId: string,
-    managerId?: string,
-  ): Promise<string[]> {
+  private async getAdminBranchIds(adminId: string): Promise<string[]> {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .select('account._id')
       .where('account.parent_id = :adminId', { adminId })
       .andWhere('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
       .andWhere('account.deleted_at IS NULL');
-
-    if (managerId) {
-      queryBuilder.andWhere('account._id = :managerId', { managerId });
-    }
 
     const branches = await queryBuilder.getMany();
     return branches.map((branch) => branch._id);
@@ -389,7 +381,7 @@ export class ClinicRevenueService {
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
-      .andWhere('ap.payment_type = :paymentType', { paymentType: 'COD' })
+      .andWhere('ap.payment_type = :paymentType', { paymentType: 'cod' })
       .andWhere('t.deleted_at IS NULL')
       .getRawOne();
 
@@ -449,7 +441,7 @@ export class ClinicRevenueService {
       )
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
       .leftJoin(
-        'clinic_service_categories',
+        'clinic_service_category',
         'csc',
         'csc._id = cs.category_id',
       )

@@ -43,7 +43,7 @@ import { ApiResponseData } from '../../../common/decorators/api-response.decorat
  * Endpoints for CLINIC_ADMIN to manage CLINIC_MANAGER accounts.
  * All endpoints require JWT authentication and CLINIC_ADMIN role.
  */
-@Controller('clinic-managers')
+@Controller('clinic-admin/clinic-managers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiTags('Clinic Admin - Manager Management')
 @ApiBearerAuth('JWT-auth')
