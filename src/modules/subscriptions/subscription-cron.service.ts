@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
+import {
+  getCurrentVietnamTime,
+  addToVietnamTime,
+  getDateString,
+} from 'src/common/utils/date.util';
 import { ClinicSubscriptionRepository } from './repositories/clinic-subscription.repository';
 import { ClinicSubscriptionRenewalQueueRepository } from './repositories/clinic-subscription-renewal-queue.repository';
 import { MailerService } from '../mailer/mailer.service';
@@ -239,7 +244,8 @@ export class SubscriptionCronService {
         status: RegistrationStatus.ACTIVE,
       })
       .andWhere(
-        `DATE(subscription.expiration_date) = DATE(NOW() + INTERVAL '${days} days')`,
+        `DATE(subscription.expiration_date) = :targetDate`,
+        { targetDate: getDateString(addToVietnamTime(days, 'day')) }
       );
 
     return query.getMany();
@@ -263,7 +269,7 @@ export class SubscriptionCronService {
       .where('subscription.subscriptionStatus IN (:...statuses)', {
         statuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
       })
-      .andWhere('subscription.expiration_date < NOW()');
+      .andWhere('subscription.expiration_date < :now', { now: getCurrentVietnamTime() });
 
     return query.getMany();
   }

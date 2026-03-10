@@ -8,6 +8,7 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
 import { CLINIC_REPRESENTATIVES } from '../constants/names';
 import { CLINIC_POSITIONS } from '../constants/medical-terms';
 import { HEADER_ADDRESSES } from '../constants/locations';
+import { getCurrentVietnamTime } from '../utils/date.util';
 
 /**
  * ContractPackage Seeder Service
@@ -144,7 +145,7 @@ export class ContractPackageSeederService {
    * Get random header date (within last 6 months)
    */
   private getRandomHeaderDate(): Date {
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     const sixMonthsAgo = new Date(
       now.getFullYear(),
       now.getMonth() - 6,

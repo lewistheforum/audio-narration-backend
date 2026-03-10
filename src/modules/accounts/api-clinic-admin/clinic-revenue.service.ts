@@ -16,6 +16,7 @@ import {
   OverallRevenueReportResponseDto,
   BranchRevenueReportResponseDto,
 } from './dto';
+import { formatToVietnamTime } from 'src/common/utils/date.util';
 
 /**
  * Clinic Revenue Service
@@ -100,7 +101,7 @@ export class ClinicRevenueService {
         startDate: filterDto.startDate,
         endDate: filterDto.endDate,
         groupedBy: filterDto.groupBy || RevenueGroupBy.DAY,
-        generatedAt: new Date().toISOString(),
+        generatedAt: formatToVietnamTime(),
       },
       summary,
       paymentMethodBreakdown,
@@ -180,7 +181,7 @@ export class ClinicRevenueService {
         startDate: filterDto.startDate,
         endDate: filterDto.endDate,
         groupedBy: filterDto.groupBy || RevenueGroupBy.DAY,
-        generatedAt: new Date().toISOString(),
+        generatedAt: formatToVietnamTime(),
       },
       branchInfo,
       summary,
@@ -524,8 +525,8 @@ export class ClinicRevenueService {
       period: item.period,
       revenue: parseInt(item.revenue || '0', 10),
       transactionCount: parseInt(item.transactionCount || '0', 10),
-      periodStart: new Date(item.periodStart).toISOString(),
-      periodEnd: new Date(item.periodEnd).toISOString(),
+      periodStart: formatToVietnamTime(new Date(item.periodStart)),
+      periodEnd: formatToVietnamTime(new Date(item.periodEnd)),
     }));
   }
 

@@ -1,8 +1,7 @@
-// Force Node.js to use timezone from environment variable
-if (process.env.TZ) {
-  process.env.TZ = process.env.TZ;
-  console.log(`Application timezone set to: ${process.env.TZ}`);
-}
+// Force Node.js to use Vietnam timezone (Asia/Ho_Chi_Minh)
+// This ensures all Date operations use GMT+7 by default
+process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
+console.log(`✅ Application timezone set to: ${process.env.TZ}`);
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';

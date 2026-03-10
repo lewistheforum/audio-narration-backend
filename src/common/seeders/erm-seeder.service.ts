@@ -66,6 +66,7 @@ import {
   BODY_SIDES,
   IMMEDIATE_OUTCOMES,
 } from '../constants/appointment-seeder-data';
+import { getCurrentVietnamTime } from '../utils/date.util';
 
 /**
  * ERM Seeder Service
@@ -217,7 +218,7 @@ export class ERMSeederService {
     const createdBy = appointment.doctorId || appointment.clinicId;
 
     // Generate signed_at timestamp if status is SIGNED
-    const signedAt = status === ERMStatus.SIGNED ? new Date() : null;
+    const signedAt = status === ERMStatus.SIGNED ? getCurrentVietnamTime() : null;
 
     return this.ermRepository.create({
       serviceAppointmentsId: serviceAppointment._id,

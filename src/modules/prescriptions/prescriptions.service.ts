@@ -25,6 +25,7 @@ import { CreateMedicineDto } from './dto/create-medicine.dto';
 import { UpdateMedicineDto } from './dto/update-medicine.dto';
 import { CreatePrescriptionDto, PrescriptionResponseDto, PrescriptionMedicineDetailDto } from './dto';
 import { PatientEPrescriptionDetailResponseDto } from './dto/patient-e-prescription-response.dto';
+import { getCurrentVietnamTime, getStartOfDay, getEndOfDay } from 'src/common/utils/date.util';
 import {
   PatientERMDetailResponseDto,
   ERMXrayDto,
@@ -158,15 +159,15 @@ export class PrescriptionsService {
    * @private
    */
   private async generateReferenceId(): Promise<string> {
-    const today = new Date();
+    const today = getCurrentVietnamTime();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const datePrefix = `EP${year}${month}${day}`;
 
     // Count prescriptions created today
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    const startOfDay = getStartOfDay();
+    const endOfDay = getEndOfDay();
 
     const count = await this.dataSource
       .getRepository(EPrescription)
