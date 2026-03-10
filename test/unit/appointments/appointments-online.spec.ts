@@ -143,6 +143,9 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
         set: jest.fn().mockReturnThis(),
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
         leftJoinAndSelect: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+        getRawMany: jest.fn().mockResolvedValue([]),
+        getRawOne: jest.fn().mockResolvedValue(null),
       }),
       findOne: jest.fn().mockImplementation((entity: any, _options?: any) => {
         // TransactionType lookup
@@ -163,6 +166,7 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
         }
         return Promise.resolve({ _id: 'saved-id', id: 'saved-id' });
       }),
+      query: jest.fn().mockResolvedValue([{ _id: 'schedule-id-1', isActive: true }]),
     };
 
     // Mock DataSource

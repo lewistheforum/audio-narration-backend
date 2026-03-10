@@ -27,3 +27,6 @@ export * from './doctor-booking.dto';
 export * from './clinic-booking.dto';
 export * from './send-reminder.dto';
 export * from './send-reminder-bulk.dto';
+export * from './get-available-doctors-out-of-hours.dto';
+export * from './available-doctors-response.dto';
+export * from './clinics-list-response.dto';

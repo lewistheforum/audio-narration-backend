@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import {
+  getCurrentVietnamTime,
+  subtractFromVietnamTime,
+  getVietnamTimestamp,
+} from '../utils/date.util';
 import { ClinicSubscription } from '../../modules/subscriptions/entities/clinic-subscription.entity';
 import { ClinicSubscriptionHistory } from '../../modules/subscriptions/entities/clinic-subscription-history.entity';
 import { Transaction } from '../../modules/transactions/entities/transaction.entity';
@@ -129,7 +134,7 @@ export class TransactionHistorySeederService {
               currency: 'VND',
               status: PaymentStatus.SUCCESS,
               transactionDate: history.subscriptionDate || history.createdAt,
-              code: `TRANS-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+              code: `TRANS-${getVietnamTimestamp()}-${Math.floor(Math.random() * 10000)}`,
               description: `${actionType} - ${currentService.serviceName} (${new Date(history.subscriptionDate || history.createdAt).toLocaleDateString('vi-VN')})`,
               transferType: PaymentDirection.OUT,
               gateway: 'SEPAY',
@@ -165,7 +170,7 @@ export class TransactionHistorySeederService {
         for (let i = 1; i <= historyCount; i++) {
           // Calculate dates going back in time
           // i=1 => 1 month ago, i=2 => 2 months ago, etc.
-          const subscriptionDate = new Date();
+          const subscriptionDate = getCurrentVietnamTime();
           subscriptionDate.setMonth(subscriptionDate.getMonth() - i);
 
           const expirationDate = new Date(subscriptionDate);

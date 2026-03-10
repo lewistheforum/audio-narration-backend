@@ -11,6 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 import { AccountsService } from '../accounts/accounts.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationService } from '../conversations/conversation.service';
@@ -235,7 +236,7 @@ export class SocketGatewayService
           messageId: data.messageId,
           conversationId: data.conversationId,
           readBy: client.data.user.userId,
-          readAt: new Date(),
+          readAt: getCurrentVietnamTime(),
         });
 
       console.log(
@@ -268,7 +269,7 @@ export class SocketGatewayService
           messageIds: data.messageIds,
           conversationId: data.conversationId,
           readBy: client.data.user.userId,
-          readAt: new Date(),
+          readAt: getCurrentVietnamTime(),
           count: updatedMessages.length,
         });
 
@@ -302,7 +303,7 @@ export class SocketGatewayService
         .emit('conversationRead', {
           conversationId: data.conversationId,
           readBy: client.data.user.userId,
-          readAt: new Date(),
+          readAt: getCurrentVietnamTime(),
           messageCount: affectedCount,
         });
 
@@ -455,7 +456,7 @@ export class SocketGatewayService
           messageType: message.messageType,
           createdAt: message.createdAt,
         },
-        updatedAt: new Date(),
+        updatedAt: getCurrentVietnamTime(),
       };
 
       // Broadcast to all participants in the conversation room
@@ -511,7 +512,7 @@ export class SocketGatewayService
           messageType: lastMessage.messageType,
           createdAt: lastMessage.createdAt,
         },
-        updatedAt: new Date(),
+        updatedAt: getCurrentVietnamTime(),
       };
 
       // Broadcast conversation update to all participants

@@ -7,6 +7,7 @@ import { EmployeeSchedule } from '../../modules/schedules/entities/employee-sche
 import { ClinicShiftRepository } from '../../modules/schedules/repositories/clinic-shift.repository';
 import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
 import { ShiftType, WeekDay } from '../../modules/schedules/enums';
+import { getStartOfDay } from '../utils/date.util';
 
 /**
  * Employee Schedule Seeder Service
@@ -129,8 +130,7 @@ export class EmployeeScheduleSeederService {
     );
 
     let createdCount = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getStartOfDay();
 
     // Generate schedules for the next 60 days (matching booking window)
     for (let dayOffset = 1; dayOffset <= this.DAYS_TO_GENERATE; dayOffset++) {

@@ -10,18 +10,20 @@ import {
   IsString,
   MaxLength,
   IsIn,
+  IsISO8601,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
  * Booking Option Enum
  *
- * Defines the three booking flows supported by the system
+ * Defines the four booking flows supported by the system
  */
 export enum BookingOption {
   SERVICE = 'service',
   DOCTOR = 'doctor',
   DATE = 'date',
+  OUT_OF_HOURS = 'out_of_hours',
 }
 
 /**
@@ -81,6 +83,19 @@ export class DateInitialDataDto {
 }
 
 /**
+ * Initial Data DTO for Out-of-Hours Booking (Option 4)
+ */
+export class OutOfHoursInitialDataDto {
+  @ApiProperty({
+    description: 'Clinic ID',
+    example: '123e4567-e89b-12d3-a456-426614174001',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'Invalid clinic ID format' })
+  clinic_id?: string;
+}
+
+/**
  * Create Booking Session DTO
  *
  * Request body for POST /api/patients/booking-sessions
@@ -92,7 +107,7 @@ export class CreateBookingSessionDto {
     example: BookingOption.SERVICE,
   })
   @IsNotEmpty({ message: 'Booking option is required' })
-  @IsEnum(BookingOption, { message: 'Invalid booking option. Must be: service, doctor, or date' })
+  @IsEnum(BookingOption, { message: 'Invalid booking option. Must be: service, doctor, date, or out_of_hours' })
   booking_option: BookingOption;
 
   @ApiProperty({
@@ -101,11 +116,12 @@ export class CreateBookingSessionDto {
       { $ref: '#/components/schemas/ServiceInitialDataDto' },
       { $ref: '#/components/schemas/DoctorInitialDataDto' },
       { $ref: '#/components/schemas/DateInitialDataDto' },
+      { $ref: '#/components/schemas/OutOfHoursInitialDataDto' },
     ],
   })
   @IsNotEmpty({ message: 'Initial data is required' })
   @IsObject({ message: 'Initial data must be an object' })
-  initial_data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto;
+  initial_data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto | OutOfHoursInitialDataDto;
 }
 
 /**
@@ -114,10 +130,11 @@ export class CreateBookingSessionDto {
  * - Option 1 (service-first): appointment_date + clinic_shift_hour_id + doctor_id
  * - Option 2 (doctor-first): appointment_date + clinic_shift_hour_id
  * - Option 3 (date-first): clinic_id
+ * - Option 4 (out-of-hours): appointment_date + extra_hour
  */
 export class UpdateSessionStep2Dto {
   @ApiProperty({
-    description: 'Appointment date in YYYY-MM-DD format (Option 1 & 2)',
+    description: 'Appointment date in YYYY-MM-DD format (Option 1, 2 & 4)',
     example: '2026-03-09',
     required: false,
   })
@@ -160,6 +177,15 @@ export class UpdateSessionStep2Dto {
   @IsOptional()
   @IsUUID('4', { message: 'Invalid clinic ID format' })
   clinic_id?: string;
+
+  @ApiProperty({
+    description: 'Extra hour timestamp in ISO 8601 format with timezone (Option 4 only - out-of-hours)',
+    example: '2026-03-15T14:30:00+07:00',
+    required: false,
+  })
+  @IsOptional()
+  @IsISO8601({}, { message: 'Extra hour must be a valid ISO 8601 timestamp with timezone' })
+  extra_hour?: string;
 }
 
 /**
@@ -357,10 +383,10 @@ export class BookingSessionResponseDto {
   current_step: number;
 
   @ApiProperty({
-    description: 'Session expiration timestamp',
-    example: '2026-02-25T11:30:00.000Z',
+    description: 'Session expiration timestamp (ISO 8601 with Vietnam timezone +07:00)',
+    example: '2026-03-10T21:30:00.000+07:00',
   })
-  expires_at: Date;
+  expires_at: string;
 
   @ApiProperty({
     description: 'Booking data accumulated so far',

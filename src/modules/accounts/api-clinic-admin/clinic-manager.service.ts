@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { generateRSAKeyPair } from 'src/common/utils/util';
+import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 import { AccountRepository } from '../repositories/account.repository';
 import { ClinicManagerInformationRepository } from '../repositories/clinic-manager-information.repository';
 import { AddressRepository } from '../repositories/address.repository';
@@ -692,7 +694,7 @@ export class ClinicManagerService {
     }
 
     // Allow deletion for PENDING_APPROVAL, MANAGER_DISABLED, BAN
-    manager.deletedAt = new Date();
+    manager.deletedAt = getCurrentVietnamTime();
     await this.accountRepository.saveAccount(manager);
 
     return { message: 'Manager account deleted successfully' };
