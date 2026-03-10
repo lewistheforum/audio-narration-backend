@@ -1930,7 +1930,7 @@ export class AccountsService {
     operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE'
   ): Promise<Account> {
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager account not found');
     }
@@ -1966,7 +1966,7 @@ export class AccountsService {
         'Can only enable managers with MANAGER_DISABLED status'
       );
     }
-    
+
     if (operation === 'DISABLE' && manager.status !== AccountStatus.ACTIVE) {
       throw new BadRequestException(
         'Can only disable managers with ACTIVE status'
@@ -3835,13 +3835,21 @@ export class AccountsService {
       // Email exists but with different role - allow registration
     }
 
-    // Step 2: Hash password for secure storage
+    // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
+    if (dto.sepayVa) {
+      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(dto.sepayVa);
+      if (existingSepay) {
+        throw new ConflictException('Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.');
+      }
+    }
+
+    // Step 3: Hash password for secure storage
     const hashedPassword = await bcrypt.hash(
       dto.password,
       this.BCRYPT_SALT_ROUNDS,
     );
 
-    // Step 3: Create all entities in a transaction
+    // Step 4: Create all entities in a transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

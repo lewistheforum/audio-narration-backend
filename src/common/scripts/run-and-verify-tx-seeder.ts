@@ -47,10 +47,10 @@ async function runAndVerify() {
 
     // Check TransactionType
     const transactionCounts = await dataSource.query(`
-      SELECT count(*) as count FROM transactions_type WHERE code = 'SUBSCRIPTION_PAYMENT'
+      SELECT count(*) as count FROM transactions_type WHERE code = 'Subscription Payment'
     `);
     console.log(
-      `TransactionType 'SUBSCRIPTION_PAYMENT' count: ${transactionCounts[0].count}`,
+      `TransactionType 'Subscription Payment' count: ${transactionCounts[0].count}`,
     );
 
     // Check ClinicSubscription
@@ -70,7 +70,7 @@ async function runAndVerify() {
     // Check Transactions
     const txCounts = await dataSource.query(`
         SELECT count(*) as count FROM transactions 
-        WHERE description LIKE 'Payment for % subscription (Historical - Month %)'
+        WHERE description LIKE '% - % (%)'
     `);
     const txCount = parseInt(txCounts[0].count);
     console.log(`Historical Transactions count: ${txCount}`);

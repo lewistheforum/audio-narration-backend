@@ -289,20 +289,11 @@ export class ContractsService {
         let privateKey: string;
 
         if (contractPackage.clinicManagerId === userId) {
-            // If Manager is signing, use the Parent's (Clinic Admin) Private Key
-            if (userAccount.parentId) {
-                const parentAccount = await this.accountsService.findAccountEntityById(userAccount.parentId);
-                if (!parentAccount || !parentAccount.encryptedPrivateKey) {
-                    throw new BadRequestException('Clinic Admin (Parent) does not have digital keys generated');
-                }
-                privateKey = parentAccount.encryptedPrivateKey;
-            } else {
-                // Fallback for Admin signing directly (if clinicId = Admin ID)
-                if (!userAccount.encryptedPrivateKey) {
-                    throw new BadRequestException('Clinic Admin does not have digital keys generated');
-                }
-                privateKey = userAccount.encryptedPrivateKey;
+            // If Manager is signing, use their own Private Key
+            if (!userAccount.encryptedPrivateKey) {
+                throw new BadRequestException('Clinic Manager does not have digital keys generated');
             }
+            privateKey = userAccount.encryptedPrivateKey;
         } else {
             // If Employee is signing, use their own Private Key
             if (!userAccount.encryptedPrivateKey) {
@@ -522,5 +513,103 @@ export class ContractsService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+    }
+
+    async getPackagesByEmployee(
+        employeeId: string,
+        clinicName?: string,
+        page: number = 1,
+        limit: number = 10,
+    ) {
+        const [packages, total] = await this.contractPackageRepository.findPackagesByEmployeeWithFilters(
+            employeeId,
+            clinicName,
+            page,
+            limit,
+        );
+
+        return {
+            data: packages,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    async getMyContract(employeeId: string, packageId: string): Promise<ContractPackage> {
+        const contractPackage = await this.contractPackageRepository.findById(packageId);
+
+        if (!contractPackage) {
+            throw new NotFoundException('Contract package not found');
+        }
+
+        if (contractPackage.employeeId !== employeeId) {
+            throw new UnauthorizedException('You do not have access to this contract');
+        }
+
+        if (contractPackage.clinicContractInformation?.contractStatus === ContractStatus.DRAFT) {
+            throw new UnauthorizedException('You do not have access to this contract yet');
+        }
+
+        return contractPackage;
+    }
+
+    /**
+     * Automatic Cron Job method to mark expired contracts as OLD 
+     * Uses Asia/Ho_Chi_Minh timezone
+     */
+    async updateExpiredContractsToOld(): Promise<number> {
+        // Calculate the current date in Asia/Ho_Chi_Minh
+        // We want to create a Date object representing the midnight of the current day in VN
+
+        // 1. Get current UTC time
+        const now = new Date();
+
+        // 2. Format to a local string in HCM timezone (e.g., "1/15/2026, 12:00:00 AM")
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false
+        });
+
+        // Parsing the date string back to get the components
+        const parts = formatter.formatToParts(now);
+        const vnDateObj: Record<string, number> = {};
+        for (const part of parts) {
+            if (part.type !== 'literal') {
+                vnDateObj[part.type] = parseInt(part.value, 10);
+            }
+        }
+
+        // Construct the Date object that aligns with VN time
+        // Note: Months in Date constructor are 0-indexed
+        const vnDate = new Date(
+            vnDateObj.year,
+            vnDateObj.month - 1,
+            vnDateObj.day,
+            vnDateObj.hour,
+            vnDateObj.minute,
+            vnDateObj.second
+        );
+
+        // Find expired DB records
+        const expiredContracts = await this.clinicContractInfoRepository.findExpiredCurrentContracts(vnDate);
+
+        if (expiredContracts.length === 0) {
+            return 0; // Nothing to update
+        }
+
+        const ids = expiredContracts.map((info: any) => info._id);
+
+        // Update DB
+        return await this.clinicContractInfoRepository.updateStatusBulk(ids, ContractStatus.OLD);
     }
 }
