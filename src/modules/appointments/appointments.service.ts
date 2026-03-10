@@ -1,10 +1,13 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
   ConflictException,
+  forwardRef,
 } from '@nestjs/common';
+import { TransactionsService } from '../transactions/transactions.service';
 import { DataSource, IsNull } from 'typeorm';
 import { AppointmentRepository, AppointmentPackageRepository } from './repositories';
 import { ClinicStaffInformationRepository, AccountRepository } from '../accounts/repositories';
@@ -40,10 +43,13 @@ import {
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from './enums';
+import { Transaction, TransactionType, TransactionTypeCode, PaymentStatus } from '../transactions/entities';
 import { ERMRecordType, ERMStatus } from '../prescriptions/enums';
 import { ERM } from '../prescriptions/entities/erm.entity';
 import { EPrescription } from '../prescriptions/entities/e-prescription.entity';
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
+import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
+import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { BookingSessionService } from './booking-session.service';
 import { MailerService, AppointmentReminderContext } from '../mailer/mailer.service';
 import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
@@ -71,6 +77,8 @@ export class AppointmentsService {
     private readonly accountRepository: AccountRepository,
     private readonly bookingSessionService: BookingSessionService,
     private readonly mailerService: MailerService,
+    @Inject(forwardRef(() => TransactionsService))
+    private readonly transactionsService: TransactionsService,
   ) { }
 
   /**
@@ -437,13 +445,19 @@ export class AppointmentsService {
       );
     }
 
+    // Capture old status for slot logic
+    const oldStatus = appointment.status;
+    const newStatus = AppointmentStatus.CANCELLED;
+
     // Update appointment
-    appointment.status = AppointmentStatus.CANCELLED;
+    appointment.status = newStatus;
     appointment.rejectReason = cancelDto.rejectReason;
 
     // Save changes
-    const updatedAppointment =
-      await this.appointmentRepository.save(appointment);
+    const updatedAppointment = await this.appointmentRepository.save(appointment);
+
+    // Handle slot return if necessary
+    await this.handleSlotReturn(this.dataSource.manager, updatedAppointment, oldStatus, newStatus);
 
     return this.transformToResponseDto(updatedAppointment);
   }
@@ -733,8 +747,11 @@ export class AppointmentsService {
       );
     }
 
+    const oldStatus = appointment.status;
+    const newStatus = updateStatusDto.status;
+
     // Update appointment status
-    appointment.status = updateStatusDto.status;
+    appointment.status = newStatus;
 
     // Update reject reason if provided
     if (updateStatusDto.reason) {
@@ -742,8 +759,10 @@ export class AppointmentsService {
     }
 
     // Save changes
-    const updatedAppointment =
-      await this.appointmentRepository.save(appointment);
+    const updatedAppointment = await this.appointmentRepository.save(appointment);
+
+    // Handle slot return if necessary
+    await this.handleSlotReturn(this.dataSource.manager, updatedAppointment, oldStatus, newStatus);
 
     return this.transformToResponseDto(updatedAppointment);
   }
@@ -1600,9 +1619,13 @@ export class AppointmentsService {
     }
 
     // 9. Update appointment status based on payment logic
+    const oldStatus = appointment.status;
     appointment.status = appointmentStatus;
 
     await this.dataSource.getRepository(Appointment).save(appointment);
+
+    // Handle slot return if necessary
+    await this.handleSlotReturn(this.dataSource.manager, appointment, oldStatus, appointmentStatus);
 
     // 10. Get prescription info
     const ePrescription = await this.dataSource
@@ -2258,50 +2281,69 @@ export class AppointmentsService {
 
   /**
    * PRIVATE METHOD: Create Payment Request for Online Payment
-   *
-   * PLACEHOLDER IMPLEMENTATION - Payment Gateway Integration Pending
-   * 
-   * This method will eventually:
-   * 1. Generate unique payment_reference_id
-   * 2. Calculate total amount from session data
-   * 3. Call Payment Gateway API (VNPay/Momo) to create payment
-   * 4. Update session with payment_reference_id (DO NOT DELETE SESSION)
-   * 5. Return payment_url for frontend redirect
-   * 
-   * Current implementation returns MOCK data for testing purposes.
-   * Session is kept in Redis for webhook processing (after actual payment).
-   *
-   * @param sessionId - Session UUID
-   * @param session - Booking session data from Redis
-   * @returns Mock payment response with payment URL
    */
-  private async createPaymentRequestOnline(
+  async createPaymentRequestOnline(
     sessionId: string,
     session: any,
   ): Promise<any> {
-    // ========================================================================
-    // PLACEHOLDER LOGIC - TO BE REPLACED WITH REAL PAYMENT GATEWAY
-    // ========================================================================
-    
-    const { v4: uuidv4 } = require('uuid');
-    
-    // Generate unique payment reference ID
-    const paymentReferenceId = uuidv4();
-    
-    // Calculate total amount (same logic as COD)
-    // In real implementation, this should query the actual service price
-    // For now, return a placeholder amount
-    const totalAmount = 300000; // Placeholder - will be calculated from session data
+    // 1. Calculate Price from Service Config
+    const serviceConfig = await this.dataSource
+      .getRepository(ClinicServiceConfig)
+      .createQueryBuilder('csc')
+      .leftJoinAndSelect('csc.service', 'service')
+      .where('csc._id = :configId', { configId: session.clinicServiceConfigId })
+      .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
+      .andWhere('csc.is_active = true')
+      .andWhere('csc.deleted_at IS NULL')
+      .andWhere('service.deleted_at IS NULL')
+      .getOne();
 
-    // Update session with payment_reference_id
-    // This allows webhook to find the session later
+    if (!serviceConfig) {
+      throw new BadRequestException('Dịch vụ không khả dụng hoặc đã bị ngừng cung cấp');
+    }
+
+    const basePrice = parseFloat(serviceConfig.price.toString());
+    const discount = serviceConfig.discount ? parseFloat(serviceConfig.discount.toString()) : 0;
+    const finalPrice = Math.round(basePrice - (basePrice * discount / 100));
+
+    // 2. Resolve Clinic Admin ID for Seepay Config
+    const managerAccount = await this.accountRepository.findAccountById(session.clinicId);
+
+    let clinicIdForConfig = session.clinicId;
+    if (managerAccount && managerAccount.role === AccountRole.CLINIC_MANAGER && managerAccount.parentId) {
+      clinicIdForConfig = managerAccount.parentId;
+    }
+
+    // Resolve ClinicAdminInformation ID (not Account ID)
+    const clinicAdminInfo = await this.dataSource
+      .getRepository(ClinicAdminInformation)
+      .findOne({ where: { accountId: clinicIdForConfig } });
+    
+    const clinicAdminInfoId = clinicAdminInfo?._id;
+
+    // 3. Generate QR via TransactionsService
+    const seepayConfig = await this.transactionsService.resolveSepayConfig(clinicAdminInfoId);
+    const qrCodeUrl = this.transactionsService.buildQrUrl(
+      finalPrice,
+      sessionId, // Use sessionId as the description/reference
+      seepayConfig.acc,
+      seepayConfig.bank,
+    );
+    const qrPayload = this.transactionsService.buildQrPayload(
+      finalPrice,
+      sessionId,
+      seepayConfig.acc,
+      seepayConfig.bank,
+    );
+
+    // 4. Update Session in Redis with calculated amount
     const updatedSession = {
       ...session,
-      paymentReferenceId,
-      paymentProvider: 'vnpay', // or 'momo'
+      paymentAmount: finalPrice,
+      paymentProvider: 'seepay',
+      paymentReferenceId: sessionId,
     };
 
-    // Save updated session back to Redis (keep TTL)
     const key = `booking:session:${sessionId}`;
     const ttl = await this.bookingSessionService['redisClient'].ttl(key);
     await this.bookingSessionService['redisClient'].setex(
@@ -2310,28 +2352,197 @@ export class AppointmentsService {
       JSON.stringify(updatedSession),
     );
 
-    // TODO: Call real Payment Gateway API
-    // const paymentGatewayResponse = await this.paymentGatewayService.createPayment({
-    //   order_id: paymentReferenceId,
-    //   amount: totalAmount,
-    //   order_info: `Thanh toan lich kham - ${session.clinicServiceConfigId}`,
-    //   return_url: `${process.env.FRONTEND_URL}/booking/payment-result`,
-    //   ipn_url: `${process.env.BACKEND_URL}/api/webhooks/payment`,
-    //   locale: 'vn',
-    //   currency: 'VND',
-    // });
-
-    // Return mock payment response
     return {
       message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
       data: {
-        payment_url: `https://sandbox.payment-gateway.com/pay?order_id=${paymentReferenceId}`,
-        payment_reference_id: paymentReferenceId,
-        amount: totalAmount,
+        qr_code_url: qrCodeUrl,
+        qr_payload: qrPayload,
+        session_id: sessionId,
+        amount: finalPrice,
+        currency: 'VND',
         expires_at: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
-        // Note: This is MOCK data. Real payment gateway will return actual payment URL
       },
     };
+  }
+
+  /**
+   * PUBLIC: Get Online Payment QR from Redis Session
+   * Called by the dedicated endpoint POST /patients/appointments/:sessionId/payment-qr
+   * Verifies that the session belongs to the requesting patient,
+   * then delegates to createPaymentRequestOnline to generate QR.
+   */
+  async getOnlinePaymentQr(sessionId: string, patientId: string): Promise<any> {
+    // 1. Fetch session from Redis
+    const session = await this.bookingSessionService.getSession(sessionId);
+    if (!session) {
+      throw new NotFoundException('Phiên đặt lịch không tồn tại hoặc đã hết hạn');
+    }
+
+    // 2. Ownership check
+    if (session.patientId !== patientId) {
+      throw new ForbiddenException('Bạn không có quyền truy cập phiên đặt lịch này');
+    }
+
+    // 3. Must be an ONLINE payment session
+    if (session.paymentMethod !== 'online') {
+      throw new BadRequestException('Phiên đặt lịch này không sử dụng thanh toán online');
+    }
+
+    // 4. Generate QR using existing logic
+    return this.createPaymentRequestOnline(sessionId, session);
+  }
+
+  /**
+   * Finalize Online Appointment after successful payment callback
+   * Called from TransactionsService.handleCallback
+   */
+  async createAppointmentOnlineFromCallback(
+    sessionId: string,
+    transactionData: any,
+  ): Promise<any> {
+    const session = await this.bookingSessionService.getSession(sessionId);
+    if (!session) {
+      throw new NotFoundException('Phiên đặt lịch không tồn tại hoặc đã hết hạn');
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Verify Slot Availability (Pessimistic Locking)
+      const slot = await manager
+        .createQueryBuilder(ClinicShiftHour, 'csh')
+        .setLock('pessimistic_write')
+        .where('csh._id = :id', { id: session.clinicShiftHourId })
+        .getOne();
+
+      if (!slot || slot.limit <= 0) {
+        throw new BadRequestException('Khung giờ này hiện đã hết chỗ. Vui lòng chọn khung giờ khác.');
+      }
+
+      // 2. Validate Service Config
+      const serviceConfig = await manager
+        .createQueryBuilder(ClinicServiceConfig, 'csc')
+        .where('csc._id = :configId', { configId: session.clinicServiceConfigId })
+        .andWhere('csc.is_active = true')
+        .getOne();
+
+      if (!serviceConfig) {
+        throw new BadRequestException('Dịch vụ không khả dụng');
+      }
+
+      // 3. Create Appointment
+      const appointment = manager.create(Appointment, {
+        patientId: session.patientId,
+        clinicId: session.clinicId,
+        doctorId: session.doctorId,
+        clinicShiftHourId: session.clinicShiftHourId,
+        appointmentDate: new Date(session.appointmentDate),
+        appointmentHour: session.appointmentHour ? new Date(session.appointmentHour) : new Date(session.appointmentDate),
+        total: session.paymentAmount || serviceConfig.price, // Required field
+        status: AppointmentStatus.CONFIRMED, // Paid online -> Confirmed
+        patientNote: session.patientNote,
+      });
+
+      const savedAppointment = await manager.save(Appointment, appointment);
+
+      // 4. Create Transaction record (NEW v4.0)
+      const transactionType = await manager.findOne(TransactionType, {
+        where: { code: TransactionTypeCode.ONLINE },
+      });
+
+      const transaction = manager.create(Transaction, {
+        appointmentId: savedAppointment._id,
+        amount: session.paymentAmount || serviceConfig.price,
+        currency: 'VND',
+        status: PaymentStatus.SUCCESS,
+        gateway: transactionData.gateway,
+        clinicId: savedAppointment.clinicId,
+        senderAccountId: savedAppointment.patientId,
+        transactionTypeId: transactionType?._id,
+        transactionDate: new Date(transactionData.transactionDate),
+        accountNumber: transactionData.accountNumber,
+        code: transactionData.code,
+        transferType: transactionData.transferType,
+        transferAmount: transactionData.transferAmount,
+        accumulated: transactionData.accumulated,
+        subAccount: transactionData.subAccount ?? undefined,
+        referenceCode: transactionData.referenceCode,
+        description: transactionData.description,
+        seepayTransactionId: transactionData.id?.toString(),
+      });
+
+      const savedTransaction = await manager.save(Transaction, transaction);
+
+      // 5. Create Appointment Package (Status: PAID)
+      const appointmentPackage = manager.create(AppointmentPackage, {
+        appointmentId: savedAppointment._id,
+        transactionId: savedTransaction.id, // LINK Transaction ID
+        amount: Math.round(session.paymentAmount || serviceConfig.price),
+        status: AppointmentPackageStatus.PAID,
+        paymentType: PaymentType.ONLINE,
+      });
+      await manager.save(AppointmentPackage, appointmentPackage);
+
+      // 6. Create Service Appointment link
+      const serviceAppointment = manager.create(ServiceAppointment, {
+        appointmentPackageId: appointmentPackage._id,
+        clinicServiceId: session.clinicServiceConfigId,
+      });
+      await manager.save(ServiceAppointment, serviceAppointment);
+
+      // 7. Update Slot Limit (Decrement)
+      slot.limit -= 1;
+      await manager.save(ClinicShiftHour, slot);
+
+      // 8. Delete Redis Session
+      await this.bookingSessionService.deleteSession(sessionId);
+
+      return {
+        message: 'Đặt lịch thành công',
+        appointment_id: savedAppointment._id,
+        transaction_id: savedTransaction.id,
+      };
+    });
+  }
+
+  /**
+   * Directly update appointment status (used by internal services like TransactionsService)
+   * Handles slot return logic automatically.
+   */
+  async updateAppointmentStatusDirectly(
+    appointmentId: string,
+    newStatus: AppointmentStatus,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const appointment = await manager.findOne(Appointment, {
+        where: { _id: appointmentId },
+      });
+
+      if (!appointment) return;
+
+      const oldStatus = appointment.status;
+      appointment.status = newStatus;
+      await manager.save(Appointment, appointment);
+
+      // Handle slot return if transitioning to COMPLETED or CANCELLED
+      await this.handleSlotReturn(manager, appointment, oldStatus, newStatus);
+    });
+  }
+
+  /**
+   * Internal helper to handle slot return logic when appointment reaches terminal state
+   */
+  private async handleSlotReturn(
+    manager: any,
+    appointment: Appointment,
+    oldStatus: AppointmentStatus,
+    newStatus: AppointmentStatus,
+  ): Promise<void> {
+    const isTerminalState = [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED].includes(newStatus);
+    const wasActiveState = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS, AppointmentStatus.NEED_FINAL_PAYMENT].includes(oldStatus);
+
+    if (isTerminalState && wasActiveState && appointment.clinicShiftHourId) {
+      console.log(`[Slot Management] Returning slot for appointment ${appointment._id} (Transition: ${oldStatus} -> ${newStatus})`);
+      await manager.increment(ClinicShiftHour, { _id: appointment.clinicShiftHourId }, 'limit', 1);
+    }
   }
 
   // ========================================================================
@@ -4370,10 +4581,15 @@ export class AppointmentsService {
    * @returns Nested schedule structure: dates -> shifts -> slots
    */
   async getClinicSchedules(clinicId: string, workingDate?: string) {
+    console.log(`\n===== [DEBUG] getClinicSchedules =====`);
+    console.log(`[DEBUG] Input clinicId: ${clinicId}`);
+    console.log(`[DEBUG] Input workingDate: ${workingDate ?? '(none, will use today+60 range)'}`);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date();
     maxDate.setDate(maxDate.getDate() + 60);
+    console.log(`[DEBUG] Date range: ${today.toISOString()} => ${maxDate.toISOString()}`);
 
     // Validate working_date if provided
     if (workingDate) {
@@ -4403,12 +4619,18 @@ export class AppointmentsService {
       .andWhere('acc.deleted_at IS NULL')
       .getRawMany();
 
+    console.log(`[DEBUG] STEP 1 - Branches found for clinicId as Admin-ID: ${branches.length}`);
+    console.log(`[DEBUG] Branches:`, branches);
+
     const branchIds = branches.map((b) => b._id);
 
     if (branchIds.length === 0) {
       // If no branches, treat clinicId as a branch itself
       branchIds.push(clinicId);
+      console.log(`[DEBUG] No branches found => treating clinicId as Manager ID directly`);
     }
+
+    console.log(`[DEBUG] Final branchIds to query schedules:`, branchIds);
 
     // Build query with conditional date filtering
     const queryBuilder = this.dataSource
@@ -4452,13 +4674,65 @@ export class AppointmentsService {
     }
 
     // Query RAW DATA - Get ALL records without grouping in SQL
+    console.log(`[DEBUG] STEP 2 - Executing main schedule query...`);
     const rawSlots = await queryBuilder
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
       .addOrderBy('csh.start_hour', 'ASC')
       .getRawMany();
 
+    console.log(`[DEBUG] STEP 2 - Raw slots from DB: ${rawSlots.length} records`);
+    if (rawSlots.length > 0) {
+      console.log(`[DEBUG] Sample raw slot[0]:`, JSON.stringify(rawSlots[0], null, 2));
+    }
+
     if (rawSlots.length === 0) {
+      console.log(`[DEBUG] => No raw slots found. Possible reasons:`);
+      console.log(`  - No employee_schedule rows matching branchIds`);
+      console.log(`  - No clinic_shift_hour rows linked to those shifts (INNER JOIN fails)`);
+      console.log(`  - Doctor role/status filter eliminated all rows`);
+      console.log(`  - Date range filter (today to +60 days) eliminated rows`);
+      console.log(`[DEBUG] Checking employee_schedule rows without slot filter...`);
+
+      const rawScheduleCheck = await this.dataSource
+        .createQueryBuilder()
+        .select(['es._id', 'es.work_date', 'es.clinic_id', 'es.employee_id', 'es.clinic_shift_id'])
+        .from('employee_schedule', 'es')
+        .where('es.clinic_id IN (:...branchIds)', { branchIds })
+        .andWhere('es.deleted_at IS NULL')
+        .getRawMany();
+      console.log(`[DEBUG] employee_schedule rows (no date/shift filter): ${rawScheduleCheck.length}`);
+      if (rawScheduleCheck.length > 0) {
+        console.log(`[DEBUG] Sample schedule:`, rawScheduleCheck[0]);
+
+        // Check if clinic_shift_hour exists for those shifts
+        const shiftIds = [...new Set(rawScheduleCheck.map((r) => r.es_clinic_shift_id))];
+        console.log(`[DEBUG] Distinct shift IDs from schedules:`, shiftIds);
+
+        const hourCheck = await this.dataSource
+          .createQueryBuilder()
+          .select(['csh._id', 'csh.shift_id', 'csh.start_hour', 'csh.end_hour', 'csh.limit', 'csh.deleted_at'])
+          .from('clinic_shift_hour', 'csh')
+          .where('csh.shift_id IN (:...shiftIds)', { shiftIds: shiftIds.length ? shiftIds : ['none'] })
+          .getRawMany();
+        console.log(`[DEBUG] clinic_shift_hour rows for those shifts: ${hourCheck.length}`);
+        if (hourCheck.length > 0) {
+          console.log(`[DEBUG] Sample hour:`, hourCheck[0]);
+        } else {
+          console.log(`[DEBUG] *** ROOT CAUSE: clinic_shift_hour table has NO rows for those shifts! ***`);
+        }
+
+        // Check doctor status
+        const empIds = [...new Set(rawScheduleCheck.map((r) => r.es_employee_id))];
+        const doctorCheck = await this.dataSource
+          .createQueryBuilder()
+          .select(['acc._id', 'acc.role', 'acc.status'])
+          .from('accounts', 'acc')
+          .where('acc._id IN (:...empIds)', { empIds: empIds.length ? empIds : ['none'] })
+          .getRawMany();
+        console.log(`[DEBUG] Doctor accounts for those schedules:`, doctorCheck);
+      }
+
       return { data: [] };
     }
 
@@ -4492,7 +4766,13 @@ export class AppointmentsService {
     );
 
     // Filter out fully booked slots
+    console.log(`[DEBUG] STEP 3 - After booking enrichment: ${enrichedSlots.length} total slots`);
+    const fullyBookedCount = enrichedSlots.filter((s) => s.available_slots <= 0).length;
+    if (fullyBookedCount > 0) {
+      console.log(`[DEBUG] Slots filtered out (fully booked): ${fullyBookedCount}`);
+    }
     const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
+    console.log(`[DEBUG] STEP 3 - Available slots after filtering: ${availableSlots.length}`);
 
     // DATA TRANSFORMATION: Group by Date -> Shift -> Slots
     const dateMap = new Map<string, any>();

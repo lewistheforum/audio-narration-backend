@@ -1,0 +1,1 @@
+src/modules/transactions/transactions.service.ts(466,59): error TS2551: Property 'findAccountById' does not exist on type 'Repository<Account>'. Did you mean 'findAndCountBy'?

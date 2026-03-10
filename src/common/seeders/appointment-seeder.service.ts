@@ -330,7 +330,7 @@ export class AppointmentSeederService {
         description: `Payment for appointment ${appointment._id} (${paymentType})`,
         transferType: PaymentDirection.IN,
         gateway: paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH',
-        prescriptionId: appointment._id,
+        appointmentId: appointment._id,
       });
       const savedTransaction = await this.transactionRepository.save(transaction);
       transactionId = savedTransaction.id;

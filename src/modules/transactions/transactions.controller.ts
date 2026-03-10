@@ -55,7 +55,7 @@ export class TransactionsController {
   /**
    * Create payment QR for a specific prescription
    *
-   * @param prescriptionId Prescription ID
+   * @param appointmentId Appointment ID
    * @param body Transaction creation DTO
    * @returns Created payment response with QR payload (if applicable)
    */
@@ -68,7 +68,7 @@ export class TransactionsController {
     AccountRole.CLINIC_MANAGER,
   )
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán cho đơn thuốc' })
+  @ApiOperation({ summary: 'Tạo QR thanh toán cho cuộc hẹn' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -349,7 +349,7 @@ export class TransactionsController {
       data: {
         items: items.map((item) => ({
           id: item.id,
-          prescriptionId: item.prescriptionId,
+          appointmentId: item.appointmentId,
           amount: item.amount,
           currency: item.currency,
           status: item.status,

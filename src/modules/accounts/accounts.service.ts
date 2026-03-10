@@ -9,7 +9,7 @@ import {
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus, VerificationType, ClinicRole } from './enums';
-import * as crypto from 'crypto';
+import { generateRSAKeyPair } from 'src/common/utils/util';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
@@ -161,29 +161,12 @@ export class AccountsService {
     private readonly transactionRepository: TransactionRepository,
   ) { }
 
-  private generateKeyPair(): {
-    publicKey: string;
-    encryptedPrivateKey: string;
-  } {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem',
-      },
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem',
-      },
-    });
 
-    return { publicKey, encryptedPrivateKey: privateKey };
-  }
 
   async generateUserKeys(
     userId: string,
   ): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
-    const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+    const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
     const account = await this.findAccountEntityById(userId);
     account.publicKey = publicKey;
     account.encryptedPrivateKey = encryptedPrivateKey;
@@ -2868,7 +2851,7 @@ export class AccountsService {
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
-      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
 
       // Step 4: Create Account entity with CLINIC_STAFF role
       // Following 2-step registration pattern: Create ACTIVE account first
@@ -2971,7 +2954,7 @@ export class AccountsService {
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
-      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
 
       // Step 4: Create Account entity with DOCTOR role
       // Following 2-step registration pattern: Create PENDING account first
@@ -3855,7 +3838,7 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
-      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
 
       // Create Account entity with CLINIC_ADMIN role and PENDING status
       const account = this.accountRepository.createAccount({
@@ -4011,6 +3994,9 @@ export class AccountsService {
         this.BCRYPT_SALT_ROUNDS,
       );
 
+      // Generate digital signature keys
+      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+
       // Create Account entity with CLINIC_MANAGER role and ACTIVE status
       const managerAccount = this.accountRepository.createAccount({
         username: dto.username,
@@ -4022,6 +4008,8 @@ export class AccountsService {
         status: AccountStatus.ACTIVE,
         isEmailVerified: false,
         isOAuthUser: false,
+        publicKey,
+        encryptedPrivateKey,
       });
 
       const savedManagerAccount =

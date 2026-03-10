@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
+import { generateRSAKeyPair } from '../utils/util';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import {
   AccountRole,
@@ -86,24 +86,7 @@ export class AccountSeederService {
     private readonly googleIframeRepository: GoogleIframeRepository,
   ) { }
 
-  private generateKeyPair(): {
-    publicKey: string;
-    encryptedPrivateKey: string;
-  } {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem',
-      },
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem',
-      },
-    });
 
-    return { publicKey, encryptedPrivateKey: privateKey };
-  }
 
   async seedBaseAccounts(): Promise<void> {
     try {
@@ -232,6 +215,10 @@ export class AccountSeederService {
         isOAuthUser: false,
       });
 
+      const keyPair = generateRSAKeyPair();
+      account.publicKey = keyPair.publicKey;
+      account.encryptedPrivateKey = keyPair.privateKey;
+
       const saved = await this.accountRepository.saveAccount(account);
       clinicAdmins.push(saved);
     }
@@ -288,9 +275,9 @@ export class AccountSeederService {
           isOAuthUser: false,
         });
 
-        const keyPair = this.generateKeyPair();
+        const keyPair = generateRSAKeyPair();
         account.publicKey = keyPair.publicKey;
-        account.encryptedPrivateKey = keyPair.encryptedPrivateKey;
+        account.encryptedPrivateKey = keyPair.privateKey;
 
         const saved = await this.accountRepository.saveAccount(account);
         clinicManagers.push(saved);
@@ -340,9 +327,9 @@ export class AccountSeederService {
           isOAuthUser: false,
         });
 
-        const keyPair = this.generateKeyPair();
+        const keyPair = generateRSAKeyPair();
         account.publicKey = keyPair.publicKey;
-        account.encryptedPrivateKey = keyPair.encryptedPrivateKey;
+        account.encryptedPrivateKey = keyPair.privateKey;
 
         await this.accountRepository.saveAccount(account);
         createdCount++;
@@ -388,9 +375,9 @@ export class AccountSeederService {
           isOAuthUser: false,
         });
 
-        const keyPair = this.generateKeyPair();
+        const keyPair = generateRSAKeyPair();
         account.publicKey = keyPair.publicKey;
-        account.encryptedPrivateKey = keyPair.encryptedPrivateKey;
+        account.encryptedPrivateKey = keyPair.privateKey;
 
         await this.accountRepository.saveAccount(account);
         createdCount++;

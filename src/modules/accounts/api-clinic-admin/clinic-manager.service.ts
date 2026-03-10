@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
+import { generateRSAKeyPair } from 'src/common/utils/util';
 import { AccountRepository } from '../repositories/account.repository';
 import { ClinicManagerInformationRepository } from '../repositories/clinic-manager-information.repository';
 import { AddressRepository } from '../repositories/address.repository';
@@ -221,11 +221,7 @@ export class ClinicManagerService {
     try {
       // Hash password & generate RSA keys
       const hashedPassword = await bcrypt.hash(dto.password, this.BCRYPT_SALT_ROUNDS);
-      const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-        modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-      });
+      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
 
       // Create Account with PENDING_APPROVAL status
       const account = this.accountRepository.createAccount({
@@ -237,7 +233,7 @@ export class ClinicManagerService {
         status: AccountStatus.PENDING_APPROVAL, // KEY: Starts in pending state
         isEmailVerified: false,
         publicKey,
-        encryptedPrivateKey: privateKey,
+        encryptedPrivateKey,
       });
 
       const savedAccount = await queryRunner.manager.save(account);
@@ -291,6 +287,44 @@ export class ClinicManagerService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * FLOW 4: Generate Keys for Manager
+   * POST /api/clinic-managers/:managerId/keys/generate
+   * 
+   * Allows CLINIC_ADMIN to regenerate digital signature keys for a manager.
+   * Useful if keys are lost or compromised.
+   * 
+   * @param clinicAdminId Authenticated clinic admin ID
+   * @param managerId Target manager account UUID
+   * @returns { publicKey: string, encryptedPrivateKey: string }
+   */
+  async generateManagerKeys(
+    clinicAdminId: string,
+    managerId: string,
+  ): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
+    // Validate CLINIC_ADMIN
+    const admin = await this.accountRepository.findAccountById(clinicAdminId);
+    if (!admin || admin.role !== AccountRole.CLINIC_ADMIN) {
+      throw new ForbiddenException('Only clinic admins can generate keys for managers');
+    }
+
+    // Validate Manager exists and belongs to this admin
+    const manager = await this.accountRepository.findAccountById(managerId);
+    if (!manager || manager.role !== AccountRole.CLINIC_MANAGER || manager.parentId !== clinicAdminId) {
+      throw new NotFoundException('Manager not found or not managed by you');
+    }
+
+    // Generate and save keys
+    const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+    
+    manager.publicKey = publicKey;
+    manager.encryptedPrivateKey = encryptedPrivateKey;
+    
+    await this.accountRepository.saveAccount(manager);
+
+    return { publicKey, encryptedPrivateKey };
   }
 
   /**

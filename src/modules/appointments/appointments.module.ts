@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentsController } from './appointments.controller';
@@ -13,6 +13,7 @@ import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-
 import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
 import { RedisModule } from '../../config/redis.config';
 import { MailerModule } from '../mailer/mailer.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 /**
  * Appointments Module
@@ -44,6 +45,7 @@ import { MailerModule } from '../mailer/mailer.module';
     ]),
     RedisModule,
     MailerModule,
+    forwardRef(() => TransactionsModule),
   ],
   controllers: [AppointmentsController],
   providers: [

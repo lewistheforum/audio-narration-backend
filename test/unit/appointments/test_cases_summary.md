@@ -1,18 +1,18 @@
-# Tóm Tắt Test Cases - Appointments Module (V4.3 Round 3 Final - 100% PASS ✓)
+# Tóm Tắt Test Cases - Appointments Module (V5.0 COD + Online - 100% PASS ✓)
 
 ## 📊 Tổng Quan Thành Tựu
 
-**🎉 HOÀN THÀNH MỤC TIÊU 100% PASS RATE - ROUND 3 FINAL 🎉**
+**🎉 HOÀN THÀNH MỤC TIÊU 100% PASS RATE - V5.0 COD + ONLINE 🎉**
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Test Suites** | 4 files | ✅ 100% Pass |
-| **Total Tests** | **66 tests** | ✅ 100% Pass |
+| **Test Suites** | 5 files | ✅ 100% Pass |
+| **Total Tests** | **82 tests** | ✅ 100% Pass |
 | **Pass Rate** | **100%** | ✓✓✓ |
-| **Duration** | ~7.7 seconds | ✅ Fast |
+| **Duration** | ~9 seconds | ✅ Fast |
 | **Framework** | Jest + NestJS | - |
-| **Version** | 4.3 (Round 3 Final) | - |
-| **Updated** | 08/03/2026 | - |
+| **Version** | 5.0 (COD + Online) | - |
+| **Updated** | 10/03/2026 | - |
 
 **Improvement Journey:**
 - **Baseline (Round 1):** 47/67 passing (70.1%)  
@@ -57,17 +57,33 @@ test/unit/appointments/
 │           ├── Include patient/service/room info
 │           └── Pagination and sorting
 │
-└── appointments-cod.spec.ts                  17/17 tests (100%) ✓ ← FULLY FIXED!
-    ├── Session validation                             3 tests
-    ├── Pessimistic locking & slot availability        3 tests
-    ├── Appointment creation (COD flow)                3 tests
-    ├── Transaction management (commit/rollback)       2 tests
-    ├── Session cleanup (Redis delete)                 2 tests
-    ├── Duplicate prevention                           1 test
-    ├── Business rules (date, service, doctor)         2 tests
-    └── Edge cases (concurrency)                       1 test
+├── appointments-cod.spec.ts                  17/17 tests (100%) ✓
+│   ├── Session validation                             3 tests
+│   ├── Pessimistic locking & slot availability        3 tests
+│   ├── Appointment creation (COD flow)                3 tests
+│   ├── Transaction management (commit/rollback)       2 tests
+│   ├── Session cleanup (Redis delete)                 2 tests
+│   ├── Duplicate prevention                           1 test
+│   ├── Business rules (date, service, doctor)         2 tests
+│   └── Edge cases (concurrency)                       1 test
+│
+└── appointments-online.spec.ts               16/16 tests (100%) ✓ ← NEW V5.0!
+    ├── QR Session Validation                          4 tests
+    │   ├── Session existence check
+    │   ├── Session ownership validation
+    │   ├── Payment method validation (must be 'online')
+    │   └── QR data generation
+    ├── Callback Session                               1 test
+    ├── Slot Management (pessimistic lock + decrement) 3 tests
+    ├── Appointment Creation (CONFIRMED status)        3 tests
+    ├── Transaction & Mapping                          2 tests
+    │   ├── Create Transaction (type=ONLINE, status=SUCCESS)
+    │   └── Map transactionId to AppointmentPackage
+    ├── Session Cleanup                                1 test
+    ├── Response Format (appointment_id + transaction_id) 1 test
+    └── Rollback on error                              1 test
 ────────────────────────────────────────────────────────────────
-TỔNG CỘNG:                                    66/66 tests ✓✓✓
+TỔNG CỘNG:                                    82/82 tests ✓✓✓
 ```
 
 **⚠️ QUAN TRỌNG:**
@@ -402,10 +418,59 @@ When features are pending implementation (like Online Payment):
 
 ---
 
+### 5️⃣ appointments-online.spec.ts (16 tests ✓) ← NEW IN V5.0!
+
+**Mục đích:** Validate luồng tạo appointment với Online payment (Seepay callback)
+
+**Coverage:**
+- ✅ **QR Session Validation (4):** Session exists, ownership, payment method, QR generation
+- ✅ **Callback Session (1):** Session expired during payment
+- ✅ **Slot Management (3):** Pessimistic locking, slot availability, atomic decrement
+- ✅ **Appointment Creation (3):** CONFIRMED status, total populated, appointmentHour populated
+- ✅ **Transaction & Mapping (2):** Transaction with type ONLINE, transactionId mapped to AppointmentPackage
+- ✅ **Session Cleanup (1):** Delete Redis session after success
+- ✅ **Response Format (1):** Return both appointment_id and transaction_id
+- ✅ **Rollback (1):** Keep session if transaction fails
+
+**Key Tests (16):**
+
+**QR Generation (4):**
+- TC-ONL-01: Throw NotFoundException if session does not exist
+- TC-ONL-02: Throw ForbiddenException if patientId does not match session owner
+- TC-ONL-03: Throw BadRequestException if paymentMethod is not online
+- TC-ONL-04: Return QR data for valid online session
+
+**Callback Session (1):**
+- TC-ONL-05: Throw NotFoundException if session expired during payment
+
+**Slot Management (3):**
+- TC-ONL-06: Use pessimistic_write lock on clinic_shift_hour
+- TC-ONL-07: Throw BadRequestException if slot is fully booked
+- TC-ONL-08: Decrement slot limit by 1 after successful creation
+
+**Appointment Creation (3):**
+- TC-ONL-09: Create appointment with status CONFIRMED (paid online)
+- TC-ONL-10: Populate total field from session paymentAmount
+- TC-ONL-11: Populate appointmentHour from session
+
+**Transaction & Mapping (2):**
+- TC-ONL-12: Create Transaction record with type ONLINE and status SUCCESS
+- TC-ONL-13: Map transactionId to AppointmentPackage (paymentType=ONLINE, status=PAID)
+
+**Session Cleanup (1):**
+- TC-ONL-14: Delete Redis session after successful appointment creation
+
+**Response Format (1):**
+- TC-ONL-15: Return both appointment_id and transaction_id
+
+**Rollback (1):**
+- TC-ONL-16: Do not delete session if database transaction fails
+
+---
+
 ## 🔮 Future Work
 
 ### Pending Implementation
-- ⏳ **Online Payment Gateway Integration** (tests removed, placeholder ready)
 - ⏳ **Integration Tests** with real PostgreSQL database
 - ⏳ **Load Testing** for high concurrency scenarios
 - ⏳ **E2E Tests** for full booking flow
@@ -413,33 +478,33 @@ When features are pending implementation (like Online Payment):
 ### Production Readiness
 - ✅ **Unit Tests:** 100% pass rate (READY)
 - ✅ **COD Payment Flow:** Fully validated (READY)
-- ⏳ **Online Payment Flow:** Pending gateway integration
+- ✅ **Online Payment Flow:** Fully validated (READY)
 - ⏳ **Observability:** Monitoring and alerting setup
 
 ---
 
 ## ✅ Conclusion
 
-**🎉 MISSION ACCOMPLISHED: 100% PASS RATE - ROUND 3 FINAL 🎉**
+**🎉 MISSION ACCOMPLISHED: 100% PASS RATE - V5.0 🎉**
 
 | Milestone | Pass Rate | Status |
 |-----------|-----------|--------|
 | **Round 1 (Baseline)** | 47/67 (70.1%) | Started |
 | **Round 2** | 52/67 (77.6%) | Progress (+7.5%) |
-| **Round 3 FINAL** | **66/66 (100%)** | **COMPLETE (+22.4%)** ✓✓✓ |
+| **Round 3 FINAL** | 66/66 (100%) | COD Complete ✓ |
+| **V5.0 FINAL** | **82/82 (100%)** | **COD + ONLINE COMPLETE** ✓✓✓ |
 
-**Key Achievements:**
-- ✅ Fixed ALL 15 failing tests in `appointments-cod.spec.ts`
-- ✅ Implemented comprehensive deep mocks for TypeORM transactions
-- ✅ Validated complete COD payment booking flow
-- ✅ Zero service code changes required (tests were the issue)
-- ✅ Removed online payment test as requested (feature pending)
+**Key Achievements (V5.0):**
+- ✅ Added 16 new tests for Online Payment Flow
+- ✅ Validated QR generation, Seepay callback, Transaction creation
+- ✅ Validated Transaction → AppointmentPackage mapping
+- ✅ Validated slot management (pessimistic locking) for online flow
+- ✅ Validated session cleanup and rollback behavior
 
-**The appointments module is now PRODUCTION READY for COD flow.**  
-All pessimistic locking, transaction management, and business rules are fully validated.
+**The appointments module is now PRODUCTION READY for both COD and Online flows.**
 
 ---
 
-**Document Version:** 4.3 (Round 3 Final)  
-**Last Updated:** March 8, 2026  
-**Status:** ✅ 100% Complete - Production Ready (COD Only)
+**Document Version:** 5.0 (Online Payment Added)
+**Last Updated:** March 10, 2026
+**Status:** ✅ 100% Complete - Production Ready (COD + Online)

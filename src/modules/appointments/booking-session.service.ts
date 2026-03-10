@@ -38,7 +38,12 @@ export interface BookingSession {
   appointmentDate?: string; // YYYY-MM-DD
   clinicShiftHourId?: string;
   paymentMethod?: 'cod' | 'online'; // NEW in v4.0 - Required before finalizing
+  paymentAmount?: number;
+  paymentProvider?: string;
+  paymentReferenceId?: string;
   patientNote?: string;
+  appointmentHour?: string;
+  workHistoryId?: string;
   
   // Metadata
   bookingOption: BookingOption;
@@ -185,11 +190,18 @@ export class BookingSessionService {
         }
         
         // MERGE: Explicitly preserve all existing fields
-        Object.assign(session, {
+        const updateFields: any = {
           clinicShiftHourId: data.clinic_shift_hour_id,
           doctorId: data.doctor_id,
           currentStep: 3,
-        });
+        };
+        
+        // ADDED VERSION 4.0: Save appointment hour
+        if (data.appointment_hour) {
+          updateFields.appointmentHour = data.appointment_hour;
+        }
+        
+        Object.assign(session, updateFields);
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
         
@@ -244,11 +256,16 @@ export class BookingSessionService {
         }
         
         // MERGE: Explicitly preserve all existing fields
-        Object.assign(session, {
+        const updateFields: any = {
           appointmentDate: data.appointment_date,
           clinicShiftHourId: data.clinic_shift_hour_id,
           currentStep: 2,
-        });
+        };
+        
+        // ADDED VERSION 4.0: Save appointment hour
+        if (data.appointment_hour) {
+          updateFields.appointmentHour = data.appointment_hour;
+        }
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         
@@ -312,6 +329,11 @@ export class BookingSessionService {
           clinicShiftHourId: data.clinic_shift_hour_id,
           currentStep: 2,
         };
+        
+        // ADDED VERSION 4.0: Save appointment hour
+        if (data.appointment_hour) {
+          updateFields.appointmentHour = data.appointment_hour;
+        }
         
         // For service-first flow (Option 1): doctor_id is provided
         if (data.doctor_id) {

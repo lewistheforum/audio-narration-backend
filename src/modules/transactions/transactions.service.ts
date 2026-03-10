@@ -1,8 +1,11 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
+import { AppointmentsService } from '../appointments/appointments.service';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
@@ -19,11 +22,12 @@ import {
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
-import { AppointmentPackageStatus, PaymentType } from '../appointments/enums';
+import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from '../appointments/enums';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
 import { Account } from '../accounts/entities/accounts.entity';
+import { BookingSessionService } from '../appointments/booking-session.service';
 
 /**
  * Transactions Service
@@ -55,6 +59,9 @@ export class TransactionsService {
     private readonly accountRepository: Repository<Account>,
     private readonly configService: ConfigService,
     private readonly subscriptionServicesService: SubscriptionServicesService,
+    private readonly bookingSessionService: BookingSessionService,
+    @Inject(forwardRef(() => AppointmentsService))
+    private readonly appointmentsService: AppointmentsService,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
@@ -594,13 +601,13 @@ export class TransactionsService {
   async handleCallback(
     payload: SeepayCallbackDto,
   ): Promise<PaymentResponseDto> {
-    const prescriptionId =
-      payload.prescriptionId ||
-      this.extractPrescriptionIdFromContent(payload.content);
+    const appointmentId =
+      payload.appointmentId ||
+      this.extractAppointmentIdFromContent(payload.content);
 
-    if (!prescriptionId) {
+    if (!appointmentId) {
       throw new BadRequestException(
-        'Unable to detect prescription ID in callback',
+        'Unable to detect appointment ID in callback',
       );
     }
 
@@ -609,7 +616,7 @@ export class TransactionsService {
 
     // A. Strategy 1: Look for existing Pending Transaction (Verification Flow)
     const existingTransaction = await this.transactionRepository.findOne({
-      where: { id: prescriptionId },
+      where: { id: appointmentId },
       relations: ['transactionType'],
     });
 
@@ -721,11 +728,11 @@ export class TransactionsService {
         }
       }
 
-      // NEW: Update Appointment Packages for Existing Transaction (Strategy A)
-      if (status === PaymentStatus.SUCCESS && prescriptionId) {
+      // NEW: Update Appointment Packages and Status for Existing Transaction (Strategy A)
+      if (status === PaymentStatus.SUCCESS && appointmentId) {
         await this.packageRepo.update(
           {
-            appointmentId: prescriptionId,
+            appointmentId: appointmentId,
             status: AppointmentPackageStatus.PENDING_PAYMENT
           },
           {
@@ -734,6 +741,20 @@ export class TransactionsService {
             paymentType: PaymentType.ONLINE
           }
         );
+
+        // Advance Appointment Status if it was NEED_FINAL_PAYMENT
+        const appointment = await this.appointmentRepository.findOne({
+          where: { _id: appointmentId }
+        });
+        if (appointment && appointment.status === AppointmentStatus.NEED_FINAL_PAYMENT) {
+          // Note: Slot increment logic will be handled within AppointmentsService.updateStatus 
+          // but here we can call a dedicated method or update directly.
+          // For now, update directly and we'll ensure slot logic is central in AppointmentsService.
+          await this.appointmentsService.updateAppointmentStatusDirectly(
+            appointmentId,
+            AppointmentStatus.COMPLETED
+          );
+        }
       }
 
       return new PaymentResponseDto({
@@ -750,17 +771,42 @@ export class TransactionsService {
     // B. Strategy 2: Standard Appointment Flow (New Transaction)
     // Resolve sender (patient) and clinic from appointment
     const appointment = await this.appointmentRepository.findOne({
-      where: { _id: prescriptionId },
+      where: { _id: appointmentId },
     });
 
     if (!appointment) {
-      // STRICT MODE: If neither Transaction nor Appointment is found, REJECT the callback.
-      // We do not allow "blind" transactions based on amount/content guessing anymore.
+      // C. Strategy 3: Online Booking Session (appointment chưa tồn tại trong DB)
+      // appointmentId ở đây chính là sessionId từ Redis
+      const session = await this.bookingSessionService.getSession(appointmentId);
+      if (session && session.paymentMethod === 'online') {
+        console.log(
+          'handleCallback Debug - Found Online Booking Session:',
+          appointmentId,
+        );
+
+        // Gọi AppointmentsService để tạo appointment thật từ session này
+        const appointmentResult = await this.appointmentsService.createAppointmentOnlineFromCallback(
+          appointmentId,
+          payload,
+        );
+
+        return new PaymentResponseDto({
+          id: appointmentResult.transaction_id,
+          amount: payload.transferAmount,
+          currency: 'VND',
+          status: PaymentStatus.SUCCESS,
+          qrCodeUrl: undefined,
+          qrPayload: undefined,
+          expiresAt: new Date(),
+        });
+      }
+
+      // STRICT MODE: If neither Transaction nor Appointment nor Session is found, REJECT the callback.
       console.error(
-        `handleCallback Error - Reference ID ${prescriptionId} not found in Transaction or Appointment tables.`,
+        `handleCallback Error - Reference ID ${appointmentId} not found in Transaction, Appointment, or Session tables.`,
       );
       throw new NotFoundException(
-        'Transaction reference (Transaction ID or Appointment ID) not found',
+        'Transaction reference (Transaction ID, Appointment ID, or Session ID) not found',
       );
     }
 
@@ -780,7 +826,7 @@ export class TransactionsService {
     // to match user preference of capturing every callback.
 
     const transaction = this.transactionRepository.create({
-      prescriptionId,
+      appointmentId,
       amount: payload.transferAmount,
       currency: 'VND',
       status,
@@ -805,13 +851,13 @@ export class TransactionsService {
 
     if (status === PaymentStatus.SUCCESS) {
       if (payload.transferAmount === 10_000) {
-        // Verification payment fallback: assume prescriptionId received (if any) holds the account ID
+        // Verification payment fallback: assume appointmentId received (if any) holds the account ID
         console.warn(
-          'handleCallback Debug - Verification fallback strategy reached. prescriptionId received:',
-          prescriptionId,
+          'handleCallback Debug - Verification fallback strategy reached. appointmentId received:',
+          appointmentId,
         );
         await this.clinicAdminRepo.update(
-          { accountId: prescriptionId },
+          { accountId: appointmentId },
           { isVerify: true },
         );
       }
@@ -883,11 +929,11 @@ export class TransactionsService {
         }
       }
 
-      // NEW: Update Appointment Packages for New Transaction (Strategy B)
-      if (status === PaymentStatus.SUCCESS && prescriptionId) {
+      // NEW: Update Appointment Packages and Status for New Transaction (Strategy B)
+      if (status === PaymentStatus.SUCCESS && appointmentId) {
         await this.packageRepo.update(
           {
-            appointmentId: prescriptionId,
+            appointmentId: appointmentId,
             status: AppointmentPackageStatus.PENDING_PAYMENT
           },
           {
@@ -896,6 +942,17 @@ export class TransactionsService {
             paymentType: PaymentType.ONLINE
           }
         );
+
+        // Advance Appointment Status if it was NEED_FINAL_PAYMENT
+        const appointment = await this.appointmentRepository.findOne({
+          where: { _id: appointmentId }
+        });
+        if (appointment && appointment.status === AppointmentStatus.NEED_FINAL_PAYMENT) {
+          await this.appointmentsService.updateAppointmentStatusDirectly(
+            appointmentId,
+            AppointmentStatus.COMPLETED
+          );
+        }
       }
     }
 
@@ -910,13 +967,13 @@ export class TransactionsService {
     });
   }
 
-  private buildQrUrl(
+  buildQrUrl(
     amount: number,
-    prescriptionId: string,
+    appointmentId: string,
     acc: string,
     bank: string,
   ): string {
-    const des = prescriptionId;
+    const des = appointmentId;
     const params = new URLSearchParams({
       acc,
       bank,
@@ -929,11 +986,11 @@ export class TransactionsService {
 
   buildQrPayload(
     amount: number,
-    prescriptionId: string,
+    appointmentId: string,
     acc: string,
     bank: string,
   ): string {
-    const des = prescriptionId;
+    const des = appointmentId;
     return JSON.stringify({
       acc,
       bank,
@@ -948,7 +1005,7 @@ export class TransactionsService {
     return expiresAt;
   }
 
-  private extractPrescriptionIdFromContent(
+  private extractAppointmentIdFromContent(
     content?: string,
   ): string | undefined {
     if (!content) {
@@ -972,7 +1029,7 @@ export class TransactionsService {
     return undefined;
   }
 
-  private async resolveSepayConfig(
+  async resolveSepayConfig(
     clinicAdminId?: string,
   ): Promise<{ acc: string; bank: string }> {
     if (!clinicAdminId) {
@@ -1010,7 +1067,7 @@ export class TransactionsService {
   ): Promise<{
     items: Array<{
       id: string;
-      prescriptionId?: string;
+      appointmentId?: string;
       amount: number;
       currency: string;
       status: string;
@@ -1036,7 +1093,7 @@ export class TransactionsService {
 
     const items = raw.map((row: any) => ({
       id: row._id,
-      prescriptionId: row.prescription_id,
+      appointmentId: row.appointment_id,
       amount: Number(row.amount),
       currency: row.currency,
       status: row.status,
@@ -1060,7 +1117,7 @@ export class TransactionsService {
     clinicId?: string,
   ): Promise<{
     id: string;
-    prescriptionId?: string;
+    appointmentId?: string;
     amount: number;
     currency: string;
     status: string;
@@ -1086,7 +1143,7 @@ export class TransactionsService {
 
     return {
       id: row._id,
-      prescriptionId: row.prescription_id,
+      appointmentId: row.appointment_id,
       amount: Number(row.amount),
       currency: row.currency,
       status: row.status,

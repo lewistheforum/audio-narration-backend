@@ -63,11 +63,11 @@ export class SeepayCallbackDto {
   signature?: string;
 
   @ApiProperty({
-    description: 'Prescription ID (UUID format)',
+    description: 'Appointment ID (UUID format)',
     example: 'f91af8b4-391e-4a41-a8c9-1f08b4b6a690',
     required: false,
   })
   @IsOptional()
   @IsString()
-  prescriptionId?: string;
+  appointmentId?: string;
 }
