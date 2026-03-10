@@ -22,6 +22,7 @@ import {
   PARTY_B_SIGNERS,
 } from '../constants/medical-terms';
 import { PROVINCES } from '../constants/locations';
+import { getCurrentVietnamTime } from '../utils/date.util';
 
 /**
  * ClinicContractInformation Seeder Service
@@ -224,7 +225,7 @@ export class ClinicContractInformationSeederService {
    * Get random contract start date (within last 6 months)
    */
   private getRandomContractStartDate(): Date {
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     const sixMonthsAgo = new Date(
       now.getFullYear(),
       now.getMonth() - 6,

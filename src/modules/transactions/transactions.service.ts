@@ -7,6 +7,11 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository, Like } from 'typeorm';
+import {
+  getCurrentVietnamTime,
+  addToVietnamTime,
+  formatToVietnamTime,
+} from 'src/common/utils/date.util';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
 import { RegistrationStatus } from '../subscriptions/enums';
@@ -147,7 +152,7 @@ export class TransactionsService {
       throw new NotFoundException('Subscription not found for this clinic');
     }
 
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
@@ -194,14 +199,14 @@ export class TransactionsService {
         clinicId,
         serviceId, // Set initial service intent
         subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP, // Default status
-        subscriptionDate: new Date(),
-        expirationDate: new Date(), // Expired by default until paid
+        subscriptionDate: getCurrentVietnamTime(),
+        expirationDate: getCurrentVietnamTime(), // Expired by default until paid
       });
       subscription = await this.clinicSubscriptionRepo.save(subscription);
     }
 
     // Case B: Exist but Active & Valid (User mistake?)
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
@@ -359,7 +364,7 @@ export class TransactionsService {
       duration = duration <= 0 ? 1 : duration;
 
       console.log(
-        `[DEBUG] Calculated base renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`,
+        `[DEBUG] Calculated base renewal duration: ${duration} months (Start: ${formatToVietnamTime(startDate)}, End: ${formatToVietnamTime(expirationDate)})`,
       );
     } else {
       duration = Math.max(1, duration);
@@ -943,9 +948,7 @@ export class TransactionsService {
   }
 
   private computeExpireTime(): Date {
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + this.qrExpireMinutes);
-    return expiresAt;
+    return addToVietnamTime(this.qrExpireMinutes, 'minute');
   }
 
   private extractPrescriptionIdFromContent(

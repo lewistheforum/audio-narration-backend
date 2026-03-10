@@ -17,10 +17,18 @@ import {
   ServiceInitialDataDto,
   DoctorInitialDataDto,
   DateInitialDataDto,
+  OutOfHoursInitialDataDto,
 } from './dto';
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole } from '../accounts/enums';
+import {
+  getCurrentVietnamTime,
+  addToVietnamTime,
+  formatToVietnamTime,
+  isInPast,
+  startOfDay,
+} from 'src/common/utils/date.util';
 
 /**
  * Booking Session Interface
@@ -36,7 +44,8 @@ export interface BookingSession {
   clinicId?: string;
   doctorId?: string;
   appointmentDate?: string; // YYYY-MM-DD
-  clinicShiftHourId?: string;
+  clinicShiftHourId?: string | null; // Nullable for out-of-hours
+  extraHour?: string | null; // ISO 8601 with timezone for out-of-hours (Option 4)
   paymentMethod?: 'cod' | 'online'; // NEW in v4.0 - Required before finalizing
   patientNote?: string;
   
@@ -86,8 +95,8 @@ export class BookingSessionService {
 
     // Generate session ID
     const sessionId = uuidv4();
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + this.SESSION_TTL * 1000);
+    const now = getCurrentVietnamTime();
+    const expiresAt = addToVietnamTime(this.SESSION_TTL, 'second');
 
     // Build session object
     const session: BookingSession = {
@@ -113,6 +122,13 @@ export class BookingSessionService {
     } else if (createDto.booking_option === BookingOption.DATE) {
       const data = createDto.initial_data as DateInitialDataDto;
       session.appointmentDate = data.appointment_date;
+    } else if (createDto.booking_option === BookingOption.OUT_OF_HOURS) {
+      const data = createDto.initial_data as OutOfHoursInitialDataDto;
+      if (data.clinic_id) {
+        session.clinicId = data.clinic_id;
+      }
+      // Initialize extraHour as null (will be set in step 2)
+      session.extraHour = null;
     }
 
     // Save to Redis with TTL
@@ -290,7 +306,7 @@ export class BookingSessionService {
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, updateFields);
       }
-    } else {
+    } else if (session.bookingOption === BookingOption.SERVICE) {
       // VERSION 4.3: Option 1 (service-first) flow (remains 4 steps)
       // Step 2: GỘP appointment_date + clinic_shift_hour_id + doctor_id
       // Step 3: Add payment_method (REQUIRED)
@@ -348,6 +364,53 @@ export class BookingSessionService {
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, updateFields);
       }
+    } else if (session.bookingOption === BookingOption.OUT_OF_HOURS) {
+      // VERSION 4.7: Option 4 (out-of-hours) flow
+      // Step 1 (initial): optional clinic_id
+      // Step 2: Add appointment_date + extra_hour (và gán cứng clinicShiftHourId = null)
+      // Step 3-5: TBD (tương tự các option khác)
+      if (updateDto.step === 2) {
+        const data = updateDto.data as any;
+        
+        // Validate extra_hour is required
+        if (!data.extra_hour) {
+          throw new BadRequestException('Extra hour is required in step 2 for out-of-hours booking');
+        }
+        
+        // Convert extra_hour to Date and validate format
+        const extraHourDate = new Date(data.extra_hour);
+        if (isNaN(extraHourDate.getTime())) {
+          throw new BadRequestException('Invalid extra hour format. Must be a valid ISO 8601 timestamp');
+        }
+        
+        // Validate extra_hour must be in the future (use Vietnam timezone)
+        if (isInPast(extraHourDate)) {
+          throw new BadRequestException('Extra hour must be in the future');
+        }
+        
+        // Validate appointment_date is required
+        if (!data.appointment_date) {
+          throw new BadRequestException('Appointment date is required in step 2 for out-of-hours booking');
+        }
+        
+        // Validate appointment_date matches the date part of extra_hour
+        const appointmentDate = new Date(data.appointment_date);
+        const extraHourDateOnly = new Date(extraHourDate.getFullYear(), extraHourDate.getMonth(), extraHourDate.getDate());
+        const appointmentDateOnly = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), appointmentDate.getDate());
+        
+        if (extraHourDateOnly.getTime() !== appointmentDateOnly.getTime()) {
+          throw new BadRequestException('Appointment date must match the date part of extra hour');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        // ĐẶC BIỆT: Gán cứng clinicShiftHourId = null cho out-of-hours
+        Object.assign(session, {
+          appointmentDate: data.appointment_date,
+          extraHour: data.extra_hour,
+          clinicShiftHourId: null,
+          currentStep: 2,
+        });
+      }
     }
 
     // Save updated session to Redis (keep original TTL)
@@ -397,7 +460,7 @@ export class BookingSessionService {
    */
   private async validateInitialData(
     option: BookingOption,
-    data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto,
+    data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto | OutOfHoursInitialDataDto,
   ): Promise<void> {
     if (option === BookingOption.SERVICE) {
       const serviceData = data as ServiceInitialDataDto;
@@ -458,32 +521,47 @@ export class BookingSessionService {
     } else if (option === BookingOption.DATE) {
       const dateData = data as DateInitialDataDto;
       
-      // Validate date is in future (at least today)
+      // Validate date is in future (at least today) - use Vietnam timezone
       const appointmentDate = new Date(dateData.appointment_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayStart = startOfDay();
 
-      if (appointmentDate < today) {
+      if (appointmentDate < todayStart) {
         throw new BadRequestException('Appointment date must be today or in the future');
       }
 
       // Validate date is within 60 days
-      const maxDate = new Date();
-      maxDate.setDate(maxDate.getDate() + 60);
+      const maxDate = addToVietnamTime(60, 'day');
 
       if (appointmentDate > maxDate) {
         throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+      }
+    } else if (option === BookingOption.OUT_OF_HOURS) {
+      const outOfHoursData = data as OutOfHoursInitialDataDto;
+      
+      // If clinic_id provided, verify it exists and is active
+      if (outOfHoursData.clinic_id) {
+        const clinic = await this.dataSource.getRepository(Account).findOne({
+          where: [
+            { _id: outOfHoursData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+            { _id: outOfHoursData.clinic_id, role: AccountRole.CLINIC_MANAGER },
+          ],
+        });
+
+        if (!clinic || clinic.status !== 'ACTIVE') {
+          throw new BadRequestException('Clinic not found or inactive');
+        }
       }
     }
   }
 
   /**
-   * Validate step sequence (VERSION 4.4)
+   * Validate step sequence (VERSION 4.7)
    * 
    * THAY ĐỔI: 
    * - Option 1 (service-first): Step range là 2-4 (chưa thay đổi)
    * - Option 2 (doctor-first): Step range là 2-5 (mới thay đổi từ 4.3)
    * - Option 3 (date-first): Step range là 2-5 (chưa thay đổi)
+   * - Option 4 (out-of-hours): Step range là 2-5 (mới thêm từ 4.7)
    * 
    * @param currentStep - Current step number
    * @param nextStep - Next step number
@@ -497,9 +575,9 @@ export class BookingSessionService {
       );
     }
 
-    // Different step ranges for different booking options (VERSION 4.4)
-    if (bookingOption === BookingOption.DATE || bookingOption === BookingOption.DOCTOR) {
-      // Option 2 & 3: Doctor-first or Date-first - up to step 5
+    // Different step ranges for different booking options (VERSION 4.7)
+    if (bookingOption === BookingOption.DATE || bookingOption === BookingOption.DOCTOR || bookingOption === BookingOption.OUT_OF_HOURS) {
+      // Option 2, 3 & 4: Doctor-first, Date-first, or Out-of-hours - up to step 5
       if (nextStep < 2 || nextStep > 5) {
         throw new BadRequestException(
           `Step must be between 2 and 5 for ${bookingOption}-first booking`,
@@ -531,6 +609,7 @@ export class BookingSessionService {
     bookingData.clinic_service_config_id = session.clinicServiceConfigId ?? null;
     bookingData.appointment_date = session.appointmentDate ?? null;
     bookingData.clinic_shift_hour_id = session.clinicShiftHourId ?? null;
+    bookingData.extra_hour = session.extraHour ?? null;
     bookingData.payment_method = session.paymentMethod ?? null;
     bookingData.patient_note = session.patientNote ?? null;
 
@@ -538,7 +617,7 @@ export class BookingSessionService {
       session_id: session.sessionId,
       booking_option: session.bookingOption,
       current_step: session.currentStep,
-      expires_at: session.expiresAt,
+      expires_at: formatToVietnamTime(session.expiresAt),
       booking_data: bookingData,
     };
   }

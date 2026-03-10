@@ -27,6 +27,7 @@ import {
   APPOINTMENT_PACKAGE_STATUSES,
   PAYMENT_TYPES,
 } from '../constants/appointment-seeder-data';
+import { getVietnamTimestamp } from '../utils/date.util';
 
 /**
  * Appointment Seeder Service
@@ -326,7 +327,7 @@ export class AppointmentSeederService {
         currency: 'VND',
         status: PaymentStatus.SUCCESS,
         transactionDate: appointment.appointmentDate,
-        code: `TRANS-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        code: `TRANS-${getVietnamTimestamp()}-${Math.floor(Math.random() * 10000)}`,
         description: `Payment for appointment ${appointment._id} (${paymentType})`,
         transferType: PaymentDirection.IN,
         gateway: paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH',
