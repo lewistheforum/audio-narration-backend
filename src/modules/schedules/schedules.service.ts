@@ -313,17 +313,13 @@ export class SchedulesService {
      */
     private async resolveClinicId(user: any): Promise<string | null> {
         if (user.role === AccountRole.CLINIC_MANAGER) {
-            return user.parentId || user._id; // Fallback to self if root
+            return user._id; // Manager IS the clinic branch
         }
 
         if (user.role === AccountRole.DOCTOR || user.role === AccountRole.CLINIC_STAFF) {
+            // Doctor/Staff's parentId = CLINIC_MANAGER._id (the branch they belong to)
             if (user.parentId) {
-                const manager = await this.accountRepository.findOne({
-                    where: { _id: user.parentId },
-                });
-                if (manager && manager.parentId) {
-                    return manager.parentId;
-                }
+                return user.parentId;
             }
         }
         return null;

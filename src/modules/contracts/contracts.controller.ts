@@ -50,6 +50,48 @@ export class ContractsController {
     }
 
     /**
+     * Get Contract Packages for Employee
+     *
+     * Retrieves a paginated list of contract packages for the logged-in employee.
+     * Supports filtering by clinic name.
+     */
+    @Get('employee/packages')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
+    @ApiBearerAuth('JWT-auth')
+    @ApiOperation({ summary: 'Get all contract packages for the logged-in employee' })
+    @ApiQuery({ name: 'clinicName', required: false, description: 'Search by clinic name' })
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    async getPackagesByEmployee(
+        @Req() req,
+        @Query('clinicName') clinicName?: string,
+        @Query('page') page: number = 1,
+        @Query('limit') limit: number = 10,
+    ) {
+        const employeeId = req.user._id;
+        return this.contractsService.getPackagesByEmployee(employeeId, clinicName, page, limit);
+    }
+
+    /**
+     * Get Contract Package by ID for Employee
+     *
+     * Retrieves contract package details specifically for the employee.
+     */
+    @Get('employee/packages/:id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
+    @ApiBearerAuth('JWT-auth')
+    @ApiOperation({ summary: 'Get contract package by ID for the logged-in employee' })
+    async getMyContractById(
+        @Req() req,
+        @Param('id') id: string
+    ) {
+        const employeeId = req.user._id;
+        return this.contractsService.getMyContract(employeeId, id);
+    }
+
+    /**
      * Create Contract Package (Step 1)
      * 
      * Initiates the contract creation process by creating a package.

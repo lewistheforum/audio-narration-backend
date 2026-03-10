@@ -12,6 +12,7 @@ import {
   PaymentStatus,
   PaymentDirection,
 } from '../../modules/transactions/entities/transaction.entity';
+import { TransactionTypeCode } from '../../modules/transactions/entities/transaction-type.entity';
 
 @Injectable()
 export class TransactionHistorySeederService {
@@ -30,7 +31,7 @@ export class TransactionHistorySeederService {
     private readonly subscriptionServiceRepository: Repository<SubscriptionService>,
     @InjectRepository(ClinicAdminInformation)
     private readonly clinicAdminInformationRepository: Repository<ClinicAdminInformation>,
-  ) {}
+  ) { }
 
   async seed(): Promise<void> {
     try {
@@ -38,13 +39,13 @@ export class TransactionHistorySeederService {
 
       // Get or Create Transaction Type
       let transactionType = await this.transactionTypeRepository.findOne({
-        where: { code: 'SUBSCRIPTION_PAYMENT' },
+        where: { code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
       });
 
       if (!transactionType) {
         transactionType = this.transactionTypeRepository.create({
           name: 'Subscription Payment',
-          code: 'SUBSCRIPTION_PAYMENT',
+          code: TransactionTypeCode.SUBSCRIPTION_PAYMENT,
         });
         await this.transactionTypeRepository.save(transactionType);
       }

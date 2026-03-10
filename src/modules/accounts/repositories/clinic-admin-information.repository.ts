@@ -22,7 +22,7 @@ export class ClinicAdminInformationRepository {
   constructor(
     @InjectRepository(ClinicAdminInformation)
     private readonly repository: Repository<ClinicAdminInformation>,
-  ) {}
+  ) { }
 
   /**
    * Find all clinic admin information records
@@ -64,6 +64,17 @@ export class ClinicAdminInformationRepository {
     return this.repository.findOne({
       where: { accountId },
       withDeleted: true,
+    });
+  }
+
+  /**
+   * Find clinic admin information by sepayVa
+   */
+  async findBySepayVa(
+    sepayVa: string,
+  ): Promise<ClinicAdminInformation | null> {
+    return this.repository.findOne({
+      where: { sepayVa },
     });
   }
 
