@@ -50,7 +50,8 @@ export class CreateClinicManagerForRegistrationDto {
   email: string;
 
   @ApiProperty({
-    description: 'Clinic manager password (min 6 characters, must contain letter and number)',
+    description:
+      'Clinic manager password (min 6 characters, must contain letter and number)',
     example: 'ManagerPass123',
     minLength: 6,
     maxLength: 50,
@@ -63,7 +64,7 @@ export class CreateClinicManagerForRegistrationDto {
 
   @ApiProperty({
     description: 'Clinic manager phone number',
-    example: '+84123456789',
+    example: '0123456789',
   })
   @IsNotEmpty({ message: 'Phone number is required' })
   @IsString({ message: 'Phone number must be a string' })
@@ -77,7 +78,9 @@ export class CreateClinicManagerForRegistrationDto {
   })
   @IsNotEmpty({ message: 'Clinic branch name is required' })
   @IsString({ message: 'Clinic branch name must be a string' })
-  @MaxLength(255, { message: 'Clinic branch name must not exceed 255 characters' })
+  @MaxLength(255, {
+    message: 'Clinic branch name must not exceed 255 characters',
+  })
   @Transform(({ value }) => value?.trim())
   clinicBranchName: string;
 

@@ -28,7 +28,7 @@ export class ClinicInfoDto {
 
   @ApiProperty({
     description: 'Clinic phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -141,7 +141,8 @@ export class BlogResponseDto {
         email: blog.clinic.email,
         phone: blog.clinic.phone,
         profilePicture: blog.clinic.clinicManagerInformation?.profilePicture,
-        clinicBranchName: blog.clinic.clinicManagerInformation?.clinicBranchName,
+        clinicBranchName:
+          blog.clinic.clinicManagerInformation?.clinicBranchName,
         fullName: blog.clinic.clinicManagerInformation?.fullName,
       };
     }

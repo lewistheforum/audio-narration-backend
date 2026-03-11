@@ -94,7 +94,10 @@ export class SocketGatewayService
         return;
       }
 
-      const user = await this.AccountsService.findAccountEntityById(token);
+      const decodedToken = verifyToken(token, this.jwtService);
+      const user = await this.AccountsService.findAccountEntityById(
+        decodedToken.sub,
+      );
 
       if (!user) {
         client.emit('error', {
@@ -137,8 +140,10 @@ export class SocketGatewayService
         username: user.username || user.email,
         status: 'online',
       });
-    } catch (error) {
-      console.error('Connection error:', error);
+    } catch (error: any) {
+      if (error?.status !== 404 && error?.name !== 'NotFoundException') {
+        console.error('Connection error:', error.message || error);
+      }
       client.emit('error', {
         message: 'Invalid authentication token',
         code: 'INVALID_AUTH_TOKEN',

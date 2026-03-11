@@ -104,7 +104,7 @@ export class ClinicAdminInformationSeederService {
           _id: randomUUID(),
           accountId: account._id,
           clinicName: this.getRandomClinicName(),
-          clinicPhone: `+84${this.randomPhoneDigits()}`,
+          clinicPhone: `0${this.randomPhoneDigits()}`,
           description: this.getRandomDescription(),
           specializedIn: this.getRandomSpecializations(),
           pros: this.getRandomPros(),

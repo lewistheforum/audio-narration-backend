@@ -30,7 +30,7 @@ export class PublicDoctorDetailData {
 
   @ApiProperty({
     description: 'Doctor phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -92,11 +92,7 @@ export class PublicDoctorDetailData {
   })
   clinic?: PublicClinicInfo;
 
-  constructor(
-    account: any,
-    doctorInfo: any,
-    clinicInfo?: any,
-  ) {
+  constructor(account: any, doctorInfo: any, clinicInfo?: any) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;

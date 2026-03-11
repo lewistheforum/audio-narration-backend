@@ -27,7 +27,7 @@ export class ClinicManagerAccountDto {
 
   @ApiProperty({
     description: 'Clinic manager phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -122,7 +122,7 @@ export class ClinicAdminAccountDto {
 
   @ApiProperty({
     description: 'Clinic admin phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -211,7 +211,7 @@ export class ClinicAdminInfoDetailDto {
 
   @ApiProperty({
     description: 'Clinic phone',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -625,7 +625,7 @@ export class ClinicDetailResponseDto {
 
   @ApiProperty({
     description: 'Clinic phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -708,7 +708,8 @@ export class ClinicDetailResponseDto {
   clinicAdminInformation?: ClinicAdminInfoDetailDto;
 
   @ApiProperty({
-    description: 'Final clinic name combining clinic admin name and branch name',
+    description:
+      'Final clinic name combining clinic admin name and branch name',
     example: 'City Medical Group Branch 1',
     required: false,
     nullable: true,
@@ -772,7 +773,9 @@ export class ClinicDetailResponseDto {
     }
 
     if (clinicAdminInfo) {
-      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(clinicAdminInfo);
+      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(
+        clinicAdminInfo,
+      );
     }
 
     this.finalClinicName = finalClinicName;

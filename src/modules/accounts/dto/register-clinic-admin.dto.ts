@@ -50,7 +50,7 @@ export class RegisterClinicAdminDto {
 
   @ApiProperty({
     description: 'Clinic admin phone number',
-    example: '+84123456789',
+    example: '0123456789',
     required: false,
   })
   @IsOptional()
@@ -59,7 +59,8 @@ export class RegisterClinicAdminDto {
   phone?: string;
 
   @ApiProperty({
-    description: 'Clinic admin password (min 6 characters, must contain letter and number)',
+    description:
+      'Clinic admin password (min 6 characters, must contain letter and number)',
     example: 'AdminPass123',
     minLength: 6,
     maxLength: 50,
@@ -89,7 +90,8 @@ export class RegisterClinicAdminDto {
 
   @ApiProperty({
     description: 'Description of clinic',
-    example: 'A modern healthcare facility providing comprehensive medical services',
+    example:
+      'A modern healthcare facility providing comprehensive medical services',
     required: false,
   })
   @IsOptional()
@@ -127,7 +129,10 @@ export class RegisterClinicAdminDto {
   })
   @IsOptional()
   @IsArray({ message: 'Paraclinical must be an array' })
-  @IsString({ each: true, message: 'Each paraclinical service must be a string' })
+  @IsString({
+    each: true,
+    message: 'Each paraclinical service must be a string',
+  })
   paraclinical?: string[];
 
   @ApiProperty({

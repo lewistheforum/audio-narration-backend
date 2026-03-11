@@ -45,7 +45,7 @@ export class UpdateAccountDto {
 
   @ApiProperty({
     description: 'Client phone number',
-    example: '+84123456789',
+    example: '0123456789',
     required: false,
   })
   @IsOptional()
