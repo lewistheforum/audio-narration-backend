@@ -33,6 +33,8 @@ import { SubscriptionService } from '../subscriptions/entities/subscription-serv
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
 import { Account } from '../accounts/entities/accounts.entity';
 import { BookingSessionService } from '../appointments/booking-session.service';
+import { ManagerRevenueReportDto, RevenuePeriod } from './dto/manager-revenue-report.dto';
+import * as XLSX from 'xlsx';
 
 /**
  * Transactions Service
@@ -1178,5 +1180,82 @@ export class TransactionsService {
       select: ['_id'],
     });
     return clinicAdmin ? clinicAdmin._id : null;
+  }
+
+  /**
+   * Get revenue statistics for a clinic manager's branch
+   */
+  async getManagerRevenueStats(
+    clinicId: string,
+    dto: ManagerRevenueReportDto,
+  ): Promise<any> {
+    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
+    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
+
+    // Default to day if not specified
+    const periodMap = {
+      [RevenuePeriod.DAILY]: 'day',
+      [RevenuePeriod.MONTHLY]: 'month',
+      [RevenuePeriod.YEARLY]: 'year',
+    };
+    const period = periodMap[dto.period || RevenuePeriod.DAILY];
+
+    const stats = await this.transactionRepository.getRevenueStats(
+      clinicId,
+      startDate,
+      endDate,
+      period,
+    );
+
+    const totalRevenue = stats.reduce(
+      (sum, s) => sum + Number(s.total_revenue),
+      0,
+    );
+    const totalTransactions = stats.reduce(
+      (sum, s) => sum + Number(s.transaction_count),
+      0,
+    );
+
+    return {
+      period: dto.period || RevenuePeriod.DAILY,
+      startDate,
+      endDate,
+      totalRevenue,
+      totalTransactions,
+      data: stats,
+    };
+  }
+
+  /**
+   * Export revenue report to Buffer (XLSX)
+   */
+  async exportManagerRevenueReport(
+    clinicId: string,
+    dto: ManagerRevenueReportDto,
+  ): Promise<Buffer> {
+    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
+    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
+
+    const transactions = await this.transactionRepository.getTransactionsForExport(
+      clinicId,
+      startDate,
+      endDate,
+    );
+
+    const worksheetData = transactions.map((t) => ({
+      'Ngày giao dịch': formatToVietnamTime(t.date),
+      'Mã giao dịch': t.transaction_id,
+      'Số tiền': Number(t.amount),
+      'Trạng thái': t.status,
+      'Cổng thanh toán': t.gateway || 'N/A',
+      'Mô tả': t.description || 'N/A',
+      'Bệnh nhân': t.patient_name || 'Hệ thống',
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Doanh thu');
+
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 }
