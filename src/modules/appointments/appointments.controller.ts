@@ -50,6 +50,11 @@ import {
   UpdateBookingSessionDto,
   CreateAppointmentFromSessionDto,
   WorkHistoryQueryDto,
+  DoctorPatientHistoryQueryDto,
+  DoctorPatientHistoryResponseDto,
+  DoctorPatientAppointmentsQueryDto,
+  DoctorPatientDetailResponseDto,
+  DoctorAppointmentHistoryDetailResponseDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -273,6 +278,288 @@ export class AppointmentsController {
   ): Promise<DoctorAppointmentListResponseDto> {
     const doctorId = req.user._id;
     return this.appointmentsService.getDoctorAppointments(doctorId, queryDto);
+  }
+
+  /**
+   * Get doctor's patient history
+   *
+   * Retrieves list of all patients who have been examined by the doctor
+   * with summary statistics and last diagnosis
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param queryDto - Query parameters (search, pagination, sorting)
+   * @returns Paginated list of patients with visit summary
+   */
+  @Get('doctor/me/patients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get doctor\'s patient history',
+    description:
+      'Retrieve list of all patients who have been examined by the authenticated doctor. ' +
+      'Includes patient information, visit statistics, and last diagnosis.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient history retrieved successfully',
+    type: DoctorPatientHistoryResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a doctor',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of records per page (default: 20)',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by patient name, phone, or email',
+    example: 'Nguyễn Văn A',
+  })
+  @ApiQuery({
+    name: 'sort_by',
+    required: false,
+    enum: ['last_visit_date', 'patient_name', 'total_visits'],
+    description: 'Sort by field (default: last_visit_date)',
+    example: 'last_visit_date',
+  })
+  @ApiQuery({
+    name: 'order',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order (default: DESC)',
+    example: 'DESC',
+  })
+  async getDoctorPatientHistory(
+    @Request() req: any,
+    @Query() queryDto: DoctorPatientHistoryQueryDto,
+  ): Promise<DoctorPatientHistoryResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getDoctorPatientHistory(doctorId, queryDto);
+  }
+
+  /**
+   * Get doctor's patient detail with appointment history (Step 2)
+   *
+   * Retrieves detailed information about a specific patient including personal
+   * information, visit statistics, and paginated appointment history.
+   *
+   * Access Control: Only doctors who have examined this patient (COMPLETED appointments)
+   * can view their details. Returns 403 Forbidden otherwise.
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param patientId - UUID of the patient
+   * @param queryDto - Query parameters for filtering appointments
+   * @returns Patient detail with statistics and appointment history
+   */
+  @Get('doctor/me/patients/:patient_id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: "Get doctor's patient detail with appointment history",
+    description: `
+      Retrieves comprehensive patient information for doctors who have examined this patient.
+      Includes:
+      - Patient personal information with address
+      - Visit statistics (first visit, last visit, total visits, services used)
+      - Paginated appointment history with services and diagnosis
+      - Filtering by appointment status and date range
+      
+      Access Control:
+      - Only doctors who have COMPLETED appointments with this patient can access
+      - Returns 403 Forbidden if doctor has never examined the patient
+    `,
+  })
+  @ApiParam({
+    name: 'patient_id',
+    type: String,
+    description: 'Patient account UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['ALL', 'COMPLETED', 'CANCELLED', 'NO_SHOW'],
+    description: 'Filter by appointment status (default: ALL)',
+    example: 'COMPLETED',
+  })
+  @ApiQuery({
+    name: 'from_date',
+    required: false,
+    type: Date,
+    description: 'Filter appointments from this date (YYYY-MM-DD)',
+    example: '2024-01-01',
+  })
+  @ApiQuery({
+    name: 'to_date',
+    required: false,
+    type: Date,
+    description: 'Filter appointments until this date (YYYY-MM-DD)',
+    example: '2024-12-31',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for appointment history (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of appointments per page (default: 10)',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient detail retrieved successfully',
+    schema: {
+      example: {
+        patient: {
+          patient_id: '123e4567-e89b-12d3-a456-426614174000',
+          full_name: 'Nguyễn Văn A',
+          phone: '0901234567',
+          email: 'patient@example.com',
+          gender: 'male',
+          date_of_birth: '1990-05-15',
+          age: 34,
+          address: '123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM',
+        },
+        statistics: {
+          first_visit: '2023-06-15',
+          last_visit: '2024-01-20',
+          total_visits: 5,
+          services_used: 3,
+        },
+        appointment_history: {
+          total: 5,
+          page: 1,
+          limit: 10,
+          appointments: [
+            {
+              appointment_id: '456e4567-e89b-12d3-a456-426614174000',
+              appointment_date: '2024-01-20',
+              appointment_hour: '2024-01-20T09:00:00Z',
+              status: 'COMPLETED',
+              services: [
+                {
+                  service_name: 'Khám tổng quát',
+                  service_type: 'general',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Doctor has never examined this patient',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Patient not found',
+  })
+  async getDoctorPatientDetail(
+    @Request() req: any,
+    @Param('patient_id') patientId: string,
+    @Query() queryDto: DoctorPatientAppointmentsQueryDto,
+  ): Promise<DoctorPatientDetailResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getDoctorPatientDetail(
+      doctorId,
+      patientId,
+      queryDto,
+    );
+  }
+
+  /**
+   * Get doctor's appointment history detail (Step 3)
+   *
+   * Retrieves complete appointment information including:
+   * - Patient and doctor details
+   * - Clinic and shift hour information
+   * - All services with ERM status
+   * - All ERMs created
+   * - Prescription with medicines (if exists)
+   * - Payment transactions
+   *
+   * @param req - Request object containing authenticated doctor
+   * @param appointmentId - UUID of the appointment
+   * @returns Complete appointment detail
+   */
+  @Get('doctor/me/appointments/:appointment_id/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: "Get complete appointment detail from patient history",
+    description: `
+      Retrieves comprehensive appointment information for doctor's patient history view.
+      Includes:
+      - Patient personal information with profile image
+      - Doctor information with specialization and license
+      - Clinic details and shift hour information
+      - All services performed with ERM status
+      - All ERMs (bệnh án) created during the appointment
+      - Complete prescription with medicines list (if exists)
+      - Payment transaction history
+      
+      Access Control:
+      - Only the doctor who owns this appointment can access
+      - Returns 403 Forbidden if appointment belongs to another doctor
+    `,
+  })
+  @ApiParam({
+    name: 'appointment_id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment detail retrieved successfully',
+    type: DoctorAppointmentHistoryDetailResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment belongs to another doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Appointment not found',
+  })
+  async getDoctorAppointmentHistoryDetail(
+    @Request() req: any,
+    @Param('appointment_id') appointmentId: string,
+  ): Promise<DoctorAppointmentHistoryDetailResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getDoctorAppointmentHistoryDetail(
+      doctorId,
+      appointmentId,
+    );
   }
 
   /**

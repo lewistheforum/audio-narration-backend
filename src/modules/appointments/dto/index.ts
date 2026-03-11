@@ -27,3 +27,8 @@ export * from './doctor-booking.dto';
 export * from './clinic-booking.dto';
 export * from './send-reminder.dto';
 export * from './send-reminder-bulk.dto';
+export * from './doctor-patient-history-query.dto';
+export * from './doctor-patient-history-response.dto';
+export * from './doctor-patient-appointments-query.dto';
+export * from './doctor-patient-detail-response.dto';
+export * from './doctor-appointment-history-detail-response.dto';
