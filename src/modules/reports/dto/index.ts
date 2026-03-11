@@ -6,3 +6,6 @@ export * from './response-ai-feedback.dto';
 export * from './response-feedback.dto';
 export * from './get-reports.dto';
 export * from './response-report.dto';
+export * from './update-feedback.dto';
+export * from './doctor-feedbacks-query.dto';
+export * from './doctor-feedbacks-response.dto';
