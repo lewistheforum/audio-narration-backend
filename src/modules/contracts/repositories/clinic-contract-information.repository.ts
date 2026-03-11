@@ -14,7 +14,7 @@ export class ClinicContractInformationRepository {
   constructor(
     @InjectRepository(ClinicContractInformation)
     private readonly repository: Repository<ClinicContractInformation>,
-  ) {}
+  ) { }
 
   /**
    * Find all clinic contract information records
@@ -124,4 +124,32 @@ export class ClinicContractInformationRepository {
   async count(): Promise<number> {
     return this.repository.count();
   }
+
+  /**
+   * Find expired contracts that are currently active
+   */
+  async findExpiredCurrentContracts(currentDate: Date): Promise<ClinicContractInformation[]> {
+    return this.repository
+      .createQueryBuilder('contractInfo')
+      .where('contractInfo.contractStatus = :status', { status: 'CURRENT' })
+      .andWhere('contractInfo.contractEndDate < :currentDate', { currentDate })
+      .getMany();
+  }
+
+  /**
+   * Bulk update contract status
+   */
+  async updateStatusBulk(ids: string[], status: string): Promise<number> {
+    if (!ids || ids.length === 0) return 0;
+
+    const result = await this.repository
+      .createQueryBuilder()
+      .update(ClinicContractInformation)
+      .set({ contractStatus: status as any })
+      .whereInIds(ids)
+      .execute();
+
+    return result.affected || 0;
+  }
 }
+

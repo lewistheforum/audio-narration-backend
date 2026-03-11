@@ -20,6 +20,7 @@ import {
 import { randomBytes } from 'crypto';
 import { CodeVerificationRepository } from '../accounts/repositories';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
+import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 
 /**
  * Authentication Service
@@ -198,7 +199,7 @@ export class AuthService {
       throw new BadRequestException('User does not exist');
     }
 
-    const now = new Date();
+    const now = getCurrentVietnamTime();
 
     // Find latest unused code for this user
     const userCodes = await this.codeVerificationRepository.findByUserId(user._id);

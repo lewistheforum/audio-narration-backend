@@ -7,8 +7,13 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository, Like } from 'typeorm';
+import {
+  getCurrentVietnamTime,
+  addToVietnamTime,
+  formatToVietnamTime,
+} from 'src/common/utils/date.util';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
-import { PaymentDirection, PaymentStatus, TransactionType } from './entities';
+import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
 import { RegistrationStatus } from '../subscriptions/enums';
 import {
   CreateTransactionDto,
@@ -19,10 +24,11 @@ import {
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
-import { AppointmentPackageStatus } from '../appointments/enums';
+import { AppointmentPackageStatus, PaymentType } from '../appointments/enums';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
+import { Account } from '../accounts/entities/accounts.entity';
 
 /**
  * Transactions Service
@@ -50,6 +56,8 @@ export class TransactionsService {
     private readonly clinicSubscriptionRepo: Repository<ClinicSubscription>,
     @InjectRepository(SubscriptionService)
     private readonly subscriptionServiceRepo: Repository<SubscriptionService>,
+    @InjectRepository(Account)
+    private readonly accountRepository: Repository<Account>,
     private readonly configService: ConfigService,
     private readonly subscriptionServicesService: SubscriptionServicesService,
   ) {
@@ -132,7 +140,10 @@ export class TransactionsService {
    * Renewal always uses 1 month duration by default
    * @param clinicId Clinic ID
    */
-  async createRenewalQr(clinicId: string): Promise<PaymentResponseDto> {
+  async createRenewalQr(
+    clinicId: string,
+    duration?: number,
+  ): Promise<PaymentResponseDto> {
     const subscription = await this.clinicSubscriptionRepo.findOne({
       where: { clinicId },
     });
@@ -141,7 +152,7 @@ export class TransactionsService {
       throw new NotFoundException('Subscription not found for this clinic');
     }
 
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
@@ -155,7 +166,10 @@ export class TransactionsService {
       );
     }
 
-    const transaction = await this.handleRenewalTransaction(subscription);
+    const transaction = await this.handleRenewalTransaction(
+      subscription,
+      duration,
+    );
     return this.generateQrResponse(subscription, transaction);
   }
 
@@ -185,14 +199,14 @@ export class TransactionsService {
         clinicId,
         serviceId, // Set initial service intent
         subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP, // Default status
-        subscriptionDate: new Date(),
-        expirationDate: new Date(), // Expired by default until paid
+        subscriptionDate: getCurrentVietnamTime(),
+        expirationDate: getCurrentVietnamTime(), // Expired by default until paid
       });
       subscription = await this.clinicSubscriptionRepo.save(subscription);
     }
 
     // Case B: Exist but Active & Valid (User mistake?)
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
@@ -303,8 +317,10 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Target service not found');
 
-    // 2. Calculate Amount: price * duration (NO discount)
-    const amount = service.price * duration;
+    // 2. Calculate Amount: price * duration (Apply discount)
+    const discount = service.discount ? parseFloat(service.discount.toString()) : 0;
+    const finalPrice = service.price - (service.price * discount) / 100;
+    const amount = finalPrice * duration;
 
     // 3. Create Transaction Content (store targetServiceId AND duration for later processing)
     const content = JSON.stringify({ targetServiceId, duration });
@@ -325,6 +341,7 @@ export class TransactionsService {
    */
   async handleRenewalTransaction(
     subscription: ClinicSubscription,
+    duration?: number,
   ): Promise<any> {
     // 1. Get Current Service
     const service = await this.subscriptionServiceRepo.findOne({
@@ -332,28 +349,32 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Current service not found');
 
-    // 3. Calculate Duration from current subscription dates
-    // If user bought 12 months, renew for 12 months.
-    const startDate = new Date(subscription.subscriptionDate);
-    const expirationDate = new Date(subscription.expirationDate);
+    // 3. Calculate/Set Duration
+    if (!duration) {
+      // If no duration provided, calculate from current subscription dates
+      const startDate = new Date(subscription.subscriptionDate);
+      const expirationDate = new Date(subscription.expirationDate);
 
-    // Calculate months difference
-    let duration =
-      (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
-    duration -= startDate.getMonth();
-    duration += expirationDate.getMonth();
+      // Calculate months difference
+      duration = (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
+      duration -= startDate.getMonth();
+      duration += expirationDate.getMonth();
 
-    // Round to handle edge cases (e.g. Feb 28 to Feb 28 next year)
-    // If days difference is significant, adjust. But simple month diff is usually enough for billing.
-    // Ensure duration is at least 1
-    duration = duration <= 0 ? 1 : duration;
+      // Ensure duration is at least 1
+      duration = duration <= 0 ? 1 : duration;
 
-    console.log(
-      `[DEBUG] Calculated renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`,
-    );
+      console.log(
+        `[DEBUG] Calculated base renewal duration: ${duration} months (Start: ${formatToVietnamTime(startDate)}, End: ${formatToVietnamTime(expirationDate)})`,
+      );
+    } else {
+      duration = Math.max(1, duration);
+      console.log(`[DEBUG] Using provided renewal duration: ${duration} months`);
+    }
 
-    // 2. Calculate Amount: price * duration (NO discount)
-    const amount = service.price * duration;
+    // 2. Calculate Amount: price * duration (Apply discount)
+    const discount = service.discount ? parseFloat(service.discount.toString()) : 0;
+    const finalPrice = service.price - (service.price * discount) / 100;
+    const amount = finalPrice * duration;
 
     // 3. Content
     const content = JSON.stringify({ duration });
@@ -395,10 +416,10 @@ export class TransactionsService {
 
     if (!transaction) {
       const transactionType = await this.transactionTypeRepo.findOne({
-        where: { name: Like('SUBSCRIPTION%') },
+        where: { code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
       });
       if (!transactionType) {
-        throw new NotFoundException('Transaction Type SUBSCRIPTION not found');
+        throw new NotFoundException('Transaction Type SUBSCRIPTION PAYMENT not found');
       }
 
       transaction = this.transactionRepository.create({
@@ -430,7 +451,7 @@ export class TransactionsService {
   ): Promise<PaymentResponseDto> {
     // Verify appointment and get real amount & clinic
     const appointment = await this.appointmentRepository.findOne({
-      where: { _id: dto.prescriptionId },
+      where: { _id: dto.appointmentId },
     });
 
     if (!appointment) {
@@ -439,10 +460,18 @@ export class TransactionsService {
 
     let clinicAdminId: string | undefined;
     if (appointment?.clinicId) {
-      const clinicAdmin = await this.clinicAdminRepo.findOne({
-        where: { accountId: appointment.clinicId },
+      // Find the CLINIC_MANAGER account
+      const managerAccount = await this.accountRepository.findOne({
+        where: { _id: appointment.clinicId },
       });
-      clinicAdminId = clinicAdmin?._id;
+
+      if (managerAccount && managerAccount.parentId) {
+        // Resolve CLINIC_ADMIN info using the parentId
+        const clinicAdmin = await this.clinicAdminRepo.findOne({
+          where: { accountId: managerAccount.parentId },
+        });
+        clinicAdminId = clinicAdmin?._id;
+      }
     }
 
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
@@ -450,7 +479,7 @@ export class TransactionsService {
     // Calculate sum of all pending packages for this appointment
     const pendingPackages = await this.packageRepo.find({
       where: {
-        appointmentId: dto.prescriptionId,
+        appointmentId: dto.appointmentId,
         status: AppointmentPackageStatus.PENDING_PAYMENT
       }
     });
@@ -463,10 +492,10 @@ export class TransactionsService {
     // Ignore dto.amount, use source of truth from DB packages
 
     const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(amount, dto.prescriptionId, acc, bank);
+    const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
     const qrPayload = this.buildQrPayload(
       amount,
-      dto.prescriptionId,
+      dto.appointmentId,
       acc,
       bank,
     );
@@ -523,7 +552,7 @@ export class TransactionsService {
     // 3. Create Pending Transaction
     // Resolve Transaction Type (VERIFICATION)
     const transactionType = await this.transactionTypeRepo.findOne({
-      where: { name: Like('VERIFICATION%') },
+      where: { code: TransactionTypeCode.VERIFICATION },
     });
 
     if (!transactionType) {
@@ -618,9 +647,7 @@ export class TransactionsService {
 
       const saved = await this.transactionRepository.save(existingTransaction);
 
-      const isVerification = existingTransaction.transactionType?.name
-        ?.toUpperCase()
-        .startsWith('VERIFICATION');
+      const isVerification = existingTransaction.transactionType?.code === TransactionTypeCode.VERIFICATION;
       console.log('handleCallback Debug - Is Verification:', isVerification);
 
       if (status === PaymentStatus.SUCCESS && isVerification) {
@@ -667,9 +694,8 @@ export class TransactionsService {
       // Logic for Subscription Status Update (Existing Transaction)
       if (
         status === PaymentStatus.SUCCESS &&
-        existingTransaction.transactionType?.name
-          ?.toUpperCase()
-          .startsWith('SUBSCRIPTION')
+        (existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
+          existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION)
       ) {
         if (existingTransaction.subscriptionId) {
           console.log(
@@ -709,7 +735,8 @@ export class TransactionsService {
           },
           {
             status: AppointmentPackageStatus.PAID,
-            transactionId: saved.id
+            transactionId: saved.id,
+            paymentType: PaymentType.ONLINE
           }
         );
       }
@@ -750,13 +777,8 @@ export class TransactionsService {
       clinicAdminId = clinicAdmin?._id;
     }
 
-    // Resolve Transaction Type (ONLINE for appointments)
-    let typeName = 'ONLINE';
-
-    // Fallback logic for VERIFICATION based on amount/content is REMOVED.
-
     const transactionType = await this.transactionTypeRepo.findOne({
-      where: { name: Like(typeName + '%') },
+      where: { code: TransactionTypeCode.ONLINE },
     });
 
     // Note: If appointment not found, we still save transaction but with null sender/clinic
@@ -813,7 +835,10 @@ export class TransactionsService {
         savedTransaction.subscriptionId,
       );
 
-      if (transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
+      if (
+        transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
+        transactionType?.code === TransactionTypeCode.SUBSCRIPTION
+      ) {
         if (savedTransaction.subscriptionId) {
           console.log(
             'handleCallback Debug - Updating Subscription Status for:',
@@ -872,7 +897,8 @@ export class TransactionsService {
           },
           {
             status: AppointmentPackageStatus.PAID,
-            transactionId: savedTransaction.id
+            transactionId: savedTransaction.id,
+            paymentType: PaymentType.ONLINE
           }
         );
       }
@@ -922,9 +948,7 @@ export class TransactionsService {
   }
 
   private computeExpireTime(): Date {
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + this.qrExpireMinutes);
-    return expiresAt;
+    return addToVietnamTime(this.qrExpireMinutes, 'minute');
   }
 
   private extractPrescriptionIdFromContent(

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import {
   AccountRole,
@@ -83,7 +84,26 @@ export class AccountSeederService {
     private readonly accountRepository: AccountRepository,
     private readonly addressRepository: AddressRepository,
     private readonly googleIframeRepository: GoogleIframeRepository,
-  ) {}
+  ) { }
+
+  private generateKeyPair(): {
+    publicKey: string;
+    encryptedPrivateKey: string;
+  } {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    });
+
+    return { publicKey, encryptedPrivateKey: privateKey };
+  }
 
   async seedBaseAccounts(): Promise<void> {
     try {
@@ -241,9 +261,8 @@ export class AccountSeederService {
       const count = isPending ? 1 : this.getRandomInt(1, 3);
 
       for (let i = 1; i <= count; i++) {
-        const email = `clinic_manager_${
-          clinicAdmins.indexOf(clinicAdmin) + 1
-        }_${i}@bonix.test`;
+        const email = `clinic_manager_${clinicAdmins.indexOf(clinicAdmin) + 1
+          }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -257,9 +276,8 @@ export class AccountSeederService {
         );
 
         const account = this.accountRepository.createAccount({
-          username: `clinic_manager_${
-            clinicAdmins.indexOf(clinicAdmin) + 1
-          }_${i}`,
+          username: `clinic_manager_${clinicAdmins.indexOf(clinicAdmin) + 1
+            }_${i}`,
           email,
           password: hashedPassword,
           phone: `0${this.randomPhoneDigits()}`,
@@ -269,6 +287,10 @@ export class AccountSeederService {
           isEmailVerified: true,
           isOAuthUser: false,
         });
+
+        const keyPair = this.generateKeyPair();
+        account.publicKey = keyPair.publicKey;
+        account.encryptedPrivateKey = keyPair.encryptedPrivateKey;
 
         const saved = await this.accountRepository.saveAccount(account);
         clinicManagers.push(saved);
@@ -292,9 +314,8 @@ export class AccountSeederService {
       const count = this.getRandomInt(5, 10);
 
       for (let i = 1; i <= count; i++) {
-        const email = `clinic_staff_${
-          clinicManagers.indexOf(clinicManager) + 1
-        }_${i}@bonix.test`;
+        const email = `clinic_staff_${clinicManagers.indexOf(clinicManager) + 1
+          }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -307,9 +328,8 @@ export class AccountSeederService {
         );
 
         const account = this.accountRepository.createAccount({
-          username: `clinic_staff_${
-            clinicManagers.indexOf(clinicManager) + 1
-          }_${i}`,
+          username: `clinic_staff_${clinicManagers.indexOf(clinicManager) + 1
+            }_${i}`,
           email,
           password: hashedPassword,
           phone: `0${this.randomPhoneDigits()}`,
@@ -319,6 +339,10 @@ export class AccountSeederService {
           isEmailVerified: true,
           isOAuthUser: false,
         });
+
+        const keyPair = this.generateKeyPair();
+        account.publicKey = keyPair.publicKey;
+        account.encryptedPrivateKey = keyPair.encryptedPrivateKey;
 
         await this.accountRepository.saveAccount(account);
         createdCount++;
@@ -339,9 +363,8 @@ export class AccountSeederService {
       const count = this.getRandomInt(5, 10);
 
       for (let i = 1; i <= count; i++) {
-        const email = `doctor_${
-          clinicManagers.indexOf(clinicManager) + 1
-        }_${i}@bonix.test`;
+        const email = `doctor_${clinicManagers.indexOf(clinicManager) + 1
+          }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -364,6 +387,10 @@ export class AccountSeederService {
           isEmailVerified: true,
           isOAuthUser: false,
         });
+
+        const keyPair = this.generateKeyPair();
+        account.publicKey = keyPair.publicKey;
+        account.encryptedPrivateKey = keyPair.encryptedPrivateKey;
 
         await this.accountRepository.saveAccount(account);
         createdCount++;
@@ -512,8 +539,8 @@ export class AccountSeederService {
 
     this.logger.log(
       `✅ Address and Google iframe seeding completed: ` +
-        `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
-        `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
+      `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
+      `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
     );
   }
 
@@ -523,7 +550,7 @@ export class AccountSeederService {
   private generateStreetAddress(): string {
     const buildingType =
       this.BUILDING_TYPES[
-        Math.floor(Math.random() * this.BUILDING_TYPES.length)
+      Math.floor(Math.random() * this.BUILDING_TYPES.length)
       ];
     const buildingNumber = Math.floor(Math.random() * 500) + 1;
     const streetName =

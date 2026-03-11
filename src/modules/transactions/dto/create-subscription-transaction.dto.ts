@@ -1,5 +1,5 @@
 import { ApiProperty, ApiHideProperty } from '@nestjs/swagger';
-import { IsUUID, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsUUID, IsNotEmpty, IsOptional, IsNumber, Min } from 'class-validator';
 
 export class CreateSubscriptionTransactionDto {
     @ApiProperty({
@@ -9,6 +9,16 @@ export class CreateSubscriptionTransactionDto {
     @IsNotEmpty()
     @IsUUID()
     subscriptionId: string;
+
+    @ApiProperty({
+        example: 6,
+        description: 'Thời hạn đăng ký (tính theo tháng)',
+        required: false,
+    })
+    @IsOptional()
+    @IsNumber()
+    @Min(1)
+    duration?: number;
 
     @ApiHideProperty()
     @IsOptional()

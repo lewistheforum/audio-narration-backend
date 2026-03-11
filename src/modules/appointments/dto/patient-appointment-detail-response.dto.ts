@@ -165,6 +165,9 @@ export class PatientAppointmentDetailResponseDto {
   @ApiPropertyOptional({ description: 'Shift end hour', example: '09:00:00' })
   end_hour?: string;
 
+  @ApiPropertyOptional({ description: 'Clinic room name', example: 'Phòng 101', nullable: true })
+  clinic_room?: string | null;
+
   @ApiProperty({ 
     description: 'Appointment status', 
     enum: AppointmentStatus, 

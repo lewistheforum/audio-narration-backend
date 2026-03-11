@@ -152,6 +152,7 @@ describe('AccountsService - Registration Flow', () => {
     clinicAdminInfoRepository = {
       create: jest.fn().mockReturnValue(createMockClinicAdminInfo()),
       findByAccountId: jest.fn().mockResolvedValue(createMockClinicAdminInfo()),
+      findBySepayVa: jest.fn().mockResolvedValue(null),
     };
 
     clinicManagerInfoRepository = {
@@ -209,25 +210,21 @@ describe('AccountsService - Registration Flow', () => {
         {
           provide: ClinicStaffInformationRepository,
           useValue: {
-            create: jest
-              .fn()
-              .mockReturnValue({
-                accountId: 'staff-1',
-                fullName: 'Staff',
-                clinicRole: ClinicRole.STAFF,
-              }),
+            create: jest.fn().mockReturnValue({
+              accountId: 'staff-1',
+              fullName: 'Staff',
+              clinicRole: ClinicRole.STAFF,
+            }),
           },
         },
         {
           provide: DoctorInformationRepository,
           useValue: {
-            create: jest
-              .fn()
-              .mockReturnValue({
-                accountId: 'doctor-1',
-                fullName: 'Doctor',
-                specialization: 'Cardiology',
-              }),
+            create: jest.fn().mockReturnValue({
+              accountId: 'doctor-1',
+              fullName: 'Doctor',
+              specialization: 'Cardiology',
+            }),
           },
         },
         {
@@ -351,6 +348,20 @@ describe('AccountsService - Registration Flow', () => {
       // Setup: Existing CLINIC_MANAGER with same email
       accountRepository.findAccountByEmail.mockResolvedValue(
         createMockAccount({ role: AccountRole.CLINIC_MANAGER }),
+      );
+
+      await expect(service.registerClinicAdmin(validDto)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+    });
+
+    it('should enforce sepayVa uniqueness - reject if sepayVa is already used', async () => {
+      // Setup: No existing account with this email
+      accountRepository.findByEmail.mockResolvedValue(null);
+      // Setup: Existing clinic with same sepayVa
+      clinicAdminInfoRepository.findBySepayVa.mockResolvedValue(
+        createMockClinicAdminInfo(),
       );
 
       await expect(service.registerClinicAdmin(validDto)).rejects.toThrow(

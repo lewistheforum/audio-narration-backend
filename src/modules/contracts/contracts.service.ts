@@ -9,6 +9,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { CodeVerificationRepository } from '../accounts/repositories/code-verification.repository';
 import { VerificationType } from '../accounts/enums';
 import { generateVerificationCode } from 'src/common/utils/util';
+import { getStartOfDay } from 'src/common/utils/date.util';
 import axios from 'axios';
 import { CreateContractPackageDto } from './dto/create-contract-package.dto';
 import { CreateContractInfoDto } from './dto/create-contract-info.dto';
@@ -289,20 +290,11 @@ export class ContractsService {
         let privateKey: string;
 
         if (contractPackage.clinicManagerId === userId) {
-            // If Manager is signing, use the Parent's (Clinic Admin) Private Key
-            if (userAccount.parentId) {
-                const parentAccount = await this.accountsService.findAccountEntityById(userAccount.parentId);
-                if (!parentAccount || !parentAccount.encryptedPrivateKey) {
-                    throw new BadRequestException('Clinic Admin (Parent) does not have digital keys generated');
-                }
-                privateKey = parentAccount.encryptedPrivateKey;
-            } else {
-                // Fallback for Admin signing directly (if clinicId = Admin ID)
-                if (!userAccount.encryptedPrivateKey) {
-                    throw new BadRequestException('Clinic Admin does not have digital keys generated');
-                }
-                privateKey = userAccount.encryptedPrivateKey;
+            // If Manager is signing, use their own Private Key
+            if (!userAccount.encryptedPrivateKey) {
+                throw new BadRequestException('Clinic Manager does not have digital keys generated');
             }
+            privateKey = userAccount.encryptedPrivateKey;
         } else {
             // If Employee is signing, use their own Private Key
             if (!userAccount.encryptedPrivateKey) {
@@ -522,5 +514,68 @@ export class ContractsService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+    }
+
+    async getPackagesByEmployee(
+        employeeId: string,
+        clinicName?: string,
+        page: number = 1,
+        limit: number = 10,
+    ) {
+        const [packages, total] = await this.contractPackageRepository.findPackagesByEmployeeWithFilters(
+            employeeId,
+            clinicName,
+            page,
+            limit,
+        );
+
+        return {
+            data: packages,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    async getMyContract(employeeId: string, packageId: string): Promise<ContractPackage> {
+        const contractPackage = await this.contractPackageRepository.findById(packageId);
+
+        if (!contractPackage) {
+            throw new NotFoundException('Contract package not found');
+        }
+
+        if (contractPackage.employeeId !== employeeId) {
+            throw new UnauthorizedException('You do not have access to this contract');
+        }
+
+        if (contractPackage.clinicContractInformation?.contractStatus === ContractStatus.DRAFT) {
+            throw new UnauthorizedException('You do not have access to this contract yet');
+        }
+
+        return contractPackage;
+    }
+
+    /**
+     * Automatic Cron Job method to mark expired contracts as OLD 
+     * Uses Asia/Ho_Chi_Minh timezone
+     */
+    async updateExpiredContractsToOld(): Promise<number> {
+        // Get start of today in Vietnam timezone
+        const today = getStartOfDay();
+
+        // Find expired DB records
+        const expiredContracts = await this.clinicContractInfoRepository.findExpiredCurrentContracts(today);
+
+        if (expiredContracts.length === 0) {
+            return 0; // Nothing to update
+        }
+
+        const ids = expiredContracts.map((info: any) => info._id);
+
+        // Update DB
+        return await this.clinicContractInfoRepository.updateStatusBulk(ids, ContractStatus.OLD);
     }
 }

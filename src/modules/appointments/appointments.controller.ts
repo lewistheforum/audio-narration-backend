@@ -22,6 +22,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+import { getDateString } from 'src/common/utils/date.util';
 import { AppointmentsService } from './appointments.service';
 import { BookingSessionService } from './booking-session.service';
 import {
@@ -50,6 +51,7 @@ import {
   UpdateBookingSessionDto,
   CreateAppointmentFromSessionDto,
   WorkHistoryQueryDto,
+  AvailableDoctorsResponseDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -1155,7 +1157,7 @@ export class AppointmentsController {
     );
 
     res.header('Content-Type', 'text/csv');
-    res.attachment(`work-history-${doctorId}-${new Date().toISOString().split('T')[0]}.csv`);
+    res.attachment(`work-history-${doctorId}-${getDateString()}.csv`);
 
     // Add BOM for Excel UTF-8 display
     res.write('\uFEFF');
@@ -1555,41 +1557,65 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get clinics by working date (Patient)',
+    summary: 'Get clinics by working date (Patient) - Nested Structure',
     description:
-      'Get list of clinic branches (CLINIC_MANAGER) that have available slots. ' +
+      'Get list of clinic systems (CLINIC_ADMIN) with their branches (CLINIC_MANAGER). ' +
+      'Returns a nested/grouped structure where each clinic system contains its branches. ' +
       'If working_date is provided, returns clinics with slots on that specific date (Option 3: Date-first booking). ' +
       'If working_date is omitted, returns all clinics with any available slots (Option 1 & 2). ' +
-      'Returns branch IDs instead of parent clinic IDs to match service configs. ' +
+      '⚠️ IMPORTANT: Use branch clinic_id (CLINIC_MANAGER._id) for booking, NOT admin_id. ' +
       'Display name format: "Parent Clinic Name - Branch Name". Supports search and district filtering.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Clinic branches retrieved successfully',
+    description: 'Clinic systems with branches retrieved successfully',
     schema: {
       example: {
         data: [
           {
-            clinic_id: 'branch-uuid-1',  // CLINIC_MANAGER._id
-            clinic_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',  // Parent + Branch name
-            clinic_admin_id: 'admin-uuid',  // Parent CLINIC_ADMIN._id (optional)
-            clinic_address: '123 Đường X, Quận 1, TP.HCM',
-            district: 'Quận 1',
-            available_slots: 15,
-            available_doctors: 3,
+            admin_id: 'admin-uuid-1',
+            system_name: 'Phòng khám Đa khoa Hoàn Mỹ',
+            logo: 'https://example.com/logo.png',
+            description: 'Hệ thống phòng khám đa khoa uy tín',
+            branches: [
+              {
+                clinic_id: 'branch-uuid-1',  // ⚠️ Use this ID for booking
+                branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',
+                address: '123 Đường X, Quận 1, TP.HCM',
+                district: 'Quận 1',
+                available_slots: 25,
+                available_doctors: 5,
+              },
+              {
+                clinic_id: 'branch-uuid-2',
+                branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 2',
+                address: '456 Đường Y, Quận 2, TP.HCM',
+                district: 'Quận 2',
+                available_slots: 15,
+                available_doctors: 3,
+              },
+            ],
           },
           {
-            clinic_id: 'branch-uuid-2',
-            clinic_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 2',
-            clinic_admin_id: 'admin-uuid',
-            clinic_address: '456 Đường Y, Quận 2, TP.HCM',
-            district: 'Quận 2',
-            available_slots: 10,
-            available_doctors: 2,
+            admin_id: 'admin-uuid-2',
+            system_name: 'Phòng khám Đa khoa Medlatec',
+            logo: null,
+            description: null,
+            branches: [
+              {
+                clinic_id: 'branch-uuid-3',
+                branch_name: 'Phòng khám Đa khoa Medlatec - Chi nhánh Quận 3',
+                address: '789 Đường Z, Quận 3, TP.HCM',
+                district: 'Quận 3',
+                available_slots: 10,
+                available_doctors: 2,
+              },
+            ],
           },
         ],
         meta: {
-          total: 2,
+          total_systems: 2,
+          total_branches: 3,
           page: 1,
           limit: 20,
           total_pages: 1,
@@ -2227,5 +2253,64 @@ export class AppointmentsController {
   ) {
     const staffAccountId = req.user._id;
     return this.appointmentsService.confirmCashPayment(appointmentId, packageId, staffAccountId);
+  }
+
+  /**
+   * Get available doctors for out-of-hours booking (Option 4)
+   * 
+   * Returns list of doctors who are working at the clinic on the specified date
+   * and are NOT busy at the requested extra hour time.
+   * 
+   * @param clinicId - Clinic UUID
+   * @param appointmentDate - Appointment date (YYYY-MM-DD)
+   * @param extraHour - Extra hour timestamp (ISO 8601 with timezone)
+   * @returns List of available doctors with metadata
+   */
+  @Get('clinics/:clinicId/available-doctors')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available doctors for out-of-hours booking (Option 4)',
+    description:
+      'Returns list of doctors who are scheduled to work at the clinic on the specified date ' +
+      'and are NOT busy at the requested time. ' +
+      'Checks against both appointment_hour and extra_hour to avoid double booking.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available doctors retrieved successfully',
+    type: AvailableDoctorsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid parameters',
+  })
+  @ApiParam({
+    name: 'clinicId',
+    type: String,
+    description: 'Clinic UUID',
+    example: '550e8400-e29b-41d4-a716-446655440010',
+  })
+  @ApiQuery({
+    name: 'appointment_date',
+    type: String,
+    description: 'Appointment date in YYYY-MM-DD format',
+    example: '2026-03-15',
+  })
+  @ApiQuery({
+    name: 'extra_hour',
+    type: String,
+    description: 'Extra hour timestamp in ISO 8601 format with timezone',
+    example: '2026-03-15T14:30:00+07:00',
+  })
+  async getAvailableDoctorsForOutOfHours(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query('appointment_date') appointmentDate: string,
+    @Query('extra_hour') extraHour: string,
+  ): Promise<AvailableDoctorsResponseDto> {
+    return this.appointmentsService.getAvailableDoctorsForOutOfHours(
+      clinicId,
+      appointmentDate,
+      extraHour,
+    );
   }
 }
