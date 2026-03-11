@@ -149,6 +149,7 @@ describe('AccountsService - Registration Flow', () => {
     clinicAdminInfoRepository = {
       create: jest.fn().mockReturnValue(createMockClinicAdminInfo()),
       findByAccountId: jest.fn().mockResolvedValue(createMockClinicAdminInfo()),
+      findBySepayVa: jest.fn().mockResolvedValue(null),
     };
 
     clinicManagerInfoRepository = {
@@ -307,6 +308,16 @@ describe('AccountsService - Registration Flow', () => {
       accountRepository.findAccountByEmail.mockResolvedValue(
         createMockAccount({ role: AccountRole.CLINIC_MANAGER }),
       );
+
+      await expect(service.registerClinicAdmin(validDto)).rejects.toThrow(ConflictException);
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+    });
+
+    it('should enforce sepayVa uniqueness - reject if sepayVa is already used', async () => {
+      // Setup: No existing account with this email
+      accountRepository.findByEmail.mockResolvedValue(null);
+      // Setup: Existing clinic with same sepayVa
+      clinicAdminInfoRepository.findBySepayVa.mockResolvedValue(createMockClinicAdminInfo());
 
       await expect(service.registerClinicAdmin(validDto)).rejects.toThrow(ConflictException);
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
@@ -626,7 +637,7 @@ describe('AccountsService - Registration Flow', () => {
       accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
-      
+
       clinicSubscriptionRepository.findByClinicId.mockResolvedValue(
         createMockClinicSubscription({
           subscriptionStatus: RegistrationStatus.PENDING_MANAGER_SETUP,
@@ -642,7 +653,7 @@ describe('AccountsService - Registration Flow', () => {
       accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
-      
+
       const existingDocs = createMockLegalDocs({
         verificationStatus: LegalDocumentVerificationStatus.REJECTED,
       });
@@ -664,7 +675,7 @@ describe('AccountsService - Registration Flow', () => {
       accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
-      
+
       await service.uploadLegalDocumentsForManager(clinicAdminId, managerAccountId, validDto);
 
       expect(queryRunner.manager.save).toHaveBeenCalledWith(
@@ -678,7 +689,7 @@ describe('AccountsService - Registration Flow', () => {
       accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
-      
+
       await service.uploadLegalDocumentsForManager(clinicAdminId, managerAccountId, validDto);
 
       expect(clinicLegalDocsRepository.create).toHaveBeenCalledWith(
@@ -692,7 +703,7 @@ describe('AccountsService - Registration Flow', () => {
       accountRepository.findAccountById
         .mockResolvedValueOnce(createMockAccount({ _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN }))
         .mockResolvedValueOnce(createMockClinicManager({ _id: managerAccountId, parentId: clinicAdminId }));
-      
+
       queryRunner.manager.save.mockRejectedValue(new Error('Database error'));
 
       await expect(
@@ -865,7 +876,7 @@ describe('AccountsService - Registration Flow', () => {
       await service.cancelPendingRegistration(accountId);
 
       const deleteCalls = queryRunner.manager.delete.mock.calls;
-      
+
       // Verify ClinicsLegalDocuments deleted before ClinicManagerInformation
       const legalDocsIndex = deleteCalls.findIndex(
         (call) => call[0].name === 'ClinicsLegalDocuments',

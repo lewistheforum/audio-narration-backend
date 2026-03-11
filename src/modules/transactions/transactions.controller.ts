@@ -59,7 +59,7 @@ export class TransactionsController {
    * @param body Transaction creation DTO
    * @returns Created payment response with QR payload (if applicable)
    */
-  @Post(':prescriptionId/qr')
+  @Post(':appointmentID/qr')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(
@@ -75,12 +75,12 @@ export class TransactionsController {
     message: 'Payment QR created successfully',
   })
   async createQr(
-    @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
-    @Body() body: Omit<CreateTransactionDto, 'prescriptionId'>,
+    @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
+    @Body() body: Omit<CreateTransactionDto, 'appointmentId'>,
   ) {
     const payment = await this.transactionsService.createDynamicQr({
       ...body,
-      prescriptionId,
+      appointmentId,
     });
     return {
       data: payment,
@@ -118,8 +118,11 @@ export class TransactionsController {
       clinicId = user.parentId;
     }
 
-    // Legacy support: Map to Renewal Logic (ignores body.serviceId if provided, strictly uses current subscription's service)
-    const payment = await this.transactionsService.createRenewalQr(clinicId);
+    // Legacy support: Map to Renewal Logic (strictly uses current subscription's service)
+    const payment = await this.transactionsService.createRenewalQr(
+      clinicId,
+      body.duration,
+    );
     return {
       data: payment,
       message: 'Subscription QR created successfully',

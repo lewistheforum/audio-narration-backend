@@ -101,4 +101,27 @@ export class SubscriptionResponseDto {
     example: '2024-01-01T00:00:00.000Z',
   })
   updatedAt: Date;
+
+  @ApiProperty({
+    description: 'Days remaining until expiration',
+    example: 30,
+  })
+  remainingDays: number;
+
+  @ApiProperty({
+    description: 'Queued next subscription service information if any',
+    required: false,
+    example: {
+      serviceId: '550e8400-e29b-41d4-a716-446655440003',
+      serviceName: 'Enterprise Plan',
+      targetStartDate: '2025-01-01T00:00:00.000Z',
+      targetEndDate: '2026-01-01T00:00:00.000Z',
+    },
+  })
+  queuedSubscription?: {
+    serviceId: string;
+    serviceName: string;
+    targetStartDate: Date;
+    targetEndDate: Date;
+  };
 }

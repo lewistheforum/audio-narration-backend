@@ -1,4 +1,4 @@
-export * from './query-appointment.dto';
+﻿export * from './query-appointment.dto';
 export * from './query-doctor-appointment.dto';
 export * from './appointment-response.dto';
 export * from './appointment-detail-response.dto';
@@ -27,6 +27,9 @@ export * from './doctor-booking.dto';
 export * from './clinic-booking.dto';
 export * from './send-reminder.dto';
 export * from './send-reminder-bulk.dto';
+export * from './get-available-doctors-out-of-hours.dto';
+export * from './available-doctors-response.dto';
+export * from './clinics-list-response.dto';
 export * from './doctor-patient-history-query.dto';
 export * from './doctor-patient-history-response.dto';
 export * from './doctor-patient-appointments-query.dto';

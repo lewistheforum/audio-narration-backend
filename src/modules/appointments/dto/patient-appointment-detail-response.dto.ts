@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AppointmentStatus } from '../enums';
+import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../enums';
 import { ERMRecordType, ERMStatus } from '../../prescriptions/enums/erm-enums';
 
 /**
@@ -105,6 +105,16 @@ export class AppointmentPackageSummaryDto {
   @ApiProperty({ description: 'Package amount', example: 270000 })
   amount: number;
 
+  @ApiPropertyOptional({ description: 'Payment method', enum: PaymentType, example: PaymentType.COD })
+  payment_type?: PaymentType;
+
+  @ApiPropertyOptional({ 
+    description: 'Payment status', 
+    enum: AppointmentPackageStatus, 
+    example: AppointmentPackageStatus.PENDING_PAYMENT 
+  })
+  payment_status?: AppointmentPackageStatus;
+
   @ApiProperty({ 
     description: 'Service appointments in this package', 
     type: [ServiceAppointmentSummaryDto] 
@@ -148,6 +158,15 @@ export class PatientAppointmentDetailResponseDto {
 
   @ApiProperty({ description: 'Appointment hour (ISO timestamp)', example: '2026-03-15T08:00:00.000Z' })
   appointment_hour: Date;
+
+  @ApiPropertyOptional({ description: 'Shift start hour', example: '08:00:00' })
+  start_hour?: string;
+
+  @ApiPropertyOptional({ description: 'Shift end hour', example: '09:00:00' })
+  end_hour?: string;
+
+  @ApiPropertyOptional({ description: 'Clinic room name', example: 'Phòng 101', nullable: true })
+  clinic_room?: string | null;
 
   @ApiProperty({ 
     description: 'Appointment status', 

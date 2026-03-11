@@ -17,10 +17,18 @@ import {
   ServiceInitialDataDto,
   DoctorInitialDataDto,
   DateInitialDataDto,
+  OutOfHoursInitialDataDto,
 } from './dto';
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole } from '../accounts/enums';
+import {
+  getCurrentVietnamTime,
+  addToVietnamTime,
+  formatToVietnamTime,
+  isInPast,
+  startOfDay,
+} from 'src/common/utils/date.util';
 
 /**
  * Booking Session Interface
@@ -36,7 +44,9 @@ export interface BookingSession {
   clinicId?: string;
   doctorId?: string;
   appointmentDate?: string; // YYYY-MM-DD
-  doctorShiftHourId?: string;
+  clinicShiftHourId?: string | null; // Nullable for out-of-hours
+  extraHour?: string | null; // ISO 8601 with timezone for out-of-hours (Option 4)
+  paymentMethod?: 'cod' | 'online'; // NEW in v4.0 - Required before finalizing
   patientNote?: string;
   
   // Metadata
@@ -85,8 +95,8 @@ export class BookingSessionService {
 
     // Generate session ID
     const sessionId = uuidv4();
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + this.SESSION_TTL * 1000);
+    const now = getCurrentVietnamTime();
+    const expiresAt = addToVietnamTime(this.SESSION_TTL, 'second');
 
     // Build session object
     const session: BookingSession = {
@@ -112,6 +122,13 @@ export class BookingSessionService {
     } else if (createDto.booking_option === BookingOption.DATE) {
       const data = createDto.initial_data as DateInitialDataDto;
       session.appointmentDate = data.appointment_date;
+    } else if (createDto.booking_option === BookingOption.OUT_OF_HOURS) {
+      const data = createDto.initial_data as OutOfHoursInitialDataDto;
+      if (data.clinic_id) {
+        session.clinicId = data.clinic_id;
+      }
+      // Initialize extraHour as null (will be set in step 2)
+      session.extraHour = null;
     }
 
     // Save to Redis with TTL
@@ -146,58 +163,253 @@ export class BookingSessionService {
       throw new ForbiddenException('You do not have permission to access this session');
     }
 
-    // Validate step sequence
-    this.validateStepSequence(session.currentStep, updateDto.step);
+    // Validate step sequence (pass bookingOption for proper validation)
+    this.validateStepSequence(session.currentStep, updateDto.step, session.bookingOption);
 
-    // Update session based on booking option and step
+    // Update session based on booking option and step (VERSION 4.6)
+    // FIX: Use Object.assign to explicitly merge new data while preserving all existing fields
     if (session.bookingOption === BookingOption.DATE) {
-      // Option 3: Date-first flow
+      // Option 3: Date-first flow (VERSION 4.6 - SWAPPED STEPS 3-4)
       // Step 1 (initial): appointment_date is already set
       // Step 2: Add clinic_id
-      // Step 3: Add clinic_service_config_id
-      // Step 4: Add doctor_shift_hour_id + doctor_id
+      // Step 3: Add clinic_shift_hour_id + doctor_id (MOVED UP from V4.4)
+      // Step 4: Add clinic_service_config_id (MOVED DOWN from V4.4)
+      // Step 5: Add payment_method + patient_note
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        session.clinicId = data.clinic_id;
-        session.currentStep = 2;
+        
+        // Validate clinic_id is required
+        if (!data.clinic_id) {
+          throw new BadRequestException('Clinic ID is required in step 2');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicId: data.clinic_id,
+          currentStep: 2,
+        });
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        session.clinicServiceConfigId = data.clinic_service_config_id;
-        session.currentStep = 3;
+        
+        // VERSION 4.6: Step 3 now handles clinic_shift_hour_id + doctor_id
+        // Validate required fields
+        if (!data.clinic_shift_hour_id) {
+          throw new BadRequestException('Clinic shift hour ID is required in step 3');
+        }
+        if (!data.doctor_id) {
+          throw new BadRequestException('Doctor ID is required in step 3');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicShiftHourId: data.clinic_shift_hour_id,
+          doctorId: data.doctor_id,
+          currentStep: 3,
+        });
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        session.doctorShiftHourId = data.doctor_shift_hour_id;
-        session.doctorId = data.doctor_id;
-        session.currentStep = 4;
+        
+        // VERSION 4.6: Step 4 now handles clinic_service_config_id
+        // Validate clinic_service_config_id is required
+        if (!data.clinic_service_config_id) {
+          throw new BadRequestException('Service config ID is required in step 4');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicServiceConfigId: data.clinic_service_config_id,
+          currentStep: 4,
+        });
+      } else if (updateDto.step === 5) {
+        const data = updateDto.data as any;
+        
+        // Payment method is REQUIRED
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 5');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        const updateFields: any = {
+          paymentMethod: data.payment_method,
+          currentStep: 5,
+        };
+        
+        // Patient note is optional
+        if (data.patient_note !== undefined) {
+          updateFields.patientNote = data.patient_note;
+        }
+        
+        Object.assign(session, updateFields);
       }
-    } else {
-      // Option 1 (service-first) and Option 2 (doctor-first) flows
-      // Step 2: Add appointment_date
-      // Step 3: Add doctor_shift_hour_id + (doctor_id OR clinic_service_config_id)
-      // Step 4: Add patient_note (optional)
+    } else if (session.bookingOption === BookingOption.DOCTOR) {
+      // VERSION 4.4: Option 2 (doctor-first) - TÁCH RỜI THÀNH 5 STEPS
+      // Step 1 (initial): doctor_id + clinic_id already set
+      // Step 2: Add appointment_date + clinic_shift_hour_id (chọn lịch)
+      // Step 3: Add clinic_service_config_id (chọn dịch vụ)
+      // Step 4: Add payment_method (chọn thanh toán)
+      // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        session.appointmentDate = data.appointment_date;
-        session.currentStep = 2;
+        
+        // Validate required fields for Step 2
+        if (!data.appointment_date) {
+          throw new BadRequestException('Appointment date is required in step 2');
+        }
+        if (!data.clinic_shift_hour_id) {
+          throw new BadRequestException('Clinic shift hour ID is required in step 2');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          appointmentDate: data.appointment_date,
+          clinicShiftHourId: data.clinic_shift_hour_id,
+          currentStep: 2,
+        });
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        session.doctorShiftHourId = data.doctor_shift_hour_id;
         
-        // For service-first flow: doctor_id is provided
-        if (data.doctor_id) {
-          session.doctorId = data.doctor_id;
+        // Validate clinic_service_config_id is required in step 3
+        if (!data.clinic_service_config_id) {
+          throw new BadRequestException('Service config ID is required in step 3');
         }
         
-        // For doctor-first flow: clinic_service_config_id is provided
-        if (data.clinic_service_config_id) {
-          session.clinicServiceConfigId = data.clinic_service_config_id;
-        }
-        
-        session.currentStep = 3;
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          clinicServiceConfigId: data.clinic_service_config_id,
+          currentStep: 3,
+        });
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        session.patientNote = data.patient_note;
-        session.currentStep = 4;
+        
+        // Payment method is REQUIRED in step 4
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 4');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          paymentMethod: data.payment_method,
+          currentStep: 4,
+        });
+      } else if (updateDto.step === 5) {
+        const data = updateDto.data as any;
+        
+        // Patient note is optional in step 5
+        const updateFields: any = {
+          currentStep: 5,
+        };
+        
+        if (data.patient_note !== undefined) {
+          updateFields.patientNote = data.patient_note;
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, updateFields);
+      }
+    } else if (session.bookingOption === BookingOption.SERVICE) {
+      // VERSION 4.3: Option 1 (service-first) flow (remains 4 steps)
+      // Step 2: GỘP appointment_date + clinic_shift_hour_id + doctor_id
+      // Step 3: Add payment_method (REQUIRED)
+      // Step 4: Add patient_note (OPTIONAL)
+      if (updateDto.step === 2) {
+        const data = updateDto.data as any;
+        
+        // Validate required fields for Step 2
+        if (!data.appointment_date) {
+          throw new BadRequestException('Appointment date is required in step 2');
+        }
+        if (!data.clinic_shift_hour_id) {
+          throw new BadRequestException('Clinic shift hour ID is required in step 2');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        const updateFields: any = {
+          appointmentDate: data.appointment_date,
+          clinicShiftHourId: data.clinic_shift_hour_id,
+          currentStep: 2,
+        };
+        
+        // For service-first flow (Option 1): doctor_id is provided
+        if (data.doctor_id) {
+          updateFields.doctorId = data.doctor_id;
+        }
+        
+        Object.assign(session, updateFields);
+      } else if (updateDto.step === 3) {
+        const data = updateDto.data as any;
+        
+        // Payment method is REQUIRED in step 3
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 3');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          paymentMethod: data.payment_method,
+          currentStep: 3,
+        });
+      } else if (updateDto.step === 4) {
+        // Step 4: Add patient_note (OPTIONAL)
+        const data = updateDto.data as any;
+        
+        // Patient note is optional - can be empty string or any text
+        const updateFields: any = {
+          currentStep: 4,
+        };
+        
+        if (data.patient_note !== undefined) {
+          updateFields.patientNote = data.patient_note;
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, updateFields);
+      }
+    } else if (session.bookingOption === BookingOption.OUT_OF_HOURS) {
+      // VERSION 4.7: Option 4 (out-of-hours) flow
+      // Step 1 (initial): optional clinic_id
+      // Step 2: Add appointment_date + extra_hour (và gán cứng clinicShiftHourId = null)
+      // Step 3-5: TBD (tương tự các option khác)
+      if (updateDto.step === 2) {
+        const data = updateDto.data as any;
+        
+        // Validate extra_hour is required
+        if (!data.extra_hour) {
+          throw new BadRequestException('Extra hour is required in step 2 for out-of-hours booking');
+        }
+        
+        // Convert extra_hour to Date and validate format
+        const extraHourDate = new Date(data.extra_hour);
+        if (isNaN(extraHourDate.getTime())) {
+          throw new BadRequestException('Invalid extra hour format. Must be a valid ISO 8601 timestamp');
+        }
+        
+        // Validate extra_hour must be in the future (use Vietnam timezone)
+        if (isInPast(extraHourDate)) {
+          throw new BadRequestException('Extra hour must be in the future');
+        }
+        
+        // Validate appointment_date is required
+        if (!data.appointment_date) {
+          throw new BadRequestException('Appointment date is required in step 2 for out-of-hours booking');
+        }
+        
+        // Validate appointment_date matches the date part of extra_hour
+        const appointmentDate = new Date(data.appointment_date);
+        const extraHourDateOnly = new Date(extraHourDate.getFullYear(), extraHourDate.getMonth(), extraHourDate.getDate());
+        const appointmentDateOnly = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), appointmentDate.getDate());
+        
+        if (extraHourDateOnly.getTime() !== appointmentDateOnly.getTime()) {
+          throw new BadRequestException('Appointment date must match the date part of extra hour');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        // ĐẶC BIỆT: Gán cứng clinicShiftHourId = null cho out-of-hours
+        Object.assign(session, {
+          appointmentDate: data.appointment_date,
+          extraHour: data.extra_hour,
+          clinicShiftHourId: null,
+          currentStep: 2,
+        });
       }
     }
 
@@ -248,7 +460,7 @@ export class BookingSessionService {
    */
   private async validateInitialData(
     option: BookingOption,
-    data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto,
+    data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto | OutOfHoursInitialDataDto,
   ): Promise<void> {
     if (option === BookingOption.SERVICE) {
       const serviceData = data as ServiceInitialDataDto;
@@ -270,9 +482,12 @@ export class BookingSessionService {
         throw new BadRequestException('This service is currently not available');
       }
 
-      // Verify clinic exists and is active
+      // Verify clinic exists and is active (can be CLINIC_ADMIN or CLINIC_MANAGER)
       const clinic = await this.dataSource.getRepository(Account).findOne({
-        where: { _id: serviceData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+        where: [
+          { _id: serviceData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+          { _id: serviceData.clinic_id, role: AccountRole.CLINIC_MANAGER },
+        ],
       });
 
       if (!clinic || clinic.status !== 'ACTIVE') {
@@ -290,10 +505,13 @@ export class BookingSessionService {
         throw new BadRequestException('Doctor not found or inactive');
       }
 
-      // If clinic_id provided, verify it exists
+      // If clinic_id provided, verify it exists (can be CLINIC_ADMIN or CLINIC_MANAGER)
       if (doctorData.clinic_id) {
         const clinic = await this.dataSource.getRepository(Account).findOne({
-          where: { _id: doctorData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+          where: [
+            { _id: doctorData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+            { _id: doctorData.clinic_id, role: AccountRole.CLINIC_MANAGER },
+          ],
         });
 
         if (!clinic || clinic.status !== 'ACTIVE') {
@@ -303,43 +521,73 @@ export class BookingSessionService {
     } else if (option === BookingOption.DATE) {
       const dateData = data as DateInitialDataDto;
       
-      // Validate date is in future (at least today)
+      // Validate date is in future (at least today) - use Vietnam timezone
       const appointmentDate = new Date(dateData.appointment_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayStart = startOfDay();
 
-      if (appointmentDate < today) {
+      if (appointmentDate < todayStart) {
         throw new BadRequestException('Appointment date must be today or in the future');
       }
 
       // Validate date is within 60 days
-      const maxDate = new Date();
-      maxDate.setDate(maxDate.getDate() + 60);
+      const maxDate = addToVietnamTime(60, 'day');
 
       if (appointmentDate > maxDate) {
         throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+      }
+    } else if (option === BookingOption.OUT_OF_HOURS) {
+      const outOfHoursData = data as OutOfHoursInitialDataDto;
+      
+      // If clinic_id provided, verify it exists and is active
+      if (outOfHoursData.clinic_id) {
+        const clinic = await this.dataSource.getRepository(Account).findOne({
+          where: [
+            { _id: outOfHoursData.clinic_id, role: AccountRole.CLINIC_ADMIN },
+            { _id: outOfHoursData.clinic_id, role: AccountRole.CLINIC_MANAGER },
+          ],
+        });
+
+        if (!clinic || clinic.status !== 'ACTIVE') {
+          throw new BadRequestException('Clinic not found or inactive');
+        }
       }
     }
   }
 
   /**
-   * Validate step sequence
-   *
-   * Ensures steps are executed in order
-   *
+   * Validate step sequence (VERSION 4.7)
+   * 
+   * THAY ĐỔI: 
+   * - Option 1 (service-first): Step range là 2-4 (chưa thay đổi)
+   * - Option 2 (doctor-first): Step range là 2-5 (mới thay đổi từ 4.3)
+   * - Option 3 (date-first): Step range là 2-5 (chưa thay đổi)
+   * - Option 4 (out-of-hours): Step range là 2-5 (mới thêm từ 4.7)
+   * 
    * @param currentStep - Current step number
    * @param nextStep - Next step number
+   * @param bookingOption - Booking option type
    * @throws BadRequestException if step sequence is invalid
    */
-  private validateStepSequence(currentStep: number, nextStep: number): void {
+  private validateStepSequence(currentStep: number, nextStep: number, bookingOption?: BookingOption): void {
     if (nextStep !== currentStep + 1) {
       throw new BadRequestException(
         `Invalid step sequence. Current step: ${currentStep}, expected next step: ${currentStep + 1}`,
       );
     }
 
-    if (nextStep < 2 || nextStep > 4) {
-      throw new BadRequestException('Step must be 2, 3, or 4');
+    // Different step ranges for different booking options (VERSION 4.7)
+    if (bookingOption === BookingOption.DATE || bookingOption === BookingOption.DOCTOR || bookingOption === BookingOption.OUT_OF_HOURS) {
+      // Option 2, 3 & 4: Doctor-first, Date-first, or Out-of-hours - up to step 5
+      if (nextStep < 2 || nextStep > 5) {
+        throw new BadRequestException(
+          `Step must be between 2 and 5 for ${bookingOption}-first booking`,
+        );
+      }
+    } else {
+      // Option 1: Service-first - step 2-4
+      if (nextStep < 2 || nextStep > 4) {
+        throw new BadRequestException('Step must be between 2 and 4 for service-first booking');
+      }
     }
   }
 
@@ -348,34 +596,28 @@ export class BookingSessionService {
    *
    * @param session - Booking session object
    * @returns Formatted response DTO
+   * 
+   * FIX: Always return ALL fields (even if undefined/null) so Frontend can see complete state
    */
   private buildSessionResponse(session: BookingSession): BookingSessionResponseDto {
     const bookingData: Record<string, any> = {};
 
-    if (session.clinicServiceConfigId) {
-      bookingData.clinic_service_config_id = session.clinicServiceConfigId;
-    }
-    if (session.clinicId) {
-      bookingData.clinic_id = session.clinicId;
-    }
-    if (session.doctorId) {
-      bookingData.doctor_id = session.doctorId;
-    }
-    if (session.appointmentDate) {
-      bookingData.appointment_date = session.appointmentDate;
-    }
-    if (session.doctorShiftHourId) {
-      bookingData.doctor_shift_hour_id = session.doctorShiftHourId;
-    }
-    if (session.patientNote) {
-      bookingData.patient_note = session.patientNote;
-    }
+    // FIX v4.5: Always include ALL possible fields to prevent data loss visibility
+    // If a field is not set yet, it will be undefined (helps Frontend track progress)
+    bookingData.clinic_id = session.clinicId ?? null;
+    bookingData.doctor_id = session.doctorId ?? null;
+    bookingData.clinic_service_config_id = session.clinicServiceConfigId ?? null;
+    bookingData.appointment_date = session.appointmentDate ?? null;
+    bookingData.clinic_shift_hour_id = session.clinicShiftHourId ?? null;
+    bookingData.extra_hour = session.extraHour ?? null;
+    bookingData.payment_method = session.paymentMethod ?? null;
+    bookingData.patient_note = session.patientNote ?? null;
 
     return {
       session_id: session.sessionId,
       booking_option: session.bookingOption,
       current_step: session.currentStep,
-      expires_at: session.expiresAt,
+      expires_at: formatToVietnamTime(session.expiresAt),
       booking_data: bookingData,
     };
   }

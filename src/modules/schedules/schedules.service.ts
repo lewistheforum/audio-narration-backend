@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
+import {
+    getCurrentVietnamTime,
+    addToVietnamTime,
+    getStartOfDay,
+    getDateString,
+} from 'src/common/utils/date.util';
 import { EmployeeSchedule } from './entities/employee-schedule.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
@@ -313,17 +319,13 @@ export class SchedulesService {
      */
     private async resolveClinicId(user: any): Promise<string | null> {
         if (user.role === AccountRole.CLINIC_MANAGER) {
-            return user.parentId || user._id; // Fallback to self if root
+            return user._id; // Manager IS the clinic branch
         }
 
         if (user.role === AccountRole.DOCTOR || user.role === AccountRole.CLINIC_STAFF) {
+            // Doctor/Staff's parentId = CLINIC_MANAGER._id (the branch they belong to)
             if (user.parentId) {
-                const manager = await this.accountRepository.findOne({
-                    where: { _id: user.parentId },
-                });
-                if (manager && manager.parentId) {
-                    return manager.parentId;
-                }
+                return user.parentId;
             }
         }
         return null;
@@ -640,13 +642,11 @@ export class SchedulesService {
         }
 
         // === STEP 2: Calculate date range ===
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const maxDate = new Date(today);
-        maxDate.setDate(maxDate.getDate() + 30); // Limited to 30 days ahead
+        const today = getStartOfDay();
+        const maxDate = addToVietnamTime(30, 'day'); // Limited to 30 days ahead
 
-        const dateRangeStart = today.toISOString().split('T')[0];
-        const dateRangeEnd = maxDate.toISOString().split('T')[0];
+        const dateRangeStart = getDateString(today);
+        const dateRangeEnd = getDateString(maxDate);
 
         // === STEP 3: Build complex query to get schedules ===
         let queryBuilder = this.dataSource
@@ -840,8 +840,7 @@ export class SchedulesService {
 
         // Validate date format and not in past
         const queryDate = new Date(date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = getStartOfDay();
 
         if (isNaN(queryDate.getTime())) {
             throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');

@@ -149,7 +149,7 @@ export class AppointmentRepository {
         'doctorProfile.account_id = doctor._id',
       )
       .leftJoinAndSelect('appointment.clinic', 'clinic')
-      .leftJoinAndSelect('appointment.doctorShiftHour', 'shiftHour')
+      .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
       .leftJoinAndSelect('shiftHour.shift', 'shift')
       .addSelect([
         'patientProfile._id',

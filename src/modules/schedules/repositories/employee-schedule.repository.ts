@@ -137,16 +137,16 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
   /**
    * Find clinic rooms for multiple appointments
    * 
-   * Uses doctor_shift_hour_id to find rooms via the chain:
+   * Uses clinic_shift_hour_id to find rooms via the chain:
    * appointment → clinic_shift_hour → clinic_shift → employee_schedule → clinic_room_employee_schedule → clinic_rooms
    * 
-   * @param appointmentData - Array of {appointmentId, doctorShiftHourId, doctorId, appointmentDate}
+   * @param appointmentData - Array of {appointmentId, clinicShiftHourId, doctorId, appointmentDate}
    * @returns Map of appointmentId to clinic rooms array
    */
   async findClinicRoomsForMultipleAppointments(
     appointmentData: Array<{
       appointmentId: string;
-      doctorShiftHourId: string | null;
+      clinicShiftHourId: string | null;
       doctorId: string | null;
       appointmentDate: Date;
     }>,
@@ -155,8 +155,8 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       return new Map();
     }
 
-    // Filter only appointments with doctor_shift_hour_id
-    const validAppointments = appointmentData.filter(a => a.doctorShiftHourId && a.doctorId);
+    // Filter only appointments with clinic_shift_hour_id
+    const validAppointments = appointmentData.filter(a => a.clinicShiftHourId && a.doctorId);
 
     if (validAppointments.length === 0) {
       return new Map();
@@ -166,7 +166,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     // Filter by work_date to get the correct room for that specific day
     const conditions = validAppointments
       .map((_, index) =>
-        `(a._id = :aptId${index} AND a.doctor_shift_hour_id = :shiftHourId${index} AND es.employee_id = :doctorId${index} AND es.work_date = a.appointment_date)`
+        `(a._id = :aptId${index} AND a.clinic_shift_hour_id = :shiftHourId${index} AND es.employee_id = :doctorId${index} AND es.work_date = a.appointment_date)`
       )
       .join(' OR ');
 
@@ -174,7 +174,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     const parameters: any = {};
     validAppointments.forEach((apt, index) => {
       parameters[`aptId${index}`] = apt.appointmentId;
-      parameters[`shiftHourId${index}`] = apt.doctorShiftHourId;
+      parameters[`shiftHourId${index}`] = apt.clinicShiftHourId;
       parameters[`doctorId${index}`] = apt.doctorId;
     });
 
@@ -186,7 +186,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .addSelect('cr._id', 'roomId')
       .addSelect('cr.room_name', 'roomName')
       .from('appointments', 'a')
-      .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.doctor_shift_hour_id')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.clinic_shift_hour_id')
       .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
       .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
       .innerJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')

@@ -22,6 +22,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+import { getDateString } from 'src/common/utils/date.util';
 import { AppointmentsService } from './appointments.service';
 import { BookingSessionService } from './booking-session.service';
 import {
@@ -55,6 +56,7 @@ import {
   DoctorPatientAppointmentsQueryDto,
   DoctorPatientDetailResponseDto,
   DoctorAppointmentHistoryDetailResponseDto,
+  AvailableDoctorsResponseDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -79,10 +81,12 @@ import { AppointmentStatus } from './enums';
  * - PATCH /appointments/:id/decline - Decline appointment (Doctor only)
  * - PATCH /appointments/:id/status - Update appointment status (Admin/Staff)
  *
- * Patient Booking Flow:
+ * Patient Booking Flow (VERSION 4.5):
  * - GET /patients/services - List available services
- * - GET /patients/clinics/:clinicId/working-days - Get available dates
- * - GET /patients/clinics/:clinicId/services/:serviceConfigId/slots - Get available slots
+ * - GET /patients/clinics - Get clinics with available slots (optional working_date filter for Option 3)
+ * - GET /patients/clinics/:clinicId/schedules - Get schedules (merged dates + shifts + slots, supports working_date query)
+ * - GET /patients/clinics/:clinicId/services - Get clinic services (used by Option 1, 2, and 3)
+ * - GET /patients/doctors/:doctorId/schedules - Get doctor schedules
  * - GET /patients/me/appointments - Get patient's appointments
  * - POST /patients/booking-sessions - Create booking session
  * - PATCH /patients/booking-sessions/:sessionId - Update booking session
@@ -1440,7 +1444,7 @@ export class AppointmentsController {
     );
 
     res.header('Content-Type', 'text/csv');
-    res.attachment(`work-history-${doctorId}-${new Date().toISOString().split('T')[0]}.csv`);
+    res.attachment(`work-history-${doctorId}-${getDateString()}.csv`);
 
     // Add BOM for Excel UTF-8 display
     res.write('\uFEFF');
@@ -1551,111 +1555,82 @@ export class AppointmentsController {
   }
 
   /**
-   * Get working days for clinic (Step 2 - Option 1: Service-first)
-   *
-   * Returns available dates where clinic has doctors working
-   * and slots are available. Can filter by service.
-   *
+   * Get clinic schedules (VERSION 4.5 - Option 1 & Option 3)
+   * 
+   * Gộp 2 API cũ (working-days + slots) thành 1 API duy nhất.
+   * Returns nested structure: Dates -> Shifts -> Slots with Doctor info.
+   * 
+   * VERSION 4.5: Thêm query parameter working_date
+   * - Nếu có working_date: Trả về lịch của ngày cụ thể (Option 3)
+   * - Nếu không có working_date: Trả về lịch 60 ngày tới (Option 1)
+   * 
    * @param clinicId - Clinic UUID
-   * @param serviceConfigId - Service config UUID (optional)
-   * @returns List of available dates with slot information
+   * @param workingDate - Optional date filter (YYYY-MM-DD)
+   * @returns Nested schedule structure
    */
-  @Get('patients/clinics/:clinicId/working-days')
+  @Get('patients/clinics/:clinicId/schedules')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.PATIENT)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get available working days for clinic (Patient)',
+    summary: 'Get clinic schedules (Patient) - VERSION 4.5',
     description:
-      'Get list of dates where clinic has available appointments. Can filter by service.',
+      'Get all available schedules for a clinic in nested structure: Dates -> Shifts -> Slots. Supports optional working_date query parameter for filtering by specific date.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Working days retrieved successfully',
+    description: 'Schedules retrieved successfully',
     schema: {
       example: {
         data: [
           {
-            date: '2026-02-25',
-            week_day: 'THỨ BA',
-            available_slots: 12,
-            available_doctors: 3,
-          },
-          {
-            date: '2026-02-26',
-            week_day: 'THỨ TƯ',
-            available_slots: 8,
-            available_doctors: 2,
-          },
-        ],
-      },
-    },
-  })
-  @ApiParam({
-    name: 'clinicId',
-    type: String,
-    description: 'Clinic UUID',
-  })
-  @ApiQuery({
-    name: 'service_config_id',
-    required: false,
-    type: String,
-    description: 'Filter by service config UUID (optional)',
-  })
-  async getWorkingDays(
-    @Param('clinicId', ParseUUIDPipe) clinicId: string,
-    @Query('service_config_id') serviceConfigId?: string,
-  ) {
-    return this.appointmentsService.getWorkingDays(clinicId, serviceConfigId);
-  }
-
-  /**
-   * Get available slots (Step 3 - Option 1: Service-first)
-   *
-   * Returns doctors and their available time slots for a specific service
-   * on a specific date, grouped by shift (morning, afternoon, evening).
-   *
-   * @param clinicId - Clinic UUID
-   * @param serviceConfigId - Service config UUID
-   * @param date - Appointment date (YYYY-MM-DD)
-   * @returns Available slots grouped by shift
-   */
-  @Get('patients/clinics/:clinicId/services/:serviceConfigId/slots')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get available slots for service on date (Patient)',
-    description:
-      'Get available time slots with doctor information for a specific service and date. Grouped by shift (morning, afternoon, evening).',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Slots retrieved successfully',
-    schema: {
-      example: {
-        data: [
-          {
-            shift: 'MORNING',
-            slots: [
+            date: '2026-03-09',
+            week_day: 'Monday',
+            shifts: [
               {
-                doctor_shift_hour_id: 'uuid',
-                doctor_id: 'uuid',
-                doctor_name: 'BS. Nguyễn Văn A',
-                doctor_specialty: 'Bác sĩ Xương Khớp',
-                start_time: '08:00:00',
-                end_time: '08:30:00',
-                limit: 5,
-                available_slots: 3,
-                clinic_room: 'Phòng 101',
+                shift: 'MORNING',
+                slots: [
+                  {
+                    clinic_shift_hour_id: 'uuid',
+                    doctor_id: 'uuid',
+                    doctor_name: 'BS. Nguyễn Văn A',
+                    doctor_specialty: 'Bác sĩ Xương Khớp',
+                    start_time: '08:00:00',
+                    end_time: '08:30:00',
+                    limit: 5,
+                    available_slots: 3,
+                    clinic_room: 'Phòng 101',
+                  },
+                ],
+              },
+              {
+                shift: 'AFTERNOON',
+                slots: [],
               },
             ],
           },
           {
-            shift: 'AFTERNOON',
-            slots: [],
+            date: '2026-03-10',
+            week_day: 'Tuesday',
+            shifts: [
+              {
+                shift: 'MORNING',
+                slots: [
+                  {
+                    clinic_shift_hour_id: 'uuid2',
+                    doctor_id: 'uuid2',
+                    doctor_name: 'BS. Trần Thị B',
+                    doctor_specialty: 'Bác sĩ Tim Mạch',
+                    start_time: '09:00:00',
+                    end_time: '09:30:00',
+                    limit: 4,
+                    available_slots: 4,
+                    clinic_room: 'Phòng 102',
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
@@ -1666,28 +1641,17 @@ export class AppointmentsController {
     type: String,
     description: 'Clinic UUID',
   })
-  @ApiParam({
-    name: 'serviceConfigId',
-    type: String,
-    description: 'Service Config UUID',
-  })
   @ApiQuery({
-    name: 'date',
-    required: true,
+    name: 'working_date',
+    required: false,
     type: String,
-    description: 'Appointment date (YYYY-MM-DD)',
-    example: '2026-02-25',
+    description: 'Filter by specific date (YYYY-MM-DD, optional)',
   })
-  async getAvailableSlots(
+  async getClinicSchedules(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
-    @Param('serviceConfigId', ParseUUIDPipe) serviceConfigId: string,
-    @Query('date') date: string,
+    @Query('working_date') workingDate?: string,
   ) {
-    return this.appointmentsService.getAvailableSlots(
-      clinicId,
-      serviceConfigId,
-      date,
-    );
+    return this.appointmentsService.getClinicSchedules(clinicId, workingDate);
   }
 
   /**
@@ -1880,27 +1844,65 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get clinics by working date (Patient)',
+    summary: 'Get clinics by working date (Patient) - Nested Structure',
     description:
-      'Get list of clinics that have available slots on a specific date. Used for Option 3: Date-first booking. Supports search and district filtering.',
+      'Get list of clinic systems (CLINIC_ADMIN) with their branches (CLINIC_MANAGER). ' +
+      'Returns a nested/grouped structure where each clinic system contains its branches. ' +
+      'If working_date is provided, returns clinics with slots on that specific date (Option 3: Date-first booking). ' +
+      'If working_date is omitted, returns all clinics with any available slots (Option 1 & 2). ' +
+      '⚠️ IMPORTANT: Use branch clinic_id (CLINIC_MANAGER._id) for booking, NOT admin_id. ' +
+      'Display name format: "Parent Clinic Name - Branch Name". Supports search and district filtering.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Clinics retrieved successfully',
+    description: 'Clinic systems with branches retrieved successfully',
     schema: {
       example: {
         data: [
           {
-            clinic_id: 'uuid',
-            clinic_name: 'Phòng khám Đa khoa Bonix',
-            clinic_address: '123 Đường X, Quận 1, TP.HCM',
-            district: 'Quận 1',
-            available_slots: 15,
-            available_doctors: 3,
+            admin_id: 'admin-uuid-1',
+            system_name: 'Phòng khám Đa khoa Hoàn Mỹ',
+            logo: 'https://example.com/logo.png',
+            description: 'Hệ thống phòng khám đa khoa uy tín',
+            branches: [
+              {
+                clinic_id: 'branch-uuid-1',  // ⚠️ Use this ID for booking
+                branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',
+                address: '123 Đường X, Quận 1, TP.HCM',
+                district: 'Quận 1',
+                available_slots: 25,
+                available_doctors: 5,
+              },
+              {
+                clinic_id: 'branch-uuid-2',
+                branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 2',
+                address: '456 Đường Y, Quận 2, TP.HCM',
+                district: 'Quận 2',
+                available_slots: 15,
+                available_doctors: 3,
+              },
+            ],
+          },
+          {
+            admin_id: 'admin-uuid-2',
+            system_name: 'Phòng khám Đa khoa Medlatec',
+            logo: null,
+            description: null,
+            branches: [
+              {
+                clinic_id: 'branch-uuid-3',
+                branch_name: 'Phòng khám Đa khoa Medlatec - Chi nhánh Quận 3',
+                address: '789 Đường Z, Quận 3, TP.HCM',
+                district: 'Quận 3',
+                available_slots: 10,
+                available_doctors: 2,
+              },
+            ],
           },
         ],
         meta: {
-          total: 10,
+          total_systems: 2,
+          total_branches: 3,
           page: 1,
           limit: 20,
           total_pages: 1,
@@ -1918,9 +1920,9 @@ export class AppointmentsController {
   })
   @ApiQuery({
     name: 'working_date',
-    required: true,
+    required: false,
     type: String,
-    description: 'Working date in YYYY-MM-DD format',
+    description: 'Optional working date in YYYY-MM-DD format. If provided, filters clinics with slots on this date. If omitted, returns all clinics with any available slots.',
     example: '2026-02-25',
   })
   @ApiQuery({
@@ -1948,7 +1950,7 @@ export class AppointmentsController {
     description: 'Filter by district',
   })
   async getClinicsByWorkingDate(
-    @Query('working_date') workingDate: string,
+    @Query('working_date') workingDate?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
     @Query('search') search?: string,
@@ -2039,7 +2041,7 @@ export class AppointmentsController {
    *
    * Update the booking session with additional data step-by-step.
    * - Step 2: Add appointment_date
-   * - Step 3: Add doctor_shift_hour_id and doctor_id
+   * - Step 3: Add clinic_shift_hour_id and doctor_id
    * - Step 4: Add patient_note (optional)
    *
    * @param req - Request object containing authenticated user
@@ -2117,19 +2119,21 @@ export class AppointmentsController {
   /**
    * Create appointment from session (Final step)
    *
-   * Finalize the booking by creating an appointment from the completed session.
+   * VERSION 4.0: Finalize booking by creating appointment from completed session.
+   * 
    * This endpoint:
    * - Reads session data from Redis
    * - Validates all business rules
-   * - Creates appointment with pessimistic locking
-   * - Deletes Redis session on success
-   * - Sends email notifications
+   * - Branches based on payment method stored in session:
+   *   * COD: Creates appointment immediately with pessimistic locking, deletes session
+   *   * ONLINE: Creates payment request (placeholder), keeps session for webhook
+   * - Returns appointment data (COD) or payment URL (ONLINE)
    *
-   * IMPORTANT: Only supports online payment. COD is not available.
+   * Payment methods are selected in Step 4 of the booking flow and stored in Redis.
    *
    * @param req - Request object containing authenticated user
-   * @param createDto - Session ID and payment method
-   * @returns Created appointment details
+   * @param createDto - Session ID (payment method already in session)
+   * @returns Created appointment details (COD) or payment URL (ONLINE)
    */
   @Post('patients/appointments')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -2139,27 +2143,44 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Create appointment from session (Patient)',
     description:
-      'Finalize booking by creating an appointment from a completed session. Requires session_id and payment_method (must be "online"). Session will be deleted after successful creation.',
+      'Finalize booking by creating appointment from completed session. Payment method (COD/ONLINE) is already stored in session from Step 4. Session will be deleted after successful COD creation, or kept for ONLINE payment webhook processing.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Appointment created successfully',
+    description: 'Appointment created successfully (COD) or payment initiated (ONLINE)',
     schema: {
-      example: {
-        message: 'Đặt lịch hẹn thành công',
-        data: {
-          appointment_id: '123e4567-e89b-12d3-a456-426614174000',
-          clinic_id: '123e4567-e89b-12d3-a456-426614174002',
-          service_name: 'Khám Xương Khớp',
-          appointment_date: '2026-02-25',
-          appointment_hour: '2026-02-25T08:00:00.000Z',
-          start_time: '08:00:00',
-          end_time: '08:30:00',
-          total: 270000,
-          status: 'PENDING',
-          payment_type: 'online',
+      oneOf: [
+        {
+          // COD Response
+          example: {
+            message: 'Đặt lịch hẹn thành công',
+            data: {
+              appointment_id: '123e4567-e89b-12d3-a456-426614174000',
+              clinic_id: '123e4567-e89b-12d3-a456-426614174002',
+              service_name: 'Khám Xương Khớp',
+              appointment_date: '2026-02-25',
+              appointment_hour: '2026-02-25T08:00:00.000Z',
+              start_time: '08:00:00',
+              end_time: '08:30:00',
+              total: 270000,
+              status: 'PENDING',
+              payment_type: 'cod',
+            },
+          },
         },
-      },
+        {
+          // ONLINE Response (Placeholder)
+          example: {
+            message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
+            data: {
+              payment_url: 'https://sandbox.payment-gateway.com/pay?order_id=xyz',
+              payment_reference_id: 'uuid',
+              amount: 270000,
+              expires_at: '2026-03-07T15:30:00.000Z',
+            },
+          },
+        },
+      ],
     },
   })
   @ApiResponse({
@@ -2190,9 +2211,11 @@ export class AppointmentsController {
     const result = await this.appointmentsService.createAppointmentFromSession(
       createDto.session_id,
       patientId,
-      createDto.payment_method,
     );
-    return {
+    
+    // Return result directly - it's either appointment data (COD) or payment URL (ONLINE)
+    // The result already includes appropriate message from service layer
+    return result.message ? result : {
       message: 'Đặt lịch hẹn thành công',
       data: result,
     };
@@ -2300,123 +2323,51 @@ export class AppointmentsController {
   }
 
   /**
-   * Get working days for doctor (Step 2a - Option 2: Doctor-first)
-   *
-   * Returns available dates where doctor is working and has available slots.
-   * Can be filtered by clinic if doctor works at multiple clinics.
-   *
+   * Get doctor schedules (VERSION 4.4 - Option 2: Doctor-first - Step 2)
+   * 
+   * TÁCH RỜI LỊCH KHÁM VÀ DỊCH VỤ
+   * API này CHỈ trả về lịch khám (nested structure).
+   * KHÔNG trả về services - services được lấy từ endpoint riêng.
+   * 
    * @param doctorId - Doctor UUID
-   * @param clinicId - Clinic UUID (optional)
-   * @returns List of available working days for doctor
+   * @param clinicId - Clinic UUID (REQUIRED)
+   * @returns Nested schedule structure only (no services)
    */
-  @Get('patients/doctors/:doctorId/working-days')
+  @Get('patients/doctors/:doctorId/schedules')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.PATIENT)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get available working days for doctor (Patient)',
+    summary: 'Get doctor schedules (Patient) - VERSION 4.4',
     description:
-      'Get list of dates where doctor has available appointments. Can filter by clinic if doctor works at multiple locations.',
+      'Get all available schedules for a doctor in nested structure: Dates -> Shifts -> Slots. Does NOT include services (use separate /services endpoint).',
   })
   @ApiResponse({
     status: 200,
-    description: 'Working days retrieved successfully',
+    description: 'Schedules retrieved successfully',
     schema: {
       example: {
         data: [
           {
-            date: '2026-02-25',
-            week_day: 'THỨ BA',
-            clinic_id: 'uuid',
-            clinic_name: 'Phòng khám ABC',
-            available_slots: 12,
-          },
-          {
-            date: '2026-02-26',
-            week_day: 'THỨ TƯ',
-            clinic_id: 'uuid',
-            clinic_name: 'Phòng khám ABC',
-            available_slots: 8,
-          },
-        ],
-      },
-    },
-  })
-  @ApiParam({
-    name: 'doctorId',
-    type: String,
-    description: 'Doctor UUID',
-  })
-  @ApiQuery({
-    name: 'clinic_id',
-    required: false,
-    type: String,
-    description: 'Filter by clinic UUID (optional if doctor works at multiple clinics)',
-  })
-  async getDoctorWorkingDays(
-    @Param('doctorId', ParseUUIDPipe) doctorId: string,
-    @Query('clinic_id') clinicId?: string,
-  ) {
-    return this.appointmentsService.getDoctorWorkingDays(doctorId, clinicId);
-  }
-
-  /**
-   * Get available slots and services for doctor (Step 3a - Option 2: Doctor-first)
-   *
-   * Returns doctor's available time slots and services they can provide
-   * on a specific date at a specific clinic, grouped by shift (morning, afternoon, evening).
-   *
-   * @param doctorId - Doctor UUID
-   * @param date - Appointment date (YYYY-MM-DD)
-   * @param clinicId - Clinic UUID
-   * @returns Available slots and services for doctor on specified date
-   */
-  @Get('patients/doctors/:doctorId/slots')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get available slots and services for doctor on date (Patient)',
-    description:
-      'Get available time slots and services that the doctor can provide on a specific date at a specific clinic. Grouped by shift (morning, afternoon, evening).',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Slots and services retrieved successfully',
-    schema: {
-      example: {
-        slots: [
-          {
-            shift: 'MORNING',
-            slots: [
+            date: '2026-03-09',
+            week_day: 'Monday',
+            shifts: [
               {
-                doctor_shift_hour_id: 'uuid',
-                start_time: '08:00:00',
-                end_time: '08:30:00',
-                limit: 5,
-                available_slots: 3,
-                clinic_room: 'Phòng 101',
+                shift: 'MORNING',
+                slots: [
+                  {
+                    clinic_shift_hour_id: 'uuid',
+                    start_time: '08:00:00',
+                    end_time: '08:30:00',
+                    limit: 5,
+                    available_slots: 3,
+                    clinic_room: 'Phòng 101',
+                  },
+                ],
               },
             ],
           },
-          {
-            shift: 'AFTERNOON',
-            slots: [],
-          },
-        ],
-        available_services: [
-          {
-            clinic_service_config_id: 'uuid',
-            service_id: 'uuid',
-            service_name: 'Khám Xương Khớp',
-            category_name: 'Khám Chuyên Khoa',
-            price: 300000,
-            discount: 10,
-            final_price: 270000,
-            description: 'Khám và tư vấn về xương khớp',
-          },
         ],
       },
     },
@@ -2427,24 +2378,16 @@ export class AppointmentsController {
     description: 'Doctor UUID',
   })
   @ApiQuery({
-    name: 'date',
-    required: true,
-    type: String,
-    description: 'Appointment date (YYYY-MM-DD)',
-    example: '2026-02-25',
-  })
-  @ApiQuery({
     name: 'clinic_id',
     required: true,
     type: String,
-    description: 'Clinic UUID',
+    description: 'Clinic UUID (required)',
   })
-  async getDoctorSlots(
+  async getDoctorSchedules(
     @Param('doctorId', ParseUUIDPipe) doctorId: string,
-    @Query('date') date: string,
     @Query('clinic_id', ParseUUIDPipe) clinicId: string,
   ) {
-    return this.appointmentsService.getDoctorSlots(doctorId, date, clinicId);
+    return this.appointmentsService.getDoctorSchedules(doctorId, clinicId);
   }
 
   /**
@@ -2597,5 +2540,64 @@ export class AppointmentsController {
   ) {
     const staffAccountId = req.user._id;
     return this.appointmentsService.confirmCashPayment(appointmentId, packageId, staffAccountId);
+  }
+
+  /**
+   * Get available doctors for out-of-hours booking (Option 4)
+   * 
+   * Returns list of doctors who are working at the clinic on the specified date
+   * and are NOT busy at the requested extra hour time.
+   * 
+   * @param clinicId - Clinic UUID
+   * @param appointmentDate - Appointment date (YYYY-MM-DD)
+   * @param extraHour - Extra hour timestamp (ISO 8601 with timezone)
+   * @returns List of available doctors with metadata
+   */
+  @Get('clinics/:clinicId/available-doctors')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available doctors for out-of-hours booking (Option 4)',
+    description:
+      'Returns list of doctors who are scheduled to work at the clinic on the specified date ' +
+      'and are NOT busy at the requested time. ' +
+      'Checks against both appointment_hour and extra_hour to avoid double booking.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available doctors retrieved successfully',
+    type: AvailableDoctorsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid parameters',
+  })
+  @ApiParam({
+    name: 'clinicId',
+    type: String,
+    description: 'Clinic UUID',
+    example: '550e8400-e29b-41d4-a716-446655440010',
+  })
+  @ApiQuery({
+    name: 'appointment_date',
+    type: String,
+    description: 'Appointment date in YYYY-MM-DD format',
+    example: '2026-03-15',
+  })
+  @ApiQuery({
+    name: 'extra_hour',
+    type: String,
+    description: 'Extra hour timestamp in ISO 8601 format with timezone',
+    example: '2026-03-15T14:30:00+07:00',
+  })
+  async getAvailableDoctorsForOutOfHours(
+    @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @Query('appointment_date') appointmentDate: string,
+    @Query('extra_hour') extraHour: string,
+  ): Promise<AvailableDoctorsResponseDto> {
+    return this.appointmentsService.getAvailableDoctorsForOutOfHours(
+      clinicId,
+      appointmentDate,
+      extraHour,
+    );
   }
 }

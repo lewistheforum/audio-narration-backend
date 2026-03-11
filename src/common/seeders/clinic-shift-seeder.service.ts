@@ -70,37 +70,69 @@ export class ClinicShiftSeederService {
       this.logger.log('Starting to seed clinic shifts...');
 
       // Check active subscriptions to filter clinics
+      // activeClinicIds contains CLINIC_ADMIN IDs (parent of CLINIC_MANAGER)
       const activeClinicIds =
         await this.clinicSubscriptionRepository.findActiveClinicIds();
 
-      // Get all CLINIC_MANAGER accounts (clinics)
-      const allAccounts = await this.accountRepository.findAllAccounts();
-      const clinicManagers = allAccounts.filter(
-        (acc) =>
-          acc.role === AccountRole.CLINIC_MANAGER &&
-          activeClinicIds.includes(acc.parentId),
-      );
-
-      if (clinicManagers.length === 0) {
+      if (activeClinicIds.length === 0) {
         this.logger.warn(
-          'No CLINIC_MANAGER accounts found. Skipping clinic shift seeding.',
+          'No active clinic subscriptions found. Skipping clinic shift seeding.',
         );
         return;
       }
 
+      this.logger.log(`Found ${activeClinicIds.length} active clinic admins with subscriptions`);
+
+      // Get all CLINIC_MANAGER accounts (clinic branches)
+      // Filter by parent_id to only include branches of active clinics
+      const allAccounts = await this.accountRepository.findAllAccounts();
+      const clinicManagers = allAccounts.filter(
+        (acc) =>
+          acc.role === AccountRole.CLINIC_MANAGER &&
+          acc.parentId && // Ensure parent_id exists
+          activeClinicIds.includes(acc.parentId), // parent_id is CLINIC_ADMIN (has active subscription)
+      );
+
+      if (clinicManagers.length === 0) {
+        this.logger.warn(
+          'No CLINIC_MANAGER accounts found with active parent subscriptions. Skipping clinic shift seeding.',
+        );
+        return;
+      }
+
+      this.logger.log(`Found ${clinicManagers.length} clinic branches to seed shifts for...`);
+
       let totalShiftsCreated = 0;
       let totalShiftHoursCreated = 0;
+      let branchesWithShifts = 0;
+      let branchesSkipped = 0;
 
-      for (const clinic of clinicManagers) {
+      for (const clinicManager of clinicManagers) {
+        // Use CLINIC_MANAGER._id as clinic_id (each branch has its own shifts)
         const { shiftsCreated, shiftHoursCreated } =
-          await this.seedShiftsForClinic(clinic);
+          await this.seedShiftsForClinic(clinicManager._id);
+        
         totalShiftsCreated += shiftsCreated;
         totalShiftHoursCreated += shiftHoursCreated;
+        
+        if (shiftsCreated > 0) {
+          branchesWithShifts++;
+        } else {
+          branchesSkipped++;
+        }
       }
 
       this.logger.log(
-        `✅ Clinic shift seeding completed. Created ${totalShiftsCreated} shifts and ${totalShiftHoursCreated} shift hours total.`,
+        `✅ Clinic shift seeding completed:`,
       );
+      this.logger.log(`   - Total shifts created: ${totalShiftsCreated}`);
+      this.logger.log(`   - Total shift hours created: ${totalShiftHoursCreated}`);
+      this.logger.log(`   - Branches with shifts: ${branchesWithShifts}`);
+      this.logger.log(`   - Branches skipped (already had shifts): ${branchesSkipped}`);
+
+      if (totalShiftsCreated === 0 && branchesSkipped === 0) {
+        this.logger.error(`⚠️  CRITICAL: No shifts were created! This will cause empty working-days API response.`);
+      }
     } catch (error) {
       this.logger.error('Failed to seed clinic shifts', error.stack);
       throw error;
@@ -108,28 +140,28 @@ export class ClinicShiftSeederService {
   }
 
   /**
-   * Seed shifts for a single clinic
+   * Seed shifts for a single clinic branch
    *
-   * @param clinic - The CLINIC_MANAGER account representing the clinic
+   * @param clinicManagerId - The CLINIC_MANAGER._id (branch identifier)
    * @returns Object with counts of created shifts and shift hours
    */
   private async seedShiftsForClinic(
-    clinic: Account,
+    clinicManagerId: string,
   ): Promise<{ shiftsCreated: number; shiftHoursCreated: number }> {
-    // Check if shifts already exist for this clinic
+    // Check if shifts already exist for this clinic branch
     const existingShifts = await this.clinicShiftRepository.find({
-      where: { clinicId: clinic._id },
+      where: { clinicId: clinicManagerId },
     });
 
-    // If shifts already exist, skip seeding for this clinic
+    // If shifts already exist, skip seeding for this clinic branch
     if (existingShifts.length > 0) {
       this.logger.log(
-        `Clinic ${clinic._id} already has ${existingShifts.length} shifts. Skipping.`,
+        `Clinic branch ${clinicManagerId} already has ${existingShifts.length} shifts. Skipping.`,
       );
       return { shiftsCreated: 0, shiftHoursCreated: 0 };
     }
 
-    this.logger.log(`Seeding shifts for clinic ${clinic._id}...`);
+    this.logger.log(`Seeding shifts for clinic branch ${clinicManagerId}...`);
 
     let shiftsCreated = 0;
     let shiftHoursCreated = 0;
@@ -137,7 +169,7 @@ export class ClinicShiftSeederService {
     // Create shifts for each shift type (MORNING, AFTERNOON, EVENING)
     for (const shiftType of Object.values(ShiftType)) {
       const shift = this.clinicShiftRepository.create({
-        clinicId: clinic._id,
+        clinicId: clinicManagerId,
         shift: shiftType,
       });
 
@@ -150,7 +182,7 @@ export class ClinicShiftSeederService {
     }
 
     this.logger.log(
-      `✅ Created ${shiftsCreated} shifts and ${shiftHoursCreated} shift hours for clinic ${clinic._id}`,
+      `✅ Created ${shiftsCreated} shifts and ${shiftHoursCreated} shift hours for clinic branch ${clinicManagerId}`,
     );
 
     return { shiftsCreated, shiftHoursCreated };

@@ -10,6 +10,11 @@ import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import { AccountRole, AccountStatus, VerificationType, ClinicRole } from './enums';
 import * as crypto from 'crypto';
+import {
+  getCurrentVietnamTime,
+  addToVietnamTime,
+  getVietnamTimestamp,
+} from 'src/common/utils/date.util';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
@@ -1930,7 +1935,7 @@ export class AccountsService {
     operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE'
   ): Promise<Account> {
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager account not found');
     }
@@ -1966,7 +1971,7 @@ export class AccountsService {
         'Can only enable managers with MANAGER_DISABLED status'
       );
     }
-    
+
     if (operation === 'DISABLE' && manager.status !== AccountStatus.ACTIVE) {
       throw new BadRequestException(
         'Can only disable managers with ACTIVE status'
@@ -2385,8 +2390,7 @@ export class AccountsService {
     const code = generateVerificationCode();
 
     // Store code in database with expiration (10 minutes)
-    const expiredAt = new Date();
-    expiredAt.setMinutes(expiredAt.getMinutes() + 10);
+    const expiredAt = addToVietnamTime(10, 'minute');
 
     const verification = this.codeVerificationRepository.create({
       accountId: account._id,
@@ -2466,8 +2470,7 @@ export class AccountsService {
     const code = generateVerificationCode();
 
     // Store code in database with expiration (15 minutes for password reset)
-    const expiredAt = new Date();
-    expiredAt.setMinutes(expiredAt.getMinutes() + 15);
+    const expiredAt = addToVietnamTime(15, 'minute');
 
     const verification = this.codeVerificationRepository.create({
       accountId: account._id,
@@ -2554,7 +2557,7 @@ export class AccountsService {
     }
 
     // Check if code has expired
-    if (new Date() > storedCode.expiredAt) {
+    if (getCurrentVietnamTime() > storedCode.expiredAt) {
       throw new UnauthorizedException(MESSAGES.failMessage.resetCodeExpired);
     }
 
@@ -2730,8 +2733,7 @@ export class AccountsService {
       const code = generateVerificationCode();
 
       // Store code in database with expiration (15 minutes for password reset)
-      const expiredAt = new Date();
-      expiredAt.setMinutes(expiredAt.getMinutes() + 15);
+      const expiredAt = addToVietnamTime(15, 'minute');
 
       const verification = this.codeVerificationRepository.create({
         accountId: savedAccount._id,
@@ -3835,13 +3837,21 @@ export class AccountsService {
       // Email exists but with different role - allow registration
     }
 
-    // Step 2: Hash password for secure storage
+    // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
+    if (dto.sepayVa) {
+      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(dto.sepayVa);
+      if (existingSepay) {
+        throw new ConflictException('Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.');
+      }
+    }
+
+    // Step 3: Hash password for secure storage
     const hashedPassword = await bcrypt.hash(
       dto.password,
       this.BCRYPT_SALT_ROUNDS,
     );
 
-    // Step 3: Create all entities in a transaction
+    // Step 4: Create all entities in a transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -3891,7 +3901,7 @@ export class AccountsService {
         clinicId: savedAccount._id,
         serviceId: dto.serviceId,
         subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
-        subscriptionDate: new Date(),
+        subscriptionDate: getCurrentVietnamTime(),
       });
 
       await queryRunner.manager.save(clinicSubscription);
@@ -3997,7 +4007,7 @@ export class AccountsService {
 
     try {
       // Generate default password for manager account
-      const defaultPassword = 'Manager' + Date.now();
+      const defaultPassword = 'Manager' + getVietnamTimestamp();
       const hashedPassword = await bcrypt.hash(
         defaultPassword,
         this.BCRYPT_SALT_ROUNDS,
