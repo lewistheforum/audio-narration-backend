@@ -70,7 +70,8 @@ import { AppointmentStatus } from './enums';
  * Handles HTTP requests for appointment management
  *
  * Endpoints:
- * - GET /appointments/staff - View all clinic appointments (Staff only)
+ * - GET /appointments/staff - View all clinic appointments without extra_hour (Staff only)
+ * - GET /appointments/staff/extra-hours - View all clinic appointments with extra_hour (Staff only)
  * - GET /appointments/:id/detail - View appointment detail (Staff only)
  * - POST /appointments/staff/create - Staff create appointment with services (Staff only)
  * - POST /appointments - Create new appointment (Patient only)
@@ -170,6 +171,81 @@ export class AppointmentsController {
   ): Promise<PaginatedAppointmentResponseDto> {
     const staffAccountId = req.user._id;
     return this.appointmentsService.getAppointmentsForStaff(
+      staffAccountId,
+      queryDto,
+    );
+  }
+
+  /**
+   * Get all appointments with extra_hour for staff's clinic
+   *
+   * Allows clinic staff to view appointments that have extra_hour
+   * with optional filtering by status and date, plus pagination
+   *
+   * @param req - Request object containing authenticated user
+   * @param queryDto - Query parameters for filtering and pagination
+   * @returns Paginated list of appointments with extra_hour
+   */
+  @Get('staff/extra-hours')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get appointments with extra_hour for staff clinic',
+    description:
+      'Retrieve appointments with extra_hour from the clinic where the staff member works. Supports filtering by status and date, with pagination.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointments with extra_hour retrieved successfully',
+    type: PaginatedAppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a clinic staff member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Staff information not found',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: AppointmentStatus,
+    description: 'Filter by appointment status',
+  })
+  @ApiQuery({
+    name: 'appointmentDate',
+    required: false,
+    type: String,
+    description: 'Filter by appointment date (YYYY-MM-DD)',
+    example: '2026-01-20',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of items per page',
+    example: 10,
+  })
+  async getAppointmentsWithExtraHourForStaff(
+    @Request() req: any,
+    @Query() queryDto: QueryAppointmentDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.getAppointmentsWithExtraHourForStaff(
       staffAccountId,
       queryDto,
     );

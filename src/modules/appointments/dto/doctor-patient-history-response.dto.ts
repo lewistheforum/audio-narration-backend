@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AppointmentStatus } from '../enums';
+import { AddressDto } from './appointment-response.dto';
 
 /**
  * Doctor Patient Summary DTO
@@ -59,6 +60,13 @@ export class DoctorPatientSummaryDto {
     nullable: true,
   })
   profileImageUrl: string | null;
+
+  @ApiProperty({
+    description: 'Patient addresses',
+    type: [AddressDto],
+    required: false,
+  })
+  addresses?: AddressDto[];
 
   @ApiProperty({
     description: 'First visit date with this doctor',

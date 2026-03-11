@@ -183,6 +183,91 @@ export class AppointmentsService {
   }
 
   /**
+   * Get all appointments with extra_hour for staff's clinic
+   *
+   * Allows clinic staff to view appointments that have extra_hour
+   * with optional filtering by status and date, plus pagination
+   *
+   * @param staffAccountId - Staff account UUID
+   * @param queryDto - Query parameters (filters, pagination)
+   * @returns Paginated list of appointments with extra_hour
+   * @throws NotFoundException if staff information not found
+   */
+  async getAppointmentsWithExtraHourForStaff(
+    staffAccountId: string,
+    queryDto: QueryAppointmentDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    // Get staff account to verify clinic access
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
+
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    // Get clinic ID from staff's parent account (clinic manager)
+    const clinicId = staffAccount.parentId;
+
+    // Prepare filters
+    const filters = {
+      status: queryDto.status,
+      appointmentDate: queryDto.appointmentDate,
+    };
+
+    // Query appointments with extra_hour and pagination
+    const [appointments, total] =
+      await this.appointmentRepository.findByClinicWithExtraHourPagination(
+        clinicId,
+        filters,
+        queryDto.page,
+        queryDto.limit,
+      );
+
+    // Get appointment IDs
+    const appointmentIds = appointments.map((apt) => apt._id);
+
+    // Fetch services for all appointments
+    const servicesMap =
+      await this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      );
+
+    // Fetch clinic rooms for all appointments
+    const appointmentData = appointments.map((apt) => ({
+      appointmentId: apt._id,
+      clinicShiftHourId: apt.clinicShiftHourId,
+      doctorId: apt.doctorId,
+      appointmentDate: apt.appointmentDate,
+    }));
+
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+        appointmentData,
+      );
+
+    // Transform to response DTOs
+    const data = appointments.map((appointment) => {
+      const clinicRooms = clinicRoomsMap.get(appointment._id) || [];
+
+      return this.transformToResponseDto(
+        appointment,
+        servicesMap.get(appointment._id),
+        clinicRooms,
+      );
+    });
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / queryDto.limit);
+
+    return {
+      data,
+      total,
+      page: queryDto.page,
+      limit: queryDto.limit,
+      totalPages,
+    };
+  }
+
+  /**
    * Create appointment by staff with services (Transaction)
    *
    * Staff creates appointment for existing patient with selected services.
@@ -867,21 +952,32 @@ export class AppointmentsService {
     services?: any[],
     clinicRooms?: any[],
   ): AppointmentResponseDto {
-    // Get patient full name from raw query result or fallback to username
+    // Get patient info - support both raw query and relation-based query
+    const patientGeneral = appointment.patient?.generalAccount;
     const patientFullName =
       appointment.patientProfile_full_name ||
+      patientGeneral?.fullName ||
       appointment.patient?.username ||
       'N/A';
+    const patientProfileImage = patientGeneral?.profilePicture || null;
+    
+    // Get patient addresses
+    const patientAddresses = appointment.patient?.addresses || [];
 
-    // Get doctor full name from raw query result or fallback to username
+    // Get doctor info - support both raw query and relation-based query
+    const doctorInfo = appointment.doctor?.doctorInformation;
     const doctorFullName =
       appointment.doctorProfile_full_name ||
+      doctorInfo?.fullName ||
       appointment.doctor?.username ||
       null;
+    const doctorProfileImage = doctorInfo?.profilePicture || null;
 
-    // Get clinic branch name from raw query result or fallback to username
+    // Get clinic info
+    const clinicInfo = appointment.clinic?.clinicManagerInformation;
     const clinicName =
       appointment.clinicProfile_clinic_branch_name ||
+      clinicInfo?.clinicBranchName ||
       appointment.clinic?.username ||
       'N/A';
 
@@ -891,10 +987,22 @@ export class AppointmentsService {
       patientFullName,
       patientEmail: appointment.patient?.email,
       patientPhone: appointment.patient?.phone,
+      patientProfileImage,
+      patientAddresses: patientAddresses.map((addr: any) => ({
+        id: addr._id,
+        address: addr.address,
+        ward: addr.ward,
+        wardName: addr.wardName,
+        district: addr.district,
+        districtName: addr.districtName,
+        province: addr.province,
+        provinceName: addr.provinceName,
+      })),
       clinicId: appointment.clinicId,
       clinicName,
       doctorId: appointment.doctorId,
       doctorFullName,
+      doctorProfileImage,
       clinicRooms: clinicRooms || [],
       services: services || [],
       appointmentDate: appointment.appointmentDate,
@@ -5184,9 +5292,9 @@ export class AppointmentsService {
     // Add search filter if provided
     if (search && search.trim()) {
       queryBuilder.andWhere(
-        '(LOWER(UNACCENT(generalAccount.fullName)) LIKE LOWER(UNACCENT(:search)) OR ' +
+        '(generalAccount.fullName ILIKE :search OR ' +
         'patient.phone LIKE :searchExact OR ' +
-        'patient.email LIKE :searchExact)',
+        'patient.email ILIKE :searchExact)',
         { search: `%${search}%`, searchExact: `%${search}%` }
       );
     }
@@ -5268,6 +5376,29 @@ export class AppointmentsService {
           }
         }
 
+        // Get patient addresses
+        const addressesData = await this.dataSource.query(
+          `
+          SELECT _id, address, ward, ward_name, district, district_name, province, province_name
+          FROM addresses
+          WHERE account_id = $1
+            AND deleted_at IS NULL
+          ORDER BY created_at DESC
+          `,
+          [patient.patientId],
+        );
+
+        const addresses = addressesData.map((addr: any) => ({
+          id: addr._id,
+          address: addr.address,
+          ward: addr.ward,
+          wardName: addr.ward_name,
+          district: addr.district,
+          districtName: addr.district_name,
+          province: addr.province,
+          provinceName: addr.province_name,
+        }));
+
         return {
           patientId: patient.patientId,
           fullName: patient.fullName || 'Unknown',
@@ -5277,6 +5408,7 @@ export class AppointmentsService {
           phone: patient.phone || null,
           email: patient.email || 'No email',
           profileImageUrl: patient.profilePicture || null,
+          addresses,
           firstVisitDate: this.formatDate(patient.firstVisitDate),
           lastVisitDate: this.formatDate(patient.lastVisitDate),
           totalVisits: parseInt(patient.totalVisits, 10),
@@ -5541,7 +5673,7 @@ export class AppointmentsService {
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
       .leftJoinAndSelect('clinic.addresses', 'clinicAddress')
-      .leftJoinAndSelect('appointment.doctorShiftHour', 'shiftHour')
+      .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
       .where('appointment._id = :appointmentId', { appointmentId })
       .getOne();
 
