@@ -354,9 +354,15 @@ export class AppointmentSeederService {
       // Pick random service config for this clinic
       const serviceConfig = getRandomItem(clinicServiceConfigs);
 
+      // V4.5: Snapshot price and discount from clinic_service_config
+      const basePrice = parseFloat(serviceConfig.price?.toString() || '0');
+      const discount = parseFloat(serviceConfig.discount?.toString() || '0');
+
       const serviceAppointment = this.serviceAppointmentRepository.create({
         clinicServiceId: serviceConfig._id,
         appointmentPackageId: savedPackage._id,
+        price: basePrice, // Snapshot: Original service price
+        discount, // Snapshot: Discount percentage at time of booking
       });
 
       await this.serviceAppointmentRepository.save(serviceAppointment);
