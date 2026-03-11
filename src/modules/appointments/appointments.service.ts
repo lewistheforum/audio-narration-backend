@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -25,8 +25,10 @@ import {
   CreateAppointmentDto,
   StaffCreateAppointmentDto,
   CancelAppointmentDto,
+  StaffCancelAppointmentDto,
+  PatientCancelAppointmentDto,
   RescheduleAppointmentDto,
-  CheckInDto,
+  StaffRescheduleAppointmentDto,
   AcceptAppointmentDto,
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
@@ -44,6 +46,23 @@ import {
   AddServiceDto,
   AddServiceResponseDto,
   WorkHistoryQueryDto,
+  DoctorPatientHistoryQueryDto,
+  DoctorPatientHistoryResponseDto,
+  DoctorPatientAppointmentsQueryDto,
+  DoctorPatientDetailResponseDto,
+  DoctorAppointmentHistoryDetailResponseDto,
+  PatientVisitStatisticsDto,
+  PatientAppointmentHistoryItemDto,
+  AppointmentServiceSummaryDto,
+  DoctorViewPatientDetailDto,
+  AppointmentPatientInfoDto,
+  AppointmentDoctorInfoDto,
+  AppointmentClinicInfoDto,
+  AppointmentShiftHourInfoDto,
+  AppointmentServiceDetailDto,
+  AppointmentERMSummaryDto,
+  AppointmentPrescriptionDto,
+  PrescriptionMedicineDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
@@ -65,8 +84,8 @@ import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
  * - Staff viewing clinic appointments
  * - Filtering by status and date
  * - Pagination support
- * - Doctor accepting appointments (PENDING → CONFIRMED)
- * - Doctor declining appointments (PENDING → CANCELLED)
+ * - Doctor accepting appointments (PENDING ΓåÆ CONFIRMED)
+ * - Doctor declining appointments (PENDING ΓåÆ CANCELLED)
  */
 @Injectable()
 export class AppointmentsService {
@@ -166,6 +185,91 @@ export class AppointmentsService {
   }
 
   /**
+   * Get all appointments with extra_hour for staff's clinic
+   *
+   * Allows clinic staff to view appointments that have extra_hour
+   * with optional filtering by status and date, plus pagination
+   *
+   * @param staffAccountId - Staff account UUID
+   * @param queryDto - Query parameters (filters, pagination)
+   * @returns Paginated list of appointments with extra_hour
+   * @throws NotFoundException if staff information not found
+   */
+  async getAppointmentsWithExtraHourForStaff(
+    staffAccountId: string,
+    queryDto: QueryAppointmentDto,
+  ): Promise<PaginatedAppointmentResponseDto> {
+    // Get staff account to verify clinic access
+    const staffAccount = await this.accountRepository.findAccountById(staffAccountId);
+
+    if (!staffAccount || staffAccount.role !== AccountRole.CLINIC_STAFF || !staffAccount.parentId) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    // Get clinic ID from staff's parent account (clinic manager)
+    const clinicId = staffAccount.parentId;
+
+    // Prepare filters
+    const filters = {
+      status: queryDto.status,
+      appointmentDate: queryDto.appointmentDate,
+    };
+
+    // Query appointments with extra_hour and pagination
+    const [appointments, total] =
+      await this.appointmentRepository.findByClinicWithExtraHourPagination(
+        clinicId,
+        filters,
+        queryDto.page,
+        queryDto.limit,
+      );
+
+    // Get appointment IDs
+    const appointmentIds = appointments.map((apt) => apt._id);
+
+    // Fetch services for all appointments
+    const servicesMap =
+      await this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      );
+
+    // Fetch clinic rooms for all appointments
+    const appointmentData = appointments.map((apt) => ({
+      appointmentId: apt._id,
+      clinicShiftHourId: apt.clinicShiftHourId,
+      doctorId: apt.doctorId,
+      appointmentDate: apt.appointmentDate,
+    }));
+
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+        appointmentData,
+      );
+
+    // Transform to response DTOs
+    const data = appointments.map((appointment) => {
+      const clinicRooms = clinicRoomsMap.get(appointment._id) || [];
+
+      return this.transformToResponseDto(
+        appointment,
+        servicesMap.get(appointment._id),
+        clinicRooms,
+      );
+    });
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / queryDto.limit);
+
+    return {
+      data,
+      total,
+      page: queryDto.page,
+      limit: queryDto.limit,
+      totalPages,
+    };
+  }
+
+  /**
    * Create appointment by staff with services (Transaction)
    *
    * Staff creates appointment for existing patient with selected services.
@@ -213,18 +317,19 @@ export class AppointmentsService {
     if (existingAppointments.length > 0) {
       throw new ConflictException(
         MESSAGES.failMessage.appointmentTimeConflict ||
-        'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
+        'Thß╗¥i gian hß║╣n n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
       );
     }
 
     // Execute transaction to create appointment + package + services
     return await this.dataSource.transaction(async (manager) => {
-      // Query service prices to calculate total
+      // Query service prices and discounts from clinic_service_config
       const serviceIds = createDto.services.map((s) => s.clinicServiceId);
-      const servicePrices = await manager
+      const serviceConfigs = await manager
         .createQueryBuilder()
         .select('config._id', 'id')
         .addSelect('config.price', 'price')
+        .addSelect('config.discount', 'discount')
         .from('clinic_service_config', 'config')
         .where('config._id IN (:...serviceIds)', { serviceIds })
         .andWhere('config.clinic_id = :clinicId', { clinicId })
@@ -233,22 +338,33 @@ export class AppointmentsService {
         .getRawMany();
 
       // Validate all services exist and are active
-      if (servicePrices.length !== serviceIds.length) {
+      if (serviceConfigs.length !== serviceIds.length) {
         throw new BadRequestException(
-          `One or more services not found or inactive for this clinic. Expected ${serviceIds.length} services, found ${servicePrices.length}`,
+          `One or more services not found or inactive for this clinic. Expected ${serviceIds.length} services, found ${serviceConfigs.length}`,
         );
       }
 
-      // Calculate total amount from services
-      const calculatedTotal = servicePrices.reduce(
-        (sum, service) => sum + parseFloat(service.price),
-        0,
+      // Create Map: clinicServiceId -> { price, discount }
+      const serviceConfigMap = new Map(
+        serviceConfigs.map((config) => [
+          config.id,
+          {
+            price: parseFloat(config.price),
+            discount: parseFloat(config.discount || 0),
+          },
+        ]),
       );
 
-      // Use provided total or calculated total
-      const finalTotal = createDto.total ?? calculatedTotal;
+      // Calculate package amount from services (price - discount)
+      const packageAmount = serviceConfigs.reduce((sum, config) => {
+        const price = parseFloat(config.price);
+        const discount = parseFloat(config.discount || 0);
+        const finalPrice = price * (100 - discount) / 100;
+        return sum + finalPrice;
+      }, 0);
 
-      // 1. Create appointment
+      // 1. Create appointment (total will be calculated from all packages)
+      // In this API, there's only one package, so total = packageAmount
       const appointment = manager.create(Appointment, {
         patientId: createDto.patientId,
         clinicId: clinicId,
@@ -257,7 +373,7 @@ export class AppointmentsService {
         appointmentDate: appointmentDate,
         appointmentHour: appointmentHour,
         extraHour: extraHour,
-        total: finalTotal,
+        total: packageAmount,
         patientNote: createDto.patientNote || null,
         status: AppointmentStatus.PENDING,
         rejectReason: null,
@@ -265,14 +381,14 @@ export class AppointmentsService {
 
       const savedAppointment = await manager.save(Appointment, appointment);
 
-      // 2. Create appointment package (always create to store services)
-      // TransactionId can be null and updated later when payment is made
+      // 2. Create appointment package with calculated amount
+      // paymentStatus defaults to PENDING_PAYMENT and paymentType to COD
       const appointmentPackage = manager.create(AppointmentPackage, {
         appointmentId: savedAppointment._id,
-        transactionId: createDto.transactionId || null,
-        amount: finalTotal,
-        status: createDto.paymentStatus || null,
-        paymentType: createDto.paymentType || null,
+        transactionId: null, // Will be updated when payment is processed
+        amount: packageAmount,
+        status: AppointmentPackageStatus.PENDING_PAYMENT,
+        paymentType: PaymentType.COD,
       });
 
       const savedPackage = await manager.save(
@@ -280,13 +396,16 @@ export class AppointmentsService {
         appointmentPackage,
       );
 
-      // 3. Create service appointments (always create to store selected services)
-      const serviceAppointments = createDto.services.map((service) =>
-        manager.create(ServiceAppointment, {
+      // 3. Create service appointments with price and discount snapshots
+      const serviceAppointments = createDto.services.map((service) => {
+        const config = serviceConfigMap.get(service.clinicServiceId);
+        return manager.create(ServiceAppointment, {
           clinicServiceId: service.clinicServiceId,
           appointmentPackageId: savedPackage._id,
-        }),
-      );
+          price: config?.price || 0,
+          discount: config?.discount || 0,
+        });
+      });
 
       await manager.save(ServiceAppointment, serviceAppointments);
 
@@ -294,7 +413,15 @@ export class AppointmentsService {
       const appointmentWithRelations =
         await manager.findOne(Appointment, {
           where: { _id: savedAppointment._id },
-          relations: ['patient', 'clinic', 'doctor'],
+          relations: [
+            'patient',
+            'patient.generalAccount',
+            'patient.addresses',
+            'clinic',
+            'clinic.clinicManagerInformation',
+            'doctor',
+            'doctor.doctorInformation',
+          ],
         });
 
       // Fetch services for the created appointment (use manager to ensure transaction visibility)
@@ -304,7 +431,8 @@ export class AppointmentsService {
           'clinicService._id AS id',
           'clinicService.service_name AS serviceName',
           'clinicService.description AS description',
-          'clinicServiceConfig.price AS price',
+          'serviceAppointment.price AS price',
+          'serviceAppointment.discount AS discount',
         ])
         .from('service_appointments', 'serviceAppointment')
         .innerJoin(
@@ -328,23 +456,34 @@ export class AppointmentsService {
         serviceName: row.servicename,
         description: row.description,
         price: parseFloat(row.price),
+        discount: row.discount ? parseFloat(row.discount) : 0,
       }));
 
       // Fetch clinic rooms if doctor shift is assigned
       let clinicRooms = [];
 
-      if (savedAppointment.clinicShiftHourId) {
-        const appointmentData = [{
-          appointmentId: savedAppointment._id,
-          clinicShiftHourId: savedAppointment.clinicShiftHourId,
-          doctorId: savedAppointment.doctorId,
-          appointmentDate: savedAppointment.appointmentDate,
-        }];
-        const clinicRoomsMap =
-          await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
-            appointmentData,
-          );
-        clinicRooms = clinicRoomsMap.get(savedAppointment._id) || [];
+      if (savedAppointment.clinicShiftHourId && savedAppointment.doctorId) {
+        // Query clinic rooms directly without needing appointment_id
+        const roomsResult = await manager
+          .createQueryBuilder()
+          .select('cr._id', 'roomId')
+          .addSelect('cr.room_name', 'roomName')
+          .from('clinic_shift_hour', 'csh')
+          .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+          .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
+          .innerJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
+          .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+          .where('csh._id = :clinicShiftHourId', { clinicShiftHourId: savedAppointment.clinicShiftHourId })
+          .andWhere('es.employee_id = :doctorId', { doctorId: savedAppointment.doctorId })
+          .andWhere('es.work_date = :appointmentDate', { appointmentDate: savedAppointment.appointmentDate })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('cr.deleted_at IS NULL')
+          .getRawMany();
+
+        clinicRooms = roomsResult.map((row) => ({
+          id: row.roomId,
+          roomName: row.roomName,
+        }));
       }
 
       return this.transformToResponseDto(appointmentWithRelations!, services, clinicRooms);
@@ -377,7 +516,7 @@ export class AppointmentsService {
 
     if (existingAppointments.length > 0) {
       throw new ConflictException(
-        'Thời gian hẹn này đã có người đặt. Vui lòng chọn thời gian khác.',
+        'Thß╗¥i gian hß║╣n n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
       );
     }
 
@@ -519,7 +658,7 @@ export class AppointmentsService {
 
       if (conflicts.length > 0) {
         throw new ConflictException(
-          'Thời gian mới này đã có người đặt. Vui lòng chọn thời gian khác.',
+          'Thß╗¥i gian mß╗¢i n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
         );
       }
     }
@@ -539,20 +678,320 @@ export class AppointmentsService {
   }
 
   /**
+   * Staff cancel appointment
+   *
+   * Allows staff to cancel appointments with optional patient note
+   *
+   * @param appointmentId - Appointment UUID
+   * @param cancelDto - Cancellation data (optional patient note)
+   * @returns Updated appointment details
+   * @throws NotFoundException if appointment not found
+   * @throws BadRequestException if appointment cannot be cancelled
+   */
+  async staffCancelAppointment(
+    appointmentId: string,
+    cancelDto: StaffCancelAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    // Find appointment with relations
+    const appointment =
+      await this.appointmentRepository.findByIdWithRelations(appointmentId);
+
+    if (!appointment || appointment.deletedAt) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Check if appointment can be cancelled
+    const cancellableStatuses = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+    ];
+
+    if (!cancellableStatuses.includes(appointment.status)) {
+      throw new BadRequestException(
+        `Cannot cancel appointment with status "${appointment.status}"`,
+      );
+    }
+
+    // Update appointment
+    appointment.status = AppointmentStatus.CANCELLED;
+    
+    // Store cancellation note in patientNote if provided
+    if (cancelDto.patientNote) {
+      appointment.patientNote = cancelDto.patientNote;
+    }
+
+    // Save changes
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
+
+    // Load services and clinic rooms
+    const { services, clinicRooms } = await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
+  }
+
+  /**
+   * Patient cancel their own appointment
+   *
+   * Allows patients to cancel their own appointments with optional note
+   *
+   * @param appointmentId - Appointment UUID
+   * @param patientId - Patient account ID (from authenticated user)
+   * @param cancelDto - Cancellation data (optional patient note)
+   * @returns Updated appointment details
+   * @throws NotFoundException if appointment not found
+   * @throws ForbiddenException if user is not the patient of this appointment
+   * @throws BadRequestException if appointment cannot be cancelled
+   */
+  async patientCancelAppointment(
+    appointmentId: string,
+    patientId: string,
+    cancelDto: PatientCancelAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    // Find appointment with relations
+    const appointment =
+      await this.appointmentRepository.findByIdWithRelations(appointmentId);
+
+    if (!appointment || appointment.deletedAt) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Verify patient owns this appointment
+    if (appointment.patientId !== patientId) {
+      throw new ForbiddenException(
+        'You can only cancel your own appointments',
+      );
+    }
+
+    // Check if appointment can be cancelled
+    const cancellableStatuses = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+    ];
+
+    if (!cancellableStatuses.includes(appointment.status)) {
+      throw new BadRequestException(
+        `Cannot cancel appointment with status "${appointment.status}"`,
+      );
+    }
+
+    // Update appointment
+    appointment.status = AppointmentStatus.CANCELLED;
+    
+    // Store cancellation note in patientNote if provided
+    if (cancelDto.patientNote) {
+      appointment.patientNote = cancelDto.patientNote;
+    }
+
+    // Save changes
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
+
+    // Load services and clinic rooms
+    const { services, clinicRooms } = await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
+  }
+
+  /**
+   * Staff reschedule appointment
+   *
+   * Allows staff to reschedule appointments to a new date, shift hour, extra hour, or extra room
+   * All fields are optional. If clinicShiftHourId is provided, appointment date will be auto-updated.
+   *
+   * @param appointmentId - Appointment UUID
+   * @param rescheduleDto - Reschedule data (new date, shift hour, extra hour, or extra room - all optional)
+   * @returns Updated appointment details
+   * @throws NotFoundException if appointment or shift hour not found
+   * @throws BadRequestException if appointment cannot be rescheduled or no fields provided
+   * @throws ConflictException if new time slot is already booked
+   */
+  async staffRescheduleAppointment(
+    appointmentId: string,
+    rescheduleDto: StaffRescheduleAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    // Find appointment with relations
+    const appointment =
+      await this.appointmentRepository.findByIdWithRelations(appointmentId);
+
+    if (!appointment || appointment.deletedAt) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Check if appointment can be rescheduled
+    const reschedulableStatuses = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+    ];
+
+    if (!reschedulableStatuses.includes(appointment.status)) {
+      throw new BadRequestException(
+        `Cannot reschedule appointment with status "${appointment.status}"`,
+      );
+    }
+
+    // Validate at least one field is provided
+    if (!rescheduleDto.appointmentDate && !rescheduleDto.clinicShiftHourId && rescheduleDto.extraHour === undefined && rescheduleDto.extraRoomId === undefined) {
+      throw new BadRequestException(
+        'At least one field (appointmentDate, clinicShiftHourId, extraHour, or extraRoomId) must be provided',
+      );
+    }
+
+    let newAppointmentDate = appointment.appointmentDate;
+    let newClinicShiftHourId = appointment.clinicShiftHourId;
+    let newExtraHour = appointment.extraHour;
+    let newExtraRoomId = appointment.extraRoomId;
+
+    // If clinicShiftHourId is provided, auto-update appointment date from shift hour work date
+    if (rescheduleDto.clinicShiftHourId) {
+      const shiftHour = await this.dataSource
+        .createQueryBuilder()
+        .select('csh._id', 'shiftHourId')
+        .addSelect('csh.shift_id', 'shiftId')
+        .addSelect('cs.shift', 'shift')
+        .addSelect('es.work_date', 'workDate')
+        .from('clinic_shift_hour', 'csh')
+        .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+        .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
+        .where('csh._id = :shiftHourId', { shiftHourId: rescheduleDto.clinicShiftHourId })
+        .andWhere('es.employee_id = :doctorId', { doctorId: appointment.doctorId })
+        .andWhere('csh.deleted_at IS NULL')
+        .andWhere('es.deleted_at IS NULL')
+        .orderBy('es.work_date', 'ASC')
+        .limit(1)
+        .getRawOne();
+
+      if (!shiftHour) {
+        throw new NotFoundException(
+          'Clinic shift hour not found or doctor does not have schedule for this shift',
+        );
+      }
+
+      newClinicShiftHourId = rescheduleDto.clinicShiftHourId;
+      newAppointmentDate = new Date(shiftHour.workDate);
+    }
+
+    // If appointmentDate is explicitly provided, override
+    if (rescheduleDto.appointmentDate) {
+      newAppointmentDate = new Date(rescheduleDto.appointmentDate);
+    }
+
+    // If extraHour is provided, update it
+    if (rescheduleDto.extraHour !== undefined) {
+      newExtraHour = rescheduleDto.extraHour ? new Date(rescheduleDto.extraHour) : null;
+    }
+
+    // If extraRoomId is provided, update it
+    if (rescheduleDto.extraRoomId !== undefined) {
+      newExtraRoomId = rescheduleDto.extraRoomId || null;
+    }
+
+    // Check for conflicts if date or shift changed
+    const dateChanged = newAppointmentDate.getTime() !== appointment.appointmentDate.getTime();
+    const shiftChanged = newClinicShiftHourId !== appointment.clinicShiftHourId;
+
+    if (dateChanged || shiftChanged) {
+      const conflictWhere: any = {
+        clinicId: appointment.clinicId,
+        appointmentDate: newAppointmentDate,
+        deletedAt: null,
+      };
+
+      if (newClinicShiftHourId) {
+        conflictWhere.clinicShiftHourId = newClinicShiftHourId;
+      }
+
+      const existingAppointments = await this.appointmentRepository.find(conflictWhere);
+
+      const conflicts = existingAppointments.filter(
+        (appt) => appt._id !== appointmentId,
+      );
+
+      if (conflicts.length > 0) {
+        throw new ConflictException(
+          'The new time slot is already booked. Please choose a different time.',
+        );
+      }
+    }
+
+    // Update appointment fields
+    appointment.appointmentDate = newAppointmentDate;
+    appointment.clinicShiftHourId = newClinicShiftHourId;
+    appointment.extraHour = newExtraHour;
+    appointment.extraRoomId = newExtraRoomId;
+
+    // Save changes
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
+
+    // Load services and clinic rooms
+    const { services, clinicRooms } = await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
+  }
+
+  /**
+   * Staff assign appointment to doctor (PENDING → PENDING_DOCTOR)
+   *
+   * Moves pending appointments with extra_hour to PENDING_DOCTOR status
+   * This is for out-of-hours appointment requests that need doctor approval
+   *
+   * @param appointmentId - Appointment UUID
+   * @returns Updated appointment details
+   * @throws NotFoundException if appointment not found
+   * @throws BadRequestException if appointment status is not PENDING or has no extra_hour
+   */
+  async staffAssignToDoctor(
+    appointmentId: string,
+  ): Promise<AppointmentResponseDto> {
+    // Find appointment with relations
+    const appointment =
+      await this.appointmentRepository.findByIdWithRelations(appointmentId);
+
+    if (!appointment || appointment.deletedAt) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Validate current status - must be PENDING
+    if (appointment.status !== AppointmentStatus.PENDING) {
+      throw new BadRequestException(
+        `Cannot assign appointment to doctor. Current status is "${appointment.status}", expected "PENDING"`,
+      );
+    }
+
+    // Validate appointment has extra_hour (required for this workflow)
+    if (!appointment.extraHour) {
+      throw new BadRequestException(
+        'Cannot assign to doctor: appointment does not have extra_hour (out-of-hours request)',
+      );
+    }
+
+    // Update status to PENDING_DOCTOR
+    appointment.status = AppointmentStatus.PENDING_DOCTOR;
+
+    // Save changes
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
+
+    // Load services and clinic rooms
+    const { services, clinicRooms } = await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
+  }
+
+  /**
    * Check in patient for appointment
    *
    * Changes appointment status to CHECKED_IN when patient arrives at clinic
    * Accepts both PENDING and CONFIRMED appointments
    *
    * @param appointmentId - Appointment UUID
-   * @param checkInDto - Empty DTO (for future extensibility)
    * @returns Updated appointment details
    * @throws NotFoundException if appointment not found
    * @throws BadRequestException if appointment status is not PENDING or CONFIRMED
    */
   async checkInPatient(
     appointmentId: string,
-    checkInDto: CheckInDto,
   ): Promise<AppointmentResponseDto> {
     // Find appointment with relations
     const appointment =
@@ -575,40 +1014,14 @@ export class AppointmentsService {
     // Update status to CHECKED_IN
     appointment.status = AppointmentStatus.CHECKED_IN;
 
-    // V4.5: Handle extraRoomId for out-of-hours appointments (Option 4)
-    // Business Rule: extraRoomId can only be assigned to appointments WITHOUT clinic_shift_hour_id
-    if (checkInDto.extraRoomId) {
-      if (appointment.clinicShiftHourId) {
-        throw new BadRequestException(
-          'Cannot assign extraRoomId to standard appointments. This field is only for out-of-hours bookings (Option 4).',
-        );
-      }
-
-      // Validate room exists and belongs to correct clinic
-      const room = await this.dataSource
-        .createQueryBuilder()
-        .select('cr._id')
-        .from('clinic_room', 'cr')
-        .where('cr._id = :roomId', { roomId: checkInDto.extraRoomId })
-        .andWhere('cr.clinic_id = :clinicId', { clinicId: appointment.clinicId })
-        .andWhere('cr.deleted_at IS NULL')
-        .getRawOne();
-
-      if (!room) {
-        throw new NotFoundException(
-          'Room not found or does not belong to this clinic.',
-        );
-      }
-
-      // Assign room to appointment
-      appointment.extraRoomId = checkInDto.extraRoomId;
-    }
-
     // Save changes
     const updatedAppointment =
       await this.appointmentRepository.save(appointment);
 
-    return this.transformToResponseDto(updatedAppointment);
+    // Load services and clinic rooms
+    const { services, clinicRooms } = await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
   }
 
   /**
@@ -789,7 +1202,7 @@ export class AppointmentsService {
    * Validate status transition
    *
    * Checks if a status change is allowed based on current status
-   * Prevents invalid transitions (e.g., COMPLETED → PENDING)
+   * Prevents invalid transitions (e.g., COMPLETED ΓåÆ PENDING)
    *
    * @param currentStatus - Current appointment status
    * @param newStatus - Target status
@@ -821,8 +1234,14 @@ export class AppointmentsService {
     const validTransitions: Record<AppointmentStatus, AppointmentStatus[]> = {
       // Appointment lifecycle
       [AppointmentStatus.PENDING]: [
+        AppointmentStatus.PENDING_DOCTOR,
         AppointmentStatus.CONFIRMED,
         AppointmentStatus.CANCELLED,
+      ],
+      [AppointmentStatus.PENDING_DOCTOR]: [
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.CANCELLED,
+        AppointmentStatus.PENDING, // Allow reverting to pending if needed
       ],
       [AppointmentStatus.CONFIRMED]: [
         AppointmentStatus.CHECKED_IN,
@@ -867,6 +1286,52 @@ export class AppointmentsService {
   }
 
   /**
+   * Load services and clinic rooms for an appointment
+   *
+   * Helper method to fetch services and clinic rooms data for response DTOs
+   *
+   * @param appointment - Appointment entity
+   * @returns Object with services and clinicRooms arrays
+   */
+  private async loadAppointmentServicesAndRooms(
+    appointment: any,
+  ): Promise<{ services: any[]; clinicRooms: any[] }> {
+    // Load services
+    const servicesMap = await this.appointmentPackageRepository.findServicesByAppointmentIds([
+      appointment._id,
+    ]);
+    const services = servicesMap.get(appointment._id) || [];
+
+    // Load clinic rooms if doctor shift is assigned
+    let clinicRooms = [];
+
+    if (appointment.clinicShiftHourId && appointment.doctorId) {
+      const roomsResult = await this.dataSource
+        .createQueryBuilder()
+        .select('cr._id', 'roomId')
+        .addSelect('cr.room_name', 'roomName')
+        .from('clinic_shift_hour', 'csh')
+        .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+        .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
+        .innerJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
+        .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+        .where('csh._id = :clinicShiftHourId', { clinicShiftHourId: appointment.clinicShiftHourId })
+        .andWhere('es.employee_id = :doctorId', { doctorId: appointment.doctorId })
+        .andWhere('es.work_date = :appointmentDate', { appointmentDate: appointment.appointmentDate })
+        .andWhere('es.deleted_at IS NULL')
+        .andWhere('cr.deleted_at IS NULL')
+        .getRawMany();
+
+      clinicRooms = roomsResult.map((row) => ({
+        id: row.roomId,
+        roomName: row.roomName,
+      }));
+    }
+
+    return { services, clinicRooms };
+  }
+
+  /**
    * Transform Appointment entity to Response DTO
    *
    * @param appointment - Appointment entity with relations
@@ -879,21 +1344,32 @@ export class AppointmentsService {
     services?: any[],
     clinicRooms?: any[],
   ): AppointmentResponseDto {
-    // Get patient full name from raw query result or fallback to username
+    // Get patient info - support both raw query and relation-based query
+    const patientGeneral = appointment.patient?.generalAccount;
     const patientFullName =
       appointment.patientProfile_full_name ||
+      patientGeneral?.fullName ||
       appointment.patient?.username ||
       'N/A';
+    const patientProfileImage = patientGeneral?.profilePicture || null;
+    
+    // Get patient addresses
+    const patientAddresses = appointment.patient?.addresses || [];
 
-    // Get doctor full name from raw query result or fallback to username
+    // Get doctor info - support both raw query and relation-based query
+    const doctorInfo = appointment.doctor?.doctorInformation;
     const doctorFullName =
       appointment.doctorProfile_full_name ||
+      doctorInfo?.fullName ||
       appointment.doctor?.username ||
       null;
+    const doctorProfileImage = doctorInfo?.profilePicture || null;
 
-    // Get clinic branch name from raw query result or fallback to username
+    // Get clinic info
+    const clinicInfo = appointment.clinic?.clinicManagerInformation;
     const clinicName =
       appointment.clinicProfile_clinic_branch_name ||
+      clinicInfo?.clinicBranchName ||
       appointment.clinic?.username ||
       'N/A';
 
@@ -903,10 +1379,22 @@ export class AppointmentsService {
       patientFullName,
       patientEmail: appointment.patient?.email,
       patientPhone: appointment.patient?.phone,
+      patientProfileImage,
+      patientAddresses: patientAddresses.map((addr: any) => ({
+        id: addr._id,
+        address: addr.address,
+        ward: addr.ward,
+        wardName: addr.wardName,
+        district: addr.district,
+        districtName: addr.districtName,
+        province: addr.province,
+        provinceName: addr.provinceName,
+      })),
       clinicId: appointment.clinicId,
       clinicName,
       doctorId: appointment.doctorId,
       doctorFullName,
+      doctorProfileImage,
       clinicRooms: clinicRooms || [],
       services: services || [],
       appointmentDate: appointment.appointmentDate,
@@ -1013,32 +1501,45 @@ export class AppointmentsService {
     clinicRooms: any[],
   ): AppointmentDetailResponseDto {
     // Patient details from raw query result
+    const patientAddresses = appointment.patient?.addresses || [];
+    const patientProfile = appointment.patient?.generalAccount;
     const patient = {
       id: appointment.patient?._id || appointment.patientId,
       username: appointment.patient?.username || 'N/A',
       email: appointment.patient?.email,
       phone: appointment.patient?.phone,
-      fullName: appointment.patientProfile_full_name,
-      gender: appointment.patientProfile_gender,
-      dob: appointment.patientProfile_dob,
-      profilePicture: appointment.patientProfile_profile_picture,
+      fullName: patientProfile?.fullName,
+      gender: patientProfile?.gender,
+      dob: patientProfile?.dob,
+      profilePicture: patientProfile?.profilePicture,
+      addresses: patientAddresses.map((addr: any) => ({
+        id: addr._id,
+        address: addr.address,
+        ward: addr.ward,
+        wardName: addr.wardName,
+        district: addr.district,
+        districtName: addr.districtName,
+        province: addr.province,
+        provinceName: addr.provinceName,
+      })),
     };
 
     // Doctor details from raw query result (if assigned)
     let doctor = null;
     if (appointment.doctor) {
+      const doctorProfile = appointment.doctor?.doctorInformation;
       doctor = {
         id: appointment.doctor._id,
         username: appointment.doctor.username,
         email: appointment.doctor.email,
         phone: appointment.doctor.phone,
-        fullName: appointment.doctorProfile_full_name,
-        gender: appointment.doctorProfile_gender,
-        dob: appointment.doctorProfile_dob,
-        profilePicture: appointment.doctorProfile_profile_picture,
-        academicDegree: appointment.doctorProfile_academic_degree,
-        experience: appointment.doctorProfile_experience,
-        position: appointment.doctorProfile_position,
+        fullName: doctorProfile?.fullName,
+        gender: doctorProfile?.gender,
+        dob: doctorProfile?.dob,
+        profilePicture: doctorProfile?.profilePicture,
+        academicDegree: doctorProfile?.academicDegree,
+        experience: doctorProfile?.experience,
+        position: doctorProfile?.position,
       };
     }
 
@@ -1058,12 +1559,13 @@ export class AppointmentsService {
     let packageData = null;
     if (appointmentPackage) {
       const services =
-        appointmentPackage.clinicService?.map((cs: any) => ({
-          id: cs._id,
-          serviceName: cs.service?.serviceName || 'N/A',
-          description: cs.service?.description,
-          price: parseFloat(cs.price || 0),
-          duration: cs.duration,
+        appointmentPackage.services?.map((svc: any) => ({
+          id: svc.serviceAppointmentId,
+          serviceName: svc.serviceName || 'N/A',
+          description: svc.description,
+          price: svc.price || 0,
+          discount: svc.discount,
+          duration: svc.duration,
         })) || [];
 
       packageData = {
@@ -1214,7 +1716,7 @@ export class AppointmentsService {
    *
    * Business Rules:
    * - Verify appointment belongs to the authenticated doctor
-   * - Auto-update status from CHECKED_IN → IN_PROGRESS when accessed
+   * - Auto-update status from CHECKED_IN ΓåÆ IN_PROGRESS when accessed
    * - Load patient information from generalAccount
    * - Load all services with ERM status
    * - Return detailed patient information (including medical history if available)
@@ -1615,22 +2117,22 @@ export class AppointmentsService {
     let appointmentStatus: AppointmentStatus;
 
     if (hasPaidOnline && !hasAdditionalServices) {
-      // CASE 1: Paid online + No additional services → Fully completed
+      // CASE 1: Paid online + No additional services ΓåÆ Fully completed
       paymentStatus = 'PAID';
       nextStep = 'EXPORT_PRESCRIPTION';
       appointmentStatus = AppointmentStatus.COMPLETED;
     } else if (!hasPaidOnline && !hasAdditionalServices) {
-      // CASE 2: Not paid online + No additional services → Need full payment
+      // CASE 2: Not paid online + No additional services ΓåÆ Need full payment
       paymentStatus = 'UNPAID';
       nextStep = 'PROCEED_TO_PAYMENT';
       appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
     } else if (hasPaidOnline && hasAdditionalServices) {
-      // CASE 3: Paid online + Has additional services → Need additional payment
+      // CASE 3: Paid online + Has additional services ΓåÆ Need additional payment
       paymentStatus = 'PARTIAL';
       nextStep = 'PROCEED_TO_PAYMENT';
       appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
     } else {
-      // CASE 4: Not paid online + Has additional services → Need full payment (including additional)
+      // CASE 4: Not paid online + Has additional services ΓåÆ Need full payment (including additional)
       paymentStatus = 'UNPAID';
       nextStep = 'PROCEED_TO_PAYMENT';
       appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
@@ -1838,7 +2340,7 @@ export class AppointmentsService {
       if (managerIds.length > 0) {
         query.andWhere('appointment.clinicId IN (:...managerIds)', { managerIds });
       } else {
-        // No managers → no results
+        // No managers ΓåÆ no results
         query.andWhere('1 = 0');
       }
     }
@@ -1959,11 +2461,11 @@ export class AppointmentsService {
     const bookingOption = session.bookingOption || 'service_first';
 
     if (bookingOption === 'out_of_hours') {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ OPTION 4: KHÁM NGOÀI GIỜ (Out of Hours)                         │
-      // │ - BẮT BUỘC: extraHour (ISO datetime string)                     │
-      // │ - KHÔNG YÊU CẦU: clinicShiftHourId                              │
-      // └─────────────────────────────────────────────────────────────────┘
+      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+      // Γöé OPTION 4: KH├üM NGO├ÇI GIß╗£ (Out of Hours)                         Γöé
+      // Γöé - Bß║«T BUß╗ÿC: extraHour (ISO datetime string)                     Γöé
+      // Γöé - KH├öNG Y├èU Cß║ªU: clinicShiftHourId                              Γöé
+      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
       if (!session.clinicServiceConfigId || !session.clinicId || !session.doctorId || 
           !session.paymentMethod || !session.extraHour) {
         throw new BadRequestException(
@@ -1988,10 +2490,10 @@ export class AppointmentsService {
       }
 
     } else {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)     │
-      // │ - YÊU CẦU: clinicShiftHourId, appointmentDate                   │
-      // └─────────────────────────────────────────────────────────────────┘
+      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+      // Γöé OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)     Γöé
+      // Γöé - Y├èU Cß║ªU: clinicShiftHourId, appointmentDate                   Γöé
+      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
       if (!session.clinicServiceConfigId || !session.clinicId || !session.appointmentDate ||
         !session.clinicShiftHourId || !session.doctorId || !session.paymentMethod) {
         throw new BadRequestException(
@@ -2060,17 +2562,17 @@ export class AppointmentsService {
     
     // OPTIONS 1/2/3: Standard Booking with Shift Hours
     if (session.paymentMethod === 'cod') {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ NHÁNH A: THANH TOÁN COD (Cash on Delivery)                      │
-      // │ Tạo appointment ngay lập tức, thanh toán tại phòng khám         │
-      // └─────────────────────────────────────────────────────────────────┘
+      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+      // Γöé NH├üNH A: THANH TO├üN COD (Cash on Delivery)                      Γöé
+      // Γöé Tß║ío appointment ngay lß║¡p tß╗⌐c, thanh to├ín tß║íi ph├▓ng kh├ím         Γöé
+      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
       return await this.createAppointmentCOD(sessionId, patientId, session, dateString!);
     } else {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ NHÁNH B: THANH TOÁN ONLINE (Payment Gateway)                    │
-      // │ PLACEHOLDER - Chưa tích hợp payment gateway thật                │
-      // │ Trả về mock payment URL, giữ session để xử lý webhook sau       │
-      // └─────────────────────────────────────────────────────────────────┘
+      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+      // Γöé NH├üNH B: THANH TO├üN ONLINE (Payment Gateway)                    Γöé
+      // Γöé PLACEHOLDER - Ch╞░a t├¡ch hß╗úp payment gateway thß║¡t                Γöé
+      // Γöé Trß║ú vß╗ü mock payment URL, giß╗» session ─æß╗â xß╗¡ l├╜ webhook sau       Γöé
+      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
       return await this.createPaymentRequestOnline(sessionId, session);
     }
   }
@@ -2414,7 +2916,7 @@ export class AppointmentsService {
 
     // Return mock payment response
     return {
-      message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
+      message: 'Vui l├▓ng thanh to├ín ─æß╗â ho├án tß║Ñt ─æß║╖t lß╗ïch',
       data: {
         payment_url: `https://sandbox.payment-gateway.com/pay?order_id=${paymentReferenceId}`,
         payment_reference_id: paymentReferenceId,
@@ -2528,7 +3030,7 @@ export class AppointmentsService {
         );
       }
 
-      // === STEP 4: CHỐNG DOUBLE BOOKING ===
+      // === STEP 4: CHß╗ÉNG DOUBLE BOOKING ===
       // CRITICAL: Check if doctor already has an appointment at this extraHour
       // Query both appointment_hour AND extra_hour columns to prevent conflicts
       const appointmentRepo = manager.getRepository('appointments');
@@ -2564,10 +3066,10 @@ export class AppointmentsService {
         patientId,
         clinicId: session.clinicId,
         doctorId: session.doctorId,
-        clinicShiftHourId: null, // BẮT BUỘC NULL cho out-of-hours
+        clinicShiftHourId: null, // Bß║«T BUß╗ÿC NULL cho out-of-hours
         appointmentDate: appointmentDateForDB,
-        appointmentHour: extraHourDate, // Giờ khám = extraHour
-        extraHour: extraHourDate, // Lưu vào cột extra_hour
+        appointmentHour: extraHourDate, // Giß╗¥ kh├ím = extraHour
+        extraHour: extraHourDate, // L╞░u v├áo cß╗Öt extra_hour
         total: finalPrice,
         status: AppointmentStatus.PENDING,
         patientNote: session.patientNote || null,
@@ -2626,14 +3128,14 @@ export class AppointmentsService {
       service_name: result.serviceConfig.service?.serviceName || 'N/A',
       appointment_date: result.appointment.appointmentDate,
       appointment_hour: result.appointment.appointmentHour,
-      extra_hour: result.appointment.extraHour, // Trả về extraHour cho client
-      start_time: null, // Không có shift hour
-      end_time: null, // Không có shift hour
+      extra_hour: result.appointment.extraHour, // Trß║ú vß╗ü extraHour cho client
+      start_time: null, // Kh├┤ng c├│ shift hour
+      end_time: null, // Kh├┤ng c├│ shift hour
       total: result.appointment.total,
       status: result.appointment.status,
       payment_type: 'cod',
       patient_note: result.appointment.patientNote,
-      is_out_of_hours: true, // Flag để frontend biết đây là out-of-hours
+      is_out_of_hours: true, // Flag ─æß╗â frontend biß║┐t ─æ├óy l├á out-of-hours
     };
   }
 
@@ -2874,7 +3376,7 @@ export class AppointmentsService {
     const appointments = await query.getMany();
     console.log(`[exportDoctorWorkHistoryCSV] Total appointments found: ${appointments.length}`);
 
-    const headers = ['Mã Ca Khám', 'Bệnh Nhân', 'Phòng Khám', 'Ngày Khám', 'Giờ Khám', 'Trạng Thái', 'Ghi Chú', 'Doanh Thu (VNĐ)'];
+    const headers = ['M├ú Ca Kh├ím', 'Bß╗çnh Nh├ón', 'Ph├▓ng Kh├ím', 'Ng├áy Kh├ím', 'Giß╗¥ Kh├ím', 'Trß║íng Th├íi', 'Ghi Ch├║', 'Doanh Thu (VN─É)'];
 
     const rows = appointments.map(app => {
       const patientName = app.patient?.username || app.patientId;
@@ -3412,9 +3914,9 @@ export class AppointmentsService {
     const total = parseInt(countResult?.count || '0', 10);
 
     // DEBUG: Print SQL query
-    console.log('🔍 SQL Query for clinic_room:');
+    console.log('≡ƒöì SQL Query for clinic_room:');
     console.log(query.getSql());
-    console.log('\n📋 Query Parameters:', query.getParameters());
+    console.log('\n≡ƒôï Query Parameters:', query.getParameters());
 
     // Get paginated results with ordering
     const appointmentsRaw = await query
@@ -3425,7 +3927,7 @@ export class AppointmentsService {
       .getRawMany();
 
     // DEBUG: Print raw data
-    console.log('\n📊 Raw appointments data (first 2):');
+    console.log('\n≡ƒôè Raw appointments data (first 2):');
     console.log(JSON.stringify(appointmentsRaw.slice(0, 2), null, 2));
 
     // CRITICAL FIX: Deduplicate appointments (M-N join can return multiple rows per appointment)
@@ -3438,7 +3940,7 @@ export class AppointmentsService {
     });
     const appointmentsRawUnique = Array.from(uniqueAppointmentsMap.values());
 
-    console.log(`\n✅ Deduplication: ${appointmentsRaw.length} rows -> ${appointmentsRawUnique.length} unique appointments`);
+    console.log(`\nΓ£à Deduplication: ${appointmentsRaw.length} rows -> ${appointmentsRawUnique.length} unique appointments`);
 
     // Optimization: Bulk load services to avoid N+1 queries
     let servicesMap: Map<string, any[]> = new Map();
@@ -4320,24 +4822,24 @@ export class AppointmentsService {
     const patientInfo = appointment.patient?.generalAccount;
 
     // Get clinic name from clinicManagerInformation
-    let clinicName = 'Phòng khám';
+    let clinicName = 'Ph├▓ng kh├ím';
     if (appointment.clinic?.clinicManagerInformation) {
       clinicName = appointment.clinic.clinicManagerInformation.clinicBranchName;
     }
 
     const context: AppointmentReminderContext = {
-      patientName: patientInfo?.fullName || 'Bệnh nhân',
+      patientName: patientInfo?.fullName || 'Bß╗çnh nh├ón',
       clinicName: clinicName,
       clinicAddress: clinicAddress
         ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
-        : 'Chưa có địa chỉ',
-      clinicPhone: appointment.clinic?.phone || 'Chưa có SĐT',
+        : 'Ch╞░a c├│ ─æß╗ïa chß╗ë',
+      clinicPhone: appointment.clinic?.phone || 'Ch╞░a c├│ S─ÉT',
       appointmentDate: new Date(appointment.appointmentDate).toLocaleDateString('vi-VN'),
       appointmentHour: new Date(appointment.appointmentHour).toLocaleTimeString('vi-VN', {
         hour: '2-digit',
         minute: '2-digit',
       }),
-      doctorName: doctorInfo?.fullName || 'Bác sĩ',
+      doctorName: doctorInfo?.fullName || 'B├íc s─⌐',
       doctorSpecialization: undefined,
       services: services.map((s: any) => ({
         serviceName: s.service_name,
@@ -4360,11 +4862,11 @@ export class AppointmentsService {
         appointment_id: appointmentId,
         patient_email: patientEmail,
         sent_at: formatToVietnamTime(sentAt),
-        message: 'Email nhắc nhở đã được gửi thành công',
+        message: 'Email nhß║»c nhß╗ƒ ─æ├ú ─æ╞░ß╗úc gß╗¡i th├ánh c├┤ng',
       };
     } catch (error) {
       console.error('Failed to send reminder email:', error);
-      throw new BadRequestException('Không thể gửi email. Vui lòng thử lại sau.');
+      throw new BadRequestException('Kh├┤ng thß╗â gß╗¡i email. Vui l├▓ng thß╗¡ lß║íi sau.');
     }
   }
 
@@ -4462,24 +4964,24 @@ export class AppointmentsService {
             const doctorInfo = appointment.doctor?.doctorInformation;
             const patientInfo = appointment.patient?.generalAccount;
 
-            let clinicName = 'Phòng khám';
+            let clinicName = 'Ph├▓ng kh├ím';
             if (appointment.clinic?.clinicManagerInformation) {
               clinicName = appointment.clinic.clinicManagerInformation.clinicBranchName;
             }
 
             const context: AppointmentReminderContext = {
-              patientName: patientInfo?.fullName || 'Bệnh nhân',
+              patientName: patientInfo?.fullName || 'Bß╗çnh nh├ón',
               clinicName: clinicName,
               clinicAddress: clinicAddress
                 ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
-                : 'Chưa có địa chỉ',
-              clinicPhone: appointment.clinic?.phone || 'Chưa có SĐT',
+                : 'Ch╞░a c├│ ─æß╗ïa chß╗ë',
+              clinicPhone: appointment.clinic?.phone || 'Ch╞░a c├│ S─ÉT',
               appointmentDate: new Date(appointment.appointmentDate).toLocaleDateString('vi-VN'),
               appointmentHour: new Date(appointment.appointmentHour).toLocaleTimeString('vi-VN', {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
-              doctorName: doctorInfo?.fullName || 'Bác sĩ',
+              doctorName: doctorInfo?.fullName || 'B├íc s─⌐',
               doctorSpecialization: undefined,
               services: services.map((s: any) => ({
                 serviceName: s.service_name,
@@ -4519,7 +5021,7 @@ export class AppointmentsService {
       total_failed: totalFailed,
       total_skipped: totalSkipped,
       sent_at: formatToVietnamTime(sentAt),
-      message: `Đã gửi ${totalSent}/${appointmentIds.length} email thành công`,
+      message: `─É├ú gß╗¡i ${totalSent}/${appointmentIds.length} email th├ánh c├┤ng`,
     };
   }
   
@@ -4555,18 +5057,18 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Không tìm thấy lịch hẹn');
+      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy lß╗ïch hß║╣n');
     }
 
     if (appointment.clinicId !== clinicId) {
-      throw new ForbiddenException('Bạn không có quyền truy cập lịch hẹn này');
+      throw new ForbiddenException('Bß║ín kh├┤ng c├│ quyß╗ün truy cß║¡p lß╗ïch hß║╣n n├áy');
     }
 
     // 3. Get all packages with services (raw data)
     const rawPackages = await this.appointmentPackageRepository.findAllByAppointmentIdWithServices(appointmentId);
 
     if (rawPackages.length === 0) {
-      throw new NotFoundException('Không tìm thấy gói thanh toán nào cho lịch hẹn này');
+      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy g├│i thanh to├ín n├áo cho lß╗ïch hß║╣n n├áy');
     }
 
     // 4. Transform raw data to DTOs
@@ -4582,6 +5084,7 @@ export class AppointmentsService {
         clinicServiceId: svc.clinic_service_id,
         serviceName: svc.service_name,
         servicePrice: Number(svc.service_price),
+        serviceDiscount: svc.service_discount ? Number(svc.service_discount) : undefined,
       })),
     }));
 
@@ -4660,28 +5163,28 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Không tìm thấy lịch hẹn');
+      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy lß╗ïch hß║╣n');
     }
 
     if (appointment.clinicId !== clinicId) {
-      throw new ForbiddenException('Bạn không có quyền truy cập lịch hẹn này');
+      throw new ForbiddenException('Bß║ín kh├┤ng c├│ quyß╗ün truy cß║¡p lß╗ïch hß║╣n n├áy');
     }
 
     // 3. Verify package exists and belongs to this appointment
     const packageData = await this.appointmentPackageRepository.findByIdForUpdate(packageId);
 
     if (!packageData) {
-      throw new NotFoundException('Không tìm thấy gói thanh toán');
+      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy g├│i thanh to├ín');
     }
 
     if (packageData.appointmentId !== appointmentId) {
-      throw new BadRequestException('Gói thanh toán không thuộc lịch hẹn này');
+      throw new BadRequestException('G├│i thanh to├ín kh├┤ng thuß╗Öc lß╗ïch hß║╣n n├áy');
     }
 
     // 4. Check if package is pending payment
     if (packageData.status !== AppointmentPackageStatus.PENDING_PAYMENT) {
       throw new BadRequestException(
-        `Không thể xác nhận thanh toán: Gói thanh toán đã ở trạng thái "${packageData.status}"`,
+        `Kh├┤ng thß╗â x├íc nhß║¡n thanh to├ín: G├│i thanh to├ín ─æ├ú ß╗ƒ trß║íng th├íi "${packageData.status}"`,
       );
     }
 
@@ -4708,7 +5211,7 @@ export class AppointmentsService {
 
     // 8. Return confirmation details
     return {
-      message: 'Xác nhận thanh toán tiền mặt thành công',
+      message: 'X├íc nhß║¡n thanh to├ín tiß╗ün mß║╖t th├ánh c├┤ng',
       appointmentId,
       package: {
         packageId: updatedPackage._id,
@@ -4729,17 +5232,17 @@ export class AppointmentsService {
   /**
    * Get Clinic Schedules (VERSION 4.5 - Option 1 & Option 3)
    * 
-   * Gộp 2 API cũ (working-days + slots) thành 1 API duy nhất.
+   * Gß╗Öp 2 API c┼⌐ (working-days + slots) th├ánh 1 API duy nhß║Ñt.
    * Returns nested structure: Dates -> Shifts -> Slots with Doctor info.
    * 
-   * VERSION 4.5: Thêm tham số working_date (optional)
-   * - Nếu có working_date: Trả về lịch của ngày cụ thể (Option 3)
-   * - Nếu không có working_date: Trả về lịch 60 ngày tới (Option 1)
+   * VERSION 4.5: Th├¬m tham sß╗æ working_date (optional)
+   * - Nß║┐u c├│ working_date: Trß║ú vß╗ü lß╗ïch cß╗ºa ng├áy cß╗Ñ thß╗â (Option 3)
+   * - Nß║┐u kh├┤ng c├│ working_date: Trß║ú vß╗ü lß╗ïch 60 ng├áy tß╗¢i (Option 1)
    * 
    * Business Logic:
    * - Query employee_schedule for clinic_id
-   * - NẾU có working_date: Filter by work_date = working_date
-   * - NẾU KHÔNG có working_date: Filter by date range [today, today+60]
+   * - Nß║╛U c├│ working_date: Filter by work_date = working_date
+   * - Nß║╛U KH├öNG c├│ working_date: Filter by date range [today, today+60]
    * - JOIN clinic_shift, clinic_shift_hour
    * - Calculate available_slots for each slot
    * - Transform in TypeScript: Group by Date -> Shift -> Slots
@@ -4926,9 +5429,9 @@ export class AppointmentsService {
   /**
    * Get Doctor Schedules (VERSION 4.4 - Option 2: Doctor-first - Step 2)
    * 
-   * TÁCH RỜI LỊCH KHÁM VÀ DỊCH VỤ
-   * API này CHỈ trả về lịch khám (dates, shifts, slots).
-   * KHÔNG trả về services - services được lấy từ API riêng getDoctorServices.
+   * T├üCH Rß╗£I Lß╗èCH KH├üM V├Ç Dß╗èCH Vß╗ñ
+   * API n├áy CHß╗ê trß║ú vß╗ü lß╗ïch kh├ím (dates, shifts, slots).
+   * KH├öNG trß║ú vß╗ü services - services ─æ╞░ß╗úc lß║Ñy tß╗½ API ri├¬ng getDoctorServices.
    * 
    * Business Logic:
    * - Query employee_schedule for doctor_id, date range [today, today+60]
@@ -5160,5 +5663,697 @@ export class AppointmentsService {
         requested_time: extraHour,
       },
     };
+  }
+
+  /**
+   * Get doctor's patient history
+   *
+   * Retrieves list of all patients who have been examined by the doctor
+   * with summary statistics and last diagnosis
+   *
+   * @param doctorId - Doctor account UUID
+   * @param queryDto - Query parameters (search, pagination, sorting)
+   * @returns Paginated list of patients with visit summary
+   */
+  async getDoctorPatientHistory(
+    doctorId: string,
+    queryDto: DoctorPatientHistoryQueryDto,
+  ): Promise<DoctorPatientHistoryResponseDto> {
+    const { page = 1, limit = 20, search, sort_by = 'last_visit_date', order = 'DESC' } = queryDto;
+    const skip = (page - 1) * limit;
+
+    // Build query to get distinct patients with statistics
+    const queryBuilder = this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .leftJoin('appointment.patient', 'patient')
+      .leftJoin('patient.generalAccount', 'generalAccount')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.deleted_at IS NULL')
+      .andWhere('appointment.status IN (:...statuses)', {
+        statuses: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
+      })
+      .select('patient._id', 'patientId')
+      .addSelect('patient.email', 'email')
+      .addSelect('patient.phone', 'phone')
+      .addSelect('generalAccount.fullName', 'fullName')
+      .addSelect('generalAccount.dob', 'dateOfBirth')
+      .addSelect('generalAccount.gender', 'gender')
+      .addSelect('generalAccount.profilePicture', 'profilePicture')
+      .addSelect('MIN(appointment.appointmentDate)', 'firstVisitDate')
+      .addSelect('MAX(appointment.appointmentDate)', 'lastVisitDate')
+      .addSelect('COUNT(appointment._id)', 'totalVisits')
+      .groupBy('patient._id')
+      .addGroupBy('patient.email')
+      .addGroupBy('patient.phone')
+      .addGroupBy('generalAccount.fullName')
+      .addGroupBy('generalAccount.dob')
+      .addGroupBy('generalAccount.gender')
+      .addGroupBy('generalAccount.profilePicture');
+
+    // Add search filter if provided
+    if (search && search.trim()) {
+      queryBuilder.andWhere(
+        '(generalAccount.fullName ILIKE :search OR ' +
+        'patient.phone LIKE :searchExact OR ' +
+        'patient.email ILIKE :searchExact)',
+        { search: `%${search}%`, searchExact: `%${search}%` }
+      );
+    }
+
+    // Add sorting - use proper field names for ORDER BY
+    if (sort_by === 'patient_name') {
+      queryBuilder.orderBy('generalAccount.fullName', order as 'ASC' | 'DESC');
+    } else if (sort_by === 'total_visits') {
+      queryBuilder.orderBy('COUNT(appointment._id)', order as 'ASC' | 'DESC');
+    } else {
+      // Default: sort by lastVisitDate
+      queryBuilder.orderBy('MAX(appointment.appointmentDate)', order as 'ASC' | 'DESC');
+    }
+
+    // Get total count
+    const totalQuery = queryBuilder.clone();
+    const totalResult = await totalQuery.getRawMany();
+    const total = totalResult.length;
+
+    // Add pagination
+    queryBuilder.offset(skip).limit(limit);
+
+    // Execute query
+    const patients = await queryBuilder.getRawMany();
+
+    // Get last diagnosis and last appointment status for each patient
+    const patientsWithDetails = await Promise.all(
+      patients.map(async (patient) => {
+        // Get last appointment
+        const lastAppointment = await this.dataSource
+          .getRepository(Appointment)
+          .findOne({
+            where: {
+              patientId: patient.patientId,
+              doctorId: doctorId,
+              status: AppointmentStatus.COMPLETED,
+            },
+            order: { appointmentDate: 'DESC' },
+          });
+
+        let lastDiagnosis: string | null = null;
+        let lastAppointmentStatus = AppointmentStatus.COMPLETED;
+
+        if (lastAppointment) {
+          lastAppointmentStatus = lastAppointment.status;
+
+          // Try to get diagnosis from ERM Consultation
+          const lastConsultation = await this.dataSource
+            .getRepository(ERM)
+            .createQueryBuilder('erm')
+            .leftJoinAndSelect('erm.appointment', 'appointment')
+            .leftJoin('erm_consultations', 'consultation', 'consultation.erm_id = erm._id')
+            .where('erm.appointmentId = :appointmentId', { appointmentId: lastAppointment._id })
+            .andWhere('erm.recordType = :recordType', { recordType: ERMRecordType.CONSULTATION })
+            .andWhere('erm.status = :status', { status: ERMStatus.COMPLETED })
+            .addSelect('consultation.working_diagnosis', 'workingDiagnosis')
+            .getRawOne();
+
+          if (lastConsultation && lastConsultation.workingDiagnosis) {
+            // Extract diagnosis text from JSONB
+            const diagnosis = lastConsultation.workingDiagnosis;
+            if (typeof diagnosis === 'object' && diagnosis.primary) {
+              lastDiagnosis = diagnosis.primary;
+            } else if (typeof diagnosis === 'string') {
+              lastDiagnosis = diagnosis;
+            }
+          }
+        }
+
+        // Calculate age from date of birth
+        let age: number | null = null;
+        if (patient.dateOfBirth) {
+          const birthDate = new Date(patient.dateOfBirth);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+        }
+
+        // Get patient addresses
+        const addressesData = await this.dataSource.query(
+          `
+          SELECT _id, address, ward, ward_name, district, district_name, province, province_name
+          FROM addresses
+          WHERE account_id = $1
+            AND deleted_at IS NULL
+          ORDER BY created_at DESC
+          `,
+          [patient.patientId],
+        );
+
+        const addresses = addressesData.map((addr: any) => ({
+          id: addr._id,
+          address: addr.address,
+          ward: addr.ward,
+          wardName: addr.ward_name,
+          district: addr.district,
+          districtName: addr.district_name,
+          province: addr.province,
+          provinceName: addr.province_name,
+        }));
+
+        return {
+          patientId: patient.patientId,
+          fullName: patient.fullName || 'Unknown',
+          dateOfBirth: patient.dateOfBirth ? this.formatDate(patient.dateOfBirth) : null,
+          age,
+          gender: patient.gender || null,
+          phone: patient.phone || null,
+          email: patient.email || 'No email',
+          profileImageUrl: patient.profilePicture || null,
+          addresses,
+          firstVisitDate: this.formatDate(patient.firstVisitDate),
+          lastVisitDate: this.formatDate(patient.lastVisitDate),
+          totalVisits: parseInt(patient.totalVisits, 10),
+          lastDiagnosis,
+          lastAppointmentStatus,
+        };
+      })
+    );
+
+    return {
+      total,
+      page,
+      limit,
+      patients: patientsWithDetails,
+    };
+  }
+
+  /**
+   * Get doctor's patient detail with appointment history
+   *
+   * Retrieves detailed information about a specific patient including:
+   * - Patient personal information with address
+   * - Visit statistics with the doctor
+   * - Paginated appointment history with services and diagnosis
+   *
+   * @param doctorId - Doctor account UUID
+   * @param patientId - Patient account UUID
+   * @param queryDto - Query parameters for filtering appointments
+   * @returns Patient detail with statistics and appointment history
+   * @throws ForbiddenException if doctor has never examined this patient
+   */
+  async getDoctorPatientDetail(
+    doctorId: string,
+    patientId: string,
+    queryDto: DoctorPatientAppointmentsQueryDto,
+  ): Promise<DoctorPatientDetailResponseDto> {
+    const { status = 'ALL', from_date, to_date, page = 1, limit = 10 } = queryDto;
+
+    // Step 1: Verify doctor has examined this patient
+    const hasExamined = await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.patientId = :patientId', { patientId })
+      .andWhere('appointment.status = :status', { status: 'COMPLETED' })
+      .getCount();
+
+    if (hasExamined === 0) {
+      throw new ForbiddenException(
+        'You do not have permission to view this patient information',
+      );
+    }
+
+    // Step 2: Get patient information with address
+    const patient = await this.accountRepository.findAccountById(patientId);
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    const generalAccount = patient.generalAccount;
+    
+    // Get addresses from database (for backward compatibility, keep first one as string)
+    const addressResult = await this.dataSource.query(
+      `
+      SELECT _id, address, ward, ward_name, district, district_name, province, province_name
+      FROM addresses
+      WHERE account_id = $1
+        AND deleted_at IS NULL
+      ORDER BY created_at DESC
+      `,
+      [patientId],
+    );
+    const addressData = addressResult[0];
+
+    // Map all addresses to AddressDto array
+    const addresses = addressResult.map((addr: any) => ({
+      id: addr._id,
+      address: addr.address,
+      ward: addr.ward,
+      wardName: addr.ward_name,
+      district: addr.district,
+      districtName: addr.district_name,
+      province: addr.province,
+      provinceName: addr.province_name,
+    }));
+
+    // Calculate age from date of birth
+    let age: number | null = null;
+    if (generalAccount?.dob) {
+      const birthDate = new Date(generalAccount.dob);
+      const today = new Date();
+      age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (
+        monthDiff < 0 ||
+        (monthDiff === 0 && today.getDate() < birthDate.getDate())
+      ) {
+        age--;
+      }
+    }
+
+    // Step 3: Calculate visit statistics
+    const statsQuery = this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .select('MIN(appointment.appointmentDate)', 'firstVisit')
+      .addSelect('MAX(appointment.appointmentDate)', 'lastVisit')
+      .addSelect('COUNT(DISTINCT appointment._id)', 'totalVisits')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.patientId = :patientId', { patientId })
+      .andWhere('appointment.status = :status', { status: 'COMPLETED' });
+
+    const statsResult = await statsQuery.getRawOne();
+
+    // Get unique services used
+    const servicesUsed = await this.dataSource.query(
+      `
+      SELECT COUNT(DISTINCT cs.service_name) as service_count
+      FROM appointments a
+      INNER JOIN appointment_package ap ON ap.appointment_id = a._id
+      INNER JOIN service_appointments sa ON sa.appointment_package_id = ap._id
+      INNER JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
+      INNER JOIN clinic_services cs ON cs._id = csc.service_id
+      WHERE a.doctor_id = $1
+        AND a.patient_id = $2
+        AND a.status = 'COMPLETED'
+        AND sa.deleted_at IS NULL
+      `,
+      [doctorId, patientId],
+    );
+
+    const statistics: PatientVisitStatisticsDto = {
+      first_visit: statsResult?.firstVisit || null,
+      last_visit: statsResult?.lastVisit || null,
+      total_visits: parseInt(statsResult?.totalVisits || '0', 10),
+      services_used: servicesUsed[0]?.service_count || 0,
+    };
+
+    // Step 4: Get paginated appointment history with filtering
+    const appointmentQuery = this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .where('appointment.doctorId = :doctorId', { doctorId })
+      .andWhere('appointment.patientId = :patientId', { patientId });
+
+    // Apply status filter
+    if (status !== 'ALL') {
+      appointmentQuery.andWhere('appointment.status = :status', { status });
+    } else {
+      // When ALL, show COMPLETED, CANCELLED, NO_SHOW
+      appointmentQuery.andWhere('appointment.status IN (:...statuses)', {
+        statuses: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+      });
+    }
+
+    // Apply date range filter
+    if (from_date) {
+      appointmentQuery.andWhere('appointment.appointmentDate >= :fromDate', {
+        fromDate: from_date,
+      });
+    }
+    if (to_date) {
+      appointmentQuery.andWhere('appointment.appointmentDate <= :toDate', {
+        toDate: to_date,
+      });
+    }
+
+    // Get total count for pagination
+    const total = await appointmentQuery.getCount();
+
+    // Apply pagination and sorting (newest first)
+    appointmentQuery
+      .orderBy('appointment.appointmentDate', 'DESC')
+      .addOrderBy('appointment.appointmentHour', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const appointments = await appointmentQuery.getMany();
+
+    // Step 5: Build appointment history items with services and diagnosis
+    const appointmentHistory: PatientAppointmentHistoryItemDto[] = await Promise.all(
+      appointments.map(async (appointment) => {
+        // Get services for this appointment
+        const services = await this.dataSource.query(
+          `
+          SELECT 
+            cs.service_name,
+            cat.type as service_type
+          FROM appointment_package ap
+          INNER JOIN service_appointments sa ON sa.appointment_package_id = ap._id
+          INNER JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
+          INNER JOIN clinic_services cs ON cs._id = csc.service_id
+          INNER JOIN clinic_service_category cat ON cat._id = cs.category_id
+          WHERE ap.appointment_id = $1
+            AND sa.deleted_at IS NULL
+          ORDER BY cat.type, cs.service_name
+          `,
+          [appointment._id],
+        );
+
+        const serviceSummaries: AppointmentServiceSummaryDto[] = services.map(
+          (svc: any) => ({
+            service_name: svc.service_name,
+            service_type: svc.service_type,
+          }),
+        );
+
+        return {
+          appointment_id: appointment._id,
+          appointment_date: appointment.appointmentDate instanceof Date
+            ? appointment.appointmentDate.toISOString().split('T')[0]
+            : new Date(appointment.appointmentDate).toISOString().split('T')[0],
+          appointment_hour: appointment.appointmentHour,
+          status: appointment.status,
+          services: serviceSummaries,
+        };
+      }),
+    );
+
+    // Build response
+    const patientDetail: DoctorViewPatientDetailDto = {
+      patient_id: patient._id,
+      full_name: generalAccount?.fullName || 'N/A',
+      phone: patient.phone || 'N/A',
+      email: patient.email || null,
+      gender: generalAccount?.gender || null,
+      date_of_birth: generalAccount?.dob
+        ? new Date(generalAccount.dob).toISOString().split('T')[0]
+        : null,
+      age,
+      address: addressData
+        ? `${addressData.address || ''}, ${addressData.ward_name || ''}, ${addressData.district_name || ''}, ${addressData.province_name || ''}`.trim()
+        : null,
+      addresses,
+    };
+
+    return {
+      patient: patientDetail,
+      statistics,
+      appointment_history: {
+        total,
+        page,
+        limit,
+        appointments: appointmentHistory,
+      },
+    };
+  }
+
+  /**
+   * Get doctor's appointment history detail (Step 3)
+   *
+   * Retrieves complete appointment information including:
+   * - Patient and doctor information
+   * - Clinic and shift hour details
+   * - All services with ERM status
+   * - All ERMs created
+   * - Prescription with medicines (if exists)
+   * - Payment transactions
+   *
+   * @param doctorId - Doctor account UUID
+   * @param appointmentId - Appointment UUID
+   * @returns Complete appointment detail
+   * @throws ForbiddenException if doctor does not own this appointment
+   * @throws NotFoundException if appointment not found
+   */
+  async getDoctorAppointmentHistoryDetail(
+    doctorId: string,
+    appointmentId: string,
+  ): Promise<DoctorAppointmentHistoryDetailResponseDto> {
+    // Step 1: Get appointment with all basic relations
+    const appointment = await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.patient', 'patient')
+      .leftJoinAndSelect('patient.generalAccount', 'patientGeneral')
+      .leftJoinAndSelect('appointment.doctor', 'doctor')
+      .leftJoinAndSelect('doctor.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('appointment.clinic', 'clinic')
+      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoinAndSelect('clinic.addresses', 'clinicAddress')
+      .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
+      .where('appointment._id = :appointmentId', { appointmentId })
+      .getOne();
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Step 2: Verify doctor ownership
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(
+        'You do not have permission to view this appointment',
+      );
+    }
+
+    // Step 3: Build patient info
+    const patientGeneral = appointment.patient?.generalAccount;
+    let patientAge: number | null = null;
+    if (patientGeneral?.dob) {
+      const birthDate = new Date(patientGeneral.dob);
+      const today = new Date();
+      patientAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (
+        monthDiff < 0 ||
+        (monthDiff === 0 && today.getDate() < birthDate.getDate())
+      ) {
+        patientAge--;
+      }
+    }
+
+    const patient: AppointmentPatientInfoDto = {
+      patient_id: appointment.patientId,
+      full_name: patientGeneral?.fullName || 'N/A',
+      date_of_birth: patientGeneral?.dob
+        ? new Date(patientGeneral.dob).toISOString().split('T')[0]
+        : null,
+      age: patientAge,
+      gender: patientGeneral?.gender || null,
+      phone: appointment.patient?.phone || null,
+      email: appointment.patient?.email || 'N/A',
+      profile_image_url: patientGeneral?.profilePicture || null,
+    };
+
+    // Step 4: Build doctor info
+    const doctorInfo = appointment.doctor?.doctorInformation;
+    const doctor: AppointmentDoctorInfoDto = {
+      doctor_id: appointment.doctorId || '',
+      full_name: doctorInfo?.fullName || 'N/A',
+      specialization: doctorInfo?.position || doctorInfo?.academicDegree || null,
+      license_number: null, // medicalLicense is JSONB, not accessible directly
+      profile_image_url: doctorInfo?.profilePicture || null,
+    };
+
+    // Step 5: Build clinic info
+    const clinicInfo = appointment.clinic?.clinicManagerInformation;
+    const clinicAddress = appointment.clinic?.addresses?.[0];
+    const clinic: AppointmentClinicInfoDto = {
+      clinic_id: appointment.clinicId,
+      clinic_name: clinicInfo?.clinicBranchName || 'N/A',
+      address: clinicAddress
+        ? `${clinicAddress.address || ''}, ${clinicAddress.wardName || ''}, ${clinicAddress.districtName || ''}, ${clinicAddress.provinceName || ''}`.trim()
+        : 'N/A',
+      phone: appointment.clinic?.phone || null,
+    };
+
+    // Step 6: Build shift hour info
+    const shiftHourData = appointment.clinicShiftHour;
+    const shift_hour: AppointmentShiftHourInfoDto = {
+      doctor_shift_hour_id: shiftHourData?._id || null,
+      shift_date: appointment.appointmentDate instanceof Date
+        ? appointment.appointmentDate.toISOString().split('T')[0]
+        : new Date(appointment.appointmentDate).toISOString().split('T')[0],
+      start_time: shiftHourData?.startHour || null,
+      end_time: shiftHourData?.endHour || null,
+      room_number: null, // Not in ClinicShiftHour schema
+      room_name: null, // Not in ClinicShiftHour schema
+    };
+
+    // Step 7: Get services with ERM information
+    const servicesData = await this.dataSource.query(
+      `
+      SELECT 
+        sa._id as service_appointment_id,
+        sa.clinic_service_id,
+        csc.service_id,
+        cs.service_code,
+        cs.service_name,
+        cat.type as service_type,
+        csc.price,
+        erm._id as erm_id,
+        erm.status as erm_status
+      FROM appointment_package ap
+      INNER JOIN service_appointments sa ON sa.appointment_package_id = ap._id
+      INNER JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
+      INNER JOIN clinic_services cs ON cs._id = csc.service_id
+      LEFT JOIN clinic_service_category cat ON cat._id = cs.category_id
+      LEFT JOIN erms erm ON erm.service_appointments_id = sa._id AND erm.deleted_at IS NULL
+      WHERE ap.appointment_id = $1
+        AND sa.deleted_at IS NULL
+      ORDER BY sa.created_at
+      `,
+      [appointmentId],
+    );
+
+    const services: AppointmentServiceDetailDto[] = servicesData.map((svc: any) => ({
+      service_appointment_id: svc.service_appointment_id,
+      clinic_service_id: svc.clinic_service_id,
+      service_code: svc.service_code || 'N/A',
+      service_name: svc.service_name,
+      service_type: svc.service_type || 'UNKNOWN',
+      price: parseFloat(svc.price) || 0,
+      added_during_examination: false, // Not tracked in current schema
+      erm_id: svc.erm_id || null,
+      erm_status: svc.erm_status || null,
+    }));
+
+    // Step 8: Get ERMs with creator information
+    const ermsData = await this.dataSource.query(
+      `
+      SELECT 
+        erm._id as erm_id,
+        erm.service_appointments_id,
+        erm.record_type,
+        erm.service_code,
+        erm.status,
+        erm.created_at,
+        erm.updated_at,
+        erm.created_by,
+        COALESCE(doc_info.full_name, 'Unknown') as created_by_name,
+        cs.service_name
+      FROM erms erm
+      INNER JOIN service_appointments sa ON sa._id = erm.service_appointments_id
+      INNER JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
+      INNER JOIN clinic_services cs ON cs._id = csc.service_id
+      LEFT JOIN accounts creator ON creator._id = erm.created_by
+      LEFT JOIN doctor_information doc_info ON doc_info.account_id = creator._id
+      WHERE erm.appointment_id = $1
+        AND erm.deleted_at IS NULL
+      ORDER BY erm.created_at
+      `,
+      [appointmentId],
+    );
+
+    const erms: AppointmentERMSummaryDto[] = ermsData.map((erm: any) => ({
+      erm_id: erm.erm_id,
+      service_appointment_id: erm.service_appointments_id,
+      record_type: erm.record_type,
+      service_code: erm.service_code || null,
+      service_name: erm.service_name,
+      status: erm.status,
+      created_at: erm.created_at,
+      updated_at: erm.updated_at,
+      created_by: erm.created_by,
+      created_by_name: erm.created_by_name,
+    }));
+
+    // Step 9: Get prescription with medicines
+    let prescription: AppointmentPrescriptionDto | null = null;
+    const prescriptionData = await this.dataSource.query(
+      `
+      SELECT 
+        ep._id as e_prescription_id,
+        ep.appointment_id,
+        ep.reference_id,
+        ep.doctor_note,
+        ep.created_at
+      FROM e_prescriptions ep
+      WHERE ep.appointment_id = $1
+        AND ep.deleted_at IS NULL
+      LIMIT 1
+      `,
+      [appointmentId],
+    );
+
+    if (prescriptionData && prescriptionData.length > 0) {
+      const prescrip = prescriptionData[0];
+      
+      // Get medicines for this prescription
+      const medicinesData = await this.dataSource.query(
+        `
+        SELECT 
+          epd._id as detail_id,
+          epd.medicine_id,
+          m.name as medicine_name,
+          m.therapeutic_class,
+          epd.check_out,
+          m.habit_forming,
+          m.side_effect
+        FROM detail_e_prescriptions epd
+        INNER JOIN medicines m ON m.id = epd.medicine_id
+        WHERE epd.e_prescription_id = $1
+          AND epd.deleted_at IS NULL
+        ORDER BY epd.created_at
+        `,
+        [prescrip.e_prescription_id],
+      );
+
+      const medicines: PrescriptionMedicineDto[] = medicinesData.map((med: any) => ({
+        detail_id: med.detail_id,
+        medicine_id: med.medicine_id,
+        medicine_name: med.medicine_name,
+        unit: null, // Unit field doesn't exist in Medicine entity
+        therapeutic_class: med.therapeutic_class || null,
+        check_out: med.check_out,
+        habit_forming: med.habit_forming || false,
+        contraindications: null, // Contraindications field doesn't exist in Medicine entity
+        side_effects: med.side_effect || null,
+      }));
+
+      prescription = {
+        e_prescription_id: prescrip.e_prescription_id,
+        appointment_id: prescrip.appointment_id,
+        reference_id: prescrip.reference_id,
+        doctor_note: prescrip.doctor_note || null,
+        created_at: prescrip.created_at,
+        created_by: appointment.doctorId || '',
+        created_by_name: doctorInfo?.fullName || 'Unknown',
+        medicines,
+      };
+    }
+
+    // Step 10: Build final response
+    return {
+      appointment_id: appointment._id,
+      appointment_date: appointment.appointmentDate instanceof Date
+        ? appointment.appointmentDate.toISOString().split('T')[0]
+        : new Date(appointment.appointmentDate).toISOString().split('T')[0],
+      appointment_hour: appointment.appointmentHour,
+      status: appointment.status,
+      total_price: parseFloat(appointment.total.toString()),
+      patient,
+      doctor,
+      clinic,
+      shift_hour,
+      services,
+      erms,
+      prescription,
+      patient_note: appointment.patientNote || null,
+      doctor_note: null, // Not in current schema
+      cancelled_reason: appointment.rejectReason || null,
+      completed_at: null, // Not in current schema
+      created_at: appointment.createdAt,
+      updated_at: appointment.updatedAt,
+    };
+
+
   }
 }

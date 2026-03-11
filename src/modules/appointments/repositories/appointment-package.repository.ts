@@ -54,24 +54,24 @@ export class AppointmentPackageRepository {
       .innerJoin(
         'service_appointments',
         'serviceAppointment',
-        'serviceAppointment.appointment_package_id = package._id',
+        'serviceAppointment.appointment_package_id = package._id AND serviceAppointment.deleted_at IS NULL',
       )
       .innerJoin(
         'clinic_service_config',
         'clinicServiceConfig',
-        'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+        'clinicServiceConfig._id = serviceAppointment.clinic_service_id AND clinicServiceConfig.deleted_at IS NULL',
       )
       .innerJoin(
         'clinic_services',
         'clinicService',
-        'clinicService._id = clinicServiceConfig.service_id',
+        'clinicService._id = clinicServiceConfig.service_id AND clinicService.deleted_at IS NULL',
       )
       .where('package._id = :packageId', { packageId: packageData.package_id })
-      .andWhere('serviceAppointment.deleted_at IS NULL')
-      .andWhere('clinicServiceConfig.deleted_at IS NULL')
-      .andWhere('clinicService.deleted_at IS NULL')
+      .select('serviceAppointment._id', 'serviceAppointment_id')
+      .addSelect('serviceAppointment.price', 'serviceAppointment_price')
+      .addSelect('serviceAppointment.discount', 'serviceAppointment_discount')
       .addSelect('clinicServiceConfig._id', 'clinicServiceConfig_id')
-      .addSelect('clinicServiceConfig.price', 'clinicServiceConfig_price')
+      .addSelect('clinicServiceConfig.duration_min', 'clinicServiceConfig_duration')
       .addSelect('clinicService._id', 'clinicService_id')
       .addSelect('clinicService.service_name', 'clinicService_serviceName')
       .addSelect('clinicService.description', 'clinicService_description')
@@ -91,10 +91,12 @@ export class AppointmentPackageRepository {
         _id: packageData.transaction_id_val,
       } : null,
       services: services.map(s => ({
-        clinicServiceId: s.clinicServiceConfig__id,
-        price: parseFloat(s.clinicServiceConfig_price),
+        serviceAppointmentId: s.serviceAppointment_id,
+        clinicServiceId: s.clinicServiceConfig_id,
+        price: s.serviceAppointment_price ? parseFloat(s.serviceAppointment_price) : 0,
+        discount: s.serviceAppointment_discount ? parseFloat(s.serviceAppointment_discount) : undefined,
         duration: s.clinicServiceConfig_duration,
-        serviceName: s.clinicService_service_name,
+        serviceName: s.clinicService_serviceName,
         description: s.clinicService_description,
       })),
     };
@@ -140,7 +142,8 @@ export class AppointmentPackageRepository {
         'clinicService._id',
         'clinicService.service_name',
         'clinicService.description',
-        'clinicServiceConfig.price',
+        'serviceAppointment.price',
+        'serviceAppointment.discount',
       ])
       .getRawMany();
 
@@ -152,7 +155,8 @@ export class AppointmentPackageRepository {
         id: row.clinicService__id,
         serviceName: row.service_name, // Fixed: was clinicService_service_name
         description: row.clinicService_description,
-        price: parseFloat(row.clinicServiceConfig_price),
+        price: parseFloat(row.serviceAppointment_price),
+        discount: row.serviceAppointment_discount ? parseFloat(row.serviceAppointment_discount) : undefined,
       };
 
       if (!servicesMap.has(appointmentId)) {
@@ -202,7 +206,8 @@ export class AppointmentPackageRepository {
           'sa._id AS service_appointment_id',
           'csc._id AS clinic_service_id',
           'cs.service_name AS service_name',
-          'csc.price AS service_price',
+          'sa.price AS service_price',
+          'sa.discount AS service_discount',
         ])
         .where('pkg._id = :packageId', { packageId: pkg.package_id })
         .andWhere('sa.deleted_at IS NULL')
