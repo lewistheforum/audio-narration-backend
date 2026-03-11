@@ -3,7 +3,7 @@ import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../../modules/contracts/enums/salary-payment-method.enum';
-import { ContractStatus } from '../../modules/accounts/enums/contract-status.enum';
+import { ContractStatus } from '../../modules/contracts/enums/contract-status.enum';
 import { ClinicContractInformation } from '../../modules/contracts/entities/clinic-contract-information.entity';
 import { ClinicContractInformationRepository } from '../../modules/contracts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';

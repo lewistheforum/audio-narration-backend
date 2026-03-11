@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ContractPackage } from '../entities/contract-package.entity';
-import { ContractStatus } from '../../accounts/enums/contract-status.enum';
+import { ContractStatus } from '../enums/contract-status.enum';
 
 /**
  * ContractPackage Repository

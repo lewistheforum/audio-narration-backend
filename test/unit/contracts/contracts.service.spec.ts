@@ -6,7 +6,7 @@ import { AccountsService } from '../../../src/modules/accounts/accounts.service'
 import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { CodeVerificationRepository } from '../../../src/modules/accounts/repositories/code-verification.repository';
 import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { ContractStatus } from '../../../src/modules/accounts/enums/contract-status.enum';
+import { ContractStatus } from '../../../src/modules/contracts/enums/contract-status.enum';
 import { CreateContractInfoDto } from '../../../src/modules/contracts/dto/create-contract-info.dto';
 import { VerificationType } from '../../../src/modules/accounts/enums';
 import * as crypto from 'crypto';

@@ -17,7 +17,7 @@ import { ContractPackage } from './entities/contract-package.entity';
 import { ClinicContractInformation } from './entities/clinic-contract-information.entity';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { ContractRole } from './enums/contract-role.enum';
-import { ContractStatus } from '../accounts/enums/contract-status.enum';
+import { ContractStatus } from './enums/contract-status.enum';
 
 /**
  * Contracts Service

@@ -11,7 +11,7 @@ import {
 import { ContractPackage } from './contract-package.entity';
 import { ContractType } from '../enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
-import { ContractStatus } from '../../accounts/enums/contract-status.enum';
+import { ContractStatus } from '../enums/contract-status.enum';
 
 @Entity('clinic_contract_information')
 export class ClinicContractInformation {
