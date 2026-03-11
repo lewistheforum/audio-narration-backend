@@ -12,6 +12,7 @@ import { HttpService } from '@nestjs/axios';
 import * as FormData from 'form-data';
 import { firstValueFrom } from 'rxjs';
 import { API } from '../../common/utils/ai-api';
+import { getCurrentVietnamTime } from '../../common/utils/date.util';
 
 /**
  * AI Service
@@ -94,7 +95,7 @@ export class AiService {
       content,
       provider: dto.provider,
       model,
-      timestamp: new Date(),
+      timestamp: getCurrentVietnamTime(),
     };
   }
 
@@ -135,7 +136,7 @@ export class AiService {
       content: formatJson,
       provider: AiProvider.CHATGPT,
       model,
-      timestamp: new Date(),
+      timestamp: getCurrentVietnamTime(),
     };
   }
 

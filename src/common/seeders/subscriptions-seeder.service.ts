@@ -12,7 +12,7 @@ import { SubscriptionService } from '../../modules/subscriptions/entities/subscr
 import { RegistrationStatus } from '../../modules/subscriptions/enums';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import { SubscriptionServiceRepository } from '../../modules/subscriptions/repositories/subscription-service.repository';
-import { subtractFromVietnamTime, addToVietnamTime } from '../utils/date.util';
+import { subtractFromVietnamTime, addToVietnamTime, getCurrentVietnamTime, addToDate } from '../utils/date.util';
 
 /**
  * Subscriptions Seeder Service
@@ -178,9 +178,8 @@ export class SubscriptionsSeederService {
       }
 
       // Calculate subscription and expiration dates
-      const subscriptionDate = new Date();
-      const expirationDate = new Date();
-      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+      const subscriptionDate = getCurrentVietnamTime();
+      const expirationDate = addToDate(subscriptionDate, 1, 'year');
 
       // Create clinic subscription with aligned status
       const clinicSubscription = this.clinicSubscriptionRepository.create({
@@ -378,7 +377,7 @@ export class SubscriptionsSeederService {
         subscriptionStatus === RegistrationStatus.PENDING_APPROVAL ||
         subscriptionStatus === RegistrationStatus.PENDING_PAYMENT
       ) {
-        subscriptionDate = new Date(backdatedDate);
+        subscriptionDate = backdatedDate;
       }
 
       // expirationDate: null for all pending statuses (not activated)
@@ -458,14 +457,13 @@ export class SubscriptionsSeederService {
           status === RegistrationStatus.PENDING_LEGAL_SETUP ||
           status === RegistrationStatus.EXPIRED
         ) {
-          subscriptionDate = new Date(historicalDate);
+          subscriptionDate = historicalDate;
         }
 
         // expirationDate only for EXPIRED status
         let expirationDate: Date | null = null;
         if (status === RegistrationStatus.EXPIRED && subscriptionDate) {
-          expirationDate = new Date(subscriptionDate);
-          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+          expirationDate = addToDate(subscriptionDate, 1, 'year');
         }
 
         // Create hanging history record

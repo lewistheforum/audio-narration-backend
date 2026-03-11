@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { PaymentDirection, PaymentStatus } from '../entities/transaction.entity';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 export class TransactionDetailDto {
   @ApiProperty()
@@ -24,9 +26,11 @@ export class TransactionDetailDto {
   referenceCode?: string;
 
   @ApiProperty({ required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   transactionDate?: Date;
 
   @ApiProperty()
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ required: false })

@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { ERMRecordType } from '../../prescriptions/enums/erm-enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 export class AddServiceResponseDto {
   @ApiProperty({
@@ -61,5 +63,6 @@ export class AddServiceResponseDto {
     description: 'Timestamp when service was added',
     example: '2026-03-02T10:30:00Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 }

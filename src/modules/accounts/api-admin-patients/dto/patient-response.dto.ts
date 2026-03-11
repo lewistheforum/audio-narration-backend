@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { Account } from '../../entities/accounts.entity';
 import { AccountStatus, Gender } from '../../enums';
+import { formatToVietnamTime } from '../../../../common/utils/date.util';
 
 export class PatientAddressDto {
   @ApiProperty()
@@ -48,6 +50,7 @@ export class PatientResponseDto {
   gender?: Gender;
 
   @ApiProperty({ required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({ enum: AccountStatus, required: false })
@@ -66,6 +69,7 @@ export class PatientResponseDto {
   addresses?: PatientAddressDto[];
 
   @ApiProperty()
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   constructor(account: Account) {

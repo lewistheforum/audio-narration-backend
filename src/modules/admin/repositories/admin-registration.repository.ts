@@ -16,6 +16,7 @@ import {
   SubscriptionInfoDto,
 } from '../dto';
 import { LegalDocumentVerificationStatus } from 'src/modules/accounts/enums';
+import { getVietnamTimestamp } from '../../../common/utils/date.util';
 
 /**
  * Admin Registration Repository
@@ -431,7 +432,7 @@ export class AdminRegistrationRepository {
     const enrichedData = data.map((item) => ({
       ...item,
       daysSinceRegistration: Math.floor(
-        (Date.now() - new Date(item.registrationDate).getTime()) /
+        (getVietnamTimestamp() - new Date(item.registrationDate).getTime()) /
           (1000 * 60 * 60 * 24),
       ),
     }));

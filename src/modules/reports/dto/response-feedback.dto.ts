@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { Feedback } from '../entities/feedback.entity';
 import { FeedbackType } from '../enums';
 import { Account } from '../../accounts/entities/accounts.entity';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 export class FeedbackResponseDto {
   @ApiProperty({
@@ -79,12 +81,14 @@ export class FeedbackResponseDto {
     description: 'Creation date',
     example: '2024-01-01T00:00:00Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Update date',
     example: '2024-01-01T00:00:00Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   constructor(feedback: Feedback) {

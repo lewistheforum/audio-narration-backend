@@ -1,4 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 export class PaymentHistoryItemDto {
   @ApiProperty({ example: 'c0ca8af8-8ef3-4611-a67d-1b1dd815e5a8' })
@@ -23,9 +25,11 @@ export class PaymentHistoryItemDto {
   referenceCode: string;
 
   @ApiProperty({ example: '2023-03-25T14:02:37.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   transactionDate: Date;
 
   @ApiProperty({ example: '2023-03-25T14:02:37.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ example: 'Phòng khám ABC', required: false })
@@ -38,6 +42,7 @@ export class PaymentHistoryItemDto {
   senderGender?: string;
 
   @ApiProperty({ example: '1990-01-01', required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   senderDob?: Date;
 }
 

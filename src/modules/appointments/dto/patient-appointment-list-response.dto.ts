@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Clinic Summary DTO for Patient Appointment List
@@ -59,9 +61,11 @@ export class PatientAppointmentListItemDto {
   doctor?: DoctorSummaryDto;
 
   @ApiProperty({ description: 'Appointment date', example: '2026-03-15' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_date: Date;
 
   @ApiProperty({ description: 'Appointment hour (ISO timestamp)', example: '2026-03-15T08:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_hour: Date;
 
   @ApiPropertyOptional({ description: 'Shift start hour', example: '08:00:00' })

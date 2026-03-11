@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DatabaseHealthService } from './database-health.service';
+import { formatToVietnamTime } from '../utils/date.util';
 
 @ApiTags('Health')
 @Controller('health')
@@ -19,7 +20,7 @@ export class HealthController {
     schema: {
       properties: {
         status: { type: 'string', example: 'healthy' },
-        timestamp: { type: 'string', format: 'date-time', example: new Date().toISOString() },
+        timestamp: { type: 'string', format: 'date-time', example: formatToVietnamTime() },
         services: {
           type: 'object',
           properties: {
@@ -54,7 +55,7 @@ export class HealthController {
 
     return {
       status: connections.allConnected ? 'healthy' : 'unhealthy',
-      timestamp: new Date().toISOString(),
+      timestamp: formatToVietnamTime(),
       services: {
         database: connections,
         details: connectionInfo,

@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AppointmentStatus } from '../enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Service Detail DTO for Appointment Response
@@ -73,12 +75,15 @@ export class AppointmentResponseDto {
   services?: ServiceDetailDto[];
 
   @ApiProperty({ description: 'Appointment date' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointmentDate: Date;
 
   @ApiProperty({ description: 'Appointment hour' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointmentHour: Date;
 
   @ApiProperty({ description: 'Extra hour if applicable', required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   extraHour?: Date | null;
 
   @ApiProperty({ description: 'Total amount', example: 500000 })
@@ -94,9 +99,11 @@ export class AppointmentResponseDto {
   rejectReason?: string | null;
 
   @ApiProperty({ description: 'Creation timestamp' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ description: 'Last update timestamp' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 }
 
