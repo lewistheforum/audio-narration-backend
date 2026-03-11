@@ -176,35 +176,13 @@ export class AppointmentRepository {
     return this.repository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoin(
-        'general_accounts',
-        'patientProfile',
-        'patientProfile.account_id = patient._id',
-      )
+      .leftJoinAndSelect('patient.addresses', 'patientAddresses')
+      .leftJoinAndSelect('patient.generalAccount', 'patientProfile')
       .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoin(
-        'doctor_information',
-        'doctorProfile',
-        'doctorProfile.account_id = doctor._id',
-      )
+      .leftJoinAndSelect('doctor.doctorInformation', 'doctorProfile')
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
       .leftJoinAndSelect('shiftHour.shift', 'shift')
-      .addSelect([
-        'patientProfile._id',
-        'patientProfile.full_name',
-        'patientProfile.gender',
-        'patientProfile.dob',
-        'patientProfile.profile_picture',
-        'doctorProfile._id',
-        'doctorProfile.full_name',
-        'doctorProfile.gender',
-        'doctorProfile.dob',
-        'doctorProfile.profile_picture',
-        'doctorProfile.academic_degree',
-        'doctorProfile.experience',
-        'doctorProfile.position',
-      ])
       .where('appointment._id = :id', { id })
       .andWhere('appointment.deletedAt IS NULL')
       .getOne();
