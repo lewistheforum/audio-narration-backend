@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { LegalDocumentVerificationStatus } from '../enums/legal-document-verification-status.enum';
 import { ClinicsLegalDocuments } from '../entities/clinics_legal_documents.entity';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Legal Document Response DTO
@@ -60,12 +62,14 @@ export class LegalDocumentResponseDto {
     description: 'Creation timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Last update timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   constructor(legalDocs: ClinicsLegalDocuments) {

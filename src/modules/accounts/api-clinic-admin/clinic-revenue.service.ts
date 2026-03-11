@@ -16,7 +16,7 @@ import {
   OverallRevenueReportResponseDto,
   BranchRevenueReportResponseDto,
 } from './dto';
-import { formatToVietnamTime } from 'src/common/utils/date.util';
+import { formatToVietnamTime, parseVietnamTime } from 'src/common/utils/date.util';
 
 /**
  * Clinic Revenue Service
@@ -224,8 +224,8 @@ export class ClinicRevenueService {
    * Ensures startDate is before endDate and range does not exceed 365 days
    */
   private validateDateRange(startDate: string, endDate: string): void {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = parseVietnamTime(startDate);
+    const end = parseVietnamTime(endDate);
 
     if (start >= end) {
       throw new BadRequestException('startDate must be before endDate');
@@ -525,8 +525,8 @@ export class ClinicRevenueService {
       period: item.period,
       revenue: parseInt(item.revenue || '0', 10),
       transactionCount: parseInt(item.transactionCount || '0', 10),
-      periodStart: formatToVietnamTime(new Date(item.periodStart)),
-      periodEnd: formatToVietnamTime(new Date(item.periodEnd)),
+      periodStart: formatToVietnamTime(item.periodStart),
+      periodEnd: formatToVietnamTime(item.periodEnd),
     }));
   }
 

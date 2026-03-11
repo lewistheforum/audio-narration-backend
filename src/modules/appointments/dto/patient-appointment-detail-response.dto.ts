@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../enums';
 import { ERMRecordType, ERMStatus } from '../../prescriptions/enums/erm-enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Enhanced Clinic Summary DTO for Patient Appointment Detail
@@ -154,9 +156,11 @@ export class PatientAppointmentDetailResponseDto {
   doctor?: DoctorDetailSummaryDto;
 
   @ApiProperty({ description: 'Appointment date', example: '2026-03-15' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_date: Date;
 
   @ApiProperty({ description: 'Appointment hour (ISO timestamp)', example: '2026-03-15T08:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_hour: Date;
 
   @ApiPropertyOptional({ description: 'Shift start hour', example: '08:00:00' })
@@ -200,8 +204,10 @@ export class PatientAppointmentDetailResponseDto {
   appointment_packages: AppointmentPackageSummaryDto[];
 
   @ApiProperty({ description: 'Appointment creation timestamp', example: '2026-03-10T10:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   created_at: Date;
 
   @ApiProperty({ description: 'Appointment last update timestamp', example: '2026-03-10T10:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updated_at: Date;
 }

@@ -9,7 +9,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { CodeVerificationRepository } from '../accounts/repositories/code-verification.repository';
 import { VerificationType } from '../accounts/enums';
 import { generateVerificationCode } from 'src/common/utils/util';
-import { getStartOfDay } from 'src/common/utils/date.util';
+import { getStartOfDay, getCurrentTime, addToVietnamTime } from 'src/common/utils/date.util';
 import axios from 'axios';
 import { CreateContractPackageDto } from './dto/create-contract-package.dto';
 import { CreateContractInfoDto } from './dto/create-contract-info.dto';
@@ -63,7 +63,7 @@ export class ContractsService {
         }
 
         // 2. Auto-populate optional fields
-        const headerDate = dto.headerDate || new Date().toISOString();
+        const headerDate = dto.headerDate || getCurrentTime();
         const headerAddress = dto.headerAddress || 'Vietnam';
         const clinicRepresentative = dto.clinicRepresentative || 'Clinic Representative';
         const position = dto.position || 'Manager';
@@ -131,8 +131,7 @@ export class ContractsService {
 
         // Generate OTP
         const code = generateVerificationCode();
-        const expirationTime = new Date();
-        expirationTime.setMinutes(expirationTime.getMinutes() + 15); // 15 mins expiry
+        const expirationTime = addToVietnamTime(15, 'minute'); // 15 mins expiry
 
         // Save OTP
         const verification = this.codeVerificationRepository.create({

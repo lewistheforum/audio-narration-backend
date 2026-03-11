@@ -5,6 +5,7 @@ import {
   ClinicServiceItemDto,
   GetClinicServicesQueryDto,
 } from './dto';
+import { formatToVietnamTime } from '../../common/utils/date.util';
 
 /**
  * Service Configs Service
@@ -101,8 +102,8 @@ export class ServiceConfigsService {
         isActive: raw.isActive,
         categoryName: raw.categoryName,
         noteForPatient: raw.noteForPatient,
-        createdAt: raw.createdAt?.toISOString(),
-        updatedAt: raw.updatedAt?.toISOString(),
+        createdAt: formatToVietnamTime(raw.createdAt),
+        updatedAt: formatToVietnamTime(raw.updatedAt),
       };
     });
 

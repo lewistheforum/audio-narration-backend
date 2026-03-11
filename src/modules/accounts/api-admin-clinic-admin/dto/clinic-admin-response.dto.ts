@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { Account } from '../../entities/accounts.entity';
 import { AccountStatus } from '../../enums';
 import { RegistrationStatus } from '../../../subscriptions/enums';
+import { formatToVietnamTime } from '../../../../common/utils/date.util';
 
 export class ClinicAdminAddressDto {
   @ApiProperty()
@@ -69,6 +71,7 @@ export class ClinicAdminResponseDto {
   status: AccountStatus;
 
   @ApiProperty()
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   constructor(account: Account) {
@@ -110,6 +113,7 @@ export class ClinicAdminDetailResponseDto extends ClinicAdminResponseDto {
   paraclinical?: string[];
 
   @ApiProperty({ required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({ required: false })
@@ -137,12 +141,14 @@ export class ClinicAdminDetailResponseDto extends ClinicAdminResponseDto {
     required: false,
     description: 'Current subscription start date',
   })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   subscriptionDate?: Date;
 
   @ApiProperty({
     required: false,
     description: 'Current subscription expiration date',
   })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   expirationDate?: Date;
 
   @ApiProperty({

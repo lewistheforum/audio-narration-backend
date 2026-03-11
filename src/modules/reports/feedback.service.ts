@@ -23,6 +23,7 @@ import {
 } from './dto/doctor-feedbacks-response.dto';
 import { API } from '../../common/utils/ai-api';
 import { MESSAGES } from '../../common/message';
+import { getVietnamTimestamp } from '../../common/utils/date.util';
 
 /**
  * Feedback Service
@@ -163,7 +164,7 @@ export class FeedbackService {
 
     // Check 3-day time limit
     const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
-    const timeDiff = Date.now() - feedback.createdAt.getTime();
+    const timeDiff = getVietnamTimestamp() - feedback.createdAt.getTime();
 
     if (timeDiff > threeDaysInMillis) {
       throw new ForbiddenException(
