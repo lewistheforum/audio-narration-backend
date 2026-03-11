@@ -107,9 +107,12 @@ export class ClinicContractInformation {
     name: 'contract_status',
     type: 'enum',
     enum: ContractStatus,
-    default: ContractStatus.CURRENT,
+    default: ContractStatus.DRAFT,
   })
   contractStatus: ContractStatus;
+
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejectionReason?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

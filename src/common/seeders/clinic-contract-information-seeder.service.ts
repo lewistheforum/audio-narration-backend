@@ -20,6 +20,7 @@ import {
   SALARY_PAYMENT_CYCLES,
   PARTY_A_SIGNERS,
   PARTY_B_SIGNERS,
+  REJECTION_REASONS,
 } from '../constants/medical-terms';
 import { PROVINCES } from '../constants/locations';
 import { getCurrentVietnamTime } from '../utils/date.util';
@@ -56,6 +57,7 @@ export class ClinicContractInformationSeederService {
   private readonly SALARY_PAYMENT_CYCLES = SALARY_PAYMENT_CYCLES;
   private readonly PARTY_A_SIGNERS = PARTY_A_SIGNERS;
   private readonly PARTY_B_SIGNERS = PARTY_B_SIGNERS;
+  private readonly REJECTION_REASONS = REJECTION_REASONS;
 
   constructor(
     private readonly clinicContractInformationRepository: ClinicContractInformationRepository,
@@ -143,6 +145,7 @@ export class ClinicContractInformationSeederService {
         }
 
         // Create clinic contract information with realistic orthopedics clinic data
+        const status = this.getRandomContractStatus();
         const contractInfo = this.clinicContractInformationRepository.create({
           contractId: contractPackage._id,
           doctorSpecialty: this.getRandomDoctorSpecialty(),
@@ -166,7 +169,8 @@ export class ClinicContractInformationSeederService {
           partyASignerName: this.getRandomPartyASignerName(),
           partyBSignerName: this.getRandomPartyBSignerName(),
           contractFile: this.getRandomContractFile(),
-          contractStatus: this.getRandomContractStatus(),
+          contractStatus: status,
+          rejectionReason: status === ContractStatus.REJECTED ? this.getRandomRejectionReason() : null,
         });
 
         await this.clinicContractInformationRepository.save(contractInfo);
@@ -402,7 +406,22 @@ export class ClinicContractInformationSeederService {
    * Get random contract status
    */
   private getRandomContractStatus(): ContractStatus {
-    const statuses = [ContractStatus.CURRENT, ContractStatus.OLD];
+    const statuses = [
+      ContractStatus.CURRENT,
+      ContractStatus.OLD,
+      ContractStatus.DRAFT,
+      ContractStatus.REJECTED,
+      ContractStatus.PENDING_SIGNATURE,
+    ];
     return statuses[Math.floor(Math.random() * statuses.length)];
+  }
+
+  /**
+   * Get random rejection reason
+   */
+  private getRandomRejectionReason(): string {
+    return this.REJECTION_REASONS[
+      Math.floor(Math.random() * this.REJECTION_REASONS.length)
+    ];
   }
 }

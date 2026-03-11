@@ -49,6 +49,7 @@ describe('ContractsService', () => {
             sendContractSigningCode: jest.fn(),
             sendContractSignedNotificationToManager: jest.fn(),
             sendContractCompletedNotificationToEmployee: jest.fn(),
+            sendContractRejectNotification: jest.fn(),
         };
 
         codeVerificationRepo = {
@@ -98,21 +99,40 @@ describe('ContractsService', () => {
             expect(result.contractStatus).toBe(ContractStatus.DRAFT);
         });
 
-        it('should RESET status to DRAFT and clear file if status is PENDING_SIGNATURE', async () => {
+        it('should THROW BadRequestException if status is PENDING_SIGNATURE', async () => {
             contractPackageRepo.findById.mockResolvedValue({ _id: packageId });
             contractInfoRepo.findByContractId.mockResolvedValue({
                 _id: 'info-1',
-                contractStatus: ContractStatus.PENDING_SIGNATURE, // File uploaded
-                contractFile: 'https://url.com/file.pdf',
-                jobDescription: 'Old Terms',
+                contractStatus: ContractStatus.PENDING_SIGNATURE,
+            });
+
+            await expect(service.createContractInfo(packageId, dto))
+                .rejects.toThrow(BadRequestException);
+        });
+
+        it('should IGNORE contractStatus in DTO during update', async () => {
+            contractPackageRepo.findById.mockResolvedValue({ _id: packageId });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                _id: 'info-1',
+                contractStatus: ContractStatus.DRAFT,
             });
             contractInfoRepo.save.mockImplementation((info) => Promise.resolve(info));
 
-            const result = await service.createContractInfo(packageId, dto);
+            const dtoWithStatus = { ...dto, contractStatus: ContractStatus.PENDING_SIGNATURE };
+            const result = await service.createContractInfo(packageId, dtoWithStatus as any);
 
-            expect(result.jobDescription).toBe('Updated Terms');
-            expect(result.contractStatus).toBe(ContractStatus.DRAFT); // Reset
-            expect(result.contractFile).toBeNull(); // Clear file
+            expect(result.contractStatus).toBe(ContractStatus.DRAFT); // Remained DRAFT
+        });
+        
+        it('should THROW BadRequestException if status is REJECTED', async () => {
+            contractPackageRepo.findById.mockResolvedValue({ _id: packageId });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                _id: 'info-1',
+                contractStatus: ContractStatus.REJECTED,
+            });
+
+            await expect(service.createContractInfo(packageId, dto))
+                .rejects.toThrow(BadRequestException);
         });
 
         it('should THROW BadRequestException if status is PENDING_MANAGER_SIGNATURE (Locked)', async () => {
@@ -517,6 +537,28 @@ describe('ContractsService', () => {
     });
 
     // ========================================
+    // uploadContractFile
+    // ========================================
+    describe('uploadContractFile', () => {
+        const contractId = 'pkg-1';
+
+        it('should throw BadRequestException if contract is not DRAFT (e.g. REJECTED, PENDING)', async () => {
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                contractStatus: ContractStatus.REJECTED,
+            });
+
+            await expect(service.uploadContractFile(contractId, {}))
+                .rejects.toThrow(BadRequestException);
+        });
+
+        it('should throw NotFoundException if contract info not found', async () => {
+            contractInfoRepo.findByContractId.mockResolvedValue(null);
+            await expect(service.uploadContractFile(contractId, {}))
+                .rejects.toThrow(NotFoundException);
+        });
+    });
+
+    // ========================================
     // updateExpiredContractsToOld
     // ========================================
     describe('updateExpiredContractsToOld', () => {
@@ -545,6 +587,132 @@ describe('ContractsService', () => {
                 ContractStatus.OLD
             );
             expect(result).toBe(2);
+        });
+    });
+
+    // ========================================
+    // rejectContract
+    // ========================================
+    describe('rejectContract', () => {
+        const contractId = 'pkg-1';
+        const empId = 'emp-1';
+        const mgrId = 'mgr-1';
+        const reason = 'Incorrect information';
+
+        it('should allow Employee to reject if status is PENDING_SIGNATURE', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                _id: contractId,
+                employeeId: empId,
+                clinicManagerId: mgrId,
+            });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                contractStatus: ContractStatus.PENDING_SIGNATURE,
+            });
+            accountsService.findAccountEntityById.mockResolvedValue({
+                username: 'EmpName',
+                email: 'emp@test.com'
+            });
+
+            await service.rejectContract(contractId, empId, reason);
+
+            expect(contractInfoRepo.save).toHaveBeenCalledWith(expect.objectContaining({
+                contractStatus: ContractStatus.REJECTED,
+                rejectionReason: reason,
+            }));
+            expect(mailerService.sendContractRejectNotification).toHaveBeenCalled();
+        });
+
+        it('should allow Manager to reject if status is PENDING_MANAGER_SIGNATURE', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                _id: contractId,
+                employeeId: empId,
+                clinicManagerId: mgrId,
+            });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                contractStatus: ContractStatus.PENDING_MANAGER_SIGNATURE,
+            });
+            accountsService.findAccountEntityById.mockResolvedValue({
+                username: 'MgrName',
+                email: 'mgr@test.com'
+            });
+
+            await service.rejectContract(contractId, mgrId, reason);
+
+            expect(contractInfoRepo.save).toHaveBeenCalledWith(expect.objectContaining({
+                contractStatus: ContractStatus.REJECTED,
+                rejectionReason: reason,
+            }));
+            expect(mailerService.sendContractRejectNotification).toHaveBeenCalled();
+        });
+
+        it('should throw UnauthorizedException if user is not party in contract', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                employeeId: 'other-1',
+                clinicManagerId: 'other-2',
+            });
+            await expect(service.rejectContract(contractId, 'hacker-1', reason))
+                .rejects.toThrow(UnauthorizedException);
+        });
+
+        it('should throw BadRequestException if employee rejects at wrong stage', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                employeeId: empId,
+                clinicManagerId: mgrId,
+            });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                contractStatus: ContractStatus.PENDING_MANAGER_SIGNATURE, // Too late for employee
+            });
+            await expect(service.rejectContract(contractId, empId, reason))
+                .rejects.toThrow(BadRequestException);
+        });
+    });
+
+    // ========================================
+    // deletePackage (Cancel)
+    // ========================================
+    describe('deletePackage', () => {
+        const contractId = 'pkg-1';
+        const mgrId = 'mgr-1';
+
+        beforeEach(() => {
+            contractPackageRepo.softDelete = jest.fn();
+            contractInfoRepo.softDelete = jest.fn();
+        });
+
+        it('should allow Manager to cancel if contract is not CURRENT', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                _id: contractId,
+                clinicManagerId: mgrId,
+            });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                _id: 'info-1',
+                contractStatus: ContractStatus.PENDING_SIGNATURE,
+            });
+
+            await service.deletePackage(contractId, mgrId);
+
+            expect(contractInfoRepo.softDelete).toHaveBeenCalledWith('info-1');
+            expect(contractPackageRepo.softDelete).toHaveBeenCalledWith(contractId);
+        });
+
+        it('should throw UnauthorizedException if non-manager tries to delete', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                clinicManagerId: 'other-mgr',
+            });
+            await expect(service.deletePackage(contractId, mgrId))
+                .rejects.toThrow(UnauthorizedException);
+        });
+
+        it('should throw BadRequestException if contract is already CURRENT', async () => {
+            contractPackageRepo.findById.mockResolvedValue({
+                _id: contractId,
+                clinicManagerId: mgrId,
+            });
+            contractInfoRepo.findByContractId.mockResolvedValue({
+                contractStatus: ContractStatus.CURRENT,
+            });
+            await expect(service.deletePackage(contractId, mgrId))
+                .rejects.toThrow(BadRequestException);
         });
     });
 });

@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
 import { generateRSAKeyPair } from 'src/common/utils/util';
+import * as crypto from 'crypto';
 import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 import { AccountRepository } from '../repositories/account.repository';
 import { ClinicManagerInformationRepository } from '../repositories/clinic-manager-information.repository';
@@ -45,7 +45,7 @@ export class ClinicManagerService {
     private readonly googleIframeRepository: GoogleIframeRepository,
     private readonly legalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * FLOW 1: Get Manager List
@@ -66,7 +66,7 @@ export class ClinicManagerService {
     }
 
     // Fetch managers with pagination and filters
-    const [managers, totalItems] = 
+    const [managers, totalItems] =
       await this.managerInfoRepository.findManagersByAdminWithPagination(
         clinicAdminId,
         query,
@@ -118,7 +118,7 @@ export class ClinicManagerService {
   ): Promise<ManagerDetailResponseDto> {
     // Validate ownership
     const manager = await this.managerInfoRepository.findManagerDetailById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -141,17 +141,17 @@ export class ClinicManagerService {
         .filter((child) => !child.deletedAt)
         .map((child) => ({
           accountId: child._id,
-          fullName: child.role === AccountRole.DOCTOR 
-            ? child.doctorInformation?.fullName 
+          fullName: child.role === AccountRole.DOCTOR
+            ? child.doctorInformation?.fullName
             : child.clinicStaffInformation?.fullName,
           role: child.role,
           email: child.email,
           status: child.status,
-          clinicRole: child.role === AccountRole.CLINIC_STAFF 
-            ? child.clinicStaffInformation?.clinicRole 
+          clinicRole: child.role === AccountRole.CLINIC_STAFF
+            ? child.clinicStaffInformation?.clinicRole
             : undefined,
-          specialization: child.role === AccountRole.DOCTOR 
-            ? child.doctorInformation?.specialization 
+          specialization: child.role === AccountRole.DOCTOR
+            ? child.doctorInformation?.specialization
             : undefined,
         }));
     }
@@ -320,10 +320,10 @@ export class ClinicManagerService {
 
     // Generate and save keys
     const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
-    
+
     manager.publicKey = publicKey;
     manager.encryptedPrivateKey = encryptedPrivateKey;
-    
+
     await this.accountRepository.saveAccount(manager);
 
     return { publicKey, encryptedPrivateKey };
@@ -351,7 +351,7 @@ export class ClinicManagerService {
   ): Promise<{ message: string }> {
     // Validate ownership
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -378,7 +378,7 @@ export class ClinicManagerService {
         legalDocs.businessLicense = dto.businessLicense || legalDocs.businessLicense;
         legalDocs.taxIdUrl = dto.taxIdUrl || legalDocs.taxIdUrl;
         legalDocs.otherDocs = dto.otherDocs || legalDocs.otherDocs;
-        
+
         // CRITICAL: Reset verification status to trigger re-approval
         legalDocs.verificationStatus = LegalDocumentVerificationStatus.PENDING_REVIEW;
         legalDocs.rejectionReason = null; // Clear previous rejection reason
@@ -409,7 +409,7 @@ export class ClinicManagerService {
 
       return {
         message: 'Legal documents updated. Manager account set to PENDING_APPROVAL. ' +
-                 'Branch operations are frozen until admin approval.',
+          'Branch operations are frozen until admin approval.',
       };
 
     } catch (error) {
@@ -435,7 +435,7 @@ export class ClinicManagerService {
     dto: UpdateManagerProfileDto,
   ): Promise<{ message: string }> {
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -455,7 +455,7 @@ export class ClinicManagerService {
 
     // Update ClinicManagerInformation
     const managerInfo = await this.managerInfoRepository.findByAccountId(managerId);
-    
+
     if (!managerInfo) {
       throw new NotFoundException('Manager information not found');
     }
@@ -486,7 +486,7 @@ export class ClinicManagerService {
     dto: UpdateManagerLocationDto,
   ): Promise<{ message: string }> {
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -506,7 +506,7 @@ export class ClinicManagerService {
     try {
       // Update Address
       const address = await this.addressRepository.findByAccountId(managerId);
-      
+
       if (!address) {
         throw new NotFoundException('Address not found for this manager');
       }
@@ -566,7 +566,7 @@ export class ClinicManagerService {
   ): Promise<{ message: string }> {
     // Validate ownership
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -592,12 +592,12 @@ export class ClinicManagerService {
     await this.accountRepository.saveAccount(manager);
 
     // Count affected personnel
-    const { staffCount, doctorCount } = 
+    const { staffCount, doctorCount } =
       await this.accountRepository.countPersonnelByManager(managerId);
 
     return {
       message: `Manager disabled successfully. ${staffCount} staff and ${doctorCount} doctors ` +
-               'will be unable to login until manager is re-enabled.',
+        'will be unable to login until manager is re-enabled.',
     };
   }
 
@@ -616,7 +616,7 @@ export class ClinicManagerService {
   ): Promise<{ message: string }> {
     // Validate ownership
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -642,12 +642,12 @@ export class ClinicManagerService {
     await this.accountRepository.saveAccount(manager);
 
     // Count affected personnel
-    const { staffCount, doctorCount } = 
+    const { staffCount, doctorCount } =
       await this.accountRepository.countPersonnelByManager(managerId);
 
     return {
       message: `Manager enabled successfully. ${staffCount} staff and ${doctorCount} doctors ` +
-               'can now login to the system.',
+        'can now login to the system.',
     };
   }
 
@@ -668,7 +668,7 @@ export class ClinicManagerService {
   ): Promise<{ message: string }> {
     // Validate ownership
     const manager = await this.accountRepository.findAccountById(managerId);
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }

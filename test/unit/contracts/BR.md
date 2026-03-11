@@ -54,11 +54,37 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
     -   Trạng thái chuyển sang `CURRENT` (Hiệu lực).
     -   **Email:** Gửi thông báo hoàn tất và link xem hợp đồng cho Nhân viên.
 
+### 2.5 Từ Chối Ký (Reject)
+-   **Actor:** Nhân viên hoặc Quản lý.
+-   **Điều kiện:** 
+    -   Nhân viên từ chối khi trạng thái là `PENDING_SIGNATURE`.
+    -   Quản lý từ chối khi trạng thái là `PENDING_MANAGER_SIGNATURE`.
+-   **Hành động:** Người dùng chọn "Từ chối" và nhập lý do (`rejectionReason`).
+-   **Kết quả:**
+    -   Trạng thái chuyển về `REJECTED`.
+    -   Hệ thống lưu lại lý do từ chối.
+    -   **Email:** Gửi thông báo cho đối phương về việc hợp đồng bị từ chối kèm lý do.
+    -   **Lưu ý:** Quản lý có thể sửa thông tin hợp đồng từ trạng thái `REJECTED` để đưa về `DRAFT` (reset quy trình).
+
+### 2.6 Hủy Bỏ Hợp Đồng (Cancel/Delete)
+-   **Actor:** Quản lý phòng khám.
+-   **Hành động:** Hủy bỏ gói hợp đồng.
+-   **Yêu cầu:** 
+    -   Cho phép hủy ở bất kỳ trạng thái nào **trước khi** hợp đồng thành `CURRENT`.
+    -   Nếu đã là `CURRENT`, việc chấm dứt hợp đồng phải tuân theo quy trình pháp lý khác (không nằm trong phạm vi module ký này).
+-   **Kết quả:** Soft delete gói hợp đồng và thông tin liên quan.
+
 ## 3. Các Quy Tắc Nghiệp Vụ (Business Rules)
 
 ### 3.1 Tính Bất Biến (Immutability)
--   **Chặn chỉnh sửa:** Không được phép chỉnh sửa thông tin hợp đồng khi trạng thái là `PENDING_MANAGER_SIGNATURE` (Nhân viên đã ký) hoặc `CURRENT` (Đã hoàn tất).
--   **Reset khi sửa:** Nếu chỉnh sửa khi đang ở trạng thái `PENDING_SIGNATURE` (Đã upload file nhưng chưa ký), hệ thống phải cảnh báo và tự động reset trạng thái về `DRAFT`, đồng thời xóa file hợp đồng cũ.
+### 3.1 Quy tắc về Chỉnh sửa (Immutable Rules)
+-   **Chốt thông tin (Absolute Lock):** Tuyệt đối không được phép chỉnh sửa thông tin (Step 2) hoặc upload file (Step 3) khi trạng thái là:
+    -   `PENDING_SIGNATURE` (Đã upload file, chờ Nhân viên ký)
+    -   `PENDING_MANAGER_SIGNATURE` (Nhân viên đã ký, chờ Quản lý ký)
+    -   `REJECTED` (Bị từ chối)
+    -   `CURRENT` (Đã hoàn tất)
+-   **Quy trình duy nhất:** Thông tin và File chỉ được phép sửa khi hợp đồng đang ở trạng thái `DRAFT`.
+-   **Cách sửa sai:** Nếu phát hiện sai sót khi hợp đồng đã ra khỏi `DRAFT`, Quản lý bắt buộc phải **Hủy bỏ (Cancel)** gói hợp đồng đó và tạo gói hợp đồng mới từ đầu. Không có cơ chế reset về `DRAFT` từ các trạng thái khác.
 
 ### 3.2 Hết Hạn Hợp Đồng (Expiration)
 -   Hệ thống có một **Cron Job** chạy ngầm định kỳ vào lúc 00:00:00 (nửa đêm) mỗi ngày (Theo múi giờ `Asia/Ho_Chi_Minh`).

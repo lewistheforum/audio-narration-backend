@@ -2493,6 +2493,7 @@ export class AppointmentsService {
         clinicId: session.clinicId,
         doctorId: session.doctorId,
         clinicShiftHourId: session.clinicShiftHourId,
+        clinicServiceConfigId: session.clinicServiceConfigId,
         appointmentDate: new Date(session.appointmentDate),
         appointmentHour: session.appointmentHour ? new Date(session.appointmentHour) : new Date(session.appointmentDate),
         total: session.paymentAmount || serviceConfig.price, // Required field
