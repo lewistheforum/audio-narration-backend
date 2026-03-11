@@ -30,10 +30,10 @@ import {
   PaginatedAppointmentResponseDto,
   CreateAppointmentDto,
   StaffCreateAppointmentDto,
-  CancelAppointmentDto,
+  StaffCancelAppointmentDto,
+  PatientCancelAppointmentDto,
   AppointmentResponseDto,
-  RescheduleAppointmentDto,
-  CheckInDto,
+  StaffRescheduleAppointmentDto,
   AcceptAppointmentDto,
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
@@ -72,12 +72,16 @@ import { AppointmentStatus } from './enums';
  * Endpoints:
  * - GET /appointments/staff - View all clinic appointments without extra_hour (Staff only)
  * - GET /appointments/staff/extra-hours - View all clinic appointments with extra_hour (Staff only)
- * - GET /appointments/:id/detail - View appointment detail (Staff only)
+ * - GET /appointments/staff/:id/detail - View appointment detail (Staff only)
  * - POST /appointments/staff/create - Staff create appointment with services (Staff only)
+ * - PATCH /appointments/staff/:id/cancel - Staff cancel appointment (Staff only)
+ * - PATCH /appointments/staff/:id/reschedule - Staff reschedule appointment (Staff only)
+ * - PATCH /appointments/staff/:id/assign-to-doctor - Assign appointment to doctor (PENDING → PENDING_DOCTOR) (Staff only)
+ * - PATCH /appointments/staff/:id/check-in - Check in patient (Staff only)
+ * - GET /appointments/staff/:id/packages - Get payment packages (Staff only)
+ * - POST /appointments/staff/:id/packages/:packageId/confirm-cash-payment - Confirm cash payment (Staff only)
  * - POST /appointments - Create new appointment (Patient only)
- * - PATCH /appointments/:id/cancel - Cancel appointment (Staff/Patient)
- * - PATCH /appointments/:id/reschedule - Reschedule appointment (Staff/Patient)
- * - PATCH /appointments/:id/check-in - Check in patient (Staff only)
+ * - PATCH /appointments/patient/:id/cancel - Patient cancel their own appointment (Patient only)
  * - PATCH /appointments/:id/accept - Accept appointment (Doctor only)
  * - PATCH /appointments/:id/decline - Decline appointment (Doctor only)
  * - PATCH /appointments/:id/status - Update appointment status (Admin/Staff)
@@ -261,7 +265,7 @@ export class AppointmentsController {
    * @param id - Appointment UUID
    * @returns Complete appointment details
    */
-  @Get(':id/detail')
+  @Get('staff/:id/detail')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
@@ -1110,23 +1114,23 @@ export class AppointmentsController {
   }
 
   /**
-   * Cancel an appointment
+   * Staff cancel an appointment
    *
-   * Allows staff or patients to cancel appointments
+   * Allows staff to cancel appointments on behalf of patients
    *
    * @param id - Appointment UUID
-   * @param cancelDto - Cancellation data (reject reason)
+   * @param cancelDto - Cancellation data (optional patient note)
    * @returns Updated appointment details
    */
-  @Patch(':id/cancel')
+  @Patch('staff/:id/cancel')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF, AccountRole.PATIENT)
+  @Roles(AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Cancel appointment',
+    summary: 'Staff cancel appointment',
     description:
-      'Cancel an existing appointment. Requires a reason for cancellation.',
+      'Cancel an appointment  as clinic staff. Optional patient note can be added.',
   })
   @ApiResponse({
     status: 200,
@@ -1143,7 +1147,7 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User does not have permission',
+    description: 'Forbidden - User is not a clinic staff member',
   })
   @ApiResponse({
     status: 404,
@@ -1155,31 +1159,88 @@ export class AppointmentsController {
     description: 'Appointment UUID',
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
-  async cancelAppointment(
+  async staffCancelAppointment(
     @Param('id') id: string,
-    @Body() cancelDto: CancelAppointmentDto,
+    @Body() cancelDto: StaffCancelAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    return this.appointmentsService.cancelAppointment(id, cancelDto);
+    return this.appointmentsService.staffCancelAppointment(id, cancelDto);
   }
 
   /**
-   * Reschedule an appointment
+   * Patient cancel their own appointment
    *
-   * Allows staff or patients to reschedule appointments to a new date/time
+   * Allows patients to cancel their own appointments
    *
+   * @param req - Request object containing authenticated user
    * @param id - Appointment UUID
-   * @param rescheduleDto - Reschedule data (new date and shift hour)
+   * @param cancelDto - Cancellation data (optional patient note)
    * @returns Updated appointment details
    */
-  @Patch(':id/reschedule')
+  @Patch('patient/:id/cancel')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF, AccountRole.PATIENT)
+  @Roles(AccountRole.PATIENT)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Reschedule appointment',
+    summary: 'Patient cancel appointment',
     description:
-      'Reschedule an existing appointment to a new date and/or doctor shift hour.',
+      'Cancel own appointment as patient. Optional note about cancellation can be added.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment cancelled successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Appointment cannot be cancelled',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not the patient of this appointment',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async patientCancelAppointment(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() cancelDto: PatientCancelAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    const patientId = req.user._id;
+    return this.appointmentsService.patientCancelAppointment(id, patientId, cancelDto);
+  }
+
+  /**
+   * Staff reschedule an appointment
+   *
+   * Allows staff to reschedule appointments to a new date/time
+   * All fields are optional. If clinicShiftHourId is provided, appointment date will be auto-updated.
+   *
+   * @param id - Appointment UUID
+   * @param rescheduleDto - Reschedule data (new date, shift hour, or extra hour)
+   * @returns Updated appointment details
+   */
+  @Patch('staff/:id/reschedule')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Staff reschedule appointment',
+    description:
+      'Reschedule an appointment to a new date, shift hour, or extra hour. All fields are optional. If clinicShiftHourId is provided, appointment date will be automatically updated from the shift hour work date.',
   })
   @ApiResponse({
     status: 200,
@@ -1196,11 +1257,11 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User does not have permission',
+    description: 'Forbidden - User is not a clinic staff member',
   })
   @ApiResponse({
     status: 404,
-    description: 'Not Found - Appointment not found',
+    description: 'Not Found - Appointment or shift hour not found',
   })
   @ApiResponse({
     status: 409,
@@ -1212,11 +1273,63 @@ export class AppointmentsController {
     description: 'Appointment UUID',
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
-  async rescheduleAppointment(
+  async staffRescheduleAppointment(
     @Param('id') id: string,
-    @Body() rescheduleDto: RescheduleAppointmentDto,
+    @Body() rescheduleDto: StaffRescheduleAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    return this.appointmentsService.rescheduleAppointment(id, rescheduleDto);
+    return this.appointmentsService.staffRescheduleAppointment(id, rescheduleDto);
+  }
+
+  /**
+   * Staff assign appointment to doctor (PENDING → PENDING_DOCTOR)
+   *
+   * Moves pending appointments with extra_hour to PENDING_DOCTOR status.
+   * This is for out-of-hours appointment requests that need doctor approval.
+   *
+   * @param id - Appointment UUID
+   * @returns Updated appointment details
+   */
+  @Patch('staff/:id/assign-to-doctor')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Assign appointment to doctor for approval',
+    description:
+      'Change appointment status from PENDING to PENDING_DOCTOR. Only for appointments with extra_hour (out-of-hours requests) that require doctor approval.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment assigned to doctor successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Appointment is not PENDING or does not have extra_hour',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a clinic staff member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async staffAssignToDoctor(
+    @Param('id') id: string,
+  ): Promise<AppointmentResponseDto> {
+    return this.appointmentsService.staffAssignToDoctor(id);
   }
 
   /**
@@ -1226,10 +1339,9 @@ export class AppointmentsController {
    * Changes appointment status from PENDING or CONFIRMED to CHECKED_IN
    *
    * @param id - Appointment UUID
-   * @param checkInDto - Empty DTO (endpoint does not require body)
    * @returns Updated appointment details
    */
-  @Patch(':id/check-in')
+  @Patch('staff/:id/check-in')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
@@ -1268,9 +1380,8 @@ export class AppointmentsController {
   })
   async checkInPatient(
     @Param('id') id: string,
-    @Body() checkInDto: CheckInDto,
   ): Promise<AppointmentResponseDto> {
-    return this.appointmentsService.checkInPatient(id, checkInDto);
+    return this.appointmentsService.checkInPatient(id);
   }
 
   /**
@@ -2472,7 +2583,7 @@ export class AppointmentsController {
    * Returns list of all payment packages associated with the appointment,
    * including their services and payment status.
    */
-  @Get(':id/packages')
+  @Get('staff/:id/packages')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
@@ -2553,7 +2664,7 @@ export class AppointmentsController {
    * Updates a specific payment package status to PAID with payment type COD.
    * If all packages are paid, the appointment status will be updated to COMPLETED.
    */
-  @Post(':id/packages/:packageId/confirm-cash-payment')
+  @Post('staff/:id/packages/:packageId/confirm-cash-payment')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')

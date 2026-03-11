@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { AddressDto } from './appointment-response.dto';
 
 /**
  * Patient Detail for Doctor View DTO
@@ -58,6 +59,13 @@ export class DoctorViewPatientDetailDto {
     nullable: true,
   })
   address: string | null;
+
+  @ApiProperty({
+    description: 'Patient addresses with full details',
+    type: [AddressDto],
+    required: false,
+  })
+  addresses?: AddressDto[];
 }
 
 /**

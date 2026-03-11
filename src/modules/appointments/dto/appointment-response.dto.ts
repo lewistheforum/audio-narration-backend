@@ -51,6 +51,9 @@ export class ServiceDetailDto {
 
   @ApiProperty({ description: 'Service price', example: 200000 })
   price: number;
+
+  @ApiProperty({ description: 'Service discount', example: 10000, required: false })
+  discount?: number;
 }
 
 /**

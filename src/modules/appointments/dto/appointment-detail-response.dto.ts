@@ -3,6 +3,7 @@ import { Transform } from 'class-transformer';
 import { PaymentType } from '../enums/payment-type.enum';
 import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
+import { AddressDto } from './appointment-response.dto';
 
 /**
  * Patient Detail DTO
@@ -34,6 +35,9 @@ export class PatientDetailDto {
 
   @ApiProperty({ description: 'Patient profile picture URL', required: false })
   profilePicture?: string;
+
+  @ApiProperty({ description: 'Patient addresses', type: [AddressDto], required: false })
+  addresses?: AddressDto[];
 }
 
 /**
@@ -94,6 +98,9 @@ export class ClinicServiceDetailDto {
 
   @ApiProperty({ description: 'Service price' })
   price: number;
+
+  @ApiProperty({ description: 'Service discount', required: false })
+  discount?: number;
 
   @ApiProperty({ description: 'Service duration in minutes', required: false })
   duration?: number;
