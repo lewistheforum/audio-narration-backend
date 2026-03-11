@@ -157,7 +157,7 @@ export class TransactionsService {
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
       subscription.expirationDate &&
-      new Date(subscription.expirationDate) > now;
+      subscription.expirationDate > now;
 
     if (isActive && isNotExpired) {
       // throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
@@ -211,7 +211,7 @@ export class TransactionsService {
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
       subscription.expirationDate &&
-      new Date(subscription.expirationDate) > now;
+      subscription.expirationDate > now;
 
     if (isActive && isNotExpired) {
       throw new BadRequestException(
@@ -352,8 +352,8 @@ export class TransactionsService {
     // 3. Calculate/Set Duration
     if (!duration) {
       // If no duration provided, calculate from current subscription dates
-      const startDate = new Date(subscription.subscriptionDate);
-      const expirationDate = new Date(subscription.expirationDate);
+      const startDate = subscription.subscriptionDate;
+      const expirationDate = subscription.expirationDate;
 
       // Calculate months difference
       duration = (expirationDate.getFullYear() - startDate.getFullYear()) * 12;

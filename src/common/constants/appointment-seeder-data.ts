@@ -7,6 +7,8 @@
 
 import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../../modules/appointments/enums';
 import { ERMRecordType, ERMStatus } from '../../modules/prescriptions/enums';
+import { subtractFromVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
+import * as dayjs from 'dayjs';
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -273,9 +275,7 @@ export function getRandomERMDescription(recordType: ERMRecordType): string {
  */
 export function getRandomPastDate(minDays: number, maxDays: number): Date {
   const daysAgo = getRandomInt(minDays, maxDays);
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date;
+  return subtractFromVietnamTime(daysAgo, 'day');
 }
 
 /**
@@ -284,9 +284,13 @@ export function getRandomPastDate(minDays: number, maxDays: number): Date {
 export function getRandomAppointmentHour(date: Date): Date {
   const hour = getRandomInt(8, 16); // 8 AM to 4 PM (allow time for appointment)
   const minute = getRandomInt(0, 3) * 15; // 0, 15, 30, or 45 minutes
-  const appointmentHour = new Date(date);
-  appointmentHour.setHours(hour, minute, 0, 0);
-  return appointmentHour;
+  return dayjs(date)
+    .tz(VIETNAM_TIMEZONE)
+    .hour(hour)
+    .minute(minute)
+    .second(0)
+    .millisecond(0)
+    .toDate();
 }
 
 /**

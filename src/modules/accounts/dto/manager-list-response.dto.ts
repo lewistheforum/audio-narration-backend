@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AccountStatus } from '../enums/account-status.enum';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Pagination Metadata DTO
@@ -55,6 +57,7 @@ export class ManagerListItemDto {
   province: string;
 
   @ApiProperty({ description: 'Account creation date' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 }
 

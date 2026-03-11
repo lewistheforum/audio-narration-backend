@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AccountStatus, ClinicRole } from '../enums';
 import { PaginationDto } from './clinic-list-response.dto';
 import { Gender } from '../enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 export class StaffItemDto {
     @ApiProperty({
@@ -61,11 +63,13 @@ export class StaffItemDto {
         required: false,
         nullable: true,
     })
+    @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
     dob?: Date;
 
     @ApiProperty({
         description: 'Creation timestamp',
     })
+    @Transform(({ value }) => formatToVietnamTime(value))
     createdAt: Date;
 
     constructor(account: any, staffInfo: any) {

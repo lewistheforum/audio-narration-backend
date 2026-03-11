@@ -575,6 +575,35 @@ export class AppointmentsService {
     // Update status to CHECKED_IN
     appointment.status = AppointmentStatus.CHECKED_IN;
 
+    // V4.5: Handle extraRoomId for out-of-hours appointments (Option 4)
+    // Business Rule: extraRoomId can only be assigned to appointments WITHOUT clinic_shift_hour_id
+    if (checkInDto.extraRoomId) {
+      if (appointment.clinicShiftHourId) {
+        throw new BadRequestException(
+          'Cannot assign extraRoomId to standard appointments. This field is only for out-of-hours bookings (Option 4).',
+        );
+      }
+
+      // Validate room exists and belongs to correct clinic
+      const room = await this.dataSource
+        .createQueryBuilder()
+        .select('cr._id')
+        .from('clinic_room', 'cr')
+        .where('cr._id = :roomId', { roomId: checkInDto.extraRoomId })
+        .andWhere('cr.clinic_id = :clinicId', { clinicId: appointment.clinicId })
+        .andWhere('cr.deleted_at IS NULL')
+        .getRawOne();
+
+      if (!room) {
+        throw new NotFoundException(
+          'Room not found or does not belong to this clinic.',
+        );
+      }
+
+      // Assign room to appointment
+      appointment.extraRoomId = checkInDto.extraRoomId;
+    }
+
     // Save changes
     const updatedAppointment =
       await this.appointmentRepository.save(appointment);
@@ -2259,11 +2288,15 @@ export class AppointmentsService {
 
       const savedPackage = await packageRepo.save(appointmentPackage);
 
-      // === STEP 9: Create Service Appointment ===
+      // === STEP 9: Create Service Appointment (with Price Snapshot) ===
+      // V4.5: Snapshot price & discount from clinic_service_config at booking time
+      // This ensures historical pricing remains accurate even if clinic changes prices later
       const serviceAppointmentRepo = manager.getRepository('service_appointments');
       const serviceAppointment = serviceAppointmentRepo.create({
         clinicServiceId: session.clinicServiceConfigId,
         appointmentPackageId: savedPackage._id,
+        price: basePrice, // Snapshot: Original service price
+        discount, // Snapshot: Discount percentage at time of booking
       });
 
       await serviceAppointmentRepo.save(serviceAppointment);
@@ -2554,11 +2587,14 @@ export class AppointmentsService {
 
       const savedPackage = await packageRepo.save(appointmentPackage);
 
-      // === STEP 7: Create Service Appointment ===
+      // === STEP 7: Create Service Appointment (with Price Snapshot) ===
+      // V4.5: Snapshot price & discount from clinic_service_config at booking time
       const serviceAppointmentRepo = manager.getRepository('service_appointments');
       const serviceAppointment = serviceAppointmentRepo.create({
         clinicServiceId: session.clinicServiceConfigId,
         appointmentPackageId: savedPackage._id,
+        price: basePrice, // Snapshot: Original service price
+        discount, // Snapshot: Discount percentage at time of booking
       });
 
       await serviceAppointmentRepo.save(serviceAppointment);
@@ -3295,8 +3331,9 @@ export class AppointmentsService {
         // Payment info
         '"ap".payment_type AS payment_type',
         '"ap".status AS payment_status',
-        // Clinic room info (nullable, depends on shift hour)
-        '"cr".room_name AS clinic_room',
+        // Clinic room info (V4.5: COALESCE for out-of-hours support)
+        // Priority: regular schedule room -> manual extra_room (for Option 4)
+        'COALESCE("cr".room_name, "extra_room".room_name) AS clinic_room',
       ])
       .from('appointments', 'a')
       .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
@@ -3313,6 +3350,7 @@ export class AppointmentsService {
       )
       .leftJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id AND cr.deleted_at IS NULL')
+      .leftJoin('clinic_room', 'extra_room', 'extra_room._id = a.extra_room_id AND extra_room.deleted_at IS NULL')
       .leftJoin('appointment_package', 'ap', 'ap.appointment_id = a._id AND ap.deleted_at IS NULL')
       .where('a.patient_id = :patientId', { patientId })
       .andWhere('a.deleted_at IS NULL');
@@ -3408,13 +3446,15 @@ export class AppointmentsService {
       const appointmentIds = appointmentsRawUnique.map((a) => a.appointment_id);
 
       // Single query to fetch all services for all appointments
+      // V4.5: Fetch price & discount from service_appointments (snapshot history)
       const servicesRaw = await this.dataSource
         .createQueryBuilder()
         .select([
           'ap.appointment_id AS appointment_id',
           'cs._id AS service_id',
           'cs.service_name AS service_name',
-          'csc.price AS price',
+          'sa.price AS price', // V4.5: Snapshot price from service_appointments
+          'sa.discount AS discount', // V4.5: Snapshot discount from service_appointments
         ])
         .from('appointment_package', 'ap')
         .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
@@ -3435,6 +3475,7 @@ export class AppointmentsService {
           service_id: service.service_id,
           service_name: service.service_name,
           price: parseFloat(service.price || '0'),
+          discount: parseFloat(service.discount || '0'),
         });
       });
     }
@@ -3549,8 +3590,8 @@ export class AppointmentsService {
         // Shift hour info (nullable)
         '"csh".start_hour AS start_hour',
         '"csh".end_hour AS end_hour',
-        // Clinic room info (nullable, depends on shift hour and employee schedule)
-        '"cr".room_name AS clinic_room',
+        // Clinic room info (V4.5: COALESCE for out-of-hours support)
+        'COALESCE("cr".room_name, "extra_room".room_name) AS clinic_room',
       ])
       .from('appointments', 'a')
       .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
@@ -3563,6 +3604,7 @@ export class AppointmentsService {
       .leftJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id AND es.employee_id = a.doctor_id AND es.work_date = a.appointment_date AND es.deleted_at IS NULL')
       .leftJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id AND cr.deleted_at IS NULL')
+      .leftJoin('clinic_room', 'extra_room', 'extra_room._id = a.extra_room_id AND extra_room.deleted_at IS NULL')
       .where('a._id = :appointmentId', { appointmentId })
       .andWhere('a.patient_id = :patientId', { patientId })
       .andWhere('a.deleted_at IS NULL')
@@ -3601,7 +3643,8 @@ export class AppointmentsService {
           'csc._id AS service_config_id',
           'cs._id AS service_id',
           'cs.service_name AS service_name',
-          'csc.price AS price',
+          'sa.price AS price', // V4.5: Snapshot price from service_appointments
+          'sa.discount AS discount', // V4.5: Snapshot discount from service_appointments
           'e._id AS erm_id',
           'e.record_type AS erm_record_type',
           'e.status AS erm_status',
@@ -3629,6 +3672,7 @@ export class AppointmentsService {
           _id: sa.service_id,
           service_name: sa.service_name,
           price: parseFloat(sa.price || '0'),
+          discount: parseFloat(sa.discount || '0'), // V4.5: Include snapshot discount
         },
         erm_summary: sa.erm_id
           ? {
