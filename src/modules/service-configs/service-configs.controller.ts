@@ -269,3 +269,127 @@ export class ManagerServiceConfigsController {
   }
 }
 
+/**
+ * Service Configs Controller for Doctor
+ *
+ * Provides endpoints for doctors to view available services
+ * from clinics where they are working
+ */
+@ApiTags('Service Configs (Doctor)')
+@Controller('doctor/clinic-services')
+export class DoctorServiceConfigsController {
+  constructor(
+    private readonly serviceConfigsService: ServiceConfigsService,
+  ) { }
+
+  /**
+   * Get Clinic Services (Doctor Only)
+   *
+   * Retrieves list of services from all clinics where doctor is working
+   * Includes pricing, duration, discount, and other configuration
+   *
+   * Query Parameters:
+   * - isActive: Filter by active status (default: true)
+   * - search: Search by service name (fuzzy search)
+   * - page: Page number (default: 1)
+   * - limit: Items per page (default: 50, max: 100)
+   *
+   * Response Format:
+   * - Returns list of services with pagination
+   * - Services from all clinics where doctor works
+   * - Final price calculated from price and discount
+   *
+   * Access Control:
+   * - Requires DOCTOR role
+   * - Requires valid JWT authentication
+   * - Returns services from ALL clinics where doctor is assigned
+   *
+   * Use Cases:
+   * - Doctor viewing available services for adding during examination
+   * - Service selection when creating additional services
+   * - Price lookup
+   *
+   * @param {any} req - Request object with authenticated doctor
+   * @param {GetClinicServicesQueryDto} query - Query parameters
+   * @returns {Promise<{data: ClinicServicesResponseDto, message: string}>} Services with pagination
+   *
+   * @swagger
+   * @security JWT-auth
+   * @response 200 - Successfully retrieved services
+   * @response 401 - Unauthorized - Missing or invalid JWT token
+   * @response 403 - Forbidden - Requires DOCTOR role
+   * @response 404 - Not Found - Doctor not assigned to any clinic
+   */
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get clinic services (Doctor only)',
+    description:
+      'Retrieves list of active services from all clinics where doctor is working with pricing and configuration',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Services retrieved successfully',
+    type: ClinicServicesResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Doctor not assigned to any clinic',
+  })
+  @ApiQuery({
+    name: 'isActive',
+    required: false,
+    type: Boolean,
+    description: 'Filter by active status (default: true)',
+    example: true,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by service name (fuzzy search)',
+    example: 'Khám',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 50, max: 100)',
+    example: 50,
+  })
+  async getDoctorClinicServices(
+    @Request() req: any,
+    @Query() query: GetClinicServicesQueryDto,
+  ): Promise<{ data: ClinicServicesResponseDto; message: string }> {
+    const doctorId = req.user._id;
+
+    const data = await this.serviceConfigsService.getDoctorClinicServices(
+      doctorId,
+      query,
+    );
+
+    return {
+      data,
+      message: 'Services retrieved successfully',
+    };
+  }
+}
+

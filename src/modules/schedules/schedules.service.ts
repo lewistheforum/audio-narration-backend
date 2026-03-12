@@ -595,6 +595,98 @@ export class SchedulesService {
     }
 
     /**
+     * Get Clinic Rooms with Shift Hours (Staff Only)
+     *
+     * Retrieves all clinic rooms with their shift hours based on employee schedules
+     * Used by staff to view available rooms and time slots
+     *
+     * Logic:
+     * - Query all rooms for the clinic
+     * - For each room, find employee schedules linked to that room
+     * - From employee schedules, get clinic shifts and their hours
+     * - Filter by work_date if provided
+     *
+     * @param user - User context (Staff)
+     * @param date - Optional work date filter (YYYY-MM-DD)
+     * @returns Object containing rooms array with nested shift hours
+     */
+    async getClinicRoomsWithShiftHours(user: any, date?: string) {
+        const clinicId = await this.resolveClinicId(user);
+        if (!clinicId) throw new BadRequestException('Clinic ID could not be resolved');
+
+        // Get all rooms for the clinic
+        const rooms = await this.roomRepository.find({
+            where: { clinicId },
+            select: ['_id', 'roomName'],
+            order: { roomName: 'ASC' },
+        });
+
+        // Build response with shift hours for each room
+        const roomsWithShiftHours = [];
+
+        for (const room of rooms) {
+            // Query employee schedules linked to this room
+            const qb = this.dataSource
+                .createQueryBuilder()
+                .select([
+                    'es._id',
+                    'es.clinic_shift_id',
+                    'cs.shift',
+                    'csh._id as shift_hour_id',
+                    'csh.start_hour',
+                    'csh.end_hour',
+                    'csh.limit',
+                ])
+                .from('employee_schedule', 'es')
+                .innerJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
+                .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+                .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+                .where('cres.clinic_room_id = :roomId', { roomId: room._id })
+                .andWhere('es.clinic_id = :clinicId', { clinicId })
+                .andWhere('es.deleted_at IS NULL')
+                .andWhere('cs.deleted_at IS NULL')
+                .andWhere('csh.deleted_at IS NULL');
+
+            // Filter by date if provided
+            if (date) {
+                qb.andWhere('es.work_date = :workDate', { workDate: date });
+            }
+
+            qb.orderBy('csh.start_hour', 'ASC');
+
+            const scheduleData = await qb.getRawMany();
+
+            // Build unique shift hours for this room
+            const shiftHoursMap = new Map();
+            for (const row of scheduleData) {
+                const shiftHourId = row.shift_hour_id;
+                if (!shiftHoursMap.has(shiftHourId)) {
+                    shiftHoursMap.set(shiftHourId, {
+                        id: shiftHourId,
+                        startHour: row.start_hour,
+                        endHour: row.end_hour,
+                        limit: row.limit,
+                        shiftType: row.shift,
+                        shiftId: row.clinic_shift_id,
+                    });
+                }
+            }
+
+            const shiftHours = Array.from(shiftHoursMap.values());
+
+            roomsWithShiftHours.push({
+                id: room._id,
+                roomName: room.roomName,
+                shiftHours,
+            });
+        }
+
+        return {
+            rooms: roomsWithShiftHours,
+        };
+    }
+
+    /**
      * Get Doctor Schedules (Staff Only)
      *
      * Retrieves list of doctors with their available schedules for appointment booking
