@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -3816,6 +3816,7 @@ export class AppointmentsService {
         'a._id AS appointment_id',
         'a.appointment_date AS appointment_date',
         'a.appointment_hour AS appointment_hour',
+        'a.extra_hour AS extra_hour',
         'a.status AS status',
         'a.total AS total',
         'a.created_at AS created_at',
@@ -3998,7 +3999,7 @@ export class AppointmentsService {
           }
         : null,
       appointment_date: apt.appointment_date,
-      appointment_hour: apt.appointment_hour,
+      appointment_hour: apt.appointment_hour || apt.extra_hour,
       start_hour: apt.start_hour,
       end_hour: apt.end_hour,
       clinic_room: apt.clinic_room || null,
@@ -4073,6 +4074,7 @@ export class AppointmentsService {
         'a._id AS appointment_id',
         'a.appointment_date AS appointment_date',
         'a.appointment_hour AS appointment_hour',
+        'a.extra_hour AS extra_hour',
         'a.status AS status',
         'a.total AS total',
         'a.patient_note AS patient_note',
@@ -4234,7 +4236,7 @@ export class AppointmentsService {
       },
       doctor: doctorInfo,
       appointment_date: appointmentRaw.appointment_date,
-      appointment_hour: appointmentRaw.appointment_hour,
+      appointment_hour: appointmentRaw.appointment_hour || appointmentRaw.extra_hour,
       start_hour: appointmentRaw.start_hour,
       end_hour: appointmentRaw.end_hour,
       clinic_room: appointmentRaw.clinic_room || null,
