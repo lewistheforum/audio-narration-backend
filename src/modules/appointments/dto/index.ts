@@ -19,6 +19,7 @@ export * from './update-appointment-status.dto';
 export * from './service-summary.dto';
 export * from './patient-info.dto';
 export * from './doctor-appointment-list-response.dto';
+export * from './doctor-appointments-response.dto';
 export * from './doctor-appointment-detail-response.dto';
 export * from './pending-services-response.dto';
 export * from './complete-examination.dto';
