@@ -271,8 +271,8 @@ export class AppointmentsService {
         appointmentId: savedAppointment._id,
         transactionId: createDto.transactionId || null,
         amount: finalTotal,
-        status: createDto.paymentStatus || null,
-        paymentType: createDto.paymentType || null,
+        status: createDto.paymentStatus || AppointmentPackageStatus.PENDING_PAYMENT,
+        paymentType: createDto.paymentType || PaymentType.COD,
       });
 
       const savedPackage = await manager.save(
@@ -3439,6 +3439,48 @@ export class AppointmentsService {
       });
     }
 
+    // Optimization: Bulk load feedbacks for COMPLETED appointments
+    let feedbacksMap: Map<string, any[]> = new Map();
+    const completedAppointmentIds = appointmentsRawUnique
+      .filter((a) => a.status === AppointmentStatus.COMPLETED)
+      .map((a) => a.appointment_id);
+
+    if (completedAppointmentIds.length > 0) {
+      const feedbacksRaw = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'f.appointment_id AS appointment_id',
+          'f._id AS feedback_id',
+          'f.rating AS rating',
+          'f.description AS description',
+          'f.description_label AS description_label',
+          'f.feedback_images AS feedback_images',
+          'f.type AS type',
+          'f.created_at AS created_at',
+        ])
+        .from('feedbacks', 'f')
+        .where('f.appointment_id IN (:...completedAppointmentIds)', { completedAppointmentIds })
+        .andWhere('f.deleted_at IS NULL')
+        .getRawMany();
+
+      // Group feedbacks by appointment_id
+      feedbacksRaw.forEach((feedback) => {
+        const aptId = feedback.appointment_id;
+        if (!feedbacksMap.has(aptId)) {
+          feedbacksMap.set(aptId, []);
+        }
+        feedbacksMap.get(aptId)!.push({
+          id: feedback.feedback_id,
+          rating: parseInt(feedback.rating || '0', 10),
+          description: feedback.description,
+          descriptionLabel: feedback.description_label,
+          feedbackImages: feedback.feedback_images,
+          type: feedback.type,
+          createdAt: feedback.created_at,
+        });
+      });
+    }
+
     // Map to response DTO structure
     const data = appointmentsRawUnique.map((apt) => ({
       _id: apt.appointment_id,
@@ -3464,6 +3506,7 @@ export class AppointmentsService {
       payment_type: apt.payment_type,
       payment_status: apt.payment_status,
       services: servicesMap.get(apt.appointment_id) || [],
+      feedbacks: feedbacksMap.get(apt.appointment_id) || [],
     }));
 
     return {

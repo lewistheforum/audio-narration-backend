@@ -21,6 +21,34 @@ export class ServiceDetailDto {
 }
 
 /**
+ * Feedback Synopsis DTO for Appointment Response
+ *
+ * Contains basic feedback information given for this appointment
+ */
+export class FeedbackSynopsisDto {
+  @ApiProperty({ description: 'Feedback ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Rating (1-5)' })
+  rating: number;
+
+  @ApiProperty({ description: 'Feedback description', required: false })
+  description?: string;
+
+  @ApiProperty({ description: 'Description labels (JSON)', required: false })
+  descriptionLabel?: any;
+
+  @ApiProperty({ description: 'Feedback images (JSON)', required: false })
+  feedbackImages?: any;
+
+  @ApiProperty({ description: 'Feedback type (DOCTOR or CLINIC)' })
+  type: string;
+
+  @ApiProperty({ description: 'Creation date' })
+  createdAt: Date;
+}
+
+/**
  * Clinic Room Detail DTO for Appointment Response
  *
  * Contains clinic room information
@@ -71,6 +99,9 @@ export class AppointmentResponseDto {
 
   @ApiProperty({ description: 'Services', type: [ServiceDetailDto], required: false })
   services?: ServiceDetailDto[];
+
+  @ApiProperty({ description: 'Feedbacks associated with this appointment', type: [FeedbackSynopsisDto], required: false })
+  feedbacks?: FeedbackSynopsisDto[];
 
   @ApiProperty({ description: 'Appointment date' })
   appointmentDate: Date;

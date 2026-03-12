@@ -1412,7 +1412,7 @@ export class AppointmentsController {
             },
             appointment_date: '2026-03-15',
             appointment_hour: '2026-03-15T08:00:00.000Z',
-            status: 'PENDING',
+            status: 'COMPLETED',
             total: 270000,
             services: [
               {
@@ -1420,6 +1420,15 @@ export class AppointmentsController {
                 service_name: 'Khám Xương Khớp',
                 price: 270000,
               },
+            ],
+            feedbacks: [
+              {
+                id: '550e8400-e29b-41d4-a716-446655440004',
+                rating: 5,
+                description: 'Bác sĩ rất tận tâm',
+                type: 'DOCTOR',
+                createdAt: '2026-03-16T10:00:00.000Z',
+              }
             ],
           },
         ],

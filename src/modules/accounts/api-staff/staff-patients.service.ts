@@ -153,12 +153,13 @@ export class StaffPatientsService {
       let emailSentAt: string | undefined;
 
       try {
-        await this.mailerService.sendWelcomeEmailWithPassword(
-          dto.email,
-          dto.fullName,
-          dto.email, // Use email as username
-          temporaryPassword,
-        );
+        await this.mailerService.sendAccountNotification({
+          email: dto.email,
+          fullName: dto.fullName,
+          username: dto.email, // Use email as username
+          password: temporaryPassword,
+          phone: dto.phone,
+        });
         emailSent = true;
         emailSentAt = new Date().toISOString();
       } catch (emailError) {
@@ -349,18 +350,18 @@ export class StaffPatientsService {
    * Generate Temporary Email from Full Name and Date of Birth
    *
    * Creates a fake email address for patients without real email.
-   * Format: normalized_name + DDMMYYYY + @tempemail.clinic
+   * Format: normalized_name + DDMMYYYY + @gmail.com
    *
    * Algorithm:
    * 1. Normalize full name: Remove accents, lowercase, remove spaces/special chars
    * 2. Format DOB: 1988-08-10 → 10081988 (DDMMYYYY)
-   * 3. Combine: tranvand10081988@tempemail.clinic
+   * 3. Combine: tranvand10081988@gmail.com
    * 4. Check duplicates: Add counter if exists (_01, _02, etc.)
    * 5. Last resort: Add phone or UUID
    *
    * Examples:
-   * - "Trần Văn D" + "1988-08-10" → tranvand10081988@tempemail.clinic
-   * - "Nguyễn Thị B" + "1995-05-20" → nguyenthib20051995@tempemail.clinic
+   * - "Trần Văn D" + "1988-08-10" → tranvand10081988@gmail.com
+   * - "Nguyễn Thị B" + "1995-05-20" → nguyenthib20051995@gmail.com
    *
    * @param {string} fullName - Patient full name
    * @param {string} dateOfBirth - Date of birth (YYYY-MM-DD)
@@ -385,7 +386,7 @@ export class StaffPatientsService {
     const emailPrefix = `${normalized}${dobFormatted}`; // tranvand10081988
 
     // Step 4: Check for duplicates and generate unique email
-    let email = `${emailPrefix}@tempemail.clinic`;
+    let email = `${emailPrefix}@gmail.com`;
     let counter = 1;
     const maxAttempts = 100;
 
@@ -395,12 +396,12 @@ export class StaffPatientsService {
       if (!existingAccount) {
         return email; // Found unique email
       }
-      email = `${emailPrefix}_${String(counter).padStart(2, '0')}@tempemail.clinic`;
+      email = `${emailPrefix}_${String(counter).padStart(2, '0')}@gmail.com`;
       counter++;
     }
 
     // Last resort 1: Add phone number
-    email = `${emailPrefix}_${phone}@tempemail.clinic`;
+    email = `${emailPrefix}_${phone}@gmail.com`;
     const phoneCheck = await this.accountRepository.findByEmail(email);
     if (!phoneCheck) {
       return email;
@@ -408,7 +409,7 @@ export class StaffPatientsService {
 
     // Last resort 2: Add short UUID
     const shortUuid = randomBytes(4).toString('hex'); // 8 characters
-    email = `${emailPrefix}_${shortUuid}@tempemail.clinic`;
+    email = `${emailPrefix}_${shortUuid}@gmail.com`;
     return email;
   }
 
@@ -429,7 +430,7 @@ export class StaffPatientsService {
    *
    * Business Rules:
    * - Phone must be unique (check for duplicates)
-   * - Fake email format: name + DOB + @tempemail.clinic
+   * - Fake email format: name + DOB + @gmail.com
    * - Password is auto-generated (12 chars, mixed case, numbers, specials)
    * - Account type = "DIRECT_ACCOUNT", is_temp_email = true
    * - No email sent (staff must provide credentials directly)
@@ -495,7 +496,27 @@ export class StaffPatientsService {
 
       await queryRunner.commitTransaction();
 
-      // Step 4: Return response with credentials (NO email sent)
+      // Step 4: Send notification email to the generated temp address
+      let emailSent = false;
+      let emailSentAt: string | undefined;
+
+      try {
+        await this.mailerService.sendAccountNotification({
+          email: fakeEmail,
+          fullName: dto.fullName,
+          username: fakeEmail,
+          password: temporaryPassword,
+          phone: dto.phone,
+          dob: dto.dateOfBirth,
+        });
+        emailSent = true;
+        emailSentAt = new Date().toISOString();
+      } catch (emailError) {
+        // Log email error but don't fail the account creation
+        console.error('Failed to send temp email notification:', emailError);
+      }
+
+      // Step 5: Return response with credentials
       return {
         success: true,
         accountId: savedAccount._id,
@@ -505,10 +526,12 @@ export class StaffPatientsService {
         fullName: dto.fullName,
         dateOfBirth: dto.dateOfBirth,
         temporaryPassword, // Return password for staff to provide manually
-        emailSent: false, // Never send email for fake addresses
+        emailSent,
+        emailSentAt,
         activationStatus: 'ACTIVE',
-        message:
-          'Account created successfully with temporary email. Customer can update real email later.',
+        message: emailSent
+          ? 'Account created successfully. A notification has been sent to the generated email address.'
+          : 'Account created successfully with temporary email. Customer can update real email later.',
         manualLoginInfo: {
           username: savedAccount.email,
           password: temporaryPassword,
@@ -553,7 +576,7 @@ export class StaffPatientsService {
 
     const data = patientsRaw.map((p) => {
       // Check if it's a generated fake email based on our known temp domain
-      const isTempEmail = p.email && p.email.endsWith('@tempemail.clinic');
+      const isTempEmail = p.email && p.email.endsWith('@gmail.com');
       return {
         accountId: p.accountId,
         email: p.email,
