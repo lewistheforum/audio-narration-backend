@@ -4,6 +4,37 @@ import { AppointmentStatus } from '../enums';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
+ * Address DTO for Patient Information
+ *
+ * Contains address details
+ */
+export class AddressDto {
+  @ApiProperty({ description: 'Address ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Full address text' })
+  address: string;
+
+  @ApiProperty({ description: 'Ward code' })
+  ward: string;
+
+  @ApiProperty({ description: 'Ward name' })
+  wardName: string;
+
+  @ApiProperty({ description: 'District code' })
+  district: string;
+
+  @ApiProperty({ description: 'District name' })
+  districtName: string;
+
+  @ApiProperty({ description: 'Province code' })
+  province: string;
+
+  @ApiProperty({ description: 'Province name' })
+  provinceName: string;
+}
+
+/**
  * Service Detail DTO for Appointment Response
  *
  * Contains service information for an appointment
@@ -20,6 +51,9 @@ export class ServiceDetailDto {
 
   @ApiProperty({ description: 'Service price', example: 200000 })
   price: number;
+
+  @ApiProperty({ description: 'Service discount', example: 10000, required: false })
+  discount?: number;
 }
 
 /**
@@ -56,6 +90,12 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Patient phone', required: false })
   patientPhone?: string;
 
+  @ApiProperty({ description: 'Patient profile image URL', required: false })
+  patientProfileImage?: string | null;
+
+  @ApiProperty({ description: 'Patient addresses', type: [AddressDto], required: false })
+  patientAddresses?: AddressDto[];
+
   @ApiProperty({ description: 'Clinic ID' })
   clinicId: string;
 
@@ -67,6 +107,9 @@ export class AppointmentResponseDto {
 
   @ApiProperty({ description: 'Doctor full name', required: false })
   doctorFullName?: string | null;
+
+  @ApiProperty({ description: 'Doctor profile image URL', required: false })
+  doctorProfileImage?: string | null;
 
   @ApiProperty({ description: 'Clinic rooms', type: [ClinicRoomDto], required: false })
   clinicRooms?: ClinicRoomDto[];

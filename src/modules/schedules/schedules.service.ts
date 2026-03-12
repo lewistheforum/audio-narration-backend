@@ -679,7 +679,7 @@ export class SchedulesService {
             .leftJoin(
                 'appointments',
                 'app',
-                'app.doctor_shift_hour_id = csh._id AND app.deleted_at IS NULL',
+                'app.clinic_shift_hour_id = csh._id AND app.deleted_at IS NULL',
             )
             .where('es.clinic_id = :clinicId', { clinicId })
             .andWhere('es.work_date >= :today', { today: dateRangeStart })
@@ -886,7 +886,7 @@ export class SchedulesService {
             .leftJoin(
                 'appointments',
                 'app',
-                'app.doctor_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
+                'app.clinic_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
                 { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
             )
             .leftJoin('accounts', 'patient_a', 'patient_a._id = app.patient_id')

@@ -1,4 +1,4 @@
-import { ApiOperation, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBody, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { FeedbackService } from './feedback.service';
 import {
   Controller,
@@ -10,13 +10,22 @@ import {
   HttpStatus,
   Put,
   ParseUUIDPipe,
+  Query,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { FeedbackResponseDto } from './dto/response-feedback.dto';
 import { FeedbackAIResponseDto } from './dto/response-ai-feedback.dto';
 import { CreateFeedbackClinicDto } from './dto/create-feedback-clinic.dto';
 import { CreateFeedbackDoctorDto } from './dto/create-feedback-doctor.dto';
 import { UpdateFeedbackDto } from './dto/update-feedback.dto';
+import { DoctorFeedbacksQueryDto } from './dto/doctor-feedbacks-query.dto';
+import { DoctorFeedbacksResponseDto } from './dto/doctor-feedbacks-response.dto';
 import { Feedback } from './entities/feedback.entity';
+import { JwtAuthGuard } from '../auth/jwt.strategy';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AccountRole } from '../accounts/enums';
 
 /**
  * Feedback Controller
@@ -203,6 +212,45 @@ export class FeedbackController {
   ): Promise<FeedbackAIResponseDto[]> {
     const feedbacks = await this.feedbackService.findAllFeedbacksById(id);
     return feedbacks.map((feedback) => new FeedbackAIResponseDto(feedback));
+  }
+
+  /**
+   * Get Doctor's Feedbacks
+   *
+   * Allows doctors to view paginated feedbacks from patients about themselves.
+   * Includes patient info, appointment info, ratings, and statistics.
+   */
+  @Get('doctor/me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get doctor feedbacks',
+    description:
+      'Retrieves paginated feedbacks for the authenticated doctor. ' +
+      'Includes patient information, appointment details, rating statistics, and distribution. ' +
+      'Supports pagination, sorting (by date or rating), filtering by minimum rating, and search in description.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Feedbacks retrieved successfully',
+    type: DoctorFeedbacksResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a doctor',
+  })
+  async getDoctorFeedbacks(
+    @Request() req: any,
+    @Query() query: DoctorFeedbacksQueryDto,
+  ): Promise<DoctorFeedbacksResponseDto> {
+    const doctorId = req.user._id;
+    return this.feedbackService.getDoctorFeedbacks(doctorId, query);
   }
 
   @Get('doctor/:doctorId')
