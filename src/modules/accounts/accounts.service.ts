@@ -3879,6 +3879,7 @@ export class AccountsService {
       const clinicAdminInfo = this.clinicAdminInfoRepository.create({
         accountId: savedAccount._id,
         clinicName: dto.clinicName,
+        clinicPhone: dto.phone,
         description: dto.description,
         specializedIn: dto.specializedIn,
         pros: dto.pros,
