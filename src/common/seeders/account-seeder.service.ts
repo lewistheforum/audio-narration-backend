@@ -225,7 +225,7 @@ export class AccountSeederService {
         username: `clinic_admin_${i}`,
         email,
         password: hashedPassword,
-        phone: `+84${this.randomPhoneDigits()}`,
+        phone: this.randomVietnamPhone(),
         role: AccountRole.CLINIC_ADMIN,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,
@@ -280,7 +280,7 @@ export class AccountSeederService {
             }_${i}`,
           email,
           password: hashedPassword,
-          phone: `+84${this.randomPhoneDigits()}`,
+          phone: this.randomVietnamPhone(),
           parentId: clinicAdmin._id,
           role: AccountRole.CLINIC_MANAGER,
           status: AccountStatus.ACTIVE,
@@ -332,7 +332,7 @@ export class AccountSeederService {
             }_${i}`,
           email,
           password: hashedPassword,
-          phone: `+84${this.randomPhoneDigits()}`,
+          phone: this.randomVietnamPhone(),
           parentId: clinicManager._id,
           role: AccountRole.CLINIC_STAFF,
           status: AccountStatus.ACTIVE,
@@ -380,7 +380,7 @@ export class AccountSeederService {
           username: `doctor_${clinicManagers.indexOf(clinicManager) + 1}_${i}`,
           email,
           password: hashedPassword,
-          phone: `+84${this.randomPhoneDigits()}`,
+          phone: this.randomVietnamPhone(),
           parentId: clinicManager._id,
           role: AccountRole.DOCTOR,
           status: AccountStatus.ACTIVE,
@@ -438,7 +438,7 @@ export class AccountSeederService {
         username: `patient_${i}`,
         email,
         password: hashedPassword,
-        phone: `+84${this.randomPhoneDigits()}`,
+        phone: this.randomVietnamPhone(),
         role: AccountRole.PATIENT,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,
@@ -610,11 +610,18 @@ export class AccountSeederService {
   }
 
   /**
-   * Generate random 9-digit phone number
+   * Generate random Vietnamese local phone number
    */
-  private randomPhoneDigits(): string {
+  private randomVietnamPhone(): string {
+    return `0${this.randomDigits(9)}`;
+  }
+
+  /**
+   * Generate random digits string
+   */
+  private randomDigits(length: number): string {
     let digits = '';
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < length; i++) {
       digits += Math.floor(Math.random() * 10);
     }
     return digits;

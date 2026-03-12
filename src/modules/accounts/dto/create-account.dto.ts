@@ -50,13 +50,13 @@ export class CreateAccountDto {
 
     @ApiProperty({
         description: 'Client phone number',
-        example: '+84123456789',
+        example: '0912345678',
         required: false,
     })
     @IsOptional()
     @IsString({ message: 'Phone must be a string' })
-    @Matches(/^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/, {
-        message: 'Invalid phone number format',
+    @Matches(/^0\d{9}$/, {
+        message: 'Phone must be exactly 10 digits and start with 0',
     })
     phone?: string;
 

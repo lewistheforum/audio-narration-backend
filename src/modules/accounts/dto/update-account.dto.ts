@@ -9,6 +9,7 @@ import {
   IsArray,
   IsObject,
   IsNumber,
+  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -45,11 +46,14 @@ export class UpdateAccountDto {
 
   @ApiProperty({
     description: 'Client phone number',
-    example: '+84123456789',
+    example: '0912345678',
     required: false,
   })
   @IsOptional()
   @IsString({ message: 'Phone must be a string' })
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone must be exactly 10 digits and start with 0',
+  })
   phone?: string;
 
   @ApiProperty({

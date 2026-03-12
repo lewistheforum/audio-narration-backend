@@ -32,7 +32,7 @@ export class PublicDoctorDetailData {
 
   @ApiProperty({
     description: 'Doctor phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })

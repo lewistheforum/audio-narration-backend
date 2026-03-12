@@ -106,7 +106,7 @@ export class ClinicAdminInformationSeederService {
           _id: randomUUID(),
           accountId: account._id,
           clinicName: this.getRandomClinicName(),
-          clinicPhone: `+84${this.randomPhoneDigits()}`,
+          clinicPhone: this.randomVietnamPhone(),
           description: this.getRandomDescription(),
           specializedIn: this.getRandomSpecializations(),
           pros: this.getRandomPros(),
@@ -210,10 +210,10 @@ export class ClinicAdminInformationSeederService {
   }
 
   /**
-   * Generate random 9-digit phone number
+   * Generate random Vietnamese local phone number
    */
-  private randomPhoneDigits(): string {
-    return this.randomDigits(9);
+  private randomVietnamPhone(): string {
+    return `0${this.randomDigits(9)}`;
   }
 
   /**

@@ -37,8 +37,8 @@ export class CreatePatientNoEmailDto {
   })
   @IsNotEmpty({ message: 'Phone number is required' })
   @IsString({ message: 'Phone number must be a string' })
-  @Matches(/^0\d{9,10}$/, {
-    message: 'Phone number must be 10-11 digits and start with 0',
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone number must be exactly 10 digits and start with 0',
   })
   @Transform(({ value }) => value?.trim())
   phone: string;
