@@ -747,7 +747,7 @@ export class AccountsService {
    * ```typescript
    * const result = await accountsService.update(id, {
    *   email: 'newemail@example.com',
-   *   phone: '+84987654321'
+    *   phone: '0987654321'
    * });
    * if (result.emailChanged) {
    *   // Send verification email to new address
