@@ -10,6 +10,7 @@ import { ERMBoneDensity } from '../../modules/prescriptions/entities/erm-bone-de
 import { ERMProcedure } from '../../modules/prescriptions/entities/erm-procedure.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
+import { getCurrentVietnamTime, subtractFromVietnamTime, addToDate } from '../utils/date.util';
 import {
   ERMStatus,
   ERMRecordType,
@@ -66,7 +67,6 @@ import {
   BODY_SIDES,
   IMMEDIATE_OUTCOMES,
 } from '../constants/appointment-seeder-data';
-import { getCurrentVietnamTime } from '../utils/date.util';
 
 /**
  * ERM Seeder Service
@@ -411,10 +411,10 @@ export class ERMSeederService {
    */
   private async createLabDetails(erm: ERM, count: number): Promise<number> {
     for (let i = 0; i < count; i++) {
-      const now = new Date();
-      const collectedAt = new Date(now.getTime() - getRandomInt(1, 3) * 24 * 60 * 60 * 1000);
-      const receivedAt = new Date(collectedAt.getTime() + getRandomInt(30, 120) * 60 * 1000);
-      const reportedAt = new Date(receivedAt.getTime() + getRandomInt(2, 8) * 60 * 60 * 1000);
+      const now = getCurrentVietnamTime();
+      const collectedAt = subtractFromVietnamTime(getRandomInt(1, 3), 'day');
+      const receivedAt = addToDate(collectedAt, getRandomInt(30, 120), 'minute');
+      const reportedAt = addToDate(receivedAt, getRandomInt(2, 8), 'hour');
 
       const panelName = getRandomItem(LAB_PANEL_NAMES) as PanelName;
       const abnormalSummary = Math.random() > 0.6; // 40% chance of normal results
@@ -538,9 +538,9 @@ export class ERMSeederService {
    */
   private async createProcedureDetails(erm: ERM, count: number): Promise<number> {
     for (let i = 0; i < count; i++) {
-      const now = new Date();
-      const performedStart = new Date(now.getTime() - getRandomInt(1, 48) * 60 * 60 * 1000);
-      const performedEnd = new Date(performedStart.getTime() + getRandomInt(15, 45) * 60 * 1000);
+      const now = getCurrentVietnamTime();
+      const performedStart = subtractFromVietnamTime(getRandomInt(1, 48), 'hour');
+      const performedEnd = addToDate(performedStart, getRandomInt(15, 45), 'minute');
 
       const procedure = this.ermProcedureRepository.create({
         ermId: erm._id,

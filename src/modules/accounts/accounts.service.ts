@@ -2331,7 +2331,7 @@ export class AccountsService {
     }
 
     // Check if code has expired
-    if (new Date() > storedCode.expiredAt) {
+    if (getCurrentVietnamTime() > storedCode.expiredAt) {
       throw new UnauthorizedException(
         MESSAGES.failMessage.verificationCodeExpired,
       );

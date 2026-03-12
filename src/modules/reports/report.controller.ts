@@ -29,11 +29,11 @@ export class ReportController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  @ApiOperation({ summary: 'Create a new report (Patient only)' })
+  @Roles(AccountRole.PATIENT, AccountRole.CLINIC_STAFF)
+  @ApiOperation({ summary: 'Create a new report (Patient & Staff)' })
   @ApiResponse({ status: 201, description: 'Report created successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid input data.' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Only patients can create reports.' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only patients and clinic staff can create reports.' })
   async createReport(@User() user: any, @Body() dto: CreateReportDto) {
     return this.reportService.createReport(user.id, dto);
   }

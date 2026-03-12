@@ -5,6 +5,7 @@ import {
   getCurrentVietnamTime,
   addToVietnamTime,
   getDateString,
+  getVietnamTimestamp,
 } from 'src/common/utils/date.util';
 import { ClinicSubscriptionRepository } from './repositories/clinic-subscription.repository';
 import { ClinicSubscriptionRenewalQueueRepository } from './repositories/clinic-subscription-renewal-queue.repository';
@@ -35,19 +36,21 @@ export class SubscriptionCronService {
 
   /**
    * Main Cron Entry Point
-   * Executes daily at midnight (00:00:00)
+   * Executes daily at midnight (00:00:00 Vietnam time)
    *
    * Orchestrates:
    * 1. Phase 1: Notification engine (read-only)
    * 2. Phase 2: State transition engine (transactional)
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  })
   async handleDailySweeper(): Promise<{
     phase1: { emailsSent: number; emailsFailed: number };
     phase2: { renewalsApplied: number; subscriptionsExpired: number; errors: number };
   }> {
     this.logger.log('🔄 Starting Daily Subscription Sweeper...');
-    const startTime = Date.now();
+    const startTime = getVietnamTimestamp();
 
     try {
       // Phase 1: Send expiration reminders (7-day and 1-day warnings)
@@ -62,7 +65,7 @@ export class SubscriptionCronService {
         `✅ Phase 2 Complete: ${phase2Stats.renewalsApplied} renewals, ${phase2Stats.subscriptionsExpired} expired, ${phase2Stats.errors} errors`,
       );
 
-      const duration = Date.now() - startTime;
+      const duration = getVietnamTimestamp() - startTime;
       this.logger.log(`✅ Daily Subscription Sweeper completed in ${duration}ms`);
 
       return {

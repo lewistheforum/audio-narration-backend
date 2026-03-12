@@ -83,7 +83,6 @@ export class StaffCreateAppointmentDto {
 
   @ApiProperty({
     description: 'Extra hour if applicable (ISO 8601 format)',
-    example: '2026-01-26T10:00:00.000Z',
     required: false,
   })
   @IsOptional()
@@ -114,35 +113,6 @@ export class StaffCreateAppointmentDto {
   @IsNumber({}, { message: 'Total must be a number' })
   @Min(0, { message: 'Total must be a positive number' })
   total?: number;
-
-  @ApiProperty({
-    description: 'Transaction ID for payment (optional - can be created later). Leave empty if payment not yet processed.',
-    required: false,
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'Invalid transaction ID format' })
-  @Transform(({ value }) => (value === '' ? null : value))
-  transactionId?: string;
-
-  @ApiProperty({
-    description: 'Payment status (e.g., PAID, PENDING, UNPAID). Leave empty if not applicable.',
-    example: AppointmentPackageStatus.PAID,
-    required: false,
-    enum: AppointmentPackageStatus,
-  })
-  @IsOptional()
-  @IsEnum(AppointmentPackageStatus, { message: 'Payment status must be a valid AppointmentPackageStatus' })
-  paymentStatus?: AppointmentPackageStatus;
-
-  @ApiProperty({
-    description: 'Payment type (online or cod). Leave empty if not applicable.',
-    example: PaymentType.ONLINE,
-    required: false,
-    enum: PaymentType,
-  })
-  @IsOptional()
-  @IsEnum(PaymentType, { message: 'Payment type must be either online or cod' })
-  paymentType?: PaymentType;
 
   @ApiProperty({
     description: 'Staff note or patient note for the appointment. Leave empty if no special notes.',

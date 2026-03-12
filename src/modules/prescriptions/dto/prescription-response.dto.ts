@@ -1,4 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Prescription Medicine Detail DTO
@@ -84,11 +86,13 @@ export class PrescriptionResponseDto {
     description: 'Creation timestamp',
     example: '2026-02-24T10:30:00Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Last update timestamp',
     example: '2026-02-24T10:30:00Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 }

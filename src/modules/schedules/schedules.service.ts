@@ -546,14 +546,17 @@ export class SchedulesService {
         shift: {
           id: schedule.clinicShift?._id,
           name: schedule.clinicShift?.shift,
-          hours: schedule.clinicShift?.hours?.map((hour: any) => ({
-            id: hour._id,
-            startHour: hour.startHour,
-            endHour: hour.endHour,
-            limit: hour.limit,
-            bookedCount: hour.bookedCount || 0,
-            isFull: (hour.bookedCount || 0) >= hour.limit,
-          })).sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
+          hours:
+            schedule.clinicShift?.hours
+              ?.map((hour: any) => ({
+                id: hour._id,
+                startHour: hour.startHour,
+                endHour: hour.endHour,
+                limit: hour.limit,
+                bookedCount: hour.bookedCount || 0,
+                isFull: (hour.bookedCount || 0) >= hour.limit,
+              }))
+              .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
         },
         room:
           schedule.rooms && schedule.rooms.length > 0
@@ -873,7 +876,7 @@ export class SchedulesService {
       .leftJoin(
         'appointments',
         'app',
-        'app.doctor_shift_hour_id = csh._id AND app.deleted_at IS NULL',
+        'app.clinic_shift_hour_id = csh._id AND app.deleted_at IS NULL',
       )
       .where('es.clinic_id = :clinicId', { clinicId })
       .andWhere('es.work_date >= :today', { today: dateRangeStart })
@@ -1099,7 +1102,7 @@ export class SchedulesService {
       .leftJoin(
         'appointments',
         'app',
-        'app.doctor_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
+        'app.clinic_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
         { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
       )
       .leftJoin('accounts', 'patient_a', 'patient_a._id = app.patient_id')

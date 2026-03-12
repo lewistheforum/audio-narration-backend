@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { PaymentType } from '../enums/payment-type.enum';
 import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
+import { AddressDto } from './appointment-response.dto';
 
 /**
  * Patient Detail DTO
@@ -27,10 +30,14 @@ export class PatientDetailDto {
   gender?: string;
 
   @ApiProperty({ description: 'Patient date of birth', required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({ description: 'Patient profile picture URL', required: false })
   profilePicture?: string;
+
+  @ApiProperty({ description: 'Patient addresses', type: [AddressDto], required: false })
+  addresses?: AddressDto[];
 }
 
 /**
@@ -58,6 +65,7 @@ export class DoctorDetailDto {
   gender?: string;
 
   @ApiProperty({ description: 'Doctor date of birth', required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({ description: 'Doctor profile picture URL', required: false })
@@ -90,6 +98,9 @@ export class ClinicServiceDetailDto {
 
   @ApiProperty({ description: 'Service price' })
   price: number;
+
+  @ApiProperty({ description: 'Service discount', required: false })
+  discount?: number;
 
   @ApiProperty({ description: 'Service duration in minutes', required: false })
   duration?: number;
@@ -189,12 +200,15 @@ export class AppointmentDetailResponseDto {
 
   // Appointment Details
   @ApiProperty({ description: 'Appointment date' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointmentDate: Date;
 
   @ApiProperty({ description: 'Appointment hour' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointmentHour: Date;
 
   @ApiProperty({ description: 'Extra hour', required: false })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   extraHour?: Date | null;
 
   @ApiProperty({ description: 'Shift hour details', type: ShiftHourDetailDto, required: false })
@@ -232,8 +246,10 @@ export class AppointmentDetailResponseDto {
 
   // Metadata
   @ApiProperty({ description: 'Created at' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ description: 'Updated at' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 }

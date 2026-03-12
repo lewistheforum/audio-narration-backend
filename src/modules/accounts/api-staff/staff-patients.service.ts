@@ -14,6 +14,7 @@ import { AccountRepository, GeneralAccountRepository } from '../repositories';
 import { AccountRole, AccountStatus } from '../enums';
 import { MailerService } from '../../mailer/mailer.service';
 import { MESSAGES } from 'src/common/message';
+import { getCurrentTime } from 'src/common/utils/date.util';
 
 /**
  * Staff Patients Service
@@ -161,7 +162,7 @@ export class StaffPatientsService {
           phone: dto.phone,
         });
         emailSent = true;
-        emailSentAt = new Date().toISOString();
+        emailSentAt = getCurrentTime();
       } catch (emailError) {
         // Log email error but don't fail the account creation
         console.error('Failed to send welcome email:', emailError);
