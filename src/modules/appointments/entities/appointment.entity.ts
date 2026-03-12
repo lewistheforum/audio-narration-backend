@@ -64,8 +64,8 @@ export class Appointment {
   @Column({ name: 'appointment_date', type: 'date' })
   appointmentDate: Date;
 
-  @Column({ name: 'appointment_hour', type: 'timestamptz' })
-  appointmentHour: Date;
+  @Column({ name: 'appointment_hour', type: 'timestamptz', nullable: true })
+  appointmentHour: Date | null;
 
   @Column({ name: 'extra_hour', type: 'timestamptz', nullable: true })
   extraHour?: Date | null;
