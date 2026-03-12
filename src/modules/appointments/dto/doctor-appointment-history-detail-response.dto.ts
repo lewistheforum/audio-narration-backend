@@ -1,4 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PaymentType } from '../enums/payment-type.enum';
+import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
+import { PatientAddressDto } from './patient-info.dto';
 
 /**
  * Patient Info for Appointment Detail DTO
@@ -56,6 +59,13 @@ export class AppointmentPatientInfoDto {
     nullable: true,
   })
   profile_image_url: string | null;
+
+  @ApiProperty({
+    description: 'Patient addresses',
+    type: [PatientAddressDto],
+    required: false,
+  })
+  addresses?: PatientAddressDto[];
 }
 
 /**
@@ -159,6 +169,12 @@ export class AppointmentShiftHourInfoDto {
   end_time: string | null;
 
   @ApiProperty({
+    description: 'Patient limit for this shift',
+    nullable: true,
+  })
+  limit: number | null;
+
+  @ApiProperty({
     description: 'Room number',
     example: 'P101',
     nullable: true,
@@ -214,6 +230,13 @@ export class AppointmentServiceDetailDto {
   price: number;
 
   @ApiProperty({
+    description: 'Service discount percentage',
+    example: 10,
+    nullable: true,
+  })
+  discount: number | null;
+
+  @ApiProperty({
     description: 'Added during examination',
     example: false,
   })
@@ -232,6 +255,79 @@ export class AppointmentServiceDetailDto {
     nullable: true,
   })
   erm_status: string | null;
+}
+
+/**
+ * Service in Payment Package DTO
+ */
+export class PackageServiceDto {
+  @ApiProperty({
+    description: 'Service ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Service name',
+    example: 'Khám tư vấn cơ xương khớp',
+  })
+  serviceName: string;
+
+  @ApiProperty({
+    description: 'Service price',
+    example: 200000,
+  })
+  price: number;
+
+  @ApiProperty({
+    description: 'Service discount percentage',
+    example: 10,
+    nullable: true,
+  })
+  discount: number | null;
+}
+
+/**
+ * Payment Package DTO
+ */
+export class PaymentPackageDto {
+  @ApiProperty({
+    description: 'Package ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Transaction ID',
+    example: 'TXN2026030812345',
+  })
+  transactionId: string;
+
+  @ApiProperty({
+    description: 'Payment amount',
+    example: 450000,
+  })
+  amount: number;
+
+  @ApiProperty({
+    description: 'Payment status',
+    enum: AppointmentPackageStatus,
+    nullable: true,
+  })
+  status: AppointmentPackageStatus | null;
+
+  @ApiProperty({
+    description: 'Payment type',
+    enum: PaymentType,
+    nullable: true,
+  })
+  paymentType: PaymentType | null;
+
+  @ApiProperty({
+    description: 'Services in package',
+    type: [PackageServiceDto],
+  })
+  services: PackageServiceDto[];
 }
 
 /**
@@ -442,6 +538,13 @@ export class DoctorAppointmentHistoryDetailResponseDto {
   appointment_hour: Date;
 
   @ApiProperty({
+    description: 'Extra hour',
+    example: '2026-03-08T09:30:00Z',
+    nullable: true,
+  })
+  extra_hour: Date | null;
+
+  @ApiProperty({
     description: 'Appointment status',
     example: 'COMPLETED',
   })
@@ -476,6 +579,33 @@ export class DoctorAppointmentHistoryDetailResponseDto {
     type: AppointmentShiftHourInfoDto,
   })
   shift_hour: AppointmentShiftHourInfoDto;
+
+  @ApiProperty({
+    description: 'Clinic rooms where doctor works',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        roomName: { type: 'string' },
+      },
+    },
+    required: false,
+  })
+  clinicRooms?: { id: string; roomName: string }[];
+
+  @ApiProperty({
+    description: 'Reminder sent status',
+    example: false,
+  })
+  isReminder: boolean;
+
+  @ApiProperty({
+    description: 'Payment package',
+    type: PaymentPackageDto,
+    nullable: true,
+  })
+  package: PaymentPackageDto | null;
 
   @ApiProperty({
     description: 'List of services',
