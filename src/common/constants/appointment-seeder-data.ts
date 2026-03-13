@@ -76,12 +76,14 @@ export const VALID_APPOINTMENT_STATUSES: AppointmentStatus[] = [
 ];
 
 /**
- * Valid ERM statuses for completed appointments
- * Only COMPLETED or SIGNED are allowed (not DRAFT/IN_PROGRESS/CANCELLED)
+ * Valid ERM statuses
+ * Includes all valid statuses except SIGNED
  */
 export const VALID_ERM_STATUSES: ERMStatus[] = [
+  ERMStatus.DRAFT,
+  ERMStatus.IN_PROGRESS,
   ERMStatus.COMPLETED,
-  ERMStatus.SIGNED,
+  ERMStatus.CANCELLED,
 ];
 
 /**
@@ -245,11 +247,21 @@ export const PAYMENT_TYPES: PaymentType[] = [
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Get a random item from an array
- */
 export function getRandomItem<T>(array: T[]): T {
   return array[Math.floor(Math.random() * array.length)];
+}
+
+const enumCounters: Record<string, number> = {};
+/**
+ * Get an item sequentially from an array to guarantee 100% coverage
+ */
+export function getSequentialItem<T>(array: T[], key: string): T {
+  if (enumCounters[key] === undefined) {
+    enumCounters[key] = 0;
+  }
+  const item = array[enumCounters[key] % array.length];
+  enumCounters[key]++;
+  return item;
 }
 
 /**
@@ -685,7 +697,7 @@ export const EDUCATION_ADVICE = [
 /**
  * Visit types
  */
-export const VISIT_TYPES = ['FIRST_VISIT', 'FOLLOW_UP', 'POST_PROCEDURE', 'ROUTINE'];
+export const VISIT_TYPES = ['FIRST_VISIT', 'FOLLOW_UP', 'POST_PROCEDURE', 'ROUTINE', 'ONLINE', 'EMERGENCY'];
 
 /**
  * Severity levels

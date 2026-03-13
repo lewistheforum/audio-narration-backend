@@ -4143,6 +4143,8 @@ export class AppointmentsService {
 
     // Optimization: Bulk load services to avoid N+1 queries
     let servicesMap: Map<string, any[]> = new Map();
+    let ermsMap: Map<string, any[]> = new Map();
+    let ePrescriptionMap: Map<string, any> = new Map();
     if (appointmentsRawUnique.length > 0) {
       const appointmentIds = appointmentsRawUnique.map((a) => a.appointment_id);
 
@@ -4156,11 +4158,15 @@ export class AppointmentsService {
           'cs.service_name AS service_name',
           'sa.price AS price', // V4.5: Snapshot price from service_appointments
           'sa.discount AS discount', // V4.5: Snapshot discount from service_appointments
+          'e._id AS erm_id',
+          'e.record_type AS erm_type',
+          'e.created_at AS erm_created_at',
         ])
         .from('appointment_package', 'ap')
         .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
         .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
         .innerJoin('clinic_services', 'cs', 'cs._id = csc.service_id')
+        .leftJoin('erms', 'e', 'e.service_appointments_id = sa._id AND e.deleted_at IS NULL')
         .where('ap.appointment_id IN (:...appointmentIds)', { appointmentIds })
         .andWhere('ap.deleted_at IS NULL')
         .andWhere('sa.deleted_at IS NULL')
@@ -4177,6 +4183,39 @@ export class AppointmentsService {
           service_name: service.service_name,
           price: parseFloat(service.price || '0'),
           discount: parseFloat(service.discount || '0'),
+        });
+
+        if (service.erm_id) {
+          if (!ermsMap.has(aptId)) {
+            ermsMap.set(aptId, []);
+          }
+          ermsMap.get(aptId)!.push({
+            id: service.erm_id,
+            type: service.erm_type,
+            created_at: service.erm_created_at,
+          });
+        }
+      });
+
+      // Fetch E-Prescription summaries
+      const ePrescriptionsRaw = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'ep.appointment_id AS appointment_id',
+          'ep._id AS ep_id',
+          'ep.reference_id AS ep_code',
+          'ep.created_at AS ep_created_at',
+        ])
+        .from('e_prescriptions', 'ep')
+        .where('ep.appointment_id IN (:...appointmentIds)', { appointmentIds })
+        .andWhere('ep.deleted_at IS NULL')
+        .getRawMany();
+        
+      ePrescriptionsRaw.forEach((ep) => {
+        ePrescriptionMap.set(ep.appointment_id, {
+           id: ep.ep_id,
+           code: ep.ep_code,
+           created_at: ep.ep_created_at,
         });
       });
     }
@@ -4206,6 +4245,8 @@ export class AppointmentsService {
       payment_type: apt.payment_type,
       payment_status: apt.payment_status,
       services: servicesMap.get(apt.appointment_id) || [],
+      erms: ermsMap.get(apt.appointment_id) || [],
+      e_prescription_summary: ePrescriptionMap.get(apt.appointment_id) || null,
     }));
 
     return {
@@ -4350,11 +4391,24 @@ export class AppointmentsService {
           'e._id AS erm_id',
           'e.record_type AS erm_record_type',
           'e.status AS erm_status',
+          'e.service_code AS erm_service_code',
+          'e.signed_at AS erm_signed_at',
+          'e.created_at AS erm_created_at',
+          'ec._id AS ec_id', 'ec.created_at AS ec_created_at',
+          'erd._id AS erd_id', 'erd.created_at AS erd_created_at',
+          'el._id AS el_id', 'el.created_at AS el_created_at',
+          'ex._id AS ex_id', 'ex.created_at AS ex_created_at',
+          'eu._id AS eu_id', 'eu.created_at AS eu_created_at'
         ])
         .from('service_appointments', 'sa')
         .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
         .innerJoin('clinic_services', 'cs', 'cs._id = csc.service_id')
         .leftJoin('erms', 'e', 'e.service_appointments_id = sa._id AND e.deleted_at IS NULL')
+        .leftJoin('erm_consultations', 'ec', 'ec.erm_id = e._id AND ec.deleted_at IS NULL')
+        .leftJoin('erm_procedures', 'erd', 'erd.erm_id = e._id AND erd.deleted_at IS NULL')
+        .leftJoin('erm_labs', 'el', 'el.erm_id = e._id AND el.deleted_at IS NULL')
+        .leftJoin('erm_xrays', 'ex', 'ex.erm_id = e._id AND ex.deleted_at IS NULL')
+        .leftJoin('erm_ultrasounds', 'eu', 'eu.erm_id = e._id AND eu.deleted_at IS NULL')
         .where('sa.appointment_package_id IN (:...packageIds)', { packageIds })
         .andWhere('sa.deleted_at IS NULL')
         .getRawMany();
@@ -4362,6 +4416,7 @@ export class AppointmentsService {
 
     // Group service appointments by package
     const servicesByPackage = new Map<string, any[]>();
+    const ermsList: any[] = [];
     serviceAppointmentsData.forEach((sa) => {
       const pkgId = sa.package_id;
       if (!servicesByPackage.has(pkgId)) {
@@ -4376,14 +4431,23 @@ export class AppointmentsService {
           price: parseFloat(sa.price || '0'),
           discount: parseFloat(sa.discount || '0'), // V4.5: Include snapshot discount
         },
-        erm_summary: sa.erm_id
-          ? {
-              _id: sa.erm_id,
-              record_type: sa.erm_record_type,
-              status: sa.erm_status,
-            }
-          : undefined,
       });
+
+      if (sa.erm_id) {
+        ermsList.push({
+          _id: sa.erm_id,
+          record_type: sa.erm_record_type,
+          status: sa.erm_status,
+          service_code: sa.erm_service_code,
+          created_at: sa.erm_created_at,
+          signed_at: sa.erm_signed_at,
+          special_erm: sa.ec_id ? { id: sa.ec_id, created_at: sa.ec_created_at } :
+                      sa.erd_id ? { id: sa.erd_id, created_at: sa.erd_created_at } :
+                      sa.el_id ? { id: sa.el_id, created_at: sa.el_created_at } :
+                      sa.ex_id ? { id: sa.ex_id, created_at: sa.ex_created_at } :
+                      sa.eu_id ? { id: sa.eu_id, created_at: sa.eu_created_at } : null
+        });
+      }
     });
 
     // Layer 4: Load doctor additional details if doctor is assigned
@@ -4406,19 +4470,46 @@ export class AppointmentsService {
       };
     }
 
-    // Layer 5: Business Rules - E-Prescription Summary (only when COMPLETED)
-    let ePrescriptionSummary = undefined;
+    // Layer 5: Business Rules - E-Prescription Detail (only when COMPLETED)
+    let ePrescriptionDetails = undefined;
     if (appointmentRaw.status === AppointmentStatus.COMPLETED) {
-      const ePrescription = await this.dataSource
+      const ePrescriptionsRow = await this.dataSource
         .createQueryBuilder()
-        .select('ep._id', 'id')
+        .select([
+          'ep._id AS id',
+          'ep.reference_id AS reference_id',
+          'ep.doctor_note AS doctor_note',
+          'ep.created_at AS created_at',
+          'ep.updated_at AS updated_at',
+          'dp._id AS detail_id',
+          'dp.quantity AS detail_quantity',
+          'dp.note AS detail_note',
+          'm.id AS medicine_id',
+          'm.name AS medicine_name',
+        ])
         .from('e_prescriptions', 'ep')
+        .leftJoin('detail_e_prescriptions', 'dp', 'dp.e_prescription_id = ep._id AND dp.deleted_at IS NULL')
+        .leftJoin('medicines', 'm', 'm.id = dp.medicine_id AND m.deleted_at IS NULL')
         .where('ep.appointment_id = :appointmentId', { appointmentId })
         .andWhere('ep.deleted_at IS NULL')
-        .getRawOne();
+        .getRawMany();
 
-      if (ePrescription) {
-        ePrescriptionSummary = { _id: ePrescription.id };
+      if (ePrescriptionsRow && ePrescriptionsRow.length > 0) {
+        const ep = ePrescriptionsRow[0];
+        ePrescriptionDetails = {
+          _id: ep.id,
+          reference_id: ep.reference_id,
+          doctor_note: ep.doctor_note,
+          created_at: ep.created_at,
+          updated_at: ep.updated_at,
+          details: ePrescriptionsRow.filter(r => r.detail_id).map(r => ({
+            _id: r.detail_id,
+            quantity: r.detail_quantity,
+            note: r.detail_note,
+            medicine_id: r.medicine_id,
+            medicine_name: r.medicine_name,
+          })),
+        };
       }
     }
 
@@ -4445,7 +4536,8 @@ export class AppointmentsService {
         appointmentRaw.status === AppointmentStatus.CANCELLED
           ? appointmentRaw.reject_reason
           : undefined,
-      e_prescription_summary: ePrescriptionSummary,
+      e_prescription: ePrescriptionDetails,
+      erms: ermsList,
       appointment_packages: packages.map((pkg) => ({
         _id: pkg.package_id,
         amount: parseFloat(pkg.amount || '0'),
@@ -6600,6 +6692,124 @@ export class AppointmentsService {
       completed_at: null, // Not in current schema
       created_at: appointment.createdAt,
       updated_at: appointment.updatedAt,
+    };
+  }
+
+  /**
+   * Get Patient ERMs List
+   * Retrieves summary of all ERM records linked to the appointment
+   */
+  async getPatientERMsList(patientId: string, appointmentId: string) {
+    const appointment = await this.dataSource.getRepository(Appointment).findOne({
+      where: { _id: appointmentId, patientId, deletedAt: IsNull() },
+      select: ['_id', 'status'],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound || 'Appointment not found or access denied');
+    }
+
+    const ermsRaw = await this.dataSource.createQueryBuilder()
+      .select([
+        'e._id AS id',
+        'e.record_type AS record_type',
+        'e.status AS status',
+        'e.service_code AS service_code',
+        'e.created_at AS created_at',
+        'ec._id AS ec_id', 'ec.main_service_code AS ec_service_code', 'ec.created_at AS ec_created_at',
+        'ex._id AS ex_id', 'ex.region AS ex_region', 'ex.created_at AS ex_created_at',
+        'el._id AS el_id', 'el.panel_name AS el_panel_name', 'el.created_at AS el_created_at',
+        'eu._id AS eu_id', 'eu.service_code AS eu_service_code', 'eu.created_at AS eu_created_at',
+        'erd._id AS erd_id', 'erd.procedure_code AS erd_procedure_code', 'erd.created_at AS erd_created_at',
+        'ebd._id AS ebd_id', 'ebd.site AS ebd_site', 'ebd.created_at AS ebd_created_at'
+      ])
+      .from('erms', 'e')
+      .leftJoin('erm_consultations', 'ec', 'ec.erm_id = e._id AND ec.deleted_at IS NULL')
+      .leftJoin('erm_xrays', 'ex', 'ex.erm_id = e._id AND ex.deleted_at IS NULL')
+      .leftJoin('erm_labs', 'el', 'el.erm_id = e._id AND el.deleted_at IS NULL')
+      .leftJoin('erm_ultrasounds', 'eu', 'eu.erm_id = e._id AND eu.deleted_at IS NULL')
+      .leftJoin('erm_procedures', 'erd', 'erd.erm_id = e._id AND erd.deleted_at IS NULL')
+      .leftJoin('erm_bone_density', 'ebd', 'ebd.erm_id = e._id AND ebd.deleted_at IS NULL')
+      .where('e.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('e.deleted_at IS NULL')
+      .getRawMany();
+
+    return ermsRaw.map(e => ({
+      id: e.id,
+      record_type: e.record_type,
+      status: e.status,
+      service_code: e.service_code,
+      created_at: e.created_at,
+      special_erm: e.ec_id ? { id: e.ec_id, service_code: e.ec_service_code, created_at: e.ec_created_at } :
+                   e.ex_id ? { id: e.ex_id, region: e.ex_region, created_at: e.ex_created_at } :
+                   e.el_id ? { id: e.el_id, panel_name: e.el_panel_name, created_at: e.el_created_at } :
+                   e.eu_id ? { id: e.eu_id, service_code: e.eu_service_code, created_at: e.eu_created_at } :
+                   e.erd_id ? { id: e.erd_id, procedure_code: e.erd_procedure_code, created_at: e.erd_created_at } :
+                   e.ebd_id ? { id: e.ebd_id, site: e.ebd_site, created_at: e.ebd_created_at } : null
+    }));
+  }
+
+  /**
+   * Get Patient ERM Detail
+   * Retrieves specific ERM record details (polymorphic)
+   */
+  async getPatientERMDetail(patientId: string, appointmentId: string, ermId: string) {
+    const appointment = await this.dataSource.getRepository(Appointment).findOne({
+      where: { _id: appointmentId, patientId, deletedAt: IsNull() },
+      select: ['_id', 'status'],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(MESSAGES.failMessage.appointmentNotFound || 'Appointment not found or access denied');
+    }
+
+    const erm = await this.dataSource.createQueryBuilder()
+      .select('e.*')
+      .from('erms', 'e')
+      .where('e._id = :ermId', { ermId })
+      .andWhere('e.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('e.deleted_at IS NULL')
+      .getRawOne();
+
+    if (!erm) {
+      throw new NotFoundException('ERM record not found');
+    }
+
+    if (erm.status !== 'COMPLETED') {
+      throw new ForbiddenException('ERM record is not available (status must be COMPLETED)');
+    }
+
+    let relationTable = '';
+    switch (erm.record_type) {
+      case 'CONSULTATION': relationTable = 'erm_consultations'; break;
+      case 'XRAY': relationTable = 'erm_xrays'; break;
+      case 'LAB': relationTable = 'erm_labs'; break;
+      case 'ULTRASOUND': relationTable = 'erm_ultrasounds'; break;
+      case 'BONE_DENSITY': relationTable = 'erm_bone_density'; break;
+      case 'PROCEDURE': relationTable = 'erm_procedures'; break;
+      default: throw new NotFoundException('Unsupported ERM record type');
+    }
+
+    const childDetails = await this.dataSource.createQueryBuilder()
+      .select('c.*')
+      .from(relationTable, 'c')
+      .where('c.erm_id = :ermId', { ermId })
+      .andWhere('c.deleted_at IS NULL')
+      .getRawOne();
+
+    if (!childDetails) {
+      throw new NotFoundException(`${erm.record_type} details not found for this ERM record`);
+    }
+
+    return {
+      _id: erm._id,
+      appointment_id: erm.appointment_id,
+      record_type: erm.record_type,
+      status: erm.status,
+      service_code: erm.service_code,
+      created_at: erm.created_at,
+      signed_at: erm.signed_at,
+      details: childDetails,
     };
   }
 }

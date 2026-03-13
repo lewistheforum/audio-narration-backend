@@ -2194,6 +2194,32 @@ export class AppointmentsController {
   }
 
   /**
+   * Get Patient ERMs List
+   * Retrieves summary of all ERM records linked to the appointment
+   */
+  @Get('patients/me/appointments/:id/erms')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get ERM records summary for a specific appointment',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+  })
+  async getPatientERMsList(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ) {
+    const patientId = req.user._id;
+    return this.appointmentsService.getPatientERMsList(patientId, id);
+  }
+
+  /**
    * Get Patient ERM Detail (Polymorphic Retrieval)
    * Patient only - retrieves specific ERM record
    * 
@@ -2227,7 +2253,6 @@ export class AppointmentsController {
   @ApiResponse({
     status: 200,
     description: 'ERM record retrieved successfully',
-    type: PatientERMDetailResponseDto,
   })
   @ApiNotFoundResponse({
     description: 'Appointment, ERM, or child record not found',
@@ -2243,9 +2268,9 @@ export class AppointmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('ermId', ParseUUIDPipe) ermId: string,
     @Request() req: any,
-  ): Promise<PatientERMDetailResponseDto> {
+  ) {
     const patientId = req.user._id;
-    return this.prescriptionsService.getPatientERMDetail(
+    return this.appointmentsService.getPatientERMDetail(
       patientId,
       id,
       ermId,
