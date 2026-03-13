@@ -771,7 +771,8 @@ export class SchedulesService {
             .leftJoin(
                 'appointments',
                 'app',
-                'app.clinic_shift_hour_id = csh._id AND app.deleted_at IS NULL',
+                'app.clinic_shift_hour_id = csh._id AND app.appointment_date = es.work_date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
+                { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
             )
             .where('es.clinic_id = :clinicId', { clinicId })
             .andWhere('es.work_date >= :today', { today: dateRangeStart })
@@ -780,8 +781,9 @@ export class SchedulesService {
             .andWhere('cs.deleted_at IS NULL')
             .andWhere('csh.deleted_at IS NULL')
             .andWhere('a.role = :role', { role: AccountRole.DOCTOR })
+            .andWhere('a.deleted_at IS NULL')
             .groupBy('es._id, es.employee_id, es.work_date, es.week_day, cs._id, cs.shift, csh._id, csh.start_hour, csh.end_hour, csh.limit, a._id, a.email, a.phone, ga.full_name, di.full_name, di.profile_picture, di.position, di.experience')
-            .having('csh.limit > COALESCE(COUNT(DISTINCT app._id), 0)'); // Only slots with availability
+            ;
 
         // Filter by shift type if provided
         if (shiftType) {
@@ -886,14 +888,16 @@ export class SchedulesService {
             }
 
             // Add time slot
-            const availableSlots = schedule.limit - schedule.booked_count;
+            const limit = Number(schedule.limit || 0);
+            const bookedCount = Number(schedule.booked_count || 0);
+            const availableSlots = Math.max(limit - bookedCount, 0);
             scheduleEntry.timeSlots.push({
                 shiftHourId: schedule.shift_hour_id,
                 startHour: schedule.start_hour,
                 endHour: schedule.end_hour,
-                limit: schedule.limit,
+                limit,
                 availableSlots: availableSlots,
-                isFullyBooked: availableSlots === 0,
+                isFullyBooked: availableSlots <= 0,
             });
             scheduleEntry.totalAvailableSlots += availableSlots;
         });
@@ -965,9 +969,7 @@ export class SchedulesService {
                 'csh.start_hour AS slot_start_time',
                 'csh.end_hour AS slot_end_time',
                 'csh.limit AS slot_limit',
-                'app._id AS appointment_id',
-                'app.status AS appointment_status',
-                'COALESCE(patient_ga.full_name, patient_a.email) AS booked_by_patient_name',
+                'COALESCE(COUNT(DISTINCT app._id), 0) AS booked_count',
             ])
             .from('employee_schedule', 'es')
             .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
@@ -981,15 +983,31 @@ export class SchedulesService {
                 'app.clinic_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
                 { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
             )
-            .leftJoin('accounts', 'patient_a', 'patient_a._id = app.patient_id')
-            .leftJoin('general_accounts', 'patient_ga', 'patient_ga.account_id = app.patient_id AND patient_ga.deleted_at IS NULL')
             .where('es.clinic_id = :clinicId', { clinicId })
             .andWhere('es.work_date = :date', { date })
             .andWhere('es.deleted_at IS NULL')
             .andWhere('cs.deleted_at IS NULL')
             .andWhere('csh.deleted_at IS NULL')
             .andWhere('a.role = :role', { role: AccountRole.DOCTOR })
-            .andWhere('a.deleted_at IS NULL');
+            .andWhere('a.deleted_at IS NULL')
+            .groupBy([
+                'es._id',
+                'es.employee_id',
+                'es.work_date',
+                'ga.full_name',
+                'di.full_name',
+                'a.email',
+                'a.phone',
+                'di.profile_picture',
+                'di.position',
+                'di.experience',
+                'cs._id',
+                'cs.shift',
+                'csh._id',
+                'csh.start_hour',
+                'csh.end_hour',
+                'csh.limit',
+            ].join(', '));
 
         // Apply optional filters
         if (doctorId) {
@@ -1114,34 +1132,38 @@ export class SchedulesService {
                 doctorData.shifts.push(shiftEntry);
             }
 
+            const slotLimit = Number(schedule.slot_limit || 0);
+            const bookedCount = Number(schedule.booked_count || 0);
+            const availableCount = Math.max(slotLimit - bookedCount, 0);
+
             // Create time slot object
             const appointmentHour = `${date}T${schedule.slot_start_time}.000Z`;
-            const isBooked = !!schedule.appointment_id;
-
             const timeSlot = {
                 shiftHourId: schedule.shift_hour_id,
                 startTime: schedule.slot_start_time,
                 endTime: schedule.slot_end_time,
                 appointmentHour,
-                isAvailable: !isBooked,
+                isAvailable: availableCount > 0,
             };
 
-            // Add to appropriate array
-            if (isBooked) {
+            // Mode 2: include all slots (both available and full)
+            if (bookedCount > 0) {
                 shiftEntry.bookedSlots.push({
                     ...timeSlot,
-                    bookedBy: schedule.booked_by_patient_name,
-                    appointmentId: schedule.appointment_id,
+                    bookedBy: `Booked ${bookedCount}/${slotLimit}`,
                 });
-                shiftEntry.bookedCount++;
-            } else {
-                shiftEntry.availableSlots.push(timeSlot);
-                shiftEntry.availableCount++;
-                doctorData.totalAvailableSlots++;
-                totalAvailableSlots++;
+                shiftEntry.bookedCount += bookedCount;
             }
 
-            shiftEntry.totalSlots++;
+            // When a slot is partially booked, it must appear in available list too
+            if (availableCount > 0) {
+                shiftEntry.availableSlots.push(timeSlot);
+            }
+
+            shiftEntry.availableCount += availableCount;
+            doctorData.totalAvailableSlots += availableCount;
+            totalAvailableSlots += availableCount;
+            shiftEntry.totalSlots += slotLimit;
 
             // Update shift time range from slots
             if (schedule.slot_start_time < shiftEntry.shiftStartTime) {
@@ -1160,15 +1182,16 @@ export class SchedulesService {
             }
         });
 
-        // Convert map to array and filter doctors with no available slots
-        const doctors = Array.from(doctorMap.values()).filter((d) => d.totalAvailableSlots > 0);
+        // Mode 2: keep all doctors in response, including those with fully booked slots
+        const doctors = Array.from(doctorMap.values());
+        const availableDoctorsCount = doctors.filter((d) => d.totalAvailableSlots > 0).length;
 
         return {
             date,
             weekDay,
             doctors,
             summary: {
-                totalDoctorsAvailable: doctors.length,
+                totalDoctorsAvailable: availableDoctorsCount,
                 totalSlotsAvailable: totalAvailableSlots,
                 earliestSlot: totalAvailableSlots > 0 ? earliestTime : null,
                 latestSlot: totalAvailableSlots > 0 ? latestTime : null,
