@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { ServiceCategoryType } from '../enums';
 import { ClinicServiceCategory } from '../entities';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 import { ClinicUsingCategoryDto } from './clinic-using-category.dto';
 
@@ -34,12 +36,14 @@ export class ClinicServiceCategoryResponseDto {
     description: 'Created At',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Updated At',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   @ApiProperty({

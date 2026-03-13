@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as dayjs from 'dayjs';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
@@ -23,7 +24,7 @@ import {
   REJECTION_REASONS,
 } from '../constants/medical-terms';
 import { PROVINCES } from '../constants/locations';
-import { getCurrentVietnamTime } from '../utils/date.util';
+import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
  * ClinicContractInformation Seeder Service
@@ -230,15 +231,11 @@ export class ClinicContractInformationSeederService {
    */
   private getRandomContractStartDate(): Date {
     const now = getCurrentVietnamTime();
-    const sixMonthsAgo = new Date(
-      now.getFullYear(),
-      now.getMonth() - 6,
-      now.getDate(),
-    );
+    const sixMonthsAgo = dayjs(now).tz(VIETNAM_TIMEZONE).subtract(6, 'month').toDate();
     const randomTime =
       sixMonthsAgo.getTime() +
       Math.random() * (now.getTime() - sixMonthsAgo.getTime());
-    return new Date(randomTime);
+    return dayjs(randomTime).tz(VIETNAM_TIMEZONE).toDate();
   }
 
   /**
@@ -247,11 +244,7 @@ export class ClinicContractInformationSeederService {
   private getRandomContractEndDate(): Date {
     const startDate = this.getRandomContractStartDate();
     const monthsToAdd = 12 + Math.floor(Math.random() * 12); // 12-24 months
-    const endDate = new Date(
-      startDate.getFullYear(),
-      startDate.getMonth() + monthsToAdd,
-      startDate.getDate(),
-    );
+    const endDate = dayjs(startDate).tz(VIETNAM_TIMEZONE).add(monthsToAdd, 'month').toDate();
     return endDate;
   }
 
@@ -278,7 +271,7 @@ export class ClinicContractInformationSeederService {
   private getRandomWorkingTime(): Date {
     const hour = 8 + Math.floor(Math.random() * 9); // 8-16 hours
     const minute = Math.floor(Math.random() * 60);
-    const date = new Date();
+    const date = getCurrentVietnamTime();
     date.setHours(hour, minute, 0, 0);
     return date;
   }

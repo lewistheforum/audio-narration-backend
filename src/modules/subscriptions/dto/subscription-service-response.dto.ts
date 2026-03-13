@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { SubscriptionServiceStatus } from '../enums/subscription-service-status.enum';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Subscription Service Response DTO
@@ -77,12 +79,14 @@ export class SubscriptionServiceResponseDto {
     description: 'Creation timestamp',
     example: '2024-01-01T00:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Last update timestamp',
     example: '2024-01-01T00:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   @ApiProperty({

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Transaction } from '../entities/transaction.entity';
+import { parseVietnamTime } from '../../../common/utils/date.util';
 
 @Injectable()
 export class TransactionRepository extends Repository<Transaction> {
@@ -124,12 +125,12 @@ export class TransactionRepository extends Repository<Transaction> {
     }
 
     if (filters?.fromDate) {
-      params.push(new Date(filters.fromDate));
+      params.push(parseVietnamTime(filters.fromDate));
       conditions.push(`t.transaction_date >= $${params.length}`);
     }
 
     if (filters?.toDate) {
-      params.push(new Date(filters.toDate));
+      params.push(parseVietnamTime(filters.toDate));
       conditions.push(`t.transaction_date <= $${params.length}`);
     }
 

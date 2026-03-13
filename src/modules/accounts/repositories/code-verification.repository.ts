@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial, LessThan, MoreThan } from 'typeorm';
 import { CodeVerification } from '../entities/code_verification.entity';
 import { VerificationType } from '../enums';
+import { getCurrentVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * CodeVerification Repository
@@ -74,7 +75,7 @@ export class CodeVerificationRepository {
         code,
         type,
         used: false,
-        expiredAt: MoreThan(new Date()),
+        expiredAt: MoreThan(getCurrentVietnamTime()),
       },
     });
   }
@@ -188,7 +189,7 @@ export class CodeVerificationRepository {
    */
   async deleteExpired(): Promise<number> {
     const result = await this.repository.delete({
-      expiredAt: LessThan(new Date()),
+      expiredAt: LessThan(getCurrentVietnamTime()),
     });
     return result.affected || 0;
   }
@@ -209,7 +210,7 @@ export class CodeVerificationRepository {
         accountId: userId,
         type,
         used: false,
-        expiredAt: MoreThan(new Date()),
+        expiredAt: MoreThan(getCurrentVietnamTime()),
       },
     });
     return count > 0;

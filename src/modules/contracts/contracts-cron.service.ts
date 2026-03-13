@@ -14,9 +14,11 @@ export class ContractsCronService {
     constructor(private readonly contractsService: ContractsService) { }
 
     /**
-     * Run every day at midnight (Server time, but logic will calculate VN time)
+     * Run every day at midnight (Vietnam timezone)
      */
-    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+        timeZone: 'Asia/Ho_Chi_Minh',
+    })
     async handleExpiredContracts() {
         this.logger.log('Starting CRON Job: Update expired contracts to OLD status...');
         try {

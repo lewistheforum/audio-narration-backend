@@ -486,19 +486,19 @@ export class PrescriptionsService {
       .select([
         // Clinic info
         'clinic._id AS clinic_id',
-        'clinic.business_name AS clinic_name',
-        'clinic.address AS clinic_address',
+        'clinic_info.clinic_name AS clinic_name',
+        'clinic_addr.address AS clinic_address',
         'clinic.phone AS clinic_phone',
-        'clinic.profile_picture AS clinic_logo',
+        'clinic_info.profile_picture AS clinic_logo',
         // Doctor info
         'doctor._id AS doctor_id',
-        'doctor.full_name AS doctor_name',
+        'doctor_info.full_name AS doctor_name',
         'doctor_info.academic_degree AS doctor_degree',
         'doctor_info.position AS doctor_position',
         // Patient info
-        'patient.full_name AS patient_name',
-        'patient.dob AS patient_dob',
-        'patient.gender AS patient_gender',
+        'patient_info.full_name AS patient_name',
+        'patient_info.dob AS patient_dob',
+        'patient_info.gender AS patient_gender',
         'patient.phone AS patient_phone',
         // Appointment info
         'a.appointment_date AS appointment_date',
@@ -506,13 +506,12 @@ export class PrescriptionsService {
       ])
       .from('appointments', 'a')
       .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
+      .leftJoin('clinic_information', 'clinic_info', 'clinic_info.account_id = clinic._id')
+      .leftJoin('addresses', 'clinic_addr', 'clinic_addr.account_id = clinic._id')
       .innerJoin('accounts', 'doctor', 'doctor._id = a.doctor_id')
+      .leftJoin('doctor_information', 'doctor_info', 'doctor_info.account_id = doctor._id')
       .innerJoin('accounts', 'patient', 'patient._id = a.patient_id')
-      .leftJoin(
-        'doctor_information',
-        'doctor_info',
-        'doctor_info.account_id = doctor._id',
-      )
+      .leftJoin('general_accounts', 'patient_info', 'patient_info.account_id = patient._id')
       .where('a._id = :appointmentId', { appointmentId })
       .getRawOne();
 

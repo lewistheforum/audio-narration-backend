@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import * as dayjs from 'dayjs';
 import { ClinicManagerInformation } from '../../modules/accounts/entities/clinic_manager_information.entity';
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { ClinicManagerInformationRepository } from '../../modules/accounts/repositories/clinic-manager-information.repository';
 import { ENGLISH_NAMES, BRANCH_NAMES } from '../constants/names';
+import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
  * ClinicManagerInformation Seeder Service
@@ -133,10 +135,10 @@ export class ClinicManagerInformationSeederService {
    */
   private generateDob(index: number): Date {
     const age = 30 + (index % 26); // 30-55 years old
-    const year = new Date().getFullYear() - age;
+    const year = getCurrentVietnamTime().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return new Date(year, month, day);
+    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
   }
 
   /**

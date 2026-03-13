@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ErmRepository } from './repositories/erm.repository';
@@ -11,6 +12,13 @@ import {
   ErmResponseDto, 
   SaveErmDataDto, 
   SaveErmResponseDto,
+  DoctorERMDetailResponseDto,
+  ConsultationDataDto,
+  XrayDataDto,
+  UltrasoundDataDto,
+  LabDataDto,
+  ProcedureDataDto,
+  BoneDensityDataDto,
 } from './dto';
 import { ConsultationFormTemplateDto } from './dto/consultation-form-template.dto';
 import { XrayFormTemplateDto } from './dto/xray-form-template.dto';
@@ -901,5 +909,226 @@ export class ErmsService {
         label: 'Recommendations',
       },
     };
+  }
+
+  /**
+   * Get Doctor ERM Detail (Step 4 - Doctor Patient History)
+   *
+   * Returns detailed ERM data for doctor to view patient's medical records
+   *
+   * @param ermId - ERM UUID
+   * @param doctorId - Authenticated doctor ID
+   * @returns Detailed ERM response based on record_type
+   * @throws NotFoundException if ERM not found
+   * @throws ForbiddenException if doctor doesn't have access
+   *
+   * Business Rules:
+   * - Verify ERM exists
+   * - Verify ERM belongs to appointment with this doctor
+   * - Return data based on record_type (CONSULTATION, XRAY, ULTRASOUND, LAB, PROCEDURE, BONE_DENSITY)
+   * - Include creator information
+   */
+  async getDoctorERMDetail(
+    ermId: string,
+    doctorId: string,
+  ): Promise<DoctorERMDetailResponseDto> {
+    // Find ERM with appointment relation
+    const erm = await this.ermRepository.findErmWithAppointment(ermId);
+
+    if (!erm) {
+      throw new NotFoundException('ERM not found');
+    }
+
+    // Verify doctor has access (appointment must belong to this doctor)
+    if (!erm.appointment || erm.appointment.doctorId !== doctorId) {
+      throw new ForbiddenException('You do not have access to this ERM');
+    }
+
+    // Get service name from service appointment
+    const serviceAppointment = await this.dataSource
+      .getRepository(ServiceAppointment)
+      .createQueryBuilder('sa')
+      .leftJoinAndSelect('sa.clinicService', 'clinicServiceConfig')
+      .leftJoinAndSelect('clinicServiceConfig.service', 'clinicService')
+      .where('sa._id = :serviceAppointmentId', {
+        serviceAppointmentId: erm.serviceAppointmentsId,
+      })
+      .getOne();
+
+    const serviceName = serviceAppointment?.clinicService?.service?.serviceName || null;
+
+    // Get creator name
+    const creator = await this.dataSource.query(
+      `
+      SELECT ga.full_name as creator_name
+      FROM general_accounts ga
+      WHERE ga._id = $1
+      `,
+      [erm.createdBy],
+    );
+    const creatorName = creator[0]?.creator_name || 'Unknown';
+
+    // Base response
+    const baseResponse = {
+      erm_id: erm._id,
+      service_appointment_id: erm.serviceAppointmentsId,
+      appointment_id: erm.appointmentId,
+      record_type: erm.recordType,
+      service_code: erm.serviceCode || null,
+      service_name: serviceName,
+      status: erm.status,
+      created_at: erm.createdAt,
+      updated_at: erm.updatedAt || null,
+      created_by: erm.createdBy,
+      created_by_name: creatorName,
+      consultation_data: null,
+      xray_data: null,
+      ultrasound_data: null,
+      lab_data: null,
+      procedure_data: null,
+      bone_density_data: null,
+    };
+
+    // Get detailed data based on record_type
+    switch (erm.recordType) {
+      case ERMRecordType.CONSULTATION: {
+        const consultation = await this.ermRepository.findConsultationByErmId(ermId);
+        if (consultation) {
+          baseResponse.consultation_data = {
+            visit_type: consultation.visitType,
+            main_service_code: consultation.mainServiceCode || null,
+            chief_complaint: consultation.chiefComplaint || null,
+            onset_duration: consultation.onsetDuration || null,
+            pain_location: consultation.painLocation || null,
+            pain_character: consultation.painCharacter || null,
+            pain_intensity: consultation.painIntensity || null,
+            aggravating_factors: consultation.aggravatingFactors || null,
+            relieving_factors: consultation.relievingFactors || null,
+            functional_limitations: consultation.functionalLimitations || null,
+            pastMsk_history: consultation.pastMskHistory || null,
+            pastMedical_history: consultation.pastMedicalHistory || null,
+            medication_history: consultation.medicationHistory || null,
+            family_history: consultation.familyHistory || null,
+            red_flags: consultation.redFlags || null,
+            vital_signs: consultation.vitalSigns || null,
+            inspection_findings: consultation.inspectionFindings || null,
+            palpation_findings: consultation.palpationFindings || null,
+            range_of_motion: consultation.rangeOfMotion || null,
+            special_tests: consultation.specialTests || null,
+            neuro_exam: consultation.neuroExam || null,
+            gait_assessment: consultation.gaitAssessment || null,
+            working_diagnosis: consultation.workingDiagnosis || null,
+            severity: consultation.severity || null,
+            comorbid_impact: consultation.comorbidImpact || null,
+            risk_factors: consultation.riskFactors || null,
+            physiotherapy_plan: consultation.physiotherapyPlan || null,
+            education_advice: consultation.educationAdvice || null,
+            follow_up_date: consultation.followUpDate || null,
+            follow_up_condition: consultation.followUpCondition || null,
+          } as ConsultationDataDto;
+        }
+        break;
+      }
+
+      case ERMRecordType.XRAY: {
+        const xray = await this.ermRepository.findXrayByErmId(ermId);
+        if (xray) {
+          baseResponse.xray_data = {
+            region: xray.region || null,
+            projection: xray.projection || null,
+            indication: xray.indication || null,
+            technique: xray.technique || null,
+            findings: xray.findings || null,
+            osteoarthritis_grade: xray.osteoarthritisGrade || null,
+            conclusion: xray.conclusion || null,
+            recommendations: xray.recommendations || null,
+            image_urls: xray.imageUrls || null,
+          } as XrayDataDto;
+        }
+        break;
+      }
+
+      case ERMRecordType.ULTRASOUND: {
+        const ultrasound = await this.ermRepository.findUltrasoundByErmId(ermId);
+        if (ultrasound) {
+          baseResponse.ultrasound_data = {
+            service_code: ultrasound.serviceCode || null,
+            indication: ultrasound.indication || null,
+            body_site: ultrasound.bodySite || null,
+            side: ultrasound.side || null,
+            technique: ultrasound.technique || null,
+            findings: ultrasound.findings || null,
+            measurements: ultrasound.measurements || null,
+            conclusion: ultrasound.conclusion || null,
+            recommendations: ultrasound.recommendations || null,
+            image_urls: ultrasound.imageUrls || null,
+            performed_at: ultrasound.performedAt,
+          } as UltrasoundDataDto;
+        }
+        break;
+      }
+
+      case ERMRecordType.LAB: {
+        const lab = await this.ermRepository.findLabByErmId(ermId);
+        if (lab) {
+          baseResponse.lab_data = {
+            panel_name: lab.panelName,
+            specimen_type: lab.specimenType,
+            collected_at: lab.collectedAt,
+            received_at: lab.receivedAt,
+            reported_at: lab.reportedAt,
+            results: lab.results,
+            abnormal_summary: lab.abnormalSummary,
+            conclusion: lab.conclusion,
+            recommendations: lab.recommendations,
+          } as LabDataDto;
+        }
+        break;
+      }
+
+      case ERMRecordType.PROCEDURE: {
+        const procedure = await this.ermRepository.findProcedureByErmId(ermId);
+        if (procedure) {
+          baseResponse.procedure_data = {
+            procedure_code: procedure.procedureCode || null,
+            indication: procedure.indication || null,
+            body_site: procedure.bodySite || null,
+            side: procedure.side || null,
+            anesthesia_type: procedure.anesthesiaType || null,
+            performed_start: procedure.performedStart || null,
+            performed_end: procedure.performedEnd || null,
+            medications: procedure.medications || null,
+            devices: procedure.devices || null,
+            description: procedure.description || null,
+            pain_score_before: procedure.painScoreBefore || null,
+            pain_score_after: procedure.painScoreAfter || null,
+            immediate_outcome: procedure.immediateOutcome || null,
+            complications: procedure.complications || null,
+            post_care_instructions: procedure.postCareInstructions || null,
+            follow_up_plan: procedure.followUpPlan || null,
+          } as ProcedureDataDto;
+        }
+        break;
+      }
+
+      case ERMRecordType.BONE_DENSITY: {
+        const boneDensity = await this.ermRepository.findBoneDensityByErmId(ermId);
+        if (boneDensity) {
+          baseResponse.bone_density_data = {
+            site: boneDensity.site,
+            bmd_value: boneDensity.bmdValue || null,
+            bmd_unit: boneDensity.bmdUnit || null,
+            t_score: boneDensity.tScore || null,
+            z_score: boneDensity.zScore || null,
+            who_category: boneDensity.whoCategory || null,
+            fracture_risk_comment: boneDensity.fractureRiskComment || null,
+            recommendations: boneDensity.recommendations || null,
+          } as BoneDensityDataDto;
+        }
+        break;
+      }
+    }
+
+    return baseResponse as DoctorERMDetailResponseDto;
   }
 }

@@ -22,23 +22,25 @@ import { User } from '../../common/decorators/user.decorator';
 import { AccountRole } from '../accounts/enums';
 
 @ApiTags('Reports')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('reports')
 export class ReportController {
   constructor(private readonly reportService: ReportService) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  @ApiOperation({ summary: 'Create a new report (Patient only)' })
+  @Roles(AccountRole.PATIENT, AccountRole.CLINIC_STAFF)
+  @ApiOperation({ summary: 'Create a new report (Patient & Staff)' })
   @ApiResponse({ status: 201, description: 'Report created successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid input data.' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Only patients can create reports.' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only patients and clinic staff can create reports.' })
   async createReport(@User() user: any, @Body() dto: CreateReportDto) {
-    return this.reportService.createReport(user.id, dto);
+    return this.reportService.createReport(user._id, dto);
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get a paginated list of reports' })
   @ApiResponse({ status: 200, description: 'Return paginated reports.' })
   async findAll(@Query() query: GetReportsDto) {
@@ -46,6 +48,8 @@ export class ReportController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get a report by ID' })
   @ApiResponse({ status: 200, description: 'Return the report.' })
   @ApiResponse({ status: 404, description: 'Report not found.' })
@@ -54,6 +58,8 @@ export class ReportController {
   }
 
   @Post(':id/respond')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Respond to a user report' })
   @ApiResponse({ status: 200, description: 'Report responded successfully.' })
   @ApiResponse({ status: 400, description: 'Report already responded to.' })

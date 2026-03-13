@@ -29,6 +29,8 @@ import {
     DoctorSchedulesResponseDto,
     GetDoctorSchedulesByDateQueryDto,
     DoctorSchedulesByDateResponseDto,
+    ClinicRoomsShiftHoursResponseDto,
+    GetRoomsShiftHoursQueryDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -246,6 +248,56 @@ export class SchedulesController {
     }
 
     /**
+     * Get Clinic Rooms with Shift Hours (Staff Only)
+     *
+     * Retrieves all clinic rooms with their shift hours based on employee schedules
+     * Used by staff to view available rooms and time slots
+     *
+     * Response includes:
+     * - List of clinic rooms with nested shift hours
+     * - Each room shows shift hours where employees are scheduled
+     *
+     * Query Parameters:
+     * - date: Optional filter by work date (YYYY-MM-DD)
+     *
+     * Roles: CLINIC_STAFF
+     */
+    @Get('staff/rooms-shift-hours')
+    @Roles(AccountRole.CLINIC_STAFF)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get clinic rooms with shift hours (Staff only)',
+        description: 'Retrieves all clinic rooms with their shift hours based on employee schedules. Optionally filter by specific work date.',
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Rooms and shift hours retrieved successfully',
+        type: ClinicRoomsShiftHoursResponseDto,
+    })
+    @ApiResponse({
+        status: 401,
+        description: 'Unauthorized - Invalid or missing JWT token',
+    })
+    @ApiResponse({
+        status: 403,
+        description: 'Forbidden - User is not a clinic staff member',
+    })
+    @ApiResponse({
+        status: 404,
+        description: 'Not Found - Clinic not found or staff not associated with clinic',
+    })
+    @ApiQuery({
+        name: 'date',
+        required: false,
+        type: String,
+        description: 'Filter shift hours by work date (YYYY-MM-DD format)',
+        example: '2024-03-15',
+    })
+    getRoomsWithShiftHours(@Request() req, @Query() query: GetRoomsShiftHoursQueryDto) {
+        return this.schedulesService.getClinicRoomsWithShiftHours(req.user, query.date);
+    }
+
+    /**
      * Get Doctor Schedules (Staff Only)
      *
      * Retrieves list of doctors with their available schedules for appointment booking
@@ -309,7 +361,7 @@ export class SchedulesController {
     async getDoctorSchedules(
         @Request() req: any,
         @Query() query: GetDoctorSchedulesQueryDto,
-    ): Promise<{ data: DoctorSchedulesResponseDto; message: string }> {
+    ): Promise<{ statusCode: number; message: string; data: any[] }> {
         // Get staff's clinic ID from accounts.parent_id
         const staffAccountId = req.user._id;
 
@@ -333,9 +385,54 @@ export class SchedulesController {
             shiftType: query.shiftType,
         });
 
+        const mappedData = (data.doctors || []).flatMap((doctorItem: any) => {
+            return (doctorItem.schedules || []).map((schedule: any) => {
+                const firstRoom = schedule.rooms?.[0] || null;
+
+                return {
+                    id: schedule.employeeScheduleId,
+                    workDate:
+                        typeof schedule.workDate === 'string'
+                            ? schedule.workDate.split('T')[0]
+                            : schedule.workDate,
+                    weekDay: schedule.weekDay,
+                    employee: {
+                        id: doctorItem.doctor?.doctorId,
+                        fullName: doctorItem.doctor?.fullName,
+                        avatar: doctorItem.doctor?.avatar || null,
+                    },
+                    shift: {
+                        id: schedule.shiftId,
+                        name: schedule.shiftType,
+                        hours: (schedule.timeSlots || []).map((slot: any) => {
+                            const limit = Number(slot.limit || 0);
+                            const availableSlots = Number(slot.availableSlots || 0);
+                            const bookedCount = Math.max(limit - availableSlots, 0);
+
+                            return {
+                                id: slot.shiftHourId,
+                                startHour: slot.startHour,
+                                endHour: slot.endHour,
+                                limit,
+                                bookedCount,
+                                isFull: bookedCount >= limit,
+                            };
+                        }),
+                    },
+                    room: firstRoom
+                        ? {
+                              id: firstRoom.roomId,
+                              name: firstRoom.roomName,
+                          }
+                        : null,
+                };
+            });
+        });
+
         return {
-            data,
-            message: 'Doctor schedules retrieved successfully',
+            statusCode: HttpStatus.OK,
+            message: 'SUCCESS',
+            data: mappedData,
         };
     }
 

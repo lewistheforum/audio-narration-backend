@@ -14,6 +14,7 @@ import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity'
 import { RedisModule } from '../../config/redis.config';
 import { MailerModule } from '../mailer/mailer.module';
 import { TransactionsModule } from '../transactions/transactions.module';
+import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
 
 /**
  * Appointments Module
@@ -46,6 +47,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
     RedisModule,
     MailerModule,
     forwardRef(() => TransactionsModule),
+    PrescriptionsModule,
   ],
   controllers: [AppointmentsController],
   providers: [

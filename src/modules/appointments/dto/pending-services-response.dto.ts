@@ -48,6 +48,19 @@ export class PendingServiceItemDto {
     nullable: true,
   })
   ermStatus?: ERMStatus | null;
+
+  @ApiProperty({
+    description: 'Service price',
+    example: 500000,
+  })
+  price: number;
+
+  @ApiProperty({
+    description: 'Service discount',
+    example: 50000,
+    required: false,
+  })
+  discount?: number;
 }
 
 /**
@@ -67,6 +80,8 @@ export class PendingServicesResponseDto {
         hasErm: false,
         ermId: null,
         ermStatus: null,
+        price: 200000,
+        discount: 20000,
       },
     ],
   })
@@ -83,6 +98,8 @@ export class PendingServicesResponseDto {
         hasErm: true,
         ermId: '123e4567-e89b-12d3-a456-426614174000',
         ermStatus: 'IN_PROGRESS',
+        price: 500000,
+        discount: 50000,
       },
     ],
   })

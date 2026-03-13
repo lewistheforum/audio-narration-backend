@@ -6,7 +6,8 @@ import { ServiceConfigsService } from './service-configs.service';
 import {
   ServiceConfigsController,
   ManagerServiceConfigsController,
-  PublicServiceConfigsController
+  PublicServiceConfigsController,
+  DoctorServiceConfigsController,
 } from './service-configs.controller';
 
 /**
@@ -16,7 +17,12 @@ import {
  */
 @Module({
   imports: [TypeOrmModule.forFeature([ClinicServiceConfig])],
-  controllers: [ServiceConfigsController, ManagerServiceConfigsController, PublicServiceConfigsController],
+  controllers: [
+    ServiceConfigsController,
+    ManagerServiceConfigsController,
+    PublicServiceConfigsController,
+    DoctorServiceConfigsController,
+  ],
   providers: [ClinicServiceConfigRepository, ServiceConfigsService],
   exports: [TypeOrmModule, ClinicServiceConfigRepository, ServiceConfigsService],
 })
