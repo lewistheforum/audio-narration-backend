@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsDateString,
+  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -64,11 +65,13 @@ export class CreateClinicManagerForRegistrationDto {
 
   @ApiProperty({
     description: 'Clinic manager phone number',
-    example: '0123456789',
+    example: '0899798602',
   })
   @IsNotEmpty({ message: 'Phone number is required' })
   @IsString({ message: 'Phone number must be a string' })
-  @MaxLength(20, { message: 'Phone number must not exceed 20 characters' })
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone number must be exactly 10 digits and start with 0',
+  })
   phone: string;
 
   // ClinicManagerInformation fields

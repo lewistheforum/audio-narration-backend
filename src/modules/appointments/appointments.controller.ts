@@ -21,7 +21,11 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
+  ApiNotFoundResponse,
+  ApiForbiddenResponse,
+  ApiProduces,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { getDateString } from 'src/common/utils/date.util';
 import { AppointmentsService } from './appointments.service';
 import { BookingSessionService } from './booking-session.service';
@@ -40,6 +44,7 @@ import {
   AppointmentDetailResponseDto,
   QueryDoctorAppointmentDto,
   DoctorAppointmentListResponseDto,
+  DoctorAppointmentsResponseDto,
   DoctorAppointmentDetailResponseDto,
   PendingServicesResponseDto,
   CompleteExaminationDto,
@@ -98,12 +103,19 @@ import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
  * - PATCH /patients/booking-sessions/:sessionId - Update booking session
  * - POST /patients/appointments - Create appointment from session
  */
+import { PrescriptionsService } from '../prescriptions/prescriptions.service';
+import {
+  PatientEPrescriptionDetailResponseDto,
+  PatientERMDetailResponseDto,
+} from '../prescriptions/dto';
+
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
+    private readonly prescriptionsService: PrescriptionsService,
   ) {}
 
   /**
@@ -333,7 +345,7 @@ export class AppointmentsController {
   @ApiResponse({
     status: 200,
     description: 'Appointments retrieved successfully',
-    type: DoctorAppointmentListResponseDto,
+    type: DoctorAppointmentsResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -360,9 +372,49 @@ export class AppointmentsController {
   async getDoctorAppointments(
     @Request() req: any,
     @Query() queryDto: QueryDoctorAppointmentDto,
-  ): Promise<DoctorAppointmentListResponseDto> {
+  ): Promise<DoctorAppointmentsResponseDto> {
     const doctorId = req.user._id;
     return this.appointmentsService.getDoctorAppointments(doctorId, queryDto);
+  }
+
+  /**
+   * Get pending extra-hour appointments for doctor
+   *
+   * Retrieves list of appointments that have extra_hour and are in PENDING_DOCTOR or CONFIRMED status.
+   * These include appointments waiting for doctor confirmation or already confirmed extra hour appointments.
+   *
+   * @param req - Request object containing authenticated doctor
+   * @returns List of appointments with extra hour in pending or confirmed status
+   */
+  @Get('doctor/me/extra-hour-pending')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get appointments with extra hour (PENDING_DOCTOR or CONFIRMED)',
+    description:
+      'Retrieve list of appointments that have extra_hour and are in PENDING_DOCTOR or CONFIRMED status. ' +
+      'Includes both appointments awaiting doctor confirmation and confirmed extra hour appointments.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Extra hour pending appointments retrieved successfully',
+    type: DoctorAppointmentsResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a doctor',
+  })
+  async getPendingExtraHourAppointments(
+    @Request() req: any,
+  ): Promise<DoctorAppointmentsResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.getPendingExtraHourAppointments(doctorId);
   }
 
   /**
@@ -584,16 +636,17 @@ export class AppointmentsController {
    * Get doctor's appointment history detail (Step 3)
    *
    * Retrieves complete appointment information including:
-   * - Patient and doctor details
+   * - Patient and doctor details with full information
    * - Clinic and shift hour information
-   * - All services with ERM status
+   * - All services with pricing (price, discount) and ERM status
+   * - Clinic rooms assignment
+   * - Payment package details
    * - All ERMs created
    * - Prescription with medicines (if exists)
-   * - Payment transactions
    *
    * @param req - Request object containing authenticated doctor
    * @param appointmentId - UUID of the appointment
-   * @returns Complete appointment detail
+   * @returns Complete appointment detail including ERMs and prescription
    */
   @Get('doctor/me/appointments/:appointment_id/history')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -603,14 +656,16 @@ export class AppointmentsController {
     summary: 'Get complete appointment detail from patient history',
     description: `
       Retrieves comprehensive appointment information for doctor's patient history view.
+      
       Includes:
-      - Patient personal information with profile image
-      - Doctor information with specialization and license
+      - Patient personal information with profile image and addresses
+      - Doctor information with academic degree and position  
       - Clinic details and shift hour information
-      - All services performed with ERM status
-      - All ERMs (bệnh án) created during the appointment
+      - All services with price, discount, and ERM status
+      - Clinic rooms where doctor works
+      - Payment package with transaction details
+      - All ERMs (bệnh án) created during appointment
       - Complete prescription with medicines list (if exists)
-      - Payment transaction history
       
       Access Control:
       - Only the doctor who owns this appointment can access
@@ -674,7 +729,7 @@ export class AppointmentsController {
   @ApiResponse({
     status: 200,
     description: 'Appointment details retrieved successfully',
-    type: DoctorAppointmentDetailResponseDto,
+    type: AppointmentResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -697,7 +752,7 @@ export class AppointmentsController {
   async getAppointmentDetailForDoctor(
     @Request() req: any,
     @Param('id', ParseUUIDPipe) appointmentId: string,
-  ): Promise<DoctorAppointmentDetailResponseDto> {
+  ): Promise<AppointmentResponseDto> {
     const doctorId = req.user._id;
     return this.appointmentsService.getAppointmentDetailForDoctor(
       appointmentId,
@@ -962,6 +1017,16 @@ export class AppointmentsController {
           example: 'XRAY',
         },
         price: { type: 'number', example: 200000 },
+        discount: {
+          type: 'number',
+          example: 10,
+          description: 'Discount percentage (%)',
+        },
+        amount: {
+          type: 'number',
+          example: 180000,
+          description: 'Final amount after discount',
+        },
         addedDuringExamination: { type: 'boolean', example: true },
         addedBy: { type: 'string', example: 'doctor-uuid' },
         createdAt: {
@@ -1017,63 +1082,6 @@ export class AppointmentsController {
       appointmentId,
       doctorId,
       addServiceDto.clinicServiceId,
-    );
-  }
-
-  /**
-   * AI create appointment with services
-   *
-   * Allows clinic ai to create appointments for existing patients
-   * with selected services. This will create records in 3 tables:
-   * appointments, appointment_package, and service_appointments
-   *
-   * @param req - Request object containing authenticated user
-   * @param createDto - Appointment creation data with services
-   * @returns Created appointment details
-   */
-  @Post('ai/create')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Create appointment for patient (AI only)',
-    description:
-      'AI creates an appointment for an existing patient with selected clinic services. This operation creates records in appointments, appointment_package, and service_appointments tables within a transaction to ensure data consistency.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Appointment created successfully',
-    type: AppointmentResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad Request - Invalid input data',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - User is not a clinic staff member',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Not Found - Staff information or patient not found',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'Conflict - Appointment time already booked',
-  })
-  async aiCreateAppointment(
-    // @Request() req: any,
-    @Body() createDto: AiCreateAppointmentDto,
-  ): Promise<AppointmentResponseDto> {
-    // const staffAccountId = req.user._id;
-    return this.appointmentsService.aiCreateAppointment(
-      // staffAccountId,
-      createDto,
     );
   }
 
@@ -1492,34 +1500,37 @@ export class AppointmentsController {
   }
 
   /**
-   * Accept appointment (Staff/Doctor)
+   * Accept extra-hour appointment (Doctor only)
    *
-   * Allows clinic staff or doctor to accept a pending appointment
-   * Changes appointment status from PENDING to CONFIRMED
+   * Allows doctor to accept an extra-hour appointment
+   * Changes appointment status from PENDING_DOCTOR to CONFIRMED
+   * Only works for appointments with extra_hour set
    *
-   * @param req - Request object containing authenticated user
+   * @param req - Request object containing authenticated doctor
    * @param id - Appointment UUID
    * @param acceptDto - Empty DTO (endpoint does not require body)
    * @returns Updated appointment details
    */
   @Patch(':id/accept')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
+  @Roles(AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Accept appointment (Staff/Doctor)',
+    summary: 'Accept extra-hour appointment (Doctor only)',
     description:
-      'Staff or doctor accepts a pending appointment. Changes status from PENDING to CONFIRMED.',
+      'Doctor accepts an extra-hour appointment. Changes status from PENDING_DOCTOR to CONFIRMED. ' +
+      'Only works for appointments with extra_hour set.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Appointment accepted successfully',
+    description: 'Extra-hour appointment accepted successfully',
     type: AppointmentResponseDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment status is not PENDING',
+    description:
+      'Bad Request - Appointment has no extra_hour or status is not PENDING_DOCTOR',
   })
   @ApiResponse({
     status: 401,
@@ -1527,7 +1538,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User is not a clinic staff or doctor',
+    description:
+      'Forbidden - User is not a doctor or appointment not assigned to this doctor',
   })
   @ApiResponse({
     status: 404,
@@ -1544,43 +1556,42 @@ export class AppointmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() acceptDto: AcceptAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    const userAccountId = req.user._id;
-    return this.appointmentsService.acceptAppointment(
-      id,
-      userAccountId,
-      acceptDto,
-    );
+    const doctorId = req.user._id;
+    return this.appointmentsService.acceptAppointment(id, doctorId, acceptDto);
   }
 
   /**
-   * Decline appointment (Staff/Doctor)
+   * Decline extra-hour appointment (Doctor only)
    *
-   * Allows clinic staff or doctor to decline a pending appointment
-   * Changes appointment status from PENDING to CANCELLED with reject reason
+   * Allows doctor to decline an extra-hour appointment
+   * Changes appointment status to CANCELLED with reject reason
+   * Only works for appointments with extra_hour set
    *
-   * @param req - Request object containing authenticated user
+   * @param req - Request object containing authenticated doctor
    * @param id - Appointment UUID
    * @param declineDto - Reject reason (required)
    * @returns Updated appointment details
    */
   @Patch(':id/decline')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
+  @Roles(AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Decline appointment (Staff/Doctor)',
+    summary: 'Decline extra-hour appointment (Doctor only)',
     description:
-      'Staff or doctor declines a pending appointment. Changes status from PENDING to CANCELLED with reject reason.',
+      'Doctor declines an extra-hour appointment. Changes status to CANCELLED with reject reason. ' +
+      'Only works for appointments with extra_hour set.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Appointment declined successfully',
+    description: 'Extra-hour appointment declined successfully',
     type: AppointmentResponseDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment status is not PENDING',
+    description:
+      'Bad Request - Appointment has no extra_hour or status is not PENDING_DOCTOR',
   })
   @ApiResponse({
     status: 401,
@@ -1588,7 +1599,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User is not a clinic staff or doctor',
+    description:
+      'Forbidden - User is not a doctor or appointment not assigned to this doctor',
   })
   @ApiResponse({
     status: 404,
@@ -1605,10 +1617,10 @@ export class AppointmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() declineDto: DeclineAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    const userAccountId = req.user._id;
+    const doctorId = req.user._id;
     return this.appointmentsService.declineAppointment(
       id,
-      userAccountId,
+      doctorId,
       declineDto,
     );
   }
@@ -2143,6 +2155,204 @@ export class AppointmentsController {
   ) {
     const patientId = req.user._id;
     return this.appointmentsService.getMyAppointmentDetail(patientId, id);
+  }
+
+  /**
+   * Get Patient E-Prescription Detail
+   * Patient only - nested under appointment route
+   *
+   * Retrieves electronic prescription for a specific appointment
+   * Only accessible when appointment status is COMPLETED
+   */
+  @Get('patients/me/appointments/:id/e-prescription')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get E-Prescription for a specific appointment',
+    description:
+      'Retrieves the electronic prescription details including all prescribed medicines. Only available for completed appointments.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'E-Prescription retrieved successfully',
+    type: PatientEPrescriptionDetailResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Appointment or E-Prescription not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'E-Prescription only available for completed appointments',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getPatientEPrescription(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ): Promise<PatientEPrescriptionDetailResponseDto> {
+    const patientId = req.user._id;
+    return await this.prescriptionsService.getPatientEPrescription(
+      patientId,
+      id,
+    );
+  }
+
+  /**
+   * Export Patient E-Prescription as PDF
+   * Patient only - generates downloadable PDF document
+   *
+   * Exports the electronic prescription in a medical-compliant PDF format
+   * with clinic, doctor, and patient information headers
+   */
+  @Get('patients/me/appointments/:id/e-prescription/export/pdf')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Export E-Prescription as PDF',
+    description:
+      'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines. Only available for completed appointments.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({
+    status: 200,
+    description: 'PDF file generated and downloaded successfully',
+    schema: {
+      type: 'string',
+      format: 'binary',
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Appointment or E-Prescription not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'E-Prescription only available for completed appointments',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async exportEPrescriptionPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ): Promise<void> {
+    const patientId = req.user._id;
+
+    // Generate PDF buffer
+    const pdfBuffer = await this.prescriptionsService.generateEPrescriptionPdf(
+      patientId,
+      id,
+    );
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="prescription-${id}.pdf"`,
+    );
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+    // Send PDF buffer
+    res.send(pdfBuffer);
+  }
+
+  /**
+   * Get Patient ERMs List
+   * Retrieves summary of all ERM records linked to the appointment
+   */
+  @Get('patients/me/appointments/:id/erms')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get ERM records summary for a specific appointment',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+  })
+  async getPatientERMsList(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ) {
+    const patientId = req.user._id;
+    return this.appointmentsService.getPatientERMsList(patientId, id);
+  }
+
+  /**
+   * Get Patient ERM Detail (Polymorphic Retrieval)
+   * Patient only - retrieves specific ERM record
+   *
+   * Returns ERM details with polymorphic child data based on record_type
+   * Enforces strict 3-layer linkage validation and visibility rules
+   */
+  @Get('patients/me/appointments/:id/erms/:ermId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get ERM record details for a specific appointment',
+    description:
+      'Retrieves Electronic Record Management (ERM) details including polymorphic child records (X-ray, Lab, Ultrasound, Consultation, Bone Density, Procedure). Only COMPLETED records are accessible to patients. Enforces strict ownership validation (patient -> appointment -> ERM).',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiParam({
+    name: 'ermId',
+    type: 'string',
+    format: 'uuid',
+    description: 'ERM record ID',
+    example: '123e4567-e89b-12d3-a456-426614174001',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'ERM record retrieved successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Appointment, ERM, or child record not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'ERM record not available (status must be COMPLETED)',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getPatientERMDetail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('ermId', ParseUUIDPipe) ermId: string,
+    @Request() req: any,
+  ) {
+    const patientId = req.user._id;
+    return this.appointmentsService.getPatientERMDetail(patientId, id, ermId);
   }
 
   /**

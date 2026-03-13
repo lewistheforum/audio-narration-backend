@@ -84,7 +84,7 @@ export class AccountSeederService {
     private readonly accountRepository: AccountRepository,
     private readonly addressRepository: AddressRepository,
     private readonly googleIframeRepository: GoogleIframeRepository,
-  ) { }
+  ) {}
 
   private generateKeyPair(): {
     publicKey: string;
@@ -225,7 +225,7 @@ export class AccountSeederService {
         username: `clinic_admin_${i}`,
         email,
         password: hashedPassword,
-        phone: `0${this.randomPhoneDigits()}`,
+        phone: this.randomVietnamPhone(),
         role: AccountRole.CLINIC_ADMIN,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,
@@ -261,8 +261,9 @@ export class AccountSeederService {
       const count = isPending ? 1 : this.getRandomInt(1, 3);
 
       for (let i = 1; i <= count; i++) {
-        const email = `clinic_manager_${clinicAdmins.indexOf(clinicAdmin) + 1
-          }_${i}@bonix.test`;
+        const email = `clinic_manager_${
+          clinicAdmins.indexOf(clinicAdmin) + 1
+        }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -276,11 +277,12 @@ export class AccountSeederService {
         );
 
         const account = this.accountRepository.createAccount({
-          username: `clinic_manager_${clinicAdmins.indexOf(clinicAdmin) + 1
-            }_${i}`,
+          username: `clinic_manager_${
+            clinicAdmins.indexOf(clinicAdmin) + 1
+          }_${i}`,
           email,
           password: hashedPassword,
-          phone: `0${this.randomPhoneDigits()}`,
+          phone: this.randomVietnamPhone(),
           parentId: clinicAdmin._id,
           role: AccountRole.CLINIC_MANAGER,
           status: AccountStatus.ACTIVE,
@@ -314,8 +316,9 @@ export class AccountSeederService {
       const count = this.getRandomInt(5, 10);
 
       for (let i = 1; i <= count; i++) {
-        const email = `clinic_staff_${clinicManagers.indexOf(clinicManager) + 1
-          }_${i}@bonix.test`;
+        const email = `clinic_staff_${
+          clinicManagers.indexOf(clinicManager) + 1
+        }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -328,11 +331,12 @@ export class AccountSeederService {
         );
 
         const account = this.accountRepository.createAccount({
-          username: `clinic_staff_${clinicManagers.indexOf(clinicManager) + 1
-            }_${i}`,
+          username: `clinic_staff_${
+            clinicManagers.indexOf(clinicManager) + 1
+          }_${i}`,
           email,
           password: hashedPassword,
-          phone: `0${this.randomPhoneDigits()}`,
+          phone: this.randomVietnamPhone(),
           parentId: clinicManager._id,
           role: AccountRole.CLINIC_STAFF,
           status: AccountStatus.ACTIVE,
@@ -363,8 +367,9 @@ export class AccountSeederService {
       const count = this.getRandomInt(5, 10);
 
       for (let i = 1; i <= count; i++) {
-        const email = `doctor_${clinicManagers.indexOf(clinicManager) + 1
-          }_${i}@bonix.test`;
+        const email = `doctor_${
+          clinicManagers.indexOf(clinicManager) + 1
+        }_${i}@bonix.test`;
         const existing = await this.accountRepository.findAccountByEmail(email);
 
         if (existing) {
@@ -380,7 +385,7 @@ export class AccountSeederService {
           username: `doctor_${clinicManagers.indexOf(clinicManager) + 1}_${i}`,
           email,
           password: hashedPassword,
-          phone: `0${this.randomPhoneDigits()}`,
+          phone: this.randomVietnamPhone(),
           parentId: clinicManager._id,
           role: AccountRole.DOCTOR,
           status: AccountStatus.ACTIVE,
@@ -438,7 +443,7 @@ export class AccountSeederService {
         username: `patient_${i}`,
         email,
         password: hashedPassword,
-        phone: `0${this.randomPhoneDigits()}`,
+        phone: this.randomVietnamPhone(),
         role: AccountRole.PATIENT,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,
@@ -539,8 +544,8 @@ export class AccountSeederService {
 
     this.logger.log(
       `✅ Address and Google iframe seeding completed: ` +
-      `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
-      `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
+        `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
+        `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
     );
   }
 
@@ -550,7 +555,7 @@ export class AccountSeederService {
   private generateStreetAddress(): string {
     const buildingType =
       this.BUILDING_TYPES[
-      Math.floor(Math.random() * this.BUILDING_TYPES.length)
+        Math.floor(Math.random() * this.BUILDING_TYPES.length)
       ];
     const buildingNumber = Math.floor(Math.random() * 500) + 1;
     const streetName =
@@ -610,11 +615,18 @@ export class AccountSeederService {
   }
 
   /**
-   * Generate random 9-digit phone number
+   * Generate random Vietnamese local phone number
    */
-  private randomPhoneDigits(): string {
+  private randomVietnamPhone(): string {
+    return `0${this.randomDigits(9)}`;
+  }
+
+  /**
+   * Generate random digits string
+   */
+  private randomDigits(length: number): string {
     let digits = '';
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < length; i++) {
       digits += Math.floor(Math.random() * 10);
     }
     return digits;

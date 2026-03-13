@@ -13,6 +13,7 @@ import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-
 import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
 import { RedisModule } from '../../config/redis.config';
 import { MailerModule } from '../mailer/mailer.module';
+import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
 
 /**
  * Appointments Module
@@ -44,6 +45,7 @@ import { MailerModule } from '../mailer/mailer.module';
     ]),
     RedisModule,
     MailerModule,
+    PrescriptionsModule,
   ],
   controllers: [AppointmentsController],
   providers: [

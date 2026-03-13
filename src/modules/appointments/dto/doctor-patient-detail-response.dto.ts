@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AddressDto } from './appointment-response.dto';
+import { AddressDto, AppointmentResponseDto } from './appointment-response.dto';
 
 /**
  * Patient Detail for Doctor View DTO
@@ -178,10 +178,10 @@ export class PaginatedAppointmentsDto {
   limit: number;
 
   @ApiProperty({
-    description: 'List of appointments in current page',
-    type: [PatientAppointmentHistoryItemDto],
+    description: 'List of appointments with comprehensive details (patient, doctor, services, clinic rooms, pricing)',
+    type: [AppointmentResponseDto],
   })
-  appointments: PatientAppointmentHistoryItemDto[];
+  appointments: AppointmentResponseDto[];
 }
 
 /**

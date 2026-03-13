@@ -3860,9 +3860,13 @@ export class AccountsService {
 
     // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
     if (dto.sepayVa) {
-      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(dto.sepayVa);
+      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(
+        dto.sepayVa,
+      );
       if (existingSepay) {
-        throw new ConflictException('Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.');
+        throw new ConflictException(
+          'Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.',
+        );
       }
     }
 
@@ -3900,6 +3904,7 @@ export class AccountsService {
       const clinicAdminInfo = this.clinicAdminInfoRepository.create({
         accountId: savedAccount._id,
         clinicName: dto.clinicName,
+        clinicPhone: dto.phone,
         description: dto.description,
         specializedIn: dto.specializedIn,
         pros: dto.pros,

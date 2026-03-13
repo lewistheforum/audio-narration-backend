@@ -50,12 +50,14 @@ export class RegisterClinicAdminDto {
 
   @ApiProperty({
     description: 'Clinic admin phone number',
-    example: '0123456789',
+    example: '0899798602',
     required: false,
   })
   @IsOptional()
   @IsString({ message: 'Phone must be a string' })
-  @MaxLength(20, { message: 'Phone must not exceed 20 characters' })
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone must be exactly 10 digits and start with 0',
+  })
   phone?: string;
 
   @ApiProperty({

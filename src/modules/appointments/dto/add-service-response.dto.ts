@@ -48,6 +48,18 @@ export class AddServiceResponseDto {
   price: number;
 
   @ApiProperty({
+    description: 'Discount percentage of the service',
+    example: 10,
+  })
+  discount: number;
+
+  @ApiProperty({
+    description: 'Final amount after discount (price * (100 - discount%) / 100)',
+    example: 180000,
+  })
+  amount: number;
+
+  @ApiProperty({
     description: 'Flag indicating service was added during examination',
     example: true,
   })
