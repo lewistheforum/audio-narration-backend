@@ -2242,13 +2242,7 @@ export class AppointmentsService {
         );
       }
 
-      // === STEP 6: Atomic Decrement Slot Limit ===
-      await manager
-        .createQueryBuilder()
-        .update('clinic_shift_hour')
-        .set({ limit: () => 'limit - 1' }) // Raw SQL prevents race condition
-        .where('_id = :id', { id: session.clinicShiftHourId })
-        .execute();
+      // === STEP 6: Atomic Decrement Slot Limit (REMOVED: Slots calculated dynamically) ===
 
       // === STEP 7: Create Appointment ===
       // V4.0: COD Payment - Status set to PENDING (awaiting clinic confirmation)
@@ -2548,9 +2542,7 @@ export class AppointmentsService {
       });
       await manager.save(ServiceAppointment, serviceAppointment);
 
-      // 7. Update Slot Limit (Decrement)
-      slot.limit -= 1;
-      await manager.save(ClinicShiftHour, slot);
+      // 7. Update Slot Limit (Decrement) - REMOVED: Calculated dynamically
 
       // 8. Delete Redis Session
       await this.bookingSessionService.deleteSession(sessionId);
@@ -2582,13 +2574,13 @@ export class AppointmentsService {
       appointment.status = newStatus;
       await manager.save(Appointment, appointment);
 
-      // Handle slot return if transitioning to COMPLETED or CANCELLED
-      await this.handleSlotReturn(manager, appointment, oldStatus, newStatus);
+      // Handle slot return if transitioning to COMPLETED or CANCELLED (REMOVED: Calculated dynamically)
     });
   }
 
   /**
    * Internal helper to handle slot return logic when appointment reaches terminal state
+   * (REMOVED LOGIC: Slots are now calculated dynamically)
    */
   private async handleSlotReturn(
     manager: any,
@@ -2596,13 +2588,7 @@ export class AppointmentsService {
     oldStatus: AppointmentStatus,
     newStatus: AppointmentStatus,
   ): Promise<void> {
-    const isTerminalState = [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED].includes(newStatus);
-    const wasActiveState = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS, AppointmentStatus.NEED_FINAL_PAYMENT].includes(oldStatus);
-
-    if (isTerminalState && wasActiveState && appointment.clinicShiftHourId) {
-      console.log(`[Slot Management] Returning slot for appointment ${appointment._id} (Transition: ${oldStatus} -> ${newStatus})`);
-      await manager.increment(ClinicShiftHour, { _id: appointment.clinicShiftHourId }, 'limit', 1);
-    }
+    // Logic removed as per Business Rules update. Slots are calculated on-the-fly.
   }
 
   /**

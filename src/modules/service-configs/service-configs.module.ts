@@ -5,7 +5,8 @@ import { ClinicServiceConfigRepository } from './repositories';
 import { ServiceConfigsService } from './service-configs.service';
 import {
   ServiceConfigsController,
-  ManagerServiceConfigsController
+  ManagerServiceConfigsController,
+  PublicServiceConfigsController
 } from './service-configs.controller';
 
 /**
@@ -15,7 +16,7 @@ import {
  */
 @Module({
   imports: [TypeOrmModule.forFeature([ClinicServiceConfig])],
-  controllers: [ServiceConfigsController, ManagerServiceConfigsController],
+  controllers: [ServiceConfigsController, ManagerServiceConfigsController, PublicServiceConfigsController],
   providers: [ClinicServiceConfigRepository, ServiceConfigsService],
   exports: [TypeOrmModule, ClinicServiceConfigRepository, ServiceConfigsService],
 })

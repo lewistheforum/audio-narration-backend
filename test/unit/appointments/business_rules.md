@@ -440,74 +440,23 @@ if (appointmentHour <= minBookingTime) {
 
 ---
 
-### 2. Quy Tắc Slot Availability & Pessimistic Locking
+### 2. Quy Tắc Chống Overbooking (Dynamic Calculation)
 
-**⚠️ QUY TẮC QUAN TRỌNG NHẤT - NGĂN RACE CONDITIONS**
+**⚠️ THAY ĐỔI KIẾN TRÚC MỚI NHẤT (V5.1)**
 
-**Architecture:**
-```
-Entity: clinic_shift_hour
-Fields:
-  - _id: UUID (primary key)
-  - clinic_id: UUID
-  - work_date: DATE
-  - start_hour: TIME
-  - end_hour: TIME
-  - limit: INTEGER          ← Số slot còn lại (mutable)
-  - duration: INTEGER        ← Thời lượng mỗi slot (phút)
-```
+Trươc đây, hệ thống dùng Pessimistic Lock kết hợp Atomic Decrement (`limit = limit - 1`). Tuy nhiên, do yêu cầu mới, hệ thống chuyển sang tính toán slot khả dụng dựa trên **Dynamic Query** (đếm số appointment theo status).
 
-**Pessimistic Locking Implementation:**
+**Calculation Logic:**
+- `Available Slots = limit - COUNT(appointments)` (chỉ đếm các appointment có status hợp lệ, ví dụ `PENDING`, `CONFIRMED`, `IN_PROGRESS`, `CHECKED_IN`, v.v... ngoại trừ `CANCELLED`, `REJECTED`, `NO_SHOW`).
+- Không điều chỉnh cột `limit` trong `clinic_shift_hour`. Cột `limit` hiện tại đại diện cho công suất tối đa tĩnh (Static Capacity Capacity).
 
-```typescript
-await dataSource.transaction('SERIALIZABLE', async (manager) => {
-  // ⚠️ BƯỚC 1: LOCK SLOT (FOR UPDATE)
-  const slot = await manager
-    .createQueryBuilder()
-    .select('csh')
-    .from('clinic_shift_hour', 'csh')
-    .where('csh._id = :id', { id: clinicShiftHourId })
-    .setLock('pessimistic_write')  // ← SELECT ... FOR UPDATE
-    .getOne();
+**Tại sao áp dụng Dynamic Calculation?**
+- ✅ Dễ dàng quản lý tải thực tế: Cứ đếm record Appointment là ra.
+- ✅ Khi hủy lịch (Cancel / Reject) không cần phải chạy lệnh hoàn lại slot.
+- ✅ `limit` không bị minus về âm hoặc sai lệch khi có lỗi concurrent.
+- Tránh được bài toán Race Conditions trong hầu hết trường hợp vì validation luôn scan toàn bộ table lúc real-time.
 
-  if (!slot) {
-    throw new NotFoundException('Time slot not found');
-  }
-
-  // ⚠️ BƯỚC 2: KIỂM TRA AVAILABILITY (SAU KHI LOCK!)
-  if (slot.limit <= 0) {
-    throw new BadRequestException(
-      'This time slot is fully booked. Please select another time.'
-    );
-  }
-
-  // ⚠️ BƯỚC 3: GIẢM SLOT (ATOMIC UPDATE)
-  await manager
-    .createQueryBuilder()
-    .update('clinic_shift_hour')
-    .set({ limit: () => 'limit - 1' })  // ← Raw SQL: limit = limit - 1
-    .where('_id = :id', { id: clinicShiftHourId })
-    .execute();
-
-  // ... Continue creating appointment
-});
-```
-
-**Why This Prevents Race Conditions:**
-
-| Timeline | User A | User B | Result |
-|----------|--------|--------|--------|
-| T1 | `SELECT ... FOR UPDATE` (LOCK acquired) | Waiting... | A has lock |
-| T2 | `limit = 1` → Check OK | Waiting... | A proceeds |
-| T3 | `UPDATE SET limit = 0` | Waiting... | A decrements |
-| T4 | `COMMIT` (Release lock) | Waiting... | A succeeds |
-| T5 | - | `SELECT ... FOR UPDATE` (LOCK acquired) | B has lock |
-| T6 | - | `limit = 0` → Check FAIL | B gets error |
-| T7 | - | `ROLLBACK` | B rejected ✓ |
-
-✅ **Result:** Only 1 user succeeds. User B gets "Slot fully booked" error instead of overbooking.
-
-**Test Coverage:** ✅ 3 tests (pessimistic locking, slot availability, atomic decrement)
+**Test Coverage:** ✅ Dynamic limit checks, overbooking preventions.
 
 ---
 

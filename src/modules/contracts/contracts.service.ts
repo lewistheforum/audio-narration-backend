@@ -374,8 +374,7 @@ export class ContractsService {
                 await this.mailerService.sendContractCompletedNotificationToEmployee(
                     employeeAccount.email,
                     userAccount.username || 'Manager',
-                    contractId,
-                    contractInfo.contractFile
+                    contractId
                 );
             }
         } else {

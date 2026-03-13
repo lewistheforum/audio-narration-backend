@@ -282,6 +282,9 @@ export class BookingSessionService {
         if (data.appointment_hour) {
           updateFields.appointmentHour = data.appointment_hour;
         }
+        
+        // MISSING Object.assign FIXXED:
+        Object.assign(session, updateFields);
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         

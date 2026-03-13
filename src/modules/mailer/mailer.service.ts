@@ -1163,7 +1163,7 @@ export class MailerService {
             </p>
             
             <div style="margin: 30px 0;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/contracts/${contractId}" 
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}" 
                  style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
                 Review & Sign Now
               </a>
@@ -1171,12 +1171,6 @@ export class MailerService {
             
             <p style="color: #6B7280; font-size: 14px; margin: 0;">
               Please review and countersign to finalize the agreement.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1199,7 +1193,6 @@ export class MailerService {
     email: string,
     managerName: string,
     contractId: string,
-    fileUrl: string,
   ): Promise<void> {
     const transporter = this.mailTransport();
     const contractCode = contractId.substring(0, 8).toUpperCase();
@@ -1227,21 +1220,8 @@ export class MailerService {
               Your contract <strong>#${contractCode}</strong> has been signed by <strong>${managerName}</strong> and is now <strong>ACTIVE</strong>.
             </p>
             
-            <div style="margin: 30px 0;">
-              <a href="${fileUrl}" 
-                 style="background: #166534; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                Download Signed Contract
-              </a>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 0;">
-              A copy of the signed document is available at the link above.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              You can now view your finalized contract details on the dashboard.
             </p>
           </div>
         </div>

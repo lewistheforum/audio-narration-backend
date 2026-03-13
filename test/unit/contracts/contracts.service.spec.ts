@@ -350,8 +350,7 @@ describe('ContractsService', () => {
             expect(mailerService.sendContractCompletedNotificationToEmployee).toHaveBeenCalledWith(
                 'employee@test.com',
                 'ManagerName',
-                contractId,
-                'file-url'
+                contractId
             );
         });
 

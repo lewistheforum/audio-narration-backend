@@ -60,7 +60,7 @@ export class ClinicContractInformationSeederService {
   private readonly REJECTION_REASONS = REJECTION_REASONS;
 
   constructor(
-    private readonly clinicContractInformationRepository: ClinicContractInformationRepository,
+    private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
   ) { }
@@ -135,7 +135,7 @@ export class ClinicContractInformationSeederService {
 
         // Check if clinic contract information already exists for this contract
         const existing =
-          await this.clinicContractInformationRepository.existsByContractId(
+          await this.clinicContractInfoRepository.existsByContractId(
             contractPackage._id,
           );
 
@@ -146,7 +146,7 @@ export class ClinicContractInformationSeederService {
 
         // Create clinic contract information with realistic orthopedics clinic data
         const status = this.getRandomContractStatus();
-        const contractInfo = this.clinicContractInformationRepository.create({
+        const contractInfo = this.clinicContractInfoRepository.create({
           contractId: contractPackage._id,
           doctorSpecialty: this.getRandomDoctorSpecialty(),
           nationality: this.getRandomNationality(),
@@ -173,7 +173,7 @@ export class ClinicContractInformationSeederService {
           rejectionReason: status === ContractStatus.REJECTED ? this.getRandomRejectionReason() : null,
         });
 
-        await this.clinicContractInformationRepository.save(contractInfo);
+        await this.clinicContractInfoRepository.save(contractInfo);
         createdCount++;
       }
 

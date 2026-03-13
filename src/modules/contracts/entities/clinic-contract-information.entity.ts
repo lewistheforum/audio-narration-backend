@@ -42,7 +42,7 @@ export class ClinicContractInformation {
   @Column({ name: 'contract_start_date', type: 'timestamptz' })
   contractStartDate: Date;
 
-  @Column({ name: 'contract_end_date', type: 'timestamptz' })
+  @Column({ name: 'contract_end_date', type: 'timestamptz', nullable: true })
   contractEndDate: Date;
 
   @Column({
@@ -91,7 +91,7 @@ export class ClinicContractInformation {
   @Column({ name: 'effective_from', type: 'timestamptz' })
   effectiveFrom: Date;
 
-  @Column({ name: 'effective_to', type: 'timestamptz' })
+  @Column({ name: 'effective_to', type: 'timestamptz', nullable: true })
   effectiveTo: Date;
 
   @Column({ name: 'party_a_signer_name', type: 'text' })

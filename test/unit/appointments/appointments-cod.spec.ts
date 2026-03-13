@@ -463,19 +463,6 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
           service.createAppointmentFromSession(mockSessionId, mockPatientId)
         ).rejects.toThrow(BadRequestException);
       });
-
-      it('should increment booked_count after successful booking', async () => {
-        setupValidSessionMock();
-
-        await service.createAppointmentFromSession(mockSessionId, mockPatientId);
-
-        // Verify UPDATE query was executed via one of the createQueryBuilder calls
-        const allResults = mockEntityManager.createQueryBuilder.mock.results;
-        const updateCalled = allResults.some(
-          (r: any) => r.value.update.mock.calls.length > 0
-        );
-        expect(updateCalled).toBe(true);
-      });
     });
 
     describe('Appointment creation', () => {

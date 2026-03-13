@@ -426,6 +426,25 @@ export class SchedulesService {
         // Logic check: Validate new Foreign Keys (Employee, Shift) if changed...
         // ... (Skipping verbose checks for brevity, rely on existing logic or constraints)
 
+        // Conflict Check on Appointments (If trying to modify Shift, Date, or Employee)
+        if (clinicShiftId || workDate || employeeId) {
+            // Check if there are any existing appointments for this schedule
+            const dateStr = workDate ? new Date(workDate).toISOString().split('T')[0] : schedule.workDate.toISOString().split('T')[0];
+            const checkQuery = this.dataSource.createQueryBuilder()
+                .select('app._id')
+                .from('appointments', 'app')
+                .innerJoin('clinic_shift_hour', 'csh', 'csh._id = app.doctor_shift_hour_id')
+                .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = csh.shift_id AND es.employee_id = app.doctor_id AND es.work_date = app.appointment_date')
+                .where('es._id = :scheduleId', { scheduleId: id })
+                .andWhere('app.status NOT IN (:...statuses)', { statuses: ['CANCELLED', 'REJECTED', 'NO_SHOW'] })
+                .andWhere('app.deleted_at IS NULL');
+
+            const existingAppointments = await checkQuery.getRawMany();
+            if (existingAppointments && existingAppointments.length > 0) {
+                throw new ConflictException('Không thể thay đổi lịch làm việc vì đã có bệnh nhân đặt hẹn');
+            }
+        }
+
         if (workDate) {
             schedule.workDate = new Date(workDate);
             const dayOfWeek = schedule.workDate.getDay();
@@ -474,6 +493,24 @@ export class SchedulesService {
      * @returns Success message
      */
     async remove(id: string) {
+        const schedule = await this.scheduleRepository.findOne({ where: { _id: id } });
+        if (!schedule) throw new NotFoundException('Schedule not found');
+
+        // Check if there are any existing appointments for this schedule before deleting
+        const checkQuery = this.dataSource.createQueryBuilder()
+            .select('app._id')
+            .from('appointments', 'app')
+            .innerJoin('clinic_shift_hour', 'csh', 'csh._id = app.doctor_shift_hour_id')
+            .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = csh.shift_id AND es.employee_id = app.doctor_id AND es.work_date = app.appointment_date')
+            .where('es._id = :scheduleId', { scheduleId: id })
+            .andWhere('app.status NOT IN (:...statuses)', { statuses: ['CANCELLED', 'REJECTED', 'NO_SHOW'] })
+            .andWhere('app.deleted_at IS NULL');
+
+        const existingAppointments = await checkQuery.getRawMany();
+        if (existingAppointments && existingAppointments.length > 0) {
+            throw new ConflictException('Không thể xóa lịch làm việc vì đã có bệnh nhân đặt hẹn');
+        }
+
         const result = await this.scheduleRepository.softDelete(id);
         if (result.affected === 0) throw new NotFoundException('Schedule not found');
         return { message: 'Schedule deleted successfully' };

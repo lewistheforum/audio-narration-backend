@@ -154,7 +154,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
       const createDto = {
         booking_option: 'date' as const,
         initial_data: {
-          appointment_date: '2026-03-09',
+          appointment_date: '2026-03-25',
         },
       } as any;
 
@@ -165,7 +165,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
 
         expect(result.booking_option).toBe('date');
         expect(result.booking_data).toMatchObject({
-          appointment_date: '2026-03-09',
+          appointment_date: '2026-03-25',
         });
       });
 
@@ -215,7 +215,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
         const updateDto = {
           step: 2 as const,
           data: {
-            appointment_date: '2026-03-09',
+             appointment_date: '2026-03-25',
             clinic_shift_hour_id: mockSlotId,
             doctor_id: mockDoctorId,
           },
@@ -227,7 +227,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
 
         expect(result.current_step).toBe(2);
         expect(result.booking_data).toMatchObject({
-          appointment_date: '2026-03-09',
+          appointment_date: '2026-03-25',
           clinic_shift_hour_id: mockSlotId,
           doctor_id: mockDoctorId,
         });
@@ -245,7 +245,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
         const updateDto = {
           step: 2 as const,
           data: {
-            appointment_date: '2026-03-09',
+             appointment_date: '2026-03-25',
             clinic_shift_hour_id: mockSlotId,
             clinic_service_config_id: mockServiceConfigId, // Service for doctor-first
           },
@@ -256,7 +256,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
         const result = await service.updateSession(mockSessionId, mockPatientId, updateDto);
 
         expect(result.booking_data).toMatchObject({
-          appointment_date: '2026-03-09',
+          appointment_date: '2026-03-25',
           clinic_shift_hour_id: mockSlotId,
           clinic_service_config_id: mockServiceConfigId,
         });
@@ -272,7 +272,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
         const updateDto = {
           step: 2 as const,
           data: {
-            appointment_date: '2026-03-09',
+             appointment_date: '2026-03-25',
             clinic_shift_hour_id: mockSlotId,
             doctor_id: mockDoctorId,
           },
@@ -444,7 +444,7 @@ describe('Booking Sessions API (V4.3) - Unit Tests', () => {
         const updateDto = {
           step: 2 as const,
           data: {
-            appointment_date: '2026-03-09',
+             appointment_date: '2026-03-25',
             clinic_shift_hour_id: mockSlotId,
             doctor_id: mockDoctorId,
           },
