@@ -2506,4 +2506,110 @@ export class MailerService {
       throw error;
     }
   }
+
+  /**
+   * Send New Account Notification with full details
+   */
+  async sendAccountNotification(data: {
+    email: string;
+    fullName: string;
+    username: string;
+    password: string;
+    phone?: string;
+    dob?: string;
+  }): Promise<void> {
+    const transporter = this.mailTransport();
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+
+    const mailOptions = {
+      from: {
+        name: 'Bonix',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: data.email,
+      subject: '✨ Thông báo tạo tài khoản thành công - Bonix',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Bonix Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F0F9FF; border-radius: 10px; padding: 30px; border: 1px solid #BAE6FD;">
+            <h1 style="color: #0369A1; margin: 0 0 20px 0;">Tài khoản Bonix của bạn đã sẵn sàng!</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Chào mừng <strong>${data.fullName}</strong> đến với Bonix.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
+              <h2 style="color: #111827; margin: 0 0 15px 0; font-size: 18px;">Thông tin chi tiết:</h2>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div>
+                  <span style="color: #6B7280; font-size: 12px; display: block;">Họ và tên:</span>
+                  <span style="color: #111827; font-weight: 600;">${data.fullName}</span>
+                </div>
+                ${data.phone ? `
+                <div>
+                  <span style="color: #6B7280; font-size: 12px; display: block;">Số điện thoại:</span>
+                  <span style="color: #111827; font-weight: 600;">${data.phone}</span>
+                </div>
+                ` : ''}
+              </div>
+
+              ${data.dob ? `
+              <div style="margin-bottom: 15px;">
+                <span style="color: #6B7280; font-size: 12px; display: block;">Ngày sinh:</span>
+                <span style="color: #111827; font-weight: 600;">${data.dob}</span>
+              </div>
+              ` : ''}
+
+              <div style="border-top: 1px dashed #E5E7EB; padding-top: 15px; margin-top: 15px;">
+                <div style="margin-bottom: 10px;">
+                  <span style="color: #6B7280; font-size: 12px;">Tên đăng nhập:</span>
+                  <p style="margin: 2px 0 0 0; color: #111827; font-weight: 600; font-size: 16px;">${data.username}</p>
+                </div>
+                <div>
+                  <span style="color: #6B7280; font-size: 12px;">Mật khẩu tạm thời:</span>
+                  <p style="margin: 2px 0 0 0; color: #0369A1; font-weight: 600; font-size: 18px; letter-spacing: 1px;">${data.password}</p>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: #FDF2F2; border-left: 4px solid #EF4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #991B1B; font-size: 14px; font-weight: 600;">⚠️ Bảo mật:</p>
+              <p style="margin: 5px 0 0 0; color: #991B1B; font-size: 13px;">
+                Đây là mật khẩu tạm thời. Để bảo mật, vui lòng thay đổi mật khẩu ngay sau lần đăng nhập đầu tiên.
+              </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${frontendUrl}" 
+                 style="background: #0369A1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                Bắt đầu ngay
+              </a>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Bonix. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Account notification email sent to ${data.email}`);
+    } catch (error) {
+      console.error('❌ Failed to send account notification email:', error);
+      throw new Error('Failed to send account notification email');
+    }
+  }
 }

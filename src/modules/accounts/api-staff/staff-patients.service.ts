@@ -8,6 +8,7 @@ import {
   CreatePatientByStaffResponseDto,
   CreatePatientNoEmailDto,
   CreatePatientNoEmailResponseDto,
+  GetAllPatientsResponseDto,
 } from './dto';
 import { AccountRepository, GeneralAccountRepository } from '../repositories';
 import { AccountRole, AccountStatus } from '../enums';
@@ -17,9 +18,9 @@ import { getCurrentTime } from 'src/common/utils/date.util';
 
 /**
  * Staff Patients Service
- * 
+ *
  * Handles patient account creation by clinic staff for walk-in appointments.
- * 
+ *
  * Features:
  * - Create patient accounts with minimal information (email, phone, full_name)
  * - Auto-generate secure random passwords
@@ -40,15 +41,15 @@ export class StaffPatientsService {
 
   /**
    * Generate Random Secure Password
-   * 
+   *
    * Creates a 12-character password containing:
    * - Uppercase letters (A-Z)
    * - Lowercase letters (a-z)
    * - Numbers (0-9)
    * - Special characters (!@#$%^&*)
-   * 
+   *
    * Format: Aa12#xYz89!Q (example)
-   * 
+   *
    * @returns {string} Random secure password
    */
   private generateRandomPassword(): string {
@@ -79,24 +80,24 @@ export class StaffPatientsService {
 
   /**
    * Create Patient Account by Staff (Step 2 - Walk-in Appointment)
-   * 
+   *
    * Creates patient account with minimal information for walk-in customers.
    * System automatically generates password and sends via email.
-   * 
+   *
    * Process:
    * 1. Validate email uniqueness
    * 2. Generate random secure password
    * 3. Create Account entity (role: PATIENT, status: ACTIVE)
    * 4. Create GeneralAccount profile
    * 5. Send welcome email with credentials
-   * 
+   *
    * Business Rules:
    * - Email must be unique
    * - Phone can be duplicate (multiple people may share phone)
    * - Password is auto-generated (12 chars, mixed case, numbers, specials)
    * - Account type = "DIRECT_ACCOUNT"
    * - Email sent with credentials (staff should provide to customer)
-   * 
+   *
    * @param {CreatePatientByStaffDto} dto - Patient data (email, phone, fullName)
    * @returns {Promise<CreatePatientByStaffResponseDto>} Created account info with password
    * @throws {ConflictException} If email already exists
@@ -153,12 +154,13 @@ export class StaffPatientsService {
       let emailSentAt: string | undefined;
 
       try {
-        await this.mailerService.sendWelcomeEmailWithPassword(
-          dto.email,
-          dto.fullName,
-          dto.email, // Use email as username
-          temporaryPassword,
-        );
+        await this.mailerService.sendAccountNotification({
+          email: dto.email,
+          fullName: dto.fullName,
+          username: dto.email, // Use email as username
+          password: temporaryPassword,
+          phone: dto.phone,
+        });
         emailSent = true;
         emailSentAt = getCurrentTime();
       } catch (emailError) {
@@ -192,65 +194,176 @@ export class StaffPatientsService {
 
   /**
    * Remove Vietnamese Tones (Accents)
-   * 
+   *
    * Converts Vietnamese characters to plain ASCII characters.
    * Examples:
    * - "Trần Văn D" → "Tran Van D"
    * - "Nguyễn Thị B" → "Nguyen Thi B"
-   * 
+   *
    * @param {string} str - String with Vietnamese accents
    * @returns {string} String without accents
    */
   private removeVietnameseTones(str: string): string {
     const tones: { [key: string]: string } = {
-      à: 'a', á: 'a', ạ: 'a', ả: 'a', ã: 'a',
-      â: 'a', ầ: 'a', ấ: 'a', ậ: 'a', ẩ: 'a', ẫ: 'a',
-      ă: 'a', ằ: 'a', ắ: 'a', ặ: 'a', ẳ: 'a', ẵ: 'a',
-      è: 'e', é: 'e', ẹ: 'e', ẻ: 'e', ẽ: 'e',
-      ê: 'e', ề: 'e', ế: 'e', ệ: 'e', ể: 'e', ễ: 'e',
-      ì: 'i', í: 'i', ị: 'i', ỉ: 'i', ĩ: 'i',
-      ò: 'o', ó: 'o', ọ: 'o', ỏ: 'o', õ: 'o',
-      ô: 'o', ồ: 'o', ố: 'o', ộ: 'o', ổ: 'o', ỗ: 'o',
-      ơ: 'o', ờ: 'o', ớ: 'o', ợ: 'o', ở: 'o', ỡ: 'o',
-      ù: 'u', ú: 'u', ụ: 'u', ủ: 'u', ũ: 'u',
-      ư: 'u', ừ: 'u', ứ: 'u', ự: 'u', ử: 'u', ữ: 'u',
-      ỳ: 'y', ý: 'y', ỵ: 'y', ỷ: 'y', ỹ: 'y',
+      à: 'a',
+      á: 'a',
+      ạ: 'a',
+      ả: 'a',
+      ã: 'a',
+      â: 'a',
+      ầ: 'a',
+      ấ: 'a',
+      ậ: 'a',
+      ẩ: 'a',
+      ẫ: 'a',
+      ă: 'a',
+      ằ: 'a',
+      ắ: 'a',
+      ặ: 'a',
+      ẳ: 'a',
+      ẵ: 'a',
+      è: 'e',
+      é: 'e',
+      ẹ: 'e',
+      ẻ: 'e',
+      ẽ: 'e',
+      ê: 'e',
+      ề: 'e',
+      ế: 'e',
+      ệ: 'e',
+      ể: 'e',
+      ễ: 'e',
+      ì: 'i',
+      í: 'i',
+      ị: 'i',
+      ỉ: 'i',
+      ĩ: 'i',
+      ò: 'o',
+      ó: 'o',
+      ọ: 'o',
+      ỏ: 'o',
+      õ: 'o',
+      ô: 'o',
+      ồ: 'o',
+      ố: 'o',
+      ộ: 'o',
+      ổ: 'o',
+      ỗ: 'o',
+      ơ: 'o',
+      ờ: 'o',
+      ớ: 'o',
+      ợ: 'o',
+      ở: 'o',
+      ỡ: 'o',
+      ù: 'u',
+      ú: 'u',
+      ụ: 'u',
+      ủ: 'u',
+      ũ: 'u',
+      ư: 'u',
+      ừ: 'u',
+      ứ: 'u',
+      ự: 'u',
+      ử: 'u',
+      ữ: 'u',
+      ỳ: 'y',
+      ý: 'y',
+      ỵ: 'y',
+      ỷ: 'y',
+      ỹ: 'y',
       đ: 'd',
-      À: 'A', Á: 'A', Ạ: 'A', Ả: 'A', Ã: 'A',
-      Â: 'A', Ầ: 'A', Ấ: 'A', Ậ: 'A', Ẩ: 'A', Ẫ: 'A',
-      Ă: 'A', Ằ: 'A', Ắ: 'A', Ặ: 'A', Ẳ: 'A', Ẵ: 'A',
-      È: 'E', É: 'E', Ẹ: 'E', Ẻ: 'E', Ẽ: 'E',
-      Ê: 'E', Ề: 'E', Ế: 'E', Ệ: 'E', Ể: 'E', Ễ: 'E',
-      Ì: 'I', Í: 'I', Ị: 'I', Ỉ: 'I', Ĩ: 'I',
-      Ò: 'O', Ó: 'O', Ọ: 'O', Ỏ: 'O', Õ: 'O',
-      Ô: 'O', Ồ: 'O', Ố: 'O', Ộ: 'O', Ổ: 'O', Ỗ: 'O',
-      Ơ: 'O', Ờ: 'O', Ớ: 'O', Ợ: 'O', Ở: 'O', Ỡ: 'O',
-      Ù: 'U', Ú: 'U', Ụ: 'U', Ủ: 'U', Ũ: 'U',
-      Ư: 'U', Ừ: 'U', Ứ: 'U', Ự: 'U', Ử: 'U', Ữ: 'U',
-      Ỳ: 'Y', Ý: 'Y', Ỵ: 'Y', Ỷ: 'Y', Ỹ: 'Y',
+      À: 'A',
+      Á: 'A',
+      Ạ: 'A',
+      Ả: 'A',
+      Ã: 'A',
+      Â: 'A',
+      Ầ: 'A',
+      Ấ: 'A',
+      Ậ: 'A',
+      Ẩ: 'A',
+      Ẫ: 'A',
+      Ă: 'A',
+      Ằ: 'A',
+      Ắ: 'A',
+      Ặ: 'A',
+      Ẳ: 'A',
+      Ẵ: 'A',
+      È: 'E',
+      É: 'E',
+      Ẹ: 'E',
+      Ẻ: 'E',
+      Ẽ: 'E',
+      Ê: 'E',
+      Ề: 'E',
+      Ế: 'E',
+      Ệ: 'E',
+      Ể: 'E',
+      Ễ: 'E',
+      Ì: 'I',
+      Í: 'I',
+      Ị: 'I',
+      Ỉ: 'I',
+      Ĩ: 'I',
+      Ò: 'O',
+      Ó: 'O',
+      Ọ: 'O',
+      Ỏ: 'O',
+      Õ: 'O',
+      Ô: 'O',
+      Ồ: 'O',
+      Ố: 'O',
+      Ộ: 'O',
+      Ổ: 'O',
+      Ỗ: 'O',
+      Ơ: 'O',
+      Ờ: 'O',
+      Ớ: 'O',
+      Ợ: 'O',
+      Ở: 'O',
+      Ỡ: 'O',
+      Ù: 'U',
+      Ú: 'U',
+      Ụ: 'U',
+      Ủ: 'U',
+      Ũ: 'U',
+      Ư: 'U',
+      Ừ: 'U',
+      Ứ: 'U',
+      Ự: 'U',
+      Ử: 'U',
+      Ữ: 'U',
+      Ỳ: 'Y',
+      Ý: 'Y',
+      Ỵ: 'Y',
+      Ỷ: 'Y',
+      Ỹ: 'Y',
       Đ: 'D',
     };
 
-    return str.split('').map(char => tones[char] || char).join('');
+    return str
+      .split('')
+      .map((char) => tones[char] || char)
+      .join('');
   }
 
   /**
    * Generate Temporary Email from Full Name and Date of Birth
-   * 
+   *
    * Creates a fake email address for patients without real email.
-   * Format: normalized_name + DDMMYYYY + @tempemail.clinic
-   * 
+   * Format: normalized_name + DDMMYYYY + @gmail.com
+   *
    * Algorithm:
    * 1. Normalize full name: Remove accents, lowercase, remove spaces/special chars
    * 2. Format DOB: 1988-08-10 → 10081988 (DDMMYYYY)
-   * 3. Combine: tranvand10081988@tempemail.clinic
+   * 3. Combine: tranvand10081988@gmail.com
    * 4. Check duplicates: Add counter if exists (_01, _02, etc.)
    * 5. Last resort: Add phone or UUID
-   * 
+   *
    * Examples:
-   * - "Trần Văn D" + "1988-08-10" → tranvand10081988@tempemail.clinic
-   * - "Nguyễn Thị B" + "1995-05-20" → nguyenthib20051995@tempemail.clinic
-   * 
+   * - "Trần Văn D" + "1988-08-10" → tranvand10081988@gmail.com
+   * - "Nguyễn Thị B" + "1995-05-20" → nguyenthib20051995@gmail.com
+   *
    * @param {string} fullName - Patient full name
    * @param {string} dateOfBirth - Date of birth (YYYY-MM-DD)
    * @param {string} phone - Phone number (fallback for uniqueness)
@@ -274,7 +387,7 @@ export class StaffPatientsService {
     const emailPrefix = `${normalized}${dobFormatted}`; // tranvand10081988
 
     // Step 4: Check for duplicates and generate unique email
-    let email = `${emailPrefix}@tempemail.clinic`;
+    let email = `${emailPrefix}@gmail.com`;
     let counter = 1;
     const maxAttempts = 100;
 
@@ -284,12 +397,12 @@ export class StaffPatientsService {
       if (!existingAccount) {
         return email; // Found unique email
       }
-      email = `${emailPrefix}_${String(counter).padStart(2, '0')}@tempemail.clinic`;
+      email = `${emailPrefix}_${String(counter).padStart(2, '0')}@gmail.com`;
       counter++;
     }
 
     // Last resort 1: Add phone number
-    email = `${emailPrefix}_${phone}@tempemail.clinic`;
+    email = `${emailPrefix}_${phone}@gmail.com`;
     const phoneCheck = await this.accountRepository.findByEmail(email);
     if (!phoneCheck) {
       return email;
@@ -297,16 +410,16 @@ export class StaffPatientsService {
 
     // Last resort 2: Add short UUID
     const shortUuid = randomBytes(4).toString('hex'); // 8 characters
-    email = `${emailPrefix}_${shortUuid}@tempemail.clinic`;
+    email = `${emailPrefix}_${shortUuid}@gmail.com`;
     return email;
   }
 
   /**
    * Create Patient Account Without Email (Step A3 - Walk-in Appointment)
-   * 
+   *
    * Creates patient account for walk-in customers who don't have real email.
    * System generates a fake email from full name + date of birth.
-   * 
+   *
    * Process:
    * 1. Validate phone uniqueness
    * 2. Generate fake email from name + DOB
@@ -315,15 +428,15 @@ export class StaffPatientsService {
    * 5. Create GeneralAccount profile with DOB
    * 6. Do NOT send email (fake email doesn't exist)
    * 7. Return credentials for manual delivery
-   * 
+   *
    * Business Rules:
    * - Phone must be unique (check for duplicates)
-   * - Fake email format: name + DOB + @tempemail.clinic
+   * - Fake email format: name + DOB + @gmail.com
    * - Password is auto-generated (12 chars, mixed case, numbers, specials)
    * - Account type = "DIRECT_ACCOUNT", is_temp_email = true
    * - No email sent (staff must provide credentials directly)
    * - Patient can update real email later
-   * 
+   *
    * @param {CreatePatientNoEmailDto} dto - Patient data (phone, fullName, dateOfBirth)
    * @returns {Promise<CreatePatientNoEmailResponseDto>} Created account info with credentials
    * @throws {ConflictException} If phone already exists
@@ -384,7 +497,27 @@ export class StaffPatientsService {
 
       await queryRunner.commitTransaction();
 
-      // Step 4: Return response with credentials (NO email sent)
+      // Step 4: Send notification email to the generated temp address
+      let emailSent = false;
+      let emailSentAt: string | undefined;
+
+      try {
+        await this.mailerService.sendAccountNotification({
+          email: fakeEmail,
+          fullName: dto.fullName,
+          username: fakeEmail,
+          password: temporaryPassword,
+          phone: dto.phone,
+          dob: dto.dateOfBirth,
+        });
+        emailSent = true;
+        emailSentAt = new Date().toISOString();
+      } catch (emailError) {
+        // Log email error but don't fail the account creation
+        console.error('Failed to send temp email notification:', emailError);
+      }
+
+      // Step 5: Return response with credentials
       return {
         success: true,
         accountId: savedAccount._id,
@@ -394,13 +527,17 @@ export class StaffPatientsService {
         fullName: dto.fullName,
         dateOfBirth: dto.dateOfBirth,
         temporaryPassword, // Return password for staff to provide manually
-        emailSent: false, // Never send email for fake addresses
+        emailSent,
+        emailSentAt,
         activationStatus: 'ACTIVE',
-        message: 'Account created successfully with temporary email. Customer can update real email later.',
+        message: emailSent
+          ? 'Account created successfully. A notification has been sent to the generated email address.'
+          : 'Account created successfully with temporary email. Customer can update real email later.',
         manualLoginInfo: {
           username: savedAccount.email,
           password: temporaryPassword,
-          instructions: 'Please provide this login information to the customer directly',
+          instructions:
+            'Please provide this login information to the customer directly',
         },
       };
     } catch (error) {
@@ -410,5 +547,53 @@ export class StaffPatientsService {
       await queryRunner.release();
     }
   }
-}
 
+  /**
+   * Get All Patient Accounts
+   *
+   * Retrieves all accounts with the role PATIENT.
+   * Includes general profile data.
+   *
+   * @returns {Promise<GetAllPatientsResponseDto>} List of patient accounts
+   */
+  async getAllPatientAccounts(): Promise<GetAllPatientsResponseDto> {
+    const patientsRaw = await this.dataSource
+      .createQueryBuilder()
+      .select([
+        'a._id as "accountId"',
+        'a.email as email',
+        'a.phone as phone',
+        'a.status as status',
+        'ga.full_name as "fullName"',
+        'ga.dob as dob',
+        'ga.gender as gender',
+      ])
+      .from('accounts', 'a')
+      .leftJoin('general_accounts', 'ga', 'ga.account_id = a._id')
+      .where('a.role = :role', { role: AccountRole.PATIENT })
+      .andWhere('a.deleted_at IS NULL')
+      .orderBy('a.created_at', 'DESC')
+      .getRawMany();
+
+    const data = patientsRaw.map((p) => {
+      // Check if it's a generated fake email based on our known temp domain
+      const isTempEmail = p.email && p.email.endsWith('@gmail.com');
+      return {
+        accountId: p.accountId,
+        email: p.email,
+        phone: p.phone,
+        fullName: p.fullName || '',
+        dateOfBirth: p.dob ? p.dob.toISOString().split('T')[0] : undefined,
+        gender: p.gender,
+        isActive: p.status === AccountStatus.ACTIVE,
+        isTempEmail: !!isTempEmail,
+      };
+    });
+
+    return {
+      success: true,
+      total: data.length,
+      data,
+    };
+  }
+}
