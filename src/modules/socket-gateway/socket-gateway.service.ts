@@ -84,7 +84,11 @@ export class SocketGatewayService
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract and validate authentication token
-      const token = client.handshake.auth.token || client.handshake.query.token;
+      const token =
+        client.handshake.auth.token ||
+        client.handshake.auth.access_token ||
+        client.handshake.query.token ||
+        client.handshake.query.access_token;
 
       if (!token) {
         client.emit('error', {

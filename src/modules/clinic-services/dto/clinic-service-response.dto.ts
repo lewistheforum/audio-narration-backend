@@ -50,7 +50,7 @@ export class ClinicServiceResponseDto {
     noteForPatient?: string;
 
     constructor(service: ClinicService, config?: ClinicServiceConfig) {
-        this._id = service._id;
+        this._id = config?._id || service._id;
         this.categoryId = service.categoryId;
         this.serviceName = service.serviceName;
         this.serviceCode = service.serviceCode;
