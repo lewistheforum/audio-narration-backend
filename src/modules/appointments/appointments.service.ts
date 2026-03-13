@@ -307,20 +307,29 @@ export class AppointmentsService {
       ? new Date(createDto.extraHour)
       : null;
 
-    // Check for time conflicts
-    const existingAppointments = await this.appointmentRepository.find({
-      clinicId: clinicId,
-      appointmentDate: appointmentDate,
-      appointmentHour: appointmentHour,
-      deletedAt: null,
-      status: AppointmentStatus.PENDING,
-    });
-
-    if (existingAppointments.length > 0) {
-      throw new ConflictException(
-        MESSAGES.failMessage.appointmentTimeConflict ||
-        'Thß╗¥i gian hß║╣n n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
+    // Validate slot capacity for shift-hour bookings.
+    // A slot is full only when appointment count reaches clinic_shift_hour.limit.
+    if (createDto.clinicShiftHourId) {
+      await this.validateShiftHourCapacity(
+        clinicId,
+        createDto.clinicShiftHourId,
+        appointmentDate,
       );
+    } else {
+      // For non-shift-hour bookings, keep exact hour conflict check.
+      const existingAppointments = await this.appointmentRepository.find({
+        clinicId: clinicId,
+        appointmentDate: appointmentDate,
+        appointmentHour: appointmentHour,
+        deletedAt: null,
+        status: AppointmentStatus.PENDING,
+      });
+
+      if (existingAppointments.length > 0) {
+        throw new ConflictException(
+          'This time slot is already booked. Please choose another time.',
+        );
+      }
     }
 
     // Execute transaction to create appointment + package + services
@@ -893,26 +902,32 @@ export class AppointmentsService {
     const shiftChanged = newClinicShiftHourId !== appointment.clinicShiftHourId;
 
     if (dateChanged || shiftChanged) {
-      const conflictWhere: any = {
-        clinicId: appointment.clinicId,
-        appointmentDate: newAppointmentDate,
-        deletedAt: null,
-      };
-
       if (newClinicShiftHourId) {
-        conflictWhere.clinicShiftHourId = newClinicShiftHourId;
-      }
-
-      const existingAppointments = await this.appointmentRepository.find(conflictWhere);
-
-      const conflicts = existingAppointments.filter(
-        (appt) => appt._id !== appointmentId,
-      );
-
-      if (conflicts.length > 0) {
-        throw new ConflictException(
-          'The new time slot is already booked. Please choose a different time.',
+        await this.validateShiftHourCapacity(
+          appointment.clinicId,
+          newClinicShiftHourId,
+          newAppointmentDate,
+          appointmentId,
         );
+      } else {
+        // For non-shift-hour bookings, keep exact hour conflict check.
+        const existingAppointments = await this.appointmentRepository.find({
+          clinicId: appointment.clinicId,
+          appointmentDate: newAppointmentDate,
+          appointmentHour: appointment.appointmentHour,
+          deletedAt: null,
+          status: AppointmentStatus.PENDING,
+        });
+
+        const conflicts = existingAppointments.filter(
+          (appt) => appt._id !== appointmentId,
+        );
+
+        if (conflicts.length > 0) {
+          throw new ConflictException(
+            'The new time slot is already booked. Please choose a different time.',
+          );
+        }
       }
     }
 
@@ -1318,6 +1333,63 @@ export class AppointmentsService {
     if (!allowedStatuses.includes(newStatus)) {
       throw new BadRequestException(
         `Cannot change status from ${currentStatus} to ${newStatus}. ${MESSAGES.failMessage.invalidStatusTransition}`,
+      );
+    }
+  }
+
+  /**
+   * Validate whether a clinic shift hour still has capacity on a specific date.
+   * A slot is considered full only when booked count >= clinic_shift_hour.limit.
+   */
+  private async validateShiftHourCapacity(
+    clinicId: string,
+    clinicShiftHourId: string,
+    appointmentDate: Date,
+    excludeAppointmentId?: string,
+  ): Promise<void> {
+    const shiftHour = await this.dataSource
+      .createQueryBuilder()
+      .select('csh._id', 'id')
+      .addSelect('csh.limit', 'limit')
+      .from('clinic_shift_hour', 'csh')
+      .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+      .where('csh._id = :clinicShiftHourId', { clinicShiftHourId })
+      .andWhere('cs.clinic_id = :clinicId', { clinicId })
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('cs.deleted_at IS NULL')
+      .getRawOne();
+
+    if (!shiftHour) {
+      throw new NotFoundException('Clinic shift hour not found for this clinic');
+    }
+
+    const bookingCountQuery = this.dataSource
+      .createQueryBuilder()
+      .select('COUNT(app._id)', 'count')
+      .from('appointments', 'app')
+      .where('app.clinic_id = :clinicId', { clinicId })
+      .andWhere('app.clinic_shift_hour_id = :clinicShiftHourId', {
+        clinicShiftHourId,
+      })
+      .andWhere('app.appointment_date = :appointmentDate', { appointmentDate })
+      .andWhere('app.deleted_at IS NULL')
+      .andWhere('app.status != :cancelledStatus', {
+        cancelledStatus: AppointmentStatus.CANCELLED,
+      });
+
+    if (excludeAppointmentId) {
+      bookingCountQuery.andWhere('app._id != :excludeAppointmentId', {
+        excludeAppointmentId,
+      });
+    }
+
+    const countResult = await bookingCountQuery.getRawOne();
+    const currentCount = Number(countResult?.count || 0);
+    const slotLimit = Number(shiftHour.limit || 0);
+
+    if (currentCount >= slotLimit) {
+      throw new ConflictException(
+        'Clinic shift hour is full. Please choose another slot.',
       );
     }
   }
