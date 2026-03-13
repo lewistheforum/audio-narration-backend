@@ -65,8 +65,11 @@ export class ERMUltrasound {
   @Column({ name: 'image_urls', type: 'jsonb', nullable: true })
   imageUrls?: any;
 
-  @CreateDateColumn({ name: 'performed_at', type: 'timestamptz' })
-  performedAt: Date;
+  @CreateDateColumn({ name: 'performed_at', type: 'timestamptz', nullable: true })
+  performedAt?: Date;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
