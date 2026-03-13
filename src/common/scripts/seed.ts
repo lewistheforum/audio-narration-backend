@@ -116,7 +116,7 @@ function generateFakeData(column: any): any {
 
   // Logic đoán kiểu dữ liệu dựa trên tên cột
   if (name.includes('email')) return faker.internet.email();
-  if (name.includes('phone')) return faker.phone.number();
+  if (name.includes('phone')) return generateVietnamPhone();
   if (name.includes('name')) return faker.person.fullName();
   if (name.includes('address')) return faker.location.streetAddress();
   if (name.includes('url') || name.includes('link'))
@@ -152,6 +152,10 @@ function generateFakeData(column: any): any {
   }
 
   return faker.lorem.word();
+}
+
+function generateVietnamPhone(): string {
+  return `0${faker.string.numeric(9)}`;
 }
 
 bootstrap();

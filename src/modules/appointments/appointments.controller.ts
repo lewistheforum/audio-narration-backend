@@ -21,7 +21,11 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
+  ApiNotFoundResponse,
+  ApiForbiddenResponse,
+  ApiProduces,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { getDateString } from 'src/common/utils/date.util';
 import { AppointmentsService } from './appointments.service';
 import { BookingSessionService } from './booking-session.service';
@@ -98,12 +102,19 @@ import { AppointmentStatus } from './enums';
  * - PATCH /patients/booking-sessions/:sessionId - Update booking session
  * - POST /patients/appointments - Create appointment from session
  */
+import { PrescriptionsService } from '../prescriptions/prescriptions.service';
+import {
+  PatientEPrescriptionDetailResponseDto,
+  PatientERMDetailResponseDto,
+} from '../prescriptions/dto';
+
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
+    private readonly prescriptionsService: PrescriptionsService,
   ) { }
 
   /**
@@ -2064,6 +2075,181 @@ export class AppointmentsController {
   ) {
     const patientId = req.user._id;
     return this.appointmentsService.getMyAppointmentDetail(patientId, id);
+  }
+
+  /**
+   * Get Patient E-Prescription Detail
+   * Patient only - nested under appointment route
+   * 
+   * Retrieves electronic prescription for a specific appointment
+   * Only accessible when appointment status is COMPLETED
+   */
+  @Get('patients/me/appointments/:id/e-prescription')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Get E-Prescription for a specific appointment',
+    description: 'Retrieves the electronic prescription details including all prescribed medicines. Only available for completed appointments.'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'E-Prescription retrieved successfully',
+    type: PatientEPrescriptionDetailResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Appointment or E-Prescription not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'E-Prescription only available for completed appointments',
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  async getPatientEPrescription(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ): Promise<PatientEPrescriptionDetailResponseDto> {
+    const patientId = req.user._id;
+    return await this.prescriptionsService.getPatientEPrescription(
+      patientId,
+      id,
+    );
+  }
+
+  /**
+   * Export Patient E-Prescription as PDF
+   * Patient only - generates downloadable PDF document
+   * 
+   * Exports the electronic prescription in a medical-compliant PDF format
+   * with clinic, doctor, and patient information headers
+   */
+  @Get('patients/me/appointments/:id/e-prescription/export/pdf')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Export E-Prescription as PDF',
+    description: 'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines. Only available for completed appointments.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({
+    status: 200,
+    description: 'PDF file generated and downloaded successfully',
+    schema: {
+      type: 'string',
+      format: 'binary',
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Appointment or E-Prescription not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'E-Prescription only available for completed appointments',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async exportEPrescriptionPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ): Promise<void> {
+    const patientId = req.user._id;
+
+    // Generate PDF buffer
+    const pdfBuffer = await this.prescriptionsService.generateEPrescriptionPdf(
+      patientId,
+      id,
+    );
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="prescription-${id}.pdf"`,
+    );
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+    // Send PDF buffer
+    res.send(pdfBuffer);
+  }
+
+  /**
+   * Get Patient ERM Detail (Polymorphic Retrieval)
+   * Patient only - retrieves specific ERM record
+   * 
+   * Returns ERM details with polymorphic child data based on record_type
+   * Enforces strict 3-layer linkage validation and visibility rules
+   */
+  @Get('patients/me/appointments/:id/erms/:ermId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get ERM record details for a specific appointment',
+    description:
+      'Retrieves Electronic Record Management (ERM) details including polymorphic child records (X-ray, Lab, Ultrasound, Consultation, Bone Density, Procedure). Only COMPLETED records are accessible to patients. Enforces strict ownership validation (patient -> appointment -> ERM).',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Appointment ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiParam({
+    name: 'ermId',
+    type: 'string',
+    format: 'uuid',
+    description: 'ERM record ID',
+    example: '123e4567-e89b-12d3-a456-426614174001',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'ERM record retrieved successfully',
+    type: PatientERMDetailResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Appointment, ERM, or child record not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'ERM record not available (status must be COMPLETED)',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getPatientERMDetail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('ermId', ParseUUIDPipe) ermId: string,
+    @Request() req: any,
+  ): Promise<PatientERMDetailResponseDto> {
+    const patientId = req.user._id;
+    return this.prescriptionsService.getPatientERMDetail(
+      patientId,
+      id,
+      ermId,
+    );
   }
 
   /**
