@@ -68,6 +68,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountRole } from '../accounts/enums';
 import { AppointmentStatus } from './enums';
+import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
 
 /**
  * Appointments Controller
@@ -115,7 +116,7 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) { }
+  ) {}
 
   /**
    * Get all appointments for staff's clinic
@@ -335,7 +336,7 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get doctor\'s appointments (Step 1 - ERM Flow)',
+    summary: "Get doctor's appointments (Step 1 - ERM Flow)",
     description:
       'Retrieve list of appointments assigned to the authenticated doctor. ' +
       'Shows CHECKED_IN and IN_PROGRESS appointments by default. ' +
@@ -432,7 +433,7 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get doctor\'s patient history',
+    summary: "Get doctor's patient history",
     description:
       'Retrieve list of all patients who have been examined by the authenticated doctor. ' +
       'Includes patient information, visit statistics, and last diagnosis.',
@@ -652,7 +653,7 @@ export class AppointmentsController {
   @Roles(AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: "Get complete appointment detail from patient history",
+    summary: 'Get complete appointment detail from patient history',
     description: `
       Retrieves comprehensive appointment information for doctor's patient history view.
       
@@ -717,7 +718,8 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get appointment detail with auto-status update (Step 2 - ERM Flow)',
+    summary:
+      'Get appointment detail with auto-status update (Step 2 - ERM Flow)',
     description:
       'Retrieve complete appointment information including patient profile, ' +
       'medical history, and all services with ERM status. ' +
@@ -867,10 +869,25 @@ export class AppointmentsController {
     schema: {
       type: 'object',
       properties: {
-        appointmentId: { type: 'string', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
-        appointmentStatus: { type: 'string', enum: ['COMPLETED', 'AWAITING_PAYMENT'], example: 'COMPLETED' },
-        paymentStatus: { type: 'string', enum: ['PAID', 'UNPAID', 'PARTIAL'], example: 'PAID' },
-        completedAt: { type: 'string', format: 'date-time', example: '2026-02-25T10:30:00Z' },
+        appointmentId: {
+          type: 'string',
+          example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        },
+        appointmentStatus: {
+          type: 'string',
+          enum: ['COMPLETED', 'AWAITING_PAYMENT'],
+          example: 'COMPLETED',
+        },
+        paymentStatus: {
+          type: 'string',
+          enum: ['PAID', 'UNPAID', 'PARTIAL'],
+          example: 'PAID',
+        },
+        completedAt: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-02-25T10:30:00Z',
+        },
         ermsSummary: {
           type: 'array',
           items: {
@@ -886,13 +903,18 @@ export class AppointmentsController {
         ePrescriptionId: { type: 'string', example: 'prescription-uuid' },
         hasAdditionalServices: { type: 'boolean', example: false },
         additionalAmount: { type: 'number', example: 0 },
-        nextStep: { type: 'string', enum: ['EXPORT_PRESCRIPTION', 'PROCEED_TO_PAYMENT'], example: 'EXPORT_PRESCRIPTION' },
+        nextStep: {
+          type: 'string',
+          enum: ['EXPORT_PRESCRIPTION', 'PROCEED_TO_PAYMENT'],
+          example: 'EXPORT_PRESCRIPTION',
+        },
       },
     },
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Validation failed (missing ERMs, DRAFT ERMs, or missing prescription)',
+    description:
+      'Bad Request - Validation failed (missing ERMs, DRAFT ERMs, or missing prescription)',
     schema: {
       type: 'object',
       properties: {
@@ -900,7 +922,10 @@ export class AppointmentsController {
         missingRequirements: {
           type: 'array',
           items: { type: 'string' },
-          example: ['Service (ID: xxx) does not have ERM', 'E-prescription not created (required when there is consultation ERM)'],
+          example: [
+            'Service (ID: xxx) does not have ERM',
+            'E-prescription not created (required when there is consultation ERM)',
+          ],
         },
       },
     },
@@ -960,7 +985,8 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Add additional service to appointment (ERM Flow - Additional Service)',
+    summary:
+      'Add additional service to appointment (ERM Flow - Additional Service)',
     description:
       'Add new service during examination (e.g., X-ray, Lab tests). ' +
       'Only allowed when appointment is IN_PROGRESS. ' +
@@ -978,19 +1004,43 @@ export class AppointmentsController {
         appointmentId: { type: 'string', example: 'appt-uuid' },
         clinicServiceId: { type: 'string', example: 'service-uuid' },
         serviceName: { type: 'string', example: 'X-ray Chest' },
-        serviceType: { type: 'string', enum: ['CONSULTATION', 'XRAY', 'ULTRASOUND', 'LAB', 'BONE_DENSITY', 'PROCEDURE'], example: 'XRAY' },
+        serviceType: {
+          type: 'string',
+          enum: [
+            'CONSULTATION',
+            'XRAY',
+            'ULTRASOUND',
+            'LAB',
+            'BONE_DENSITY',
+            'PROCEDURE',
+          ],
+          example: 'XRAY',
+        },
         price: { type: 'number', example: 200000 },
-        discount: { type: 'number', example: 10, description: 'Discount percentage (%)' },
-        amount: { type: 'number', example: 180000, description: 'Final amount after discount' },
+        discount: {
+          type: 'number',
+          example: 10,
+          description: 'Discount percentage (%)',
+        },
+        amount: {
+          type: 'number',
+          example: 180000,
+          description: 'Final amount after discount',
+        },
         addedDuringExamination: { type: 'boolean', example: true },
         addedBy: { type: 'string', example: 'doctor-uuid' },
-        createdAt: { type: 'string', format: 'date-time', example: '2026-03-02T10:30:00Z' },
+        createdAt: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-03-02T10:30:00Z',
+        },
       },
     },
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Invalid status, service already exists, or validation failed',
+    description:
+      'Bad Request - Invalid status, service already exists, or validation failed',
   })
   @ApiResponse({
     status: 401,
@@ -1276,7 +1326,11 @@ export class AppointmentsController {
     @Body() cancelDto: PatientCancelAppointmentDto,
   ): Promise<AppointmentResponseDto> {
     const patientId = req.user._id;
-    return this.appointmentsService.patientCancelAppointment(id, patientId, cancelDto);
+    return this.appointmentsService.patientCancelAppointment(
+      id,
+      patientId,
+      cancelDto,
+    );
   }
 
   /**
@@ -1334,7 +1388,10 @@ export class AppointmentsController {
     @Param('id') id: string,
     @Body() rescheduleDto: StaffRescheduleAppointmentDto,
   ): Promise<AppointmentResponseDto> {
-    return this.appointmentsService.staffRescheduleAppointment(id, rescheduleDto);
+    return this.appointmentsService.staffRescheduleAppointment(
+      id,
+      rescheduleDto,
+    );
   }
 
   /**
@@ -1363,7 +1420,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment is not PENDING or does not have extra_hour',
+    description:
+      'Bad Request - Appointment is not PENDING or does not have extra_hour',
   })
   @ApiResponse({
     status: 401,
@@ -1471,7 +1529,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment has no extra_hour or status is not PENDING_DOCTOR',
+    description:
+      'Bad Request - Appointment has no extra_hour or status is not PENDING_DOCTOR',
   })
   @ApiResponse({
     status: 401,
@@ -1498,11 +1557,7 @@ export class AppointmentsController {
     @Body() acceptDto: AcceptAppointmentDto,
   ): Promise<AppointmentResponseDto> {
     const doctorId = req.user._id;
-    return this.appointmentsService.acceptAppointment(
-      id,
-      doctorId,
-      acceptDto,
-    );
+    return this.appointmentsService.acceptAppointment(id, doctorId, acceptDto);
   }
 
   /**
@@ -1535,7 +1590,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment has no extra_hour or status is not PENDING_DOCTOR',
+    description:
+      'Bad Request - Appointment has no extra_hour or status is not PENDING_DOCTOR',
   })
   @ApiResponse({
     status: 401,
@@ -1581,7 +1637,11 @@ export class AppointmentsController {
    */
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_STAFF, AccountRole.CLINIC_MANAGER)
+  @Roles(
+    AccountRole.ADMIN,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_MANAGER,
+  )
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -1628,20 +1688,25 @@ export class AppointmentsController {
 
   /**
    * Get doctor work history
-   * 
+   *
    * Get paginated work history including revenue for a specific doctor
-   * 
+   *
    * @param doctorId - Doctor UUID
    * @param queryDto - Filter options (dates, status, pagination)
    */
   @Get('doctors/:doctorId/work-history')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @Roles(
+    AccountRole.DOCTOR,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get doctor work history',
-    description: 'Get paginated work history including revenue calculation. Managers/Admins can only view doctors in their clinic.',
+    description:
+      'Get paginated work history including revenue calculation. Managers/Admins can only view doctors in their clinic.',
   })
   @ApiResponse({
     status: 200,
@@ -1662,14 +1727,18 @@ export class AppointmentsController {
 
   /**
    * Export doctor work history to CSV
-   * 
+   *
    * @param doctorId - Doctor UUID
    * @param queryDto - Filter options
    * @param res - Express response object for file download
    */
   @Get('doctors/:doctorId/work-history/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @Roles(
+    AccountRole.DOCTOR,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+  )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Export doctor work history',
@@ -1685,11 +1754,12 @@ export class AppointmentsController {
     @Query() queryDto: WorkHistoryQueryDto,
     @Res() res,
   ) {
-    const csvContent = await this.appointmentsService.exportDoctorWorkHistoryCSV(
-      req.user.accountId || req.user._id,
-      doctorId,
-      queryDto,
-    );
+    const csvContent =
+      await this.appointmentsService.exportDoctorWorkHistoryCSV(
+        req.user.accountId || req.user._id,
+        doctorId,
+        queryDto,
+      );
 
     res.header('Content-Type', 'text/csv');
     res.attachment(`work-history-${doctorId}-${getDateString()}.csv`);
@@ -1804,14 +1874,14 @@ export class AppointmentsController {
 
   /**
    * Get clinic schedules (VERSION 4.5 - Option 1 & Option 3)
-   * 
+   *
    * Gộp 2 API cũ (working-days + slots) thành 1 API duy nhất.
    * Returns nested structure: Dates -> Shifts -> Slots with Doctor info.
-   * 
+   *
    * VERSION 4.5: Thêm query parameter working_date
    * - Nếu có working_date: Trả về lịch của ngày cụ thể (Option 3)
    * - Nếu không có working_date: Trả về lịch 60 ngày tới (Option 1)
-   * 
+   *
    * @param clinicId - Clinic UUID
    * @param workingDate - Optional date filter (YYYY-MM-DD)
    * @returns Nested schedule structure
@@ -1947,13 +2017,22 @@ export class AppointmentsController {
             },
             appointment_date: '2026-03-15',
             appointment_hour: '2026-03-15T08:00:00.000Z',
-            status: 'PENDING',
+            status: 'COMPLETED',
             total: 270000,
             services: [
               {
                 service_id: '550e8400-e29b-41d4-a716-446655440003',
                 service_name: 'Khám Xương Khớp',
                 price: 270000,
+              },
+            ],
+            feedbacks: [
+              {
+                id: '550e8400-e29b-41d4-a716-446655440004',
+                rating: 5,
+                description: 'Bác sĩ rất tận tâm',
+                type: 'DOCTOR',
+                createdAt: '2026-03-16T10:00:00.000Z',
               },
             ],
           },
@@ -1971,7 +2050,8 @@ export class AppointmentsController {
     name: 'tab',
     required: false,
     enum: ['UPCOMING', 'HISTORY'],
-    description: 'Filter by tab: UPCOMING (active future appointments) or HISTORY (completed/past appointments)',
+    description:
+      'Filter by tab: UPCOMING (active future appointments) or HISTORY (completed/past appointments)',
     example: 'UPCOMING',
   })
   @ApiQuery({
@@ -2080,7 +2160,7 @@ export class AppointmentsController {
   /**
    * Get Patient E-Prescription Detail
    * Patient only - nested under appointment route
-   * 
+   *
    * Retrieves electronic prescription for a specific appointment
    * Only accessible when appointment status is COMPLETED
    */
@@ -2089,9 +2169,10 @@ export class AppointmentsController {
   @Roles(AccountRole.PATIENT)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get E-Prescription for a specific appointment',
-    description: 'Retrieves the electronic prescription details including all prescribed medicines. Only available for completed appointments.'
+    description:
+      'Retrieves the electronic prescription details including all prescribed medicines. Only available for completed appointments.',
   })
   @ApiParam({
     name: 'id',
@@ -2111,9 +2192,9 @@ export class AppointmentsController {
   @ApiForbiddenResponse({
     description: 'E-Prescription only available for completed appointments',
   })
-  @ApiResponse({ 
-    status: 401, 
-    description: 'Unauthorized - Invalid or missing JWT token' 
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
   })
   async getPatientEPrescription(
     @Param('id', ParseUUIDPipe) id: string,
@@ -2129,7 +2210,7 @@ export class AppointmentsController {
   /**
    * Export Patient E-Prescription as PDF
    * Patient only - generates downloadable PDF document
-   * 
+   *
    * Exports the electronic prescription in a medical-compliant PDF format
    * with clinic, doctor, and patient information headers
    */
@@ -2140,7 +2221,8 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Export E-Prescription as PDF',
-    description: 'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines. Only available for completed appointments.',
+    description:
+      'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines. Only available for completed appointments.',
   })
   @ApiParam({
     name: 'id',
@@ -2222,7 +2304,7 @@ export class AppointmentsController {
   /**
    * Get Patient ERM Detail (Polymorphic Retrieval)
    * Patient only - retrieves specific ERM record
-   * 
+   *
    * Returns ERM details with polymorphic child data based on record_type
    * Enforces strict 3-layer linkage validation and visibility rules
    */
@@ -2270,11 +2352,7 @@ export class AppointmentsController {
     @Request() req: any,
   ) {
     const patientId = req.user._id;
-    return this.appointmentsService.getPatientERMDetail(
-      patientId,
-      id,
-      ermId,
-    );
+    return this.appointmentsService.getPatientERMDetail(patientId, id, ermId);
   }
 
   /**
@@ -2314,7 +2392,7 @@ export class AppointmentsController {
             description: 'Hệ thống phòng khám đa khoa uy tín',
             branches: [
               {
-                clinic_id: 'branch-uuid-1',  // ⚠️ Use this ID for booking
+                clinic_id: 'branch-uuid-1', // ⚠️ Use this ID for booking
                 branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',
                 address: '123 Đường X, Quận 1, TP.HCM',
                 district: 'Quận 1',
@@ -2370,7 +2448,8 @@ export class AppointmentsController {
     name: 'working_date',
     required: false,
     type: String,
-    description: 'Optional working date in YYYY-MM-DD format. If provided, filters clinics with slots on this date. If omitted, returns all clinics with any available slots.',
+    description:
+      'Optional working date in YYYY-MM-DD format. If provided, filters clinics with slots on this date. If omitted, returns all clinics with any available slots.',
     example: '2026-02-25',
   })
   @ApiQuery({
@@ -2459,7 +2538,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Invalid initial data or inactive service/clinic',
+    description:
+      'Bad Request - Invalid initial data or inactive service/clinic',
   })
   @ApiResponse({
     status: 401,
@@ -2568,7 +2648,7 @@ export class AppointmentsController {
    * Create appointment from session (Final step)
    *
    * VERSION 4.0: Finalize booking by creating appointment from completed session.
-   * 
+   *
    * This endpoint:
    * - Reads session data from Redis
    * - Validates all business rules
@@ -2595,7 +2675,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Appointment created successfully (COD) or payment initiated (ONLINE)',
+    description:
+      'Appointment created successfully (COD) or payment initiated (ONLINE)',
     schema: {
       oneOf: [
         {
@@ -2621,7 +2702,8 @@ export class AppointmentsController {
           example: {
             message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
             data: {
-              payment_url: 'https://sandbox.payment-gateway.com/pay?order_id=xyz',
+              payment_url:
+                'https://sandbox.payment-gateway.com/pay?order_id=xyz',
               payment_reference_id: 'uuid',
               amount: 270000,
               expires_at: '2026-03-07T15:30:00.000Z',
@@ -2633,7 +2715,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Incomplete session, slot full, or invalid payment method',
+    description:
+      'Bad Request - Incomplete session, slot full, or invalid payment method',
   })
   @ApiResponse({
     status: 401,
@@ -2660,13 +2743,15 @@ export class AppointmentsController {
       createDto.session_id,
       patientId,
     );
-    
+
     // Return result directly - it's either appointment data (COD) or payment URL (ONLINE)
     // The result already includes appropriate message from service layer
-    return result.message ? result : {
-      message: 'Đặt lịch hẹn thành công',
-      data: result,
-    };
+    return result.message
+      ? result
+      : {
+          message: 'Đặt lịch hẹn thành công',
+          data: result,
+        };
   }
 
   @Post('patients/appointments/:sessionId/payment-qr')
@@ -2819,11 +2904,11 @@ export class AppointmentsController {
 
   /**
    * Get doctor schedules (VERSION 4.4 - Option 2: Doctor-first - Step 2)
-   * 
+   *
    * TÁCH RỜI LỊCH KHÁM VÀ DỊCH VỤ
    * API này CHỈ trả về lịch khám (nested structure).
    * KHÔNG trả về services - services được lấy từ endpoint riêng.
-   * 
+   *
    * @param doctorId - Doctor UUID
    * @param clinicId - Clinic UUID (REQUIRED)
    * @returns Nested schedule structure only (no services)
@@ -2887,7 +2972,7 @@ export class AppointmentsController {
 
   /**
    * Get all payment packages for an appointment (Clinic Staff)
-   * 
+   *
    * Returns list of all payment packages associated with the appointment,
    * including their services and payment status.
    */
@@ -2898,7 +2983,8 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get all payment packages for appointment (Clinic Staff)',
-    description: 'Returns list of all payment packages with their services and payment status for the specified appointment.',
+    description:
+      'Returns list of all payment packages with their services and payment status for the specified appointment.',
   })
   @ApiResponse({
     status: 200,
@@ -2906,7 +2992,10 @@ export class AppointmentsController {
     schema: {
       type: 'object',
       properties: {
-        appointmentId: { type: 'string', example: '550e8400-e29b-41d4-a716-446655440000' },
+        appointmentId: {
+          type: 'string',
+          example: '550e8400-e29b-41d4-a716-446655440000',
+        },
         packages: {
           type: 'array',
           items: {
@@ -2917,7 +3006,11 @@ export class AppointmentsController {
               paymentTransactionId: { type: 'string', nullable: true },
               amount: { type: 'number' },
               status: { type: 'string', enum: ['pending_payment', 'paid'] },
-              paymentType: { type: 'string', enum: ['online', 'cod'], nullable: true },
+              paymentType: {
+                type: 'string',
+                enum: ['online', 'cod'],
+                nullable: true,
+              },
               services: {
                 type: 'array',
                 items: {
@@ -2926,12 +3019,12 @@ export class AppointmentsController {
                     serviceAppointmentId: { type: 'string' },
                     clinicServiceId: { type: 'string' },
                     serviceName: { type: 'string' },
-                    servicePrice: { type: 'number' }
-                  }
-                }
-              }
-            }
-          }
+                    servicePrice: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
         },
         summary: {
           type: 'object',
@@ -2939,11 +3032,11 @@ export class AppointmentsController {
             totalPackages: { type: 'number' },
             totalAmount: { type: 'number' },
             paidAmount: { type: 'number' },
-            pendingAmount: { type: 'number' }
-          }
-        }
-      }
-    }
+            pendingAmount: { type: 'number' },
+          },
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 404,
@@ -2963,12 +3056,15 @@ export class AppointmentsController {
     @Request() req: any,
   ) {
     const staffAccountId = req.user._id;
-    return this.appointmentsService.getAppointmentPackages(appointmentId, staffAccountId);
+    return this.appointmentsService.getAppointmentPackages(
+      appointmentId,
+      staffAccountId,
+    );
   }
 
   /**
    * Confirm cash payment for a specific package (Clinic Staff)
-   * 
+   *
    * Updates a specific payment package status to PAID with payment type COD.
    * If all packages are paid, the appointment status will be updated to COMPLETED.
    */
@@ -2979,7 +3075,8 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Confirm cash payment for specific package (Clinic Staff)',
-    description: 'Confirms cash payment for a specific package. Updates package status to PAID and payment type to COD. If all packages are paid, appointment status becomes COMPLETED.',
+    description:
+      'Confirms cash payment for a specific package. Updates package status to PAID and payment type to COD. If all packages are paid, appointment status becomes COMPLETED.',
   })
   @ApiResponse({
     status: 200,
@@ -2987,7 +3084,10 @@ export class AppointmentsController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Xác nhận thanh toán tiền mặt thành công' },
+        message: {
+          type: 'string',
+          example: 'Xác nhận thanh toán tiền mặt thành công',
+        },
         appointmentId: { type: 'string' },
         package: {
           type: 'object',
@@ -2997,14 +3097,17 @@ export class AppointmentsController {
             status: { type: 'string', enum: ['paid'] },
             paymentType: { type: 'string', enum: ['cod'] },
             paymentTransactionId: { type: 'null' },
-            updatedAt: { type: 'string', format: 'date-time' }
-          }
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
         },
-        appointmentStatus: { type: 'string', enum: ['in_progress', 'need_final_payment', 'completed'] },
+        appointmentStatus: {
+          type: 'string',
+          enum: ['in_progress', 'need_final_payment', 'completed'],
+        },
         allPackagesPaid: { type: 'boolean' },
-        remainingPendingPackages: { type: 'number' }
-      }
-    }
+        remainingPendingPackages: { type: 'number' },
+      },
+    },
   })
   @ApiResponse({
     status: 404,
@@ -3012,7 +3115,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Package is not in PENDING_PAYMENT status or does not belong to this appointment',
+    description:
+      'Package is not in PENDING_PAYMENT status or does not belong to this appointment',
   })
   @ApiResponse({
     status: 403,
@@ -3034,15 +3138,19 @@ export class AppointmentsController {
     @Request() req: any,
   ) {
     const staffAccountId = req.user._id;
-    return this.appointmentsService.confirmCashPayment(appointmentId, packageId, staffAccountId);
+    return this.appointmentsService.confirmCashPayment(
+      appointmentId,
+      packageId,
+      staffAccountId,
+    );
   }
 
   /**
    * Get available doctors for out-of-hours booking (Option 4)
-   * 
+   *
    * Returns list of doctors who are working at the clinic on the specified date
    * and are NOT busy at the requested extra hour time.
-   * 
+   *
    * @param clinicId - Clinic UUID
    * @param appointmentDate - Appointment date (YYYY-MM-DD)
    * @param extraHour - Extra hour timestamp (ISO 8601 with timezone)

@@ -96,11 +96,7 @@ export class PublicDoctorDetailData {
   })
   clinic?: PublicClinicInfo;
 
-  constructor(
-    account: any,
-    doctorInfo: any,
-    clinicInfo?: any,
-  ) {
+  constructor(account: any, doctorInfo: any, clinicInfo?: any) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;

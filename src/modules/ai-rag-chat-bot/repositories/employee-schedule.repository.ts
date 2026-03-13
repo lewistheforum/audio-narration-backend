@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { EmployeeSchedule } from 'src/modules/schedules/entities';
 import { DataSource, Repository } from 'typeorm';
-import { EmployeeSchedule } from '../entities/employee-schedule.entity';
-import { WeekDay } from '../enums';
 
 @Injectable()
 export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
@@ -129,7 +128,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .leftJoin(
         'appointments',
         'appointment',
-        'appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != \'CANCELLED\'',
+        "appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != 'CANCELLED'",
       )
       .addSelect('COUNT(appointment._id)', 'bookedCount')
       .where('schedule.clinicId = :clinicId', { clinicId })
@@ -182,16 +181,18 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .getRawAndEntities()
       .then(({ raw, entities }) => {
         // Map raw bookedCount back into the entities
-        return entities.map(entity => {
+        return entities.map((entity) => {
           // Find matching raw rows to attach bookedCount to the corresponding hours
           if (entity.clinicShift && entity.clinicShift.hours) {
-            entity.clinicShift.hours = entity.clinicShift.hours.map(hour => {
+            entity.clinicShift.hours = entity.clinicShift.hours.map((hour) => {
               const rawRow = raw.find(
-                r => r.schedule__id === entity._id && r.clinicShiftHour__id === hour._id
+                (r) =>
+                  r.schedule__id === entity._id &&
+                  r.clinicShiftHour__id === hour._id,
               );
               return {
                 ...hour,
-                bookedCount: rawRow ? parseInt(rawRow.bookedCount, 10) : 0
+                bookedCount: rawRow ? parseInt(rawRow.bookedCount, 10) : 0,
               };
             });
           }
