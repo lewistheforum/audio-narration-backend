@@ -21,7 +21,7 @@ export class PackageServiceItemDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tổng quát',
+    example: 'General Consultation',
   })
   serviceName: string;
 

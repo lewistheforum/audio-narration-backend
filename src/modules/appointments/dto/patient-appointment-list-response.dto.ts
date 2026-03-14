@@ -10,10 +10,10 @@ export class ClinicSummaryDto {
   @ApiProperty({ description: 'Clinic ID' })
   _id: string;
 
-  @ApiProperty({ description: 'Clinic business name', example: 'Phòng khám ABC' })
+  @ApiProperty({ description: 'Clinic business name', example: 'ABC Clinic' })
   name: string;
 
-  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Đường ABC, Quận 1, TP.HCM' })
+  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Main Street, District 1, Ho Chi Minh City' })
   address?: string;
 }
 
@@ -24,7 +24,7 @@ export class DoctorSummaryDto {
   @ApiProperty({ description: 'Doctor ID' })
   _id: string;
 
-  @ApiProperty({ description: 'Doctor full name', example: 'BS. Nguyễn Văn A' })
+  @ApiProperty({ description: 'Doctor full name', example: 'Dr. John Smith' })
   name: string;
 
   @ApiPropertyOptional({ description: 'Doctor profile picture URL' })
@@ -38,11 +38,17 @@ export class PatientServiceDto {
   @ApiProperty({ description: 'Service ID' })
   service_id: string;
 
-  @ApiProperty({ description: 'Service name', example: 'Khám Xương Khớp' })
+  @ApiProperty({ description: 'Service name', example: 'General Checkup' })
   service_name: string;
 
-  @ApiProperty({ description: 'Service price', example: 270000 })
+  @ApiProperty({ description: 'Original service price', example: 200000 })
   price: number;
+
+  @ApiProperty({ description: 'Discount percentage', example: 10 })
+  discount: number;
+
+  @ApiProperty({ description: 'Final price after discount', example: 180000 })
+  final_price: number;
 }
 
 /**

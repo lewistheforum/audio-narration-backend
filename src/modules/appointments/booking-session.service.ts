@@ -40,7 +40,8 @@ export interface BookingSession {
   patientId: string;
   
   // Data accumulated across steps
-  clinicServiceConfigId?: string;
+  /** V5.0: Multi-service booking - replaces single clinicServiceConfigId */
+  serviceIds?: string[]; // Array of clinic_service_config IDs
   clinicId?: string;
   doctorId?: string;
   appointmentDate?: string; // YYYY-MM-DD
@@ -111,7 +112,10 @@ export class BookingSessionService {
     // Populate initial data based on booking option
     if (createDto.booking_option === BookingOption.SERVICE) {
       const data = createDto.initial_data as ServiceInitialDataDto;
-      session.clinicServiceConfigId = data.clinic_service_config_id;
+      // V5.0: Store service_ids as array; initial data may carry one or many ids
+      session.serviceIds = Array.isArray((data as any).service_ids)
+        ? (data as any).service_ids
+        : [data.clinic_service_config_id];
       session.clinicId = data.clinic_id;
     } else if (createDto.booking_option === BookingOption.DOCTOR) {
       const data = createDto.initial_data as DoctorInitialDataDto;
@@ -209,15 +213,14 @@ export class BookingSessionService {
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
         
-        // VERSION 4.6: Step 4 now handles clinic_service_config_id
-        // Validate clinic_service_config_id is required
-        if (!data.clinic_service_config_id) {
-          throw new BadRequestException('Service config ID is required in step 4');
+        // VERSION 5.0: Step 4 now handles service_ids (multi-service array)
+        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
+          throw new BadRequestException('service_ids (array) is required in step 4');
         }
         
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
-          clinicServiceConfigId: data.clinic_service_config_id,
+          serviceIds: data.service_ids,
           currentStep: 4,
         });
       } else if (updateDto.step === 5) {
@@ -242,11 +245,11 @@ export class BookingSessionService {
         Object.assign(session, updateFields);
       }
     } else if (session.bookingOption === BookingOption.DOCTOR) {
-      // VERSION 4.4: Option 2 (doctor-first) - TÁCH RỜI THÀNH 5 STEPS
+      // VERSION 4.4: Option 2 (doctor-first) - SEPARATED INTO 5 STEPS
       // Step 1 (initial): doctor_id + clinic_id already set
-      // Step 2: Add appointment_date + clinic_shift_hour_id (chọn lịch)
-      // Step 3: Add clinic_service_config_id (chọn dịch vụ)
-      // Step 4: Add payment_method (chọn thanh toán)
+      // Step 2: Add appointment_date + clinic_shift_hour_id (select schedule)
+      // Step 3: Add service_ids (select services)
+      // Step 4: Add payment_method (select payment)
       // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
@@ -268,14 +271,14 @@ export class BookingSessionService {
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         
-        // Validate clinic_service_config_id is required in step 3
-        if (!data.clinic_service_config_id) {
-          throw new BadRequestException('Service config ID is required in step 3');
+        // V5.0: Accept service_ids (multi-service array) instead of single ID
+        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
+          throw new BadRequestException('service_ids (array) is required in step 3');
         }
         
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
-          clinicServiceConfigId: data.clinic_service_config_id,
+          serviceIds: data.service_ids,
           currentStep: 3,
         });
       } else if (updateDto.step === 4) {
@@ -308,7 +311,7 @@ export class BookingSessionService {
       }
     } else if (session.bookingOption === BookingOption.SERVICE) {
       // VERSION 4.3: Option 1 (service-first) flow (remains 4 steps)
-      // Step 2: GỘP appointment_date + clinic_shift_hour_id + doctor_id
+      // Step 2: COMBINE appointment_date + clinic_shift_hour_id + doctor_id
       // Step 3: Add payment_method (REQUIRED)
       // Step 4: Add patient_note (OPTIONAL)
       if (updateDto.step === 2) {
@@ -367,8 +370,8 @@ export class BookingSessionService {
     } else if (session.bookingOption === BookingOption.OUT_OF_HOURS) {
       // VERSION 4.7: Option 4 (out-of-hours) flow
       // Step 1 (initial): optional clinic_id
-      // Step 2: Add appointment_date + extra_hour (và gán cứng clinicShiftHourId = null)
-      // Step 3-5: TBD (tương tự các option khác)
+      // Step 2: Add appointment_date + extra_hour (hardcode clinicShiftHourId = null)
+      // Step 3-5: Similar to other options
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
         
@@ -403,7 +406,7 @@ export class BookingSessionService {
         }
         
         // MERGE: Explicitly preserve all existing fields
-        // ĐẶC BIỆT: Gán cứng clinicShiftHourId = null cho out-of-hours
+        // SPECIAL: Hardcode clinicShiftHourId = null for out-of-hours
         Object.assign(session, {
           appointmentDate: data.appointment_date,
           extraHour: data.extra_hour,
@@ -557,11 +560,11 @@ export class BookingSessionService {
   /**
    * Validate step sequence (VERSION 4.7)
    * 
-   * THAY ĐỔI: 
-   * - Option 1 (service-first): Step range là 2-4 (chưa thay đổi)
-   * - Option 2 (doctor-first): Step range là 2-5 (mới thay đổi từ 4.3)
-   * - Option 3 (date-first): Step range là 2-5 (chưa thay đổi)
-   * - Option 4 (out-of-hours): Step range là 2-5 (mới thêm từ 4.7)
+   * CHANGES:
+   * - Option 1 (service-first): Step range is 2-4 (unchanged)
+   * - Option 2 (doctor-first): Step range is 2-5 (changed since 4.3)
+   * - Option 3 (date-first): Step range is 2-5 (unchanged)
+   * - Option 4 (out-of-hours): Step range is 2-5 (added in 4.7)
    * 
    * @param currentStep - Current step number
    * @param nextStep - Next step number
@@ -603,10 +606,10 @@ export class BookingSessionService {
     const bookingData: Record<string, any> = {};
 
     // FIX v4.5: Always include ALL possible fields to prevent data loss visibility
-    // If a field is not set yet, it will be undefined (helps Frontend track progress)
+    // V5.0: clinic_service_config_id replaced by service_ids (array)
     bookingData.clinic_id = session.clinicId ?? null;
     bookingData.doctor_id = session.doctorId ?? null;
-    bookingData.clinic_service_config_id = session.clinicServiceConfigId ?? null;
+    bookingData.service_ids = session.serviceIds ?? null;
     bookingData.appointment_date = session.appointmentDate ?? null;
     bookingData.clinic_shift_hour_id = session.clinicShiftHourId ?? null;
     bookingData.extra_hour = session.extraHour ?? null;

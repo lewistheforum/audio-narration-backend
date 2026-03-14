@@ -11,6 +11,9 @@ import {
   MaxLength,
   IsIn,
   IsISO8601,
+  IsArray,
+  ArrayMinSize,
+  ArrayUnique,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -180,21 +183,28 @@ export class UpdateSessionStep2Dto {
 }
 
 /**
- * Update Data DTO for Step 3 (VERSION 4.6 - FIXED)
+ * Update Data DTO for Step 3 (VERSION 5.0 - Multi-Service)
  * 
  * - Option 1 (service-first): payment_method
- * - Option 2 (doctor-first): clinic_service_config_id
+ * - Option 2 (doctor-first): service_ids (ARRAY of clinic_service_config_id)
  * - Option 3 (date-first): clinic_shift_hour_id + doctor_id (V4.6 - MOVED UP)
  */
 export class UpdateSessionStep3Dto {
   @ApiProperty({
-    description: 'Service config ID (Option 2 only)',
-    example: '123e4567-e89b-12d3-a456-426614174005',
+    description: 'Array of Clinic Service Config IDs (Option 2 - multi-service)',
+    type: [String],
+    example: [
+      '123e4567-e89b-12d3-a456-426614174005',
+      '223e4567-e89b-12d3-a456-426614174006',
+    ],
     required: false,
   })
   @IsOptional()
-  @IsUUID('4', { message: 'Invalid clinic service config ID format' })
-  clinic_service_config_id?: string;
+  @IsArray({ message: 'service_ids must be an array' })
+  @ArrayMinSize(1, { message: 'service_ids must contain at least one service' })
+  @ArrayUnique({ message: 'service_ids must not contain duplicate IDs' })
+  @IsUUID('4', { each: true, message: 'Each service_id must be a valid UUID v4' })
+  service_ids?: string[];
 
   @ApiProperty({
     description: 'Payment method - COD or ONLINE (Option 1 only)',
@@ -226,11 +236,11 @@ export class UpdateSessionStep3Dto {
 }
 
 /**
- * Update Data DTO for Step 4 (VERSION 4.6 - FIXED)
+ * Update Data DTO for Step 4 (VERSION 5.0 - Multi-Service)
  * 
  * - Option 1 (service-first): patient_note (optional)
  * - Option 2 (doctor-first): payment_method (REQUIRED)
- * - Option 3 (date-first): clinic_service_config_id (V4.6 - MOVED DOWN)
+ * - Option 3 (date-first): service_ids (ARRAY - V5.0 multi-service)
  */
 export class UpdateSessionStep4Dto {
   @ApiProperty({
@@ -245,7 +255,7 @@ export class UpdateSessionStep4Dto {
 
   @ApiProperty({
     description: 'Patient note (Option 1 only)',
-    example: 'Đau mỏi vai gáy từ 1 tuần nay',
+    example: 'Patient has neck and shoulder pain for 1 week',
     required: false,
   })
   @IsOptional()
@@ -254,13 +264,20 @@ export class UpdateSessionStep4Dto {
   patient_note?: string;
 
   @ApiProperty({
-    description: 'Service config ID (Option 3 only - V4.6)',
-    example: '123e4567-e89b-12d3-a456-426614174005',
+    description: 'Array of Clinic Service Config IDs (Option 3 - V5.0 multi-service)',
+    type: [String],
+    example: [
+      '123e4567-e89b-12d3-a456-426614174005',
+      '223e4567-e89b-12d3-a456-426614174006',
+    ],
     required: false,
   })
   @IsOptional()
-  @IsUUID('4', { message: 'Invalid clinic service config ID format' })
-  clinic_service_config_id?: string;
+  @IsArray({ message: 'service_ids must be an array' })
+  @ArrayMinSize(1, { message: 'service_ids must contain at least one service' })
+  @ArrayUnique({ message: 'service_ids must not contain duplicate IDs' })
+  @IsUUID('4', { each: true, message: 'Each service_id must be a valid UUID v4' })
+  service_ids?: string[];
 }
 
 /**
@@ -282,7 +299,7 @@ export class UpdateSessionStep5Dto {
 
   @ApiProperty({
     description: 'Patient note (for Option 2 and Option 3)',
-    example: 'Đau mỏi vai gáy từ 1 tuần nay',
+    example: 'Patient has neck and shoulder pain for 1 week',
     required: false,
   })
   @IsOptional()
@@ -296,9 +313,9 @@ export class UpdateSessionStep5Dto {
  *
  * Request body for PATCH /api/patients/booking-sessions/:sessionId
  * 
- * THAY ĐỔI QUAN TRỌNG:
+ * IMPORTANT CHANGES:
  * - Option 1: Step range 2-4 (unchanged)
- * - Option 2: Step range 2-5 (TÁCH RỜI lịch và dịch vụ)
+ * - Option 2: Step range 2-5 (SEPARATED schedule and services)
  * - Option 3: Step range 2-5 (unchanged)
  */
 export class UpdateBookingSessionDto {

@@ -11,10 +11,10 @@ export class ClinicDetailSummaryDto {
   @ApiProperty({ description: 'Clinic ID', example: 'c1a2b3c4-d5e6-7890-abcd-ef1234567890' })
   _id: string;
 
-  @ApiProperty({ description: 'Clinic business name', example: 'Phòng khám ABC' })
+  @ApiProperty({ description: 'Clinic business name', example: 'ABC Clinic' })
   name: string;
 
-  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Đường ABC, Quận 1, TP.HCM' })
+  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Main Street, District 1, Ho Chi Minh City' })
   address?: string;
 
   @ApiPropertyOptional({ description: 'Clinic phone number', example: '0901234567' })
@@ -31,16 +31,16 @@ export class DoctorDetailSummaryDto {
   @ApiProperty({ description: 'Doctor ID', example: 'd1a2b3c4-d5e6-7890-abcd-ef1234567890' })
   _id: string;
 
-  @ApiProperty({ description: 'Doctor full name', example: 'BS. Nguyễn Văn A' })
+  @ApiProperty({ description: 'Doctor full name', example: 'Dr. John Smith' })
   name: string;
 
   @ApiPropertyOptional({ description: 'Doctor profile picture URL' })
   profilePicture?: string;
 
-  @ApiPropertyOptional({ description: 'Academic degree', example: 'Bác sĩ Chuyên khoa I' })
+  @ApiPropertyOptional({ description: 'Academic degree', example: 'Specialist Level I' })
   academicDegree?: string;
 
-  @ApiPropertyOptional({ description: 'Position', example: 'Trưởng khoa Xương Khớp' })
+  @ApiPropertyOptional({ description: 'Position', example: 'Head of Orthopedics Department' })
   position?: string;
 }
 
@@ -73,7 +73,7 @@ export class ClinicServiceSummaryDto {
   @ApiProperty({ description: 'Service ID', example: 's1a2b3c4-d5e6-7890-abcd-ef1234567890' })
   _id: string;
 
-  @ApiProperty({ description: 'Service name', example: 'Khám Xương Khớp' })
+  @ApiProperty({ description: 'Service name', example: 'Orthopedic Consultation' })
   service_name: string;
 
   @ApiProperty({ description: 'Service price', example: 270000 })
@@ -169,7 +169,7 @@ export class PatientAppointmentDetailResponseDto {
   @ApiPropertyOptional({ description: 'Shift end hour', example: '09:00:00' })
   end_hour?: string;
 
-  @ApiPropertyOptional({ description: 'Clinic room name', example: 'Phòng 101', nullable: true })
+  @ApiPropertyOptional({ description: 'Clinic room name', example: 'Room 101', nullable: true })
   clinic_room?: string | null;
 
   @ApiProperty({ 
@@ -187,7 +187,7 @@ export class PatientAppointmentDetailResponseDto {
 
   @ApiPropertyOptional({ 
     description: 'Reject reason (only available when status is CANCELLED)',
-    example: 'Bác sĩ bận đột xuất' 
+    example: 'Doctor suddenly unavailable' 
   })
   reject_reason?: string;
 

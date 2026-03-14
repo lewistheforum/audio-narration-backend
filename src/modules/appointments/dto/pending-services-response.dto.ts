@@ -15,7 +15,7 @@ export class PendingServiceItemDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tư vấn',
+    example: 'Consultation',
   })
   serviceName: string;
 
@@ -75,7 +75,7 @@ export class PendingServicesResponseDto {
     example: [
       {
         serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
-        serviceName: 'X-quang khớp gối',
+        serviceName: 'Knee X-Ray',
         serviceType: 'XRAY',
         hasErm: false,
         ermId: null,
@@ -93,7 +93,7 @@ export class PendingServicesResponseDto {
     example: [
       {
         serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
-        serviceName: 'Khám tư vấn',
+        serviceName: 'Consultation',
         serviceType: 'CONSULTATION',
         hasErm: true,
         ermId: '123e4567-e89b-12d3-a456-426614174000',
