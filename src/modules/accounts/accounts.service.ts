@@ -8,7 +8,12 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
-import { AccountRole, AccountStatus, VerificationType, ClinicRole } from './enums';
+import {
+  AccountRole,
+  AccountStatus,
+  VerificationType,
+  ClinicRole,
+} from './enums';
 import * as crypto from 'crypto';
 import {
   getCurrentVietnamTime,
@@ -164,7 +169,7 @@ export class AccountsService {
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
-  ) { }
+  ) {}
 
   private generateKeyPair(): {
     publicKey: string;
@@ -747,7 +752,7 @@ export class AccountsService {
    * ```typescript
    * const result = await accountsService.update(id, {
    *   email: 'newemail@example.com',
-    *   phone: '0987654321'
+   *   phone: '0987654321'
    * });
    * if (result.emailChanged) {
    *   // Send verification email to new address
@@ -1634,19 +1639,29 @@ export class AccountsService {
   async deleteEmployee(id: string, requestorId: string): Promise<void> {
     const employee = await this.findAccountEntityById(id);
 
-    if (employee.role !== AccountRole.DOCTOR && employee.role !== AccountRole.CLINIC_STAFF) {
-      throw new ForbiddenException('Only doctors and clinic staff can be removed by clinic management');
+    if (
+      employee.role !== AccountRole.DOCTOR &&
+      employee.role !== AccountRole.CLINIC_STAFF
+    ) {
+      throw new ForbiddenException(
+        'Only doctors and clinic staff can be removed by clinic management',
+      );
     }
 
     const requestor = await this.accountRepository.findAccountById(requestorId);
-    if (!requestor) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+    if (!requestor)
+      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
     // Simplified Security Check: employee's parentId must strictly match the requestor's ID
     if (employee.parentId !== requestorId) {
       console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
       console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-      console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
-      console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
+      console.log(
+        `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
+      );
+      console.log(
+        `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
+      );
       console.log(`[RESULT] Access Denied because IDs do NOT match!`);
       console.log('-------------------------------------\n');
 
@@ -1657,8 +1672,12 @@ export class AccountsService {
 
     console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
     console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-    console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
-    console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
+    console.log(
+      `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
+    );
+    console.log(
+      `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
+    );
     console.log(`[RESULT] Approved! Executing soft delete...`);
     console.log('-------------------------------------\n');
 
@@ -1918,11 +1937,11 @@ export class AccountsService {
 
   /**
    * Validate Manager Status for Operations
-   * 
+   *
    * Checks if a CLINIC_MANAGER account is in a valid state to allow:
    * - Creating Staff/Doctor accounts
    * - Being enabled/disabled by Admin
-   * 
+   *
    * @param managerId - UUID of CLINIC_MANAGER account
    * @param operation - Type of operation being performed
    * @throws {NotFoundException} If manager not found
@@ -1932,7 +1951,7 @@ export class AccountsService {
    */
   private async validateManagerStatus(
     managerId: string,
-    operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE'
+    operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE',
   ): Promise<Account> {
     const manager = await this.accountRepository.findAccountById(managerId);
 
@@ -1949,32 +1968,35 @@ export class AccountsService {
       if (manager.status === AccountStatus.PENDING_APPROVAL) {
         throw new ForbiddenException(
           'Cannot create staff. Manager legal documents pending approval. ' +
-          'Please complete document verification first.'
+            'Please complete document verification first.',
         );
       }
       if (manager.status === AccountStatus.MANAGER_DISABLED) {
         throw new ForbiddenException(
           'Cannot create staff. Manager account is disabled. ' +
-          'Please contact your clinic administrator.'
+            'Please contact your clinic administrator.',
         );
       }
       if (manager.status !== AccountStatus.ACTIVE) {
         throw new ForbiddenException(
-          'Manager account must be ACTIVE to create staff members.'
+          'Manager account must be ACTIVE to create staff members.',
         );
       }
     }
 
     // Validate enable/disable operations
-    if (operation === 'ENABLE' && manager.status !== AccountStatus.MANAGER_DISABLED) {
+    if (
+      operation === 'ENABLE' &&
+      manager.status !== AccountStatus.MANAGER_DISABLED
+    ) {
       throw new BadRequestException(
-        'Can only enable managers with MANAGER_DISABLED status'
+        'Can only enable managers with MANAGER_DISABLED status',
       );
     }
 
     if (operation === 'DISABLE' && manager.status !== AccountStatus.ACTIVE) {
       throw new BadRequestException(
-        'Can only disable managers with ACTIVE status'
+        'Can only disable managers with ACTIVE status',
       );
     }
 
@@ -1983,10 +2005,10 @@ export class AccountsService {
 
   /**
    * Validate Parent Manager Status for Login
-   * 
+   *
    * Ensures Staff/Doctor cannot login if their parent Manager is disabled.
    * Implements cascading access control based on account hierarchy.
-   * 
+   *
    * @param account - Account attempting to login
    * @throws {ForbiddenException} If parent manager is disabled or pending approval
    */
@@ -2002,18 +2024,18 @@ export class AccountsService {
     // Verify parentId exists
     if (!account.parentId) {
       throw new ForbiddenException(
-        'Account hierarchy error. No parent manager found.'
+        'Account hierarchy error. No parent manager found.',
       );
     }
 
     // Fetch parent Manager account
     const parentManager = await this.accountRepository.findAccountById(
-      account.parentId
+      account.parentId,
     );
 
     if (!parentManager) {
       throw new ForbiddenException(
-        'Parent manager not found. Please contact support.'
+        'Parent manager not found. Please contact support.',
       );
     }
 
@@ -2021,7 +2043,7 @@ export class AccountsService {
     if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
       throw new ForbiddenException(
         'Your clinic branch has been temporarily disabled. ' +
-        'Please contact your clinic administrator for assistance.'
+          'Please contact your clinic administrator for assistance.',
       );
     }
 
@@ -2029,7 +2051,7 @@ export class AccountsService {
     if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
       throw new ForbiddenException(
         'Your clinic branch is pending legal document approval. ' +
-        'You will be able to login once verification is complete.'
+          'You will be able to login once verification is complete.',
       );
     }
 
@@ -2158,7 +2180,7 @@ export class AccountsService {
       if (
         !legalDocs ||
         legalDocs.verificationStatus !==
-        LegalDocumentVerificationStatus.APPROVED
+          LegalDocumentVerificationStatus.APPROVED
       ) {
         throw new ForbiddenException(
           'Account is not ready or clinic is not active',
@@ -2595,7 +2617,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_MANAGER) {
       throw new BadRequestException(
         'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
-        `Current role: ${account.role}`,
+          `Current role: ${account.role}`,
       );
     }
   }
@@ -3144,8 +3166,8 @@ export class AccountsService {
         province,
         specialty,
         RegistrationStatus.ACTIVE ||
-        RegistrationStatus.NON_RENEWING ||
-        RegistrationStatus.EXPIRED,
+          RegistrationStatus.NON_RENEWING ||
+          RegistrationStatus.EXPIRED,
       );
 
     const clinicItems: ClinicItemDto[] = [];
@@ -3405,7 +3427,6 @@ export class AccountsService {
    * @returns {Promise<Account[]>} List of employees
    */
 
-
   /**
    * Get Doctor by ID with Full Details
    *
@@ -3525,7 +3546,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_ADMIN) {
       throw new BadRequestException(
         'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
-        `Current role: ${account.role}`,
+          `Current role: ${account.role}`,
       );
     }
   }
@@ -3839,9 +3860,13 @@ export class AccountsService {
 
     // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
     if (dto.sepayVa) {
-      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(dto.sepayVa);
+      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(
+        dto.sepayVa,
+      );
       if (existingSepay) {
-        throw new ConflictException('Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.');
+        throw new ConflictException(
+          'Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.',
+        );
       }
     }
 
@@ -4575,19 +4600,28 @@ export class AccountsService {
    * @param id Staff Account ID
    * @param managerId Manager Account ID
    */
-  async findStaffById(id: string, managerId: string): Promise<AccountResponseDto> {
+  async findStaffById(
+    id: string,
+    managerId: string,
+  ): Promise<AccountResponseDto> {
     const staff = await this.findAccountEntityById(id);
 
     const parent = await this.accountRepository.findAccountById(managerId);
-    if (!parent) throw new ForbiddenException(MESSAGES.failMessage.userNotFound);
+    if (!parent)
+      throw new ForbiddenException(MESSAGES.failMessage.userNotFound);
 
     const clinicId = parent.parentId;
-    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
-    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
+    const allManagers = await this.accountRepository.findByParentIdAndRole(
+      clinicId,
+      AccountRole.CLINIC_MANAGER,
+    );
+    const validParentIds = [clinicId, ...allManagers.map((m) => m._id)];
 
     // Security Check: Ensure staff belongs to the manager's clinic
     if (!validParentIds.includes(staff.parentId)) {
-      throw new ForbiddenException(MESSAGES.failMessage.insufficientPermissions);
+      throw new ForbiddenException(
+        MESSAGES.failMessage.insufficientPermissions,
+      );
     }
 
     return this.getAccountInformationByRole(id);
@@ -4619,18 +4653,22 @@ export class AccountsService {
     if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
     const clinicId = parent.parentId;
-    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
-    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
-
-    const [accounts, total] = await this.accountRepository.findStaffByClinicWithFilters(
-      validParentIds,
-      (page - 1) * limit,
-      limit,
-      search,
-      role,
-      fromDate,
-      toDate,
+    const allManagers = await this.accountRepository.findByParentIdAndRole(
+      clinicId,
+      AccountRole.CLINIC_MANAGER,
     );
+    const validParentIds = [clinicId, ...allManagers.map((m) => m._id)];
+
+    const [accounts, total] =
+      await this.accountRepository.findStaffByClinicWithFilters(
+        validParentIds,
+        (page - 1) * limit,
+        limit,
+        search,
+        role,
+        fromDate,
+        toDate,
+      );
 
     const staffItems: StaffItemDto[] = [];
     for (const account of accounts) {
@@ -4675,23 +4713,28 @@ export class AccountsService {
     if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
     const clinicAdminId = parent.parentId;
-    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicAdminId, AccountRole.CLINIC_MANAGER);
-    const validParentIds = [clinicAdminId, ...allManagers.map(m => m._id)];
-
-    const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(managerId);
-
-    const [accounts, total] = await this.accountRepository.findDoctorsWithFilters(
-      AccountRole.DOCTOR,
-      AccountStatus.ACTIVE,
-      (page - 1) * limit,
-      limit,
-      validParentIds,
-      undefined,
-      search,
-      academicDegree,
-      fromDate,
-      toDate,
+    const allManagers = await this.accountRepository.findByParentIdAndRole(
+      clinicAdminId,
+      AccountRole.CLINIC_MANAGER,
     );
+    const validParentIds = [clinicAdminId, ...allManagers.map((m) => m._id)];
+
+    const clinicInfo =
+      await this.clinicManagerInfoRepository.findByAccountId(managerId);
+
+    const [accounts, total] =
+      await this.accountRepository.findDoctorsWithFilters(
+        AccountRole.DOCTOR,
+        AccountStatus.ACTIVE,
+        (page - 1) * limit,
+        limit,
+        validParentIds,
+        undefined,
+        search,
+        academicDegree,
+        fromDate,
+        toDate,
+      );
 
     const doctorItems: DoctorItemDto[] = [];
     for (const account of accounts) {

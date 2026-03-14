@@ -236,7 +236,12 @@ export class ClinicAdminInformationSeederService {
     const year = getCurrentVietnamTime().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return dayjs
+      .tz(
+        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        VIETNAM_TIMEZONE,
+      )
+      .toDate();
   }
 
   /**

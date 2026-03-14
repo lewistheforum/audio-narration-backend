@@ -37,6 +37,7 @@ export class ClinicServicesService {
         'cs.description as "description"',
         'cs.service_functions as "serviceFunctions"',
         'cs.is_active as "isActive"',
+        'csc._id as "configId"',
         'csc.price as "price"',
         'csc.discount as "discount"',
         'csc.duration_min as "durationMin"',
@@ -62,6 +63,7 @@ export class ClinicServicesService {
           : raw.serviceFunctions,
         isActive: raw.isActive,
       } as any, {
+        _id: raw.configId,
         price: raw.price,
         discount: raw.discount,
         durationMin: raw.durationMin,

@@ -721,7 +721,8 @@ export class ClinicDetailResponseDto {
   clinicAdminInformation?: ClinicAdminInfoDetailDto;
 
   @ApiProperty({
-    description: 'Final clinic name combining clinic admin name and branch name',
+    description:
+      'Final clinic name combining clinic admin name and branch name',
     example: 'City Medical Group Branch 1',
     required: false,
     nullable: true,
@@ -785,7 +786,9 @@ export class ClinicDetailResponseDto {
     }
 
     if (clinicAdminInfo) {
-      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(clinicAdminInfo);
+      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(
+        clinicAdminInfo,
+      );
     }
 
     this.finalClinicName = finalClinicName;

@@ -7,7 +7,7 @@ import { PaginationDto } from './clinic-list-response.dto';
 /**
  * Doctor Pagination DTO
  */
-export class DoctorPaginationDto extends PaginationDto { }
+export class DoctorPaginationDto extends PaginationDto {}
 
 /**
  * Doctor Item DTO
@@ -77,11 +77,7 @@ export class DoctorItemDto {
   })
   clinicInfo?: ClinicInfoDto;
 
-  constructor(
-    account: any,
-    doctorInfo: any,
-    clinicInfo?: any,
-  ) {
+  constructor(account: any, doctorInfo: any, clinicInfo?: any) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;
@@ -96,7 +92,7 @@ export class DoctorItemDto {
     // Map clinic info if exists
     if (clinicInfo && clinicInfo.length > 0) {
       // Handle case if clinicInfo is passed as direct object or array
-      // Based on logic in service: clinicInfo = findByAccountId which might return object or array? 
+      // Based on logic in service: clinicInfo = findByAccountId which might return object or array?
       // ClinicManagerInfoRepository.findByAccountId likely returns a single object logic-wise but strict typing matters.
       // Let's assume object for now, adapting if needed.
       // In service: clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(doctor.parentId);

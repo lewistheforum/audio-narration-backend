@@ -39,7 +39,7 @@ export class ServiceItemDto {
  * Data structure for staff creating an appointment for a patient
  * This will create records in 3 tables: appointments, appointment_package, service_appointments
  */
-export class StaffCreateAppointmentDto {
+export class AiCreateAppointmentDto {
   @ApiProperty({
     description: 'Patient account ID (existing patient in system)',
     example: '123e4567-e89b-12d3-a456-426614174000',
@@ -47,6 +47,14 @@ export class StaffCreateAppointmentDto {
   @IsNotEmpty({ message: 'Patient ID is required' })
   @IsUUID('4', { message: 'Invalid patient ID format' })
   patientId: string;
+
+  @ApiProperty({
+    description: 'Clinic ID (existing clinic in system)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsNotEmpty({ message: 'Clinic ID is required' })
+  @IsUUID('4', { message: 'Invalid clinic ID format' })
+  clinicId: string;
 
   @ApiProperty({
     description: 'Doctor account ID (optional - can be assigned later)',
