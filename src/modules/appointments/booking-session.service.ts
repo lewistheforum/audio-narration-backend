@@ -245,11 +245,11 @@ export class BookingSessionService {
         Object.assign(session, updateFields);
       }
     } else if (session.bookingOption === BookingOption.DOCTOR) {
-      // VERSION 4.4: Option 2 (doctor-first) - TÁCH RỜI THÀNH 5 STEPS
+      // VERSION 4.4: Option 2 (doctor-first) - SEPARATED INTO 5 STEPS
       // Step 1 (initial): doctor_id + clinic_id already set
-      // Step 2: Add appointment_date + clinic_shift_hour_id (chọn lịch)
-      // Step 3: Add clinic_service_config_id (chọn dịch vụ)
-      // Step 4: Add payment_method (chọn thanh toán)
+      // Step 2: Add appointment_date + clinic_shift_hour_id (select schedule)
+      // Step 3: Add service_ids (select services)
+      // Step 4: Add payment_method (select payment)
       // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
@@ -311,7 +311,7 @@ export class BookingSessionService {
       }
     } else if (session.bookingOption === BookingOption.SERVICE) {
       // VERSION 4.3: Option 1 (service-first) flow (remains 4 steps)
-      // Step 2: GỘP appointment_date + clinic_shift_hour_id + doctor_id
+      // Step 2: COMBINE appointment_date + clinic_shift_hour_id + doctor_id
       // Step 3: Add payment_method (REQUIRED)
       // Step 4: Add patient_note (OPTIONAL)
       if (updateDto.step === 2) {
@@ -370,8 +370,8 @@ export class BookingSessionService {
     } else if (session.bookingOption === BookingOption.OUT_OF_HOURS) {
       // VERSION 4.7: Option 4 (out-of-hours) flow
       // Step 1 (initial): optional clinic_id
-      // Step 2: Add appointment_date + extra_hour (và gán cứng clinicShiftHourId = null)
-      // Step 3-5: TBD (tương tự các option khác)
+      // Step 2: Add appointment_date + extra_hour (hardcode clinicShiftHourId = null)
+      // Step 3-5: Similar to other options
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
         
@@ -406,7 +406,7 @@ export class BookingSessionService {
         }
         
         // MERGE: Explicitly preserve all existing fields
-        // ĐẶC BIỆT: Gán cứng clinicShiftHourId = null cho out-of-hours
+        // SPECIAL: Hardcode clinicShiftHourId = null for out-of-hours
         Object.assign(session, {
           appointmentDate: data.appointment_date,
           extraHour: data.extra_hour,
@@ -560,11 +560,11 @@ export class BookingSessionService {
   /**
    * Validate step sequence (VERSION 4.7)
    * 
-   * THAY ĐỔI: 
-   * - Option 1 (service-first): Step range là 2-4 (chưa thay đổi)
-   * - Option 2 (doctor-first): Step range là 2-5 (mới thay đổi từ 4.3)
-   * - Option 3 (date-first): Step range là 2-5 (chưa thay đổi)
-   * - Option 4 (out-of-hours): Step range là 2-5 (mới thêm từ 4.7)
+   * CHANGES:
+   * - Option 1 (service-first): Step range is 2-4 (unchanged)
+   * - Option 2 (doctor-first): Step range is 2-5 (changed since 4.3)
+   * - Option 3 (date-first): Step range is 2-5 (unchanged)
+   * - Option 4 (out-of-hours): Step range is 2-5 (added in 4.7)
    * 
    * @param currentStep - Current step number
    * @param nextStep - Next step number

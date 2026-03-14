@@ -360,14 +360,8 @@ export class AppointmentsService {
 
       if (existingAppointments.length > 0) {
         throw new ConflictException(
-          MESSAGES.failMessage.appointmentTimeConflict ||
-            'Thß╗¥i gian hß║╣n n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
+          'This time slot is already booked. Please choose another time.',
         );
-        if (existingAppointments.length > 0) {
-          throw new ConflictException(
-            'This time slot is already booked. Please choose another time.',
-          );
-        }
       }
 
       // Execute transaction to create appointment + package + services
@@ -581,7 +575,7 @@ export class AppointmentsService {
 
     if (existingAppointments.length > 0) {
       throw new ConflictException(
-        'Thß╗¥i gian hß║╣n n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
+        'This time slot is already booked. Please choose another time.',
       );
     }
 
@@ -726,7 +720,7 @@ export class AppointmentsService {
 
       if (conflicts.length > 0) {
         throw new ConflictException(
-          'Thß╗¥i gian mß╗¢i n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
+          'This time slot is already booked. Please choose another time.',
         );
       }
     }
@@ -2762,17 +2756,7 @@ export class AppointmentsService {
     query.orderBy('appointment.appointmentDate', 'DESC');
     query.addOrderBy('appointment.appointmentHour', 'DESC');
 
-    console.log(
-      `[getDoctorWorkHistory] Query parameters: doctorId=${doctorId}, role=${userAccount.role}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`,
-    );
-    console.log(`[getDoctorWorkHistory] Raw SQL Query: `, query.getSql());
-    console.log(
-      `[getDoctorWorkHistory] SQL Parameters: `,
-      query.getParameters(),
-    );
-
     const total = await query.getCount();
-    console.log(`[getDoctorWorkHistory] Total appointments found: ${total}`);
 
     // pagination
     const page = queryDto.page || 1;
@@ -2876,11 +2860,11 @@ export class AppointmentsService {
     const bookingOption = session.bookingOption || 'service_first';
 
     if (bookingOption === 'out_of_hours') {
-      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
-      // Γöé OPTION 4: KH├üM NGO├ÇI GIß╗£ (Out of Hours)                         Γöé
-      // Γöé - Bß║«T BUß╗ÿC: extraHour (ISO datetime string)                     Γöé
-      // Γöé - KH├öNG Y├èU Cß║ªU: clinicShiftHourId                              Γöé
-      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+      // ============================================================
+      // OPTION 4: OUT-OF-HOURS BOOKING
+      // - REQUIRED: extraHour (ISO datetime string)
+      // - NOT REQUIRED: clinicShiftHourId
+      // ============================================================
       if (!session.serviceIds || session.serviceIds.length === 0 || !session.clinicId || 
           !session.doctorId || !session.paymentMethod || !session.extraHour) {
         throw new BadRequestException(
@@ -2911,10 +2895,10 @@ export class AppointmentsService {
         throw new BadRequestException('extraHour must be in the future');
       }
     } else {
-      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
-      // Γöé OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)     Γöé
-      // Γöé - Y├èU Cß║ªU: clinicShiftHourId, appointmentDate                   Γöé
-      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+      // ============================================================
+      // OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)
+      // - REQUIRED: clinicShiftHourId, appointmentDate
+      // ============================================================
       if (!session.serviceIds || session.serviceIds.length === 0 || !session.clinicId || !session.appointmentDate ||
         !session.clinicShiftHourId || !session.doctorId || !session.paymentMethod) {
         throw new BadRequestException(
@@ -2999,10 +2983,10 @@ export class AppointmentsService {
 
     // OPTIONS 1/2/3: Standard Booking with Shift Hours
     if (session.paymentMethod === 'cod') {
-      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
-      // Γöé NH├üNH A: THANH TO├üN COD (Cash on Delivery)                      Γöé
-      // Γöé Tß║ío appointment ngay lß║¡p tß╗⌐c, thanh to├ín tß║íi ph├▓ng kh├ím         Γöé
-      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+      // ============================================================
+      // BRANCH A: COD PAYMENT (Cash on Delivery)
+      // Creates appointment immediately, patient pays at clinic
+      // ============================================================
       return await this.createAppointmentCOD(
         sessionId,
         patientId,
@@ -3010,11 +2994,11 @@ export class AppointmentsService {
         dateString!,
       );
     } else {
-      // ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
-      // Γöé NH├üNH B: THANH TO├üN ONLINE (Payment Gateway)                    Γöé
-      // Γöé PLACEHOLDER - Ch╞░a t├¡ch hß╗úp payment gateway thß║¡t                Γöé
-      // Γöé Trß║ú vß╗ü mock payment URL, giß╗» session ─æß╗â xß╗¡ l├╜ webhook sau       Γöé
-      // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+      // ============================================================
+      // BRANCH B: ONLINE PAYMENT (Payment Gateway)
+      // PLACEHOLDER - Payment gateway integration pending
+      // Returns mock payment URL, session will be processed via webhook
+      // ============================================================
       return await this.createPaymentRequestOnline(sessionId, session);
     }
   }
@@ -3080,10 +3064,18 @@ export class AppointmentsService {
       // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
       // Query ALL service_ids from clinic_service_config in ONE batch query
       const serviceIds: string[] = session.serviceIds;
+      // Deduplicate serviceIds to handle duplicate UUIDs in the array
+      const uniqueServiceIds = Array.from(new Set(serviceIds));
+
+      // Guard clause: Check for empty array
+      if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+        throw new BadRequestException('Service IDs array cannot be empty');
+      }
+
       const serviceConfigs = await manager
         .createQueryBuilder(ClinicServiceConfig, 'csc')
         .leftJoinAndSelect('csc.service', 'service')
-        .where('csc._id IN (:...serviceIds)', { serviceIds })
+        .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
         .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
         .andWhere('csc.is_active = :isActive', { isActive: true })
         .andWhere('csc.deleted_at IS NULL')
@@ -3092,11 +3084,11 @@ export class AppointmentsService {
         .getMany();
 
       // Verify ALL requested services exist and are active
-      if (serviceConfigs.length !== serviceIds.length) {
+      if (serviceConfigs.length !== uniqueServiceIds.length) {
         const foundIds = serviceConfigs.map((s) => s._id);
-        const missingIds = serviceIds.filter((id) => !foundIds.includes(id));
+        const missingIds = uniqueServiceIds.filter((id) => !foundIds.includes(id));
         throw new BadRequestException(
-          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ')}`,
+          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ') || 'Unknown'}`,
         );
       }
 
@@ -3285,14 +3277,22 @@ export class AppointmentsService {
     */
 
     // === STEP 12: Build Response ===
-    const serviceNames = result.serviceConfigs
-      .map((sc: any) => sc.service?.serviceName || 'N/A')
-      .join(', ');
+    const services = result.serviceConfigs.map((sc: ClinicServiceConfig) => {
+      const price = Number(sc.price) || 0;
+      const discount = Number(sc.discount) || 0;
+      const finalPrice = price - (price * discount) / 100;
+      return {
+        service_name: sc.service?.serviceName || 'N/A',
+        price,
+        discount,
+        final_price: finalPrice,
+      };
+    });
 
     return {
       appointment_id: result.appointment._id,
       clinic_id: result.appointment.clinicId,
-      service_names: serviceNames, // V5.0: Multiple service names
+      services, // V5.0: Array of service details with price info
       appointment_date: result.appointment.appointmentDate,
       appointment_hour: result.appointment.appointmentHour,
       start_time: result.shiftHour.startHour,
@@ -3371,7 +3371,7 @@ export class AppointmentsService {
 
     // Return mock payment response
     return {
-      message: 'Vui l├▓ng thanh to├ín ─æß╗â ho├án tß║Ñt ─æß║╖t lß╗ïch',
+      message: 'Please complete the payment to finish booking',
       data: {
         payment_url: `https://sandbox.payment-gateway.com/pay?order_id=${paymentReferenceId}`,
         payment_reference_id: paymentReferenceId,
@@ -3432,10 +3432,18 @@ export class AppointmentsService {
       // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
       // Query clinic_service_config for ALL serviceIds in one batch
       const serviceIds: string[] = session.serviceIds;
+      // Deduplicate serviceIds to handle duplicate UUIDs in the array
+      const uniqueServiceIds = Array.from(new Set(serviceIds));
+
+      // Guard clause: Check for empty array
+      if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+        throw new BadRequestException('Service IDs array cannot be empty');
+      }
+
       const serviceConfigs = await manager
         .createQueryBuilder(ClinicServiceConfig, 'csc')
         .leftJoinAndSelect('csc.service', 'service')
-        .where('csc._id IN (:...serviceIds)', { serviceIds })
+        .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
         .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
         .andWhere('csc.is_active = :isActive', { isActive: true })
         .andWhere('csc.deleted_at IS NULL')
@@ -3444,11 +3452,11 @@ export class AppointmentsService {
         .getMany();
 
       // Verify ALL requested services exist and are active
-      if (serviceConfigs.length !== serviceIds.length) {
+      if (serviceConfigs.length !== uniqueServiceIds.length) {
         const foundIds = serviceConfigs.map((s) => s._id);
-        const missingIds = serviceIds.filter((id) => !foundIds.includes(id));
+        const missingIds = uniqueServiceIds.filter((id) => !foundIds.includes(id));
         throw new BadRequestException(
-          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ')}`,
+          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ') || 'Unknown'}`,
         );
       }
 
@@ -3485,7 +3493,7 @@ export class AppointmentsService {
           );
         }
 
-      // === STEP 4: CHỐNG DOUBLE BOOKING ===
+      // === STEP 4: PREVENT DOUBLE BOOKING ===
       // CRITICAL: Check if doctor already has an appointment at this extraHour
       // Query both appointment_hour AND extra_hour columns to prevent conflicts
       
@@ -3564,10 +3572,22 @@ export class AppointmentsService {
     await this.bookingSessionService.deleteSession(sessionId);
 
     // === STEP 9: Build Response ===
+    const services = result.serviceConfigs.map((sc: ClinicServiceConfig) => {
+      const price = Number(sc.price) || 0;
+      const discount = Number(sc.discount) || 0;
+      const finalPrice = price - (price * discount) / 100;
+      return {
+        service_name: sc.service?.serviceName || 'N/A',
+        price,
+        discount,
+        final_price: finalPrice,
+      };
+    });
+
     return {
       appointment_id: result.appointment._id,
       clinic_id: result.appointment.clinicId,
-      service_names: result.serviceConfigs.map((sc: ClinicServiceConfig) => sc.service?.serviceName || 'N/A'),
+      services, // V5.0: Array of service details with price info
       appointment_date: result.appointment.appointmentDate,
       appointment_hour: result.appointment.appointmentHour,
       extra_hour: result.appointment.extraHour,
@@ -3835,29 +3855,17 @@ export class AppointmentsService {
     query.orderBy('appointment.appointmentDate', 'DESC');
     query.addOrderBy('appointment.appointmentHour', 'DESC');
 
-    console.log(
-      `[exportDoctorWorkHistoryCSV] Query parameters: doctorId=${doctorId}, role=${userAccount.role}, fromDate=${queryDto.fromDate}, toDate=${queryDto.toDate}, status=${queryDto.status}`,
-    );
-    console.log(`[exportDoctorWorkHistoryCSV] Raw SQL Query: `, query.getSql());
-    console.log(
-      `[exportDoctorWorkHistoryCSV] SQL Parameters: `,
-      query.getParameters(),
-    );
-
     const appointments = await query.getMany();
-    console.log(
-      `[exportDoctorWorkHistoryCSV] Total appointments found: ${appointments.length}`,
-    );
 
     const headers = [
-      'M├ú Ca Kh├ím',
-      'Bß╗çnh Nh├ón',
-      'Ph├▓ng Kh├ím',
-      'Ng├áy Kh├ím',
-      'Giß╗¥ Kh├ím',
-      'Trß║íng Th├íi',
-      'Ghi Ch├║',
-      'Doanh Thu (VN─É)',
+      'Appointment ID',
+      'Patient',
+      'Clinic',
+      'Date',
+      'Time',
+      'Status',
+      'Note',
+      'Total (VND)',
     ];
 
     const rows = appointments.map((app) => {
@@ -4425,11 +4433,6 @@ export class AppointmentsService {
       .getRawOne();
     const total = parseInt(countResult?.count || '0', 10);
 
-    // DEBUG: Print SQL query
-    console.log('≡ƒöì SQL Query for clinic_room:');
-    console.log(query.getSql());
-    console.log('\n≡ƒôï Query Parameters:', query.getParameters());
-
     // Get paginated results with ordering
     const appointmentsRaw = await query
       .orderBy('a.appointment_date', 'DESC')
@@ -4437,10 +4440,6 @@ export class AppointmentsService {
       .offset((page - 1) * limit)
       .limit(limit)
       .getRawMany();
-
-    // DEBUG: Print raw data
-    console.log('\n≡ƒôè Raw appointments data (first 2):');
-    console.log(JSON.stringify(appointmentsRaw.slice(0, 2), null, 2));
 
     // CRITICAL FIX: Deduplicate appointments (M-N join can return multiple rows per appointment)
     // Keep only the first room if multiple rooms are assigned to the same schedule
@@ -4451,10 +4450,6 @@ export class AppointmentsService {
       }
     });
     const appointmentsRawUnique = Array.from(uniqueAppointmentsMap.values());
-
-    console.log(
-      `\nΓ£à Deduplication: ${appointmentsRaw.length} rows -> ${appointmentsRawUnique.length} unique appointments`,
-    );
 
     // Optimization: Bulk load services to avoid N+1 queries
     let servicesMap: Map<string, any[]> = new Map();
@@ -5573,18 +5568,18 @@ export class AppointmentsService {
     const patientInfo = appointment.patient?.generalAccount;
 
     // Get clinic name from clinicManagerInformation
-    let clinicName = 'Ph├▓ng kh├ím';
+    let clinicName = 'Clinic';
     if (appointment.clinic?.clinicManagerInformation) {
       clinicName = appointment.clinic.clinicManagerInformation.clinicBranchName;
     }
 
     const context: AppointmentReminderContext = {
-      patientName: patientInfo?.fullName || 'Bß╗çnh nh├ón',
+      patientName: patientInfo?.fullName || 'Patient',
       clinicName: clinicName,
       clinicAddress: clinicAddress
         ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
-        : 'Ch╞░a c├│ ─æß╗ïa chß╗ë',
-      clinicPhone: appointment.clinic?.phone || 'Ch╞░a c├│ S─ÉT',
+        : 'No address provided',
+      clinicPhone: appointment.clinic?.phone || 'No phone',
       appointmentDate: new Date(appointment.appointmentDate).toLocaleDateString(
         'vi-VN',
       ),
@@ -5621,12 +5616,12 @@ export class AppointmentsService {
         appointment_id: appointmentId,
         patient_email: patientEmail,
         sent_at: formatToVietnamTime(sentAt),
-        message: 'Email nhß║»c nhß╗ƒ ─æ├ú ─æ╞░ß╗úc gß╗¡i th├ánh c├┤ng',
+        message: 'Reminder email sent successfully',
       };
     } catch (error) {
       console.error('Failed to send reminder email:', error);
       throw new BadRequestException(
-        'Kh├┤ng thß╗â gß╗¡i email. Vui l├▓ng thß╗¡ lß║íi sau.',
+        'Unable to send email. Please try again later.',
       );
     }
   }
@@ -5736,19 +5731,19 @@ export class AppointmentsService {
             const doctorInfo = appointment.doctor?.doctorInformation;
             const patientInfo = appointment.patient?.generalAccount;
 
-            let clinicName = 'Ph├▓ng kh├ím';
+            let clinicName = 'Clinic';
             if (appointment.clinic?.clinicManagerInformation) {
               clinicName =
                 appointment.clinic.clinicManagerInformation.clinicBranchName;
             }
 
             const context: AppointmentReminderContext = {
-              patientName: patientInfo?.fullName || 'Bß╗çnh nh├ón',
+              patientName: patientInfo?.fullName || 'Patient',
               clinicName: clinicName,
               clinicAddress: clinicAddress
                 ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
-                : 'Ch╞░a c├│ ─æß╗ïa chß╗ë',
-              clinicPhone: appointment.clinic?.phone || 'Ch╞░a c├│ S─ÉT',
+                : 'No address provided',
+              clinicPhone: appointment.clinic?.phone || 'No phone',
               appointmentDate: new Date(
                 appointment.appointmentDate,
               ).toLocaleDateString('vi-VN'),
@@ -5806,7 +5801,7 @@ export class AppointmentsService {
       total_failed: totalFailed,
       total_skipped: totalSkipped,
       sent_at: formatToVietnamTime(sentAt),
-      message: `─É├ú gß╗¡i ${totalSent}/${appointmentIds.length} email th├ánh c├┤ng`,
+      message: `Successfully sent ${totalSent}/${appointmentIds.length} emails`,
     };
   }
 
@@ -5847,12 +5842,12 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy lß╗ïch hß║╣n');
+      throw new NotFoundException('Appointment not found');
     }
 
     if (appointment.clinicId !== clinicId) {
       throw new ForbiddenException(
-        'Bß║ín kh├┤ng c├│ quyß╗ün truy cß║¡p lß╗ïch hß║╣n n├áy',
+        'You do not have access to this appointment',
       );
     }
 
@@ -5864,7 +5859,7 @@ export class AppointmentsService {
 
     if (rawPackages.length === 0) {
       throw new NotFoundException(
-        'Kh├┤ng t├¼m thß║Ñy g├│i thanh to├ín n├áo cho lß╗ïch hß║╣n n├áy',
+        'No payment packages found for this appointment',
       );
     }
 
@@ -5967,12 +5962,12 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy lß╗ïch hß║╣n');
+      throw new NotFoundException('Appointment not found');
     }
 
     if (appointment.clinicId !== clinicId) {
       throw new ForbiddenException(
-        'Bß║ín kh├┤ng c├│ quyß╗ün truy cß║¡p lß╗ïch hß║╣n n├áy',
+        'You do not have access to this appointment',
       );
     }
 
@@ -5981,7 +5976,7 @@ export class AppointmentsService {
       await this.appointmentPackageRepository.findByIdForUpdate(packageId);
 
     if (!packageData) {
-      throw new NotFoundException('Kh├┤ng t├¼m thß║Ñy g├│i thanh to├ín');
+      throw new NotFoundException('Payment package not found');
     }
 
     if (packageData.appointmentId !== appointmentId) {
@@ -5993,7 +5988,7 @@ export class AppointmentsService {
     // 4. Check if package is pending payment
     if (packageData.status !== AppointmentPackageStatus.PENDING_PAYMENT) {
       throw new BadRequestException(
-        `Kh├┤ng thß╗â x├íc nhß║¡n thanh to├ín: G├│i thanh to├ín ─æ├ú ß╗ƒ trß║íng th├íi "${packageData.status}"`,
+        `Cannot confirm payment: Payment is currently in status "${packageData.status}"`,
       );
     }
 
@@ -6043,17 +6038,17 @@ export class AppointmentsService {
   /**
    * Get Clinic Schedules (VERSION 4.5 - Option 1 & Option 3)
    *
-   * Gß╗Öp 2 API c┼⌐ (working-days + slots) th├ánh 1 API duy nhß║Ñt.
+   * Merged 2 legacy APIs (working-days + slots) into single API.
    * Returns nested structure: Dates -> Shifts -> Slots with Doctor info.
    *
-   * VERSION 4.5: Th├¬m tham sß╗æ working_date (optional)
-   * - Nß║┐u c├│ working_date: Trß║ú vß╗ü lß╗ïch cß╗ºa ng├áy cß╗Ñ thß╗â (Option 3)
-   * - Nß║┐u kh├┤ng c├│ working_date: Trß║ú vß╗ü lß╗ïch 60 ng├áy tß╗¢i (Option 1)
+   * VERSION 4.5: Added query parameter working_date
+   * - If working_date provided: Returns schedule for specific date (Option 3)
+   * - If no working_date: Returns 60-day schedule (Option 1)
    *
    * Business Logic:
    * - Query employee_schedule for clinic_id
-   * - Nß║╛U c├│ working_date: Filter by work_date = working_date
-   * - Nß║╛U KH├öNG c├│ working_date: Filter by date range [today, today+60]
+   * - If working_date: Filter by work_date = working_date
+   * - If no working_date: Filter by date range [today, today+60]
    * - JOIN clinic_shift, clinic_shift_hour
    * - Calculate available_slots for each slot
    * - Transform in TypeScript: Group by Date -> Shift -> Slots
@@ -6246,9 +6241,9 @@ export class AppointmentsService {
   /**
    * Get Doctor Schedules (VERSION 4.4 - Option 2: Doctor-first - Step 2)
    *
-   * T├üCH Rß╗£I Lß╗èCH KH├üM V├Ç Dß╗èCH Vß╗ñ
-   * API n├áy CHß╗ê trß║ú vß╗ü lß╗ïch kh├ím (dates, shifts, slots).
-   * KH├öNG trß║ú vß╗ü services - services ─æ╞░ß╗úc lß║Ñy tß╗½ API ri├¬ng getDoctorServices.
+   * SEPARATE SCHEDULES AND SERVICES
+   * This API ONLY returns schedules (dates, shifts, slots).
+   * Does NOT return services - services are fetched from separate endpoint.
    *
    * Business Logic:
    * - Query employee_schedule for doctor_id, date range [today, today+60]

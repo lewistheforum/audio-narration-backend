@@ -2,19 +2,19 @@ import { ApiProperty } from '@nestjs/swagger';
 
 class ErmSummaryItemDto {
   @ApiProperty({
-    description: 'Tên dịch vụ',
-    example: 'Khám tư vấn',
+    description: 'Service name',
+    example: 'Consultation',
   })
   serviceName: string;
 
   @ApiProperty({
-    description: 'ID của ERM',
+    description: 'ERM ID',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   ermId: string;
 
   @ApiProperty({
-    description: 'Trạng thái ERM',
+    description: 'ERM status',
     example: 'COMPLETED',
     enum: ['COMPLETED'],
   })
@@ -23,64 +23,64 @@ class ErmSummaryItemDto {
 
 export class CompleteExaminationResponseDto {
   @ApiProperty({
-    description: 'ID của appointment',
+    description: 'Appointment ID',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   appointmentId: string;
 
   @ApiProperty({
-    description: 'Trạng thái appointment sau khi hoàn tất',
+    description: 'Appointment status after completion',
     example: 'COMPLETED',
     enum: ['COMPLETED', 'AWAITING_PAYMENT'],
   })
   appointmentStatus: string;
 
   @ApiProperty({
-    description: 'Trạng thái thanh toán',
+    description: 'Payment status',
     example: 'PAID',
     enum: ['PAID', 'UNPAID', 'PARTIAL'],
   })
   paymentStatus: string;
 
   @ApiProperty({
-    description: 'Thời gian hoàn tất',
+    description: 'Completion timestamp',
     example: '2026-02-25T10:30:00Z',
   })
   completedAt: Date;
 
   @ApiProperty({
-    description: 'Tóm tắt các ERM đã hoàn thành',
+    description: 'Summary of completed ERMs',
     type: [ErmSummaryItemDto],
   })
   ermsSummary: ErmSummaryItemDto[];
 
   @ApiProperty({
-    description: 'Có đơn thuốc hay không',
+    description: 'Whether prescription exists',
     example: true,
   })
   hasPrescription: boolean;
 
   @ApiProperty({
-    description: 'ID của đơn thuốc điện tử',
+    description: 'E-prescription ID',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     required: false,
   })
   ePrescriptionId?: string;
 
   @ApiProperty({
-    description: 'Có dịch vụ phát sinh hay không',
+    description: 'Whether additional services were added',
     example: false,
   })
   hasAdditionalServices: boolean;
 
   @ApiProperty({
-    description: 'Số tiền phát sinh cần thanh toán thêm',
+    description: 'Additional amount to pay',
     example: 0,
   })
   additionalAmount: number;
 
   @ApiProperty({
-    description: 'Bước tiếp theo',
+    description: 'Next step',
     example: 'EXPORT_PRESCRIPTION',
     enum: ['EXPORT_PRESCRIPTION', 'PROCEED_TO_PAYMENT'],
   })

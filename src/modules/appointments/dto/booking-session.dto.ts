@@ -255,7 +255,7 @@ export class UpdateSessionStep4Dto {
 
   @ApiProperty({
     description: 'Patient note (Option 1 only)',
-    example: 'Đau mỏi vai gáy từ 1 tuần nay',
+    example: 'Patient has neck and shoulder pain for 1 week',
     required: false,
   })
   @IsOptional()
@@ -299,7 +299,7 @@ export class UpdateSessionStep5Dto {
 
   @ApiProperty({
     description: 'Patient note (for Option 2 and Option 3)',
-    example: 'Đau mỏi vai gáy từ 1 tuần nay',
+    example: 'Patient has neck and shoulder pain for 1 week',
     required: false,
   })
   @IsOptional()
@@ -313,9 +313,9 @@ export class UpdateSessionStep5Dto {
  *
  * Request body for PATCH /api/patients/booking-sessions/:sessionId
  * 
- * THAY ĐỔI QUAN TRỌNG:
+ * IMPORTANT CHANGES:
  * - Option 1: Step range 2-4 (unchanged)
- * - Option 2: Step range 2-5 (TÁCH RỜI lịch và dịch vụ)
+ * - Option 2: Step range 2-5 (SEPARATED schedule and services)
  * - Option 3: Step range 2-5 (unchanged)
  */
 export class UpdateBookingSessionDto {
