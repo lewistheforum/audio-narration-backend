@@ -40,7 +40,8 @@ export interface BookingSession {
   patientId: string;
   
   // Data accumulated across steps
-  clinicServiceConfigId?: string;
+  /** V5.0: Multi-service booking - replaces single clinicServiceConfigId */
+  serviceIds?: string[]; // Array of clinic_service_config IDs
   clinicId?: string;
   doctorId?: string;
   appointmentDate?: string; // YYYY-MM-DD
@@ -111,7 +112,10 @@ export class BookingSessionService {
     // Populate initial data based on booking option
     if (createDto.booking_option === BookingOption.SERVICE) {
       const data = createDto.initial_data as ServiceInitialDataDto;
-      session.clinicServiceConfigId = data.clinic_service_config_id;
+      // V5.0: Store service_ids as array; initial data may carry one or many ids
+      session.serviceIds = Array.isArray((data as any).service_ids)
+        ? (data as any).service_ids
+        : [data.clinic_service_config_id];
       session.clinicId = data.clinic_id;
     } else if (createDto.booking_option === BookingOption.DOCTOR) {
       const data = createDto.initial_data as DoctorInitialDataDto;
@@ -209,15 +213,14 @@ export class BookingSessionService {
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
         
-        // VERSION 4.6: Step 4 now handles clinic_service_config_id
-        // Validate clinic_service_config_id is required
-        if (!data.clinic_service_config_id) {
-          throw new BadRequestException('Service config ID is required in step 4');
+        // VERSION 5.0: Step 4 now handles service_ids (multi-service array)
+        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
+          throw new BadRequestException('service_ids (array) is required in step 4');
         }
         
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
-          clinicServiceConfigId: data.clinic_service_config_id,
+          serviceIds: data.service_ids,
           currentStep: 4,
         });
       } else if (updateDto.step === 5) {
@@ -268,14 +271,14 @@ export class BookingSessionService {
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         
-        // Validate clinic_service_config_id is required in step 3
-        if (!data.clinic_service_config_id) {
-          throw new BadRequestException('Service config ID is required in step 3');
+        // V5.0: Accept service_ids (multi-service array) instead of single ID
+        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
+          throw new BadRequestException('service_ids (array) is required in step 3');
         }
         
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
-          clinicServiceConfigId: data.clinic_service_config_id,
+          serviceIds: data.service_ids,
           currentStep: 3,
         });
       } else if (updateDto.step === 4) {
@@ -603,10 +606,10 @@ export class BookingSessionService {
     const bookingData: Record<string, any> = {};
 
     // FIX v4.5: Always include ALL possible fields to prevent data loss visibility
-    // If a field is not set yet, it will be undefined (helps Frontend track progress)
+    // V5.0: clinic_service_config_id replaced by service_ids (array)
     bookingData.clinic_id = session.clinicId ?? null;
     bookingData.doctor_id = session.doctorId ?? null;
-    bookingData.clinic_service_config_id = session.clinicServiceConfigId ?? null;
+    bookingData.service_ids = session.serviceIds ?? null;
     bookingData.appointment_date = session.appointmentDate ?? null;
     bookingData.clinic_shift_hour_id = session.clinicShiftHourId ?? null;
     bookingData.extra_hour = session.extraHour ?? null;

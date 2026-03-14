@@ -2664,10 +2664,10 @@ export class AppointmentsService {
       // Γöé - Bß║«T BUß╗ÿC: extraHour (ISO datetime string)                     Γöé
       // Γöé - KH├öNG Y├èU Cß║ªU: clinicShiftHourId                              Γöé
       // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
-      if (!session.clinicServiceConfigId || !session.clinicId || !session.doctorId || 
-          !session.paymentMethod || !session.extraHour) {
+      if (!session.serviceIds || session.serviceIds.length === 0 || !session.clinicId || 
+          !session.doctorId || !session.paymentMethod || !session.extraHour) {
         throw new BadRequestException(
-          'Incomplete out-of-hours booking session. Required: clinicServiceConfigId, clinicId, doctorId, paymentMethod, extraHour.',
+          'Incomplete out-of-hours booking session. Required: serviceIds, clinicId, doctorId, paymentMethod, extraHour.',
         );
       }
 
@@ -2692,7 +2692,7 @@ export class AppointmentsService {
       // Γöé OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)     Γöé
       // Γöé - Y├èU Cß║ªU: clinicShiftHourId, appointmentDate                   Γöé
       // ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
-      if (!session.clinicServiceConfigId || !session.clinicId || !session.appointmentDate ||
+      if (!session.serviceIds || session.serviceIds.length === 0 || !session.clinicId || !session.appointmentDate ||
         !session.clinicShiftHourId || !session.doctorId || !session.paymentMethod) {
         throw new BadRequestException(
           'Incomplete booking session. Please complete all steps (including payment method selection) before confirming.',
@@ -2831,55 +2831,28 @@ export class AppointmentsService {
         );
       }
 
-      // === STEP 2: Validate Service Config ===
-      // FIX: Use QueryBuilder to properly check parent service's deletedAt
-      const serviceConfigQuery = manager
+      // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
+      // Query ALL service_ids from clinic_service_config in ONE batch query
+      const serviceIds: string[] = session.serviceIds;
+      const serviceConfigs = await manager
         .createQueryBuilder(ClinicServiceConfig, 'csc')
         .leftJoinAndSelect('csc.service', 'service')
-        .where('csc._id = :configId', { configId: session.clinicServiceConfigId })
+        .where('csc._id IN (:...serviceIds)', { serviceIds })
         .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
         .andWhere('csc.is_active = :isActive', { isActive: true })
         .andWhere('csc.deleted_at IS NULL')
-        .andWhere('service.deleted_at IS NULL') // CRITICAL: Check parent service not deleted
-        .andWhere('service.is_active = :serviceActive', { serviceActive: true });
+        .andWhere('service.deleted_at IS NULL')
+        .andWhere('service.is_active = :serviceActive', { serviceActive: true })
+        .getMany();
 
-      const serviceConfig = await serviceConfigQuery.getOne();
-
-      if (!serviceConfig) {
-        // Additional debug: Try to find the service config without constraints
-        const anyConfig = await manager.findOne(ClinicServiceConfig, {
-          where: {
-            _id: session.clinicServiceConfigId,
-          },
-          relations: ['service'],
-        });
-
-        if (anyConfig) {
-          // Service exists but belongs to different clinic
-          throw new BadRequestException(
-            'Service is not available at the selected clinic. Please select a service from this clinic.'
-          );
-        }
-
-        // Try to find by clinic only
-        const configsByClinic = await manager
-          .createQueryBuilder(ClinicServiceConfig, 'csc')
-          .leftJoinAndSelect('csc.service', 'service')
-          .where('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
-          .andWhere('csc.is_active = true')
-          .andWhere('csc.deleted_at IS NULL')
-          .andWhere('service.deleted_at IS NULL')
-          .andWhere('service.is_active = true')
-          .take(5)
-          .getMany();
-
-        throw new BadRequestException('Service is not available');
+      // Verify ALL requested services exist and are active
+      if (serviceConfigs.length !== serviceIds.length) {
+        const foundIds = serviceConfigs.map((s) => s._id);
+        const missingIds = serviceIds.filter((id) => !foundIds.includes(id));
+        throw new BadRequestException(
+          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ')}`,
+        );
       }
-
-      // Calculate price (base price - discount)
-      const basePrice = parseFloat(serviceConfig.price.toString());
-      const discount = serviceConfig.discount ? parseFloat(serviceConfig.discount.toString()) : 0;
-      const finalPrice = basePrice - (basePrice * discount / 100);
 
       // === STEP 3: Validate Doctor Schedule ===
       // Get all valid clinic IDs (clinic itself + all branches)
@@ -2956,11 +2929,11 @@ export class AppointmentsService {
         .where('_id = :id', { id: session.clinicShiftHourId })
         .execute();
 
-      // === STEP 7: Create Appointment ===
-      // V4.0: COD Payment - Status set to PENDING (awaiting clinic confirmation)
-      // Create proper Date objects from dateString to avoid timezone issues
+      // === TIER 1: Create Appointment (with placeholder total = 0) ===
+      // NOTE: total will be updated after Tier 3 calculates the real sum
       const appointmentDateForDB = new Date(dateString + 'T00:00:00');
       
+      // appointmentRepo already declared above (for duplicate check - reused here)
       const appointment = appointmentRepo.create({
         patientId,
         clinicId: session.clinicId,
@@ -2968,43 +2941,71 @@ export class AppointmentsService {
         clinicShiftHourId: session.clinicShiftHourId,
         appointmentDate: appointmentDateForDB,
         appointmentHour,
-        total: finalPrice,
+        total: 0, // Placeholder - updated after Tier 3 calculation
         status: AppointmentStatus.PENDING,
         patientNote: session.patientNote || null,
       });
 
       const savedAppointment = await appointmentRepo.save(appointment);
 
-      // === STEP 8: Create Appointment Package ===
-      // V4.0: COD Payment - Status set to PENDING_PAYMENT, will be paid at clinic
-      const packageRepo = manager.getRepository('appointment_package');
-      const appointmentPackage = packageRepo.create({
-        appointmentId: savedAppointment._id,
-        transactionId: null, // COD: No transaction ID until payment at clinic
-        amount: Math.round(finalPrice), // Convert to integer (cents/smallest unit)
-        status: AppointmentPackageStatus.PENDING_PAYMENT,
-        paymentType: PaymentType.COD, // V4.0: Changed from ONLINE to COD
-      });
-
-      const savedPackage = await packageRepo.save(appointmentPackage);
-
-      // === STEP 9: Create Service Appointment (with Price Snapshot) ===
-      // V4.5: Snapshot price & discount from clinic_service_config at booking time
-      // This ensures historical pricing remains accurate even if clinic changes prices later
+      // === TIER 3: Create ServiceAppointment Records (Price Snapshot) ===
+      // Iterate over all fetched service configs and create a ServiceAppointment
+      // for each one, capturing the real-time price & discount as a financial snapshot.
       const serviceAppointmentRepo = manager.getRepository('service_appointments');
-      const serviceAppointment = serviceAppointmentRepo.create({
-        clinicServiceId: session.clinicServiceConfigId,
-        appointmentPackageId: savedPackage._id,
-        price: basePrice, // Snapshot: Original service price
-        discount, // Snapshot: Discount percentage at time of booking
-      });
+      const packageRepo = manager.getRepository('appointment_package');
 
-      await serviceAppointmentRepo.save(serviceAppointment);
+      // Tier 3 needs the package first (ServiceAppointment links via appointmentPackageId)
+      // But per the blueprint the TIER ORDER is 1→3→2, so we create a "pre-package"
+      // placeholder, then refine. Actually: ServiceAppointment links to AppointmentPackage.
+      // We MUST create the package first so foreign key is satisfied, then update amount after.
+      // Create AppointmentPackage with amount = 0 placeholder first (Tier 2 step A)
+      const appointmentPackagePlaceholder = packageRepo.create({
+        appointmentId: savedAppointment._id,
+        transactionId: null,
+        amount: 0, // Will be updated after snapshots are computed
+        status: AppointmentPackageStatus.PENDING_PAYMENT,
+        paymentType: PaymentType.COD,
+      });
+      const savedPackage = await packageRepo.save(appointmentPackagePlaceholder);
+
+      // Now create ServiceAppointment records for every service (Tier 3)
+      let grandTotal = 0;
+      const serviceAppointmentsToSave: any[] = [];
+
+      for (const config of serviceConfigs) {
+        const snapshotPrice = parseFloat(config.price.toString());
+        const snapshotDiscount = config.discount ? parseFloat(config.discount.toString()) : 0;
+        const serviceFinalPrice = snapshotPrice - (snapshotPrice * snapshotDiscount / 100);
+        grandTotal += serviceFinalPrice;
+
+        const sa = serviceAppointmentRepo.create({
+          clinicServiceId: config._id,
+          appointmentPackageId: savedPackage._id, // Links to package entity
+          price: snapshotPrice,     // Financial snapshot from clinic_service_config
+          discount: snapshotDiscount, // Financial snapshot from clinic_service_config
+        });
+        serviceAppointmentsToSave.push(sa);
+      }
+
+      await serviceAppointmentRepo.save(serviceAppointmentsToSave);
+
+      // === TIER 2 (Finalize): Update Package amount + Appointment total ===
+      // Grand total = SUM(price - price * discount / 100) across all service_appointments
+      const roundedTotal = Math.round(grandTotal);
+
+      // Update AppointmentPackage with real amount
+      await packageRepo.update({ _id: savedPackage._id }, { amount: roundedTotal });
+
+      // Update Appointment.total with the aggregated amount
+      await appointmentRepo.update({ _id: savedAppointment._id }, { total: grandTotal });
+
+      // Refresh savedAppointment.total for the response
+      savedAppointment.total = grandTotal;
 
       // Return data for response
       return {
         appointment: savedAppointment,
-        serviceConfig,
+        serviceConfigs, // Array of all fetched service configs
         shiftHour,
       };
     });
@@ -3032,17 +3033,21 @@ export class AppointmentsService {
     */
 
     // === STEP 12: Build Response ===
+    const serviceNames = result.serviceConfigs
+      .map((sc: any) => sc.service?.serviceName || 'N/A')
+      .join(', ');
+
     return {
       appointment_id: result.appointment._id,
       clinic_id: result.appointment.clinicId,
-      service_name: result.serviceConfig.service?.serviceName || 'N/A',
+      service_names: serviceNames, // V5.0: Multiple service names
       appointment_date: result.appointment.appointmentDate,
       appointment_hour: result.appointment.appointmentHour,
       start_time: result.shiftHour.startHour,
       end_time: result.shiftHour.endHour,
       total: result.appointment.total,
       status: result.appointment.status,
-      payment_type: 'cod', // V4.0: COD payment method
+      payment_type: 'cod',
       patient_note: result.appointment.patientNote,
     };
   }
@@ -3172,28 +3177,28 @@ export class AppointmentsService {
     // Execute transaction with SERIALIZABLE isolation level
     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
       
-      // === STEP 2: Validate Service Config ===
-      // Same validation as standard booking
-      const serviceConfigQuery = manager
+      // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
+      // Query clinic_service_config for ALL serviceIds in one batch
+      const serviceIds: string[] = session.serviceIds;
+      const serviceConfigs = await manager
         .createQueryBuilder(ClinicServiceConfig, 'csc')
         .leftJoinAndSelect('csc.service', 'service')
-        .where('csc._id = :configId', { configId: session.clinicServiceConfigId })
+        .where('csc._id IN (:...serviceIds)', { serviceIds })
         .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
         .andWhere('csc.is_active = :isActive', { isActive: true })
         .andWhere('csc.deleted_at IS NULL')
         .andWhere('service.deleted_at IS NULL')
-        .andWhere('service.is_active = :serviceActive', { serviceActive: true });
+        .andWhere('service.is_active = :serviceActive', { serviceActive: true })
+        .getMany();
 
-      const serviceConfig = await serviceConfigQuery.getOne();
-
-      if (!serviceConfig) {
-        throw new BadRequestException('Service is not available');
+      // Verify ALL requested services exist and are active
+      if (serviceConfigs.length !== serviceIds.length) {
+        const foundIds = serviceConfigs.map((s) => s._id);
+        const missingIds = serviceIds.filter((id) => !foundIds.includes(id));
+        throw new BadRequestException(
+          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ')}`,
+        );
       }
-
-      // Calculate price (base price - discount)
-      const basePrice = parseFloat(serviceConfig.price.toString());
-      const discount = serviceConfig.discount ? parseFloat(serviceConfig.discount.toString()) : 0;
-      const finalPrice = basePrice - (basePrice * discount / 100);
 
       // === STEP 3: Validate Doctor Schedule ===
       // Doctor must have a schedule on this date (even for out-of-hours)
@@ -3228,10 +3233,9 @@ export class AppointmentsService {
         );
       }
 
-      // === STEP 4: CHß╗ÉNG DOUBLE BOOKING ===
+      // === STEP 4: CHỐNG DOUBLE BOOKING ===
       // CRITICAL: Check if doctor already has an appointment at this extraHour
       // Query both appointment_hour AND extra_hour columns to prevent conflicts
-      const appointmentRepo = manager.getRepository('appointments');
       
       const existingAppointment = await manager
         .createQueryBuilder()
@@ -3252,88 +3256,76 @@ export class AppointmentsService {
         );
       }
 
-      // === STEP 5: Create Appointment (OUT-OF-HOURS) ===
-      // KEY DIFFERENCES:
-      // - clinic_shift_hour_id = NULL (not using regular slots)
-      // - extra_hour = extraHourDate (the custom time requested)
-      // - appointment_hour = extraHourDate (same as extra_hour)
-      // - appointment_date = date part of extraHour
-      const appointmentDateForDB = new Date(dateString + 'T00:00:00');
-      
-      const appointment = appointmentRepo.create({
+      // === TIER 1: Create Appointment with placeholder total ===
+      const apptRepo = manager.getRepository(Appointment);
+      const newAppointment = apptRepo.create({
         patientId,
-        clinicId: session.clinicId,
         doctorId: session.doctorId,
-        clinicShiftHourId: null, // Bß║«T BUß╗ÿC NULL cho out-of-hours
-        appointmentDate: appointmentDateForDB,
-        appointmentHour: extraHourDate, // Giß╗¥ kh├ím = extraHour
-        extraHour: extraHourDate, // L╞░u v├áo cß╗Öt extra_hour
-        total: finalPrice,
+        clinicId: session.clinicId,
+        clinicShiftHourId: null, // Out-of-hours: no shift
+        appointmentDate: extraHourDate,
+        appointmentHour: extraHourDate,
+        extraHour: extraHourDate,
         status: AppointmentStatus.PENDING,
         patientNote: session.patientNote || null,
+        total: 0, // Placeholder
       });
+      const savedAppointment = await apptRepo.save(newAppointment);
 
-      const savedAppointment = await appointmentRepo.save(appointment);
-
-      // === STEP 6: Create Appointment Package ===
-      const packageRepo = manager.getRepository('appointment_package');
-      const appointmentPackage = packageRepo.create({
+      // === TIER 2 (Phase A): Create AppointmentPackage placeholder ===
+      // Must exist before ServiceAppointment due to FK constraint
+      const pkgRepo = manager.getRepository(AppointmentPackage);
+      const savedPackage = await pkgRepo.save(pkgRepo.create({
         appointmentId: savedAppointment._id,
-        transactionId: null, // COD: No transaction ID until payment at clinic
-        amount: Math.round(finalPrice),
-        status: AppointmentPackageStatus.PENDING_PAYMENT,
+        amount: 0, // Placeholder, updated after Tier 3
         paymentType: PaymentType.COD,
-      });
+        status: AppointmentPackageStatus.PENDING_PAYMENT,
+      }));
 
-      const savedPackage = await packageRepo.save(appointmentPackage);
+      // === TIER 3: Create ServiceAppointment snapshots ===
+      const saRepo = manager.getRepository(ServiceAppointment);
+      let grandTotal = 0;
 
-      // === STEP 7: Create Service Appointment (with Price Snapshot) ===
-      // V4.5: Snapshot price & discount from clinic_service_config at booking time
-      const serviceAppointmentRepo = manager.getRepository('service_appointments');
-      const serviceAppointment = serviceAppointmentRepo.create({
-        clinicServiceId: session.clinicServiceConfigId,
-        appointmentPackageId: savedPackage._id,
-        price: basePrice, // Snapshot: Original service price
-        discount, // Snapshot: Discount percentage at time of booking
-      });
+      for (const sc of serviceConfigs) {
+        const snapshotPrice = Number(sc.price) || 0;
+        const snapshotDiscount = Number(sc.discount) || 0;
+        const lineFinalPrice = snapshotPrice - (snapshotPrice * snapshotDiscount) / 100;
+        grandTotal += lineFinalPrice;
 
-      await serviceAppointmentRepo.save(serviceAppointment);
+        await saRepo.save(saRepo.create({
+          clinicServiceId: sc._id, // FK → clinic_service_config
+          appointmentPackageId: savedPackage._id, // FK → appointment_package
+          price: snapshotPrice,
+          discount: snapshotDiscount,
+        }));
+      }
 
-      // Return data for response
-      return {
-        appointment: savedAppointment,
-        serviceConfig,
-      };
+      // === TIER 2 (Phase B): Update totals ===
+      await pkgRepo.update({ _id: savedPackage._id }, { amount: grandTotal });
+      savedAppointment.total = grandTotal;
+      await apptRepo.save(savedAppointment);
+
+      return { appointment: savedAppointment, serviceConfigs };
     });
 
-    // === STEP 8: Delete Redis Session (Cleanup) ===
+    // === STEP 8: Delete Redis Session ===
     await this.bookingSessionService.deleteSession(sessionId);
 
-    // === STEP 9: Send Email Notifications (Async - Non-blocking) ===
-    // TODO: Implement email sending when ready
-    /*
-    try {
-      await this.mailerService.sendAppointmentConfirmation({...});
-    } catch (emailError) {
-      console.error('Failed to send appointment email:', emailError);
-    }
-    */
-
-    // === STEP 10: Build Response ===
+    // === STEP 9: Build Response ===
     return {
       appointment_id: result.appointment._id,
       clinic_id: result.appointment.clinicId,
-      service_name: result.serviceConfig.service?.serviceName || 'N/A',
+      service_names: result.serviceConfigs.map((sc: ClinicServiceConfig) => sc.service?.serviceName || 'N/A'),
       appointment_date: result.appointment.appointmentDate,
       appointment_hour: result.appointment.appointmentHour,
-      extra_hour: result.appointment.extraHour, // Trß║ú vß╗ü extraHour cho client
-      start_time: null, // Kh├┤ng c├│ shift hour
-      end_time: null, // Kh├┤ng c├│ shift hour
+      extra_hour: result.appointment.extraHour,
+      start_time: null,
+      end_time: null,
       total: result.appointment.total,
       status: result.appointment.status,
       payment_type: 'cod',
       patient_note: result.appointment.patientNote,
-      is_out_of_hours: true, // Flag ─æß╗â frontend biß║┐t ─æ├óy l├á out-of-hours
+      is_out_of_hours: true,
     };
   }
 
