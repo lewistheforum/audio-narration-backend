@@ -28,7 +28,6 @@ import {
   QueryAppointmentDto,
   AppointmentResponseDto,
   PaginatedAppointmentResponseDto,
-  CreateAppointmentDto,
   StaffCreateAppointmentDto,
   CancelAppointmentDto,
   StaffCancelAppointmentDto,
@@ -335,10 +334,20 @@ export class AppointmentsService {
 
     // Convert date strings to Date objects
     const appointmentDate = new Date(createDto.appointmentDate);
-    const appointmentHour = new Date(createDto.appointmentHour);
+    appointmentDate.setHours(0, 0, 0, 0);
     const extraHour = createDto.extraHour
       ? new Date(createDto.extraHour)
       : null;
+
+    if (!createDto.clinicShiftHourId) {
+      throw new BadRequestException('Clinic shift hour ID is required');
+    }
+
+    const appointmentHour = await this.getAppointmentHourFromShift(
+      clinicId,
+      createDto.clinicShiftHourId,
+      appointmentDate,
+    );
 
     // Validate slot capacity for shift-hour bookings.
     // A slot is full only when appointment count reaches clinic_shift_hour.limit.
@@ -348,24 +357,43 @@ export class AppointmentsService {
         createDto.clinicShiftHourId,
         appointmentDate,
       );
-    } else {
-      // For non-shift-hour bookings, keep exact hour conflict check.
-      const existingAppointments = await this.appointmentRepository.find({
-        clinicId: clinicId,
-        appointmentDate: appointmentDate,
-        appointmentHour: appointmentHour,
-        deletedAt: null,
-        status: AppointmentStatus.PENDING,
-      });
+    }
 
-      if (existingAppointments.length > 0) {
-        throw new ConflictException(
-          'This time slot is already booked. Please choose another time.',
-        );
-      }
+    // Execute transaction to create appointment + package + services
+    return await this.dataSource.transaction(async (manager) => {
+        const activeStatuses = [
+          AppointmentStatus.PENDING,
+          AppointmentStatus.PENDING_DOCTOR,
+          AppointmentStatus.CONFIRMED,
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.NEED_FINAL_PAYMENT,
+        ];
 
-      // Execute transaction to create appointment + package + services
-      return await this.dataSource.transaction(async (manager) => {
+        // Prevent duplicate active bookings for same patient in same shift/date.
+        const duplicatedAppointment = await manager
+          .createQueryBuilder(Appointment, 'appointment')
+          .where('appointment.patient_id = :patientId', {
+            patientId: createDto.patientId,
+          })
+          .andWhere('appointment.clinic_shift_hour_id = :clinicShiftHourId', {
+            clinicShiftHourId: createDto.clinicShiftHourId,
+          })
+          .andWhere('appointment.appointment_date = :appointmentDate', {
+            appointmentDate,
+          })
+          .andWhere('appointment.deleted_at IS NULL')
+          .andWhere('appointment.status IN (:...activeStatuses)', {
+            activeStatuses,
+          })
+          .getOne();
+
+        if (duplicatedAppointment) {
+          throw new ConflictException(
+            'Patient already has an active appointment in this shift on the selected date.',
+          );
+        }
+
         // Query service prices and discounts from clinic_service_config
         const serviceIds = createDto.services.map((s) => s.clinicServiceId);
         const serviceConfigs = await manager
@@ -412,7 +440,7 @@ export class AppointmentsService {
           patientId: createDto.patientId,
           clinicId: clinicId,
           doctorId: createDto.doctorId || null,
-          clinicShiftHourId: createDto.clinicShiftHourId || null,
+          clinicShiftHourId: createDto.clinicShiftHourId,
           appointmentDate: appointmentDate,
           appointmentHour: appointmentHour,
           extraHour: extraHour,
@@ -544,70 +572,6 @@ export class AppointmentsService {
           clinicRooms,
         );
       });
-    }
-  }
-
-  /**
-   * Create a new appointment
-   *
-   * @param createDto - Appointment creation data
-   * @returns Created appointment details
-   * @throws BadRequestException if appointment time conflict exists
-   */
-  async createAppointment(
-    createDto: CreateAppointmentDto,
-  ): Promise<AppointmentResponseDto> {
-    // Convert date strings to Date objects
-    const appointmentDate = new Date(createDto.appointmentDate);
-    const appointmentHour = new Date(createDto.appointmentHour);
-    const extraHour = createDto.extraHour
-      ? new Date(createDto.extraHour)
-      : null;
-
-    // Check for time conflicts - same clinic, same date, same hour
-    const existingAppointments = await this.appointmentRepository.find({
-      clinicId: createDto.clinicId,
-      appointmentDate: appointmentDate,
-      appointmentHour: appointmentHour,
-      deletedAt: null,
-      status: AppointmentStatus.PENDING,
-    });
-
-    if (existingAppointments.length > 0) {
-      throw new ConflictException(
-        'This time slot is already booked. Please choose another time.',
-      );
-    }
-
-    // Create appointment entity
-    const appointment = this.appointmentRepository.create({
-      patientId: createDto.patientId,
-      clinicId: createDto.clinicId,
-      doctorId: createDto.doctorId || null,
-      clinicShiftHourId: createDto.clinicShiftHourId || null,
-      appointmentDate: appointmentDate,
-      appointmentHour: appointmentHour,
-      extraHour: extraHour,
-      total: createDto.total,
-      patientNote: createDto.patientNote || null,
-      status: AppointmentStatus.PENDING,
-      rejectReason: null,
-    });
-
-    // Save to database
-    const savedAppointment = await this.appointmentRepository.save(appointment);
-
-    // Fetch with relations for response
-    const appointmentWithRelations =
-      await this.appointmentRepository.findByIdWithRelations(
-        savedAppointment._id,
-      );
-
-    if (!appointmentWithRelations) {
-      throw new NotFoundException('Unable to load appointment information');
-    }
-
-    return this.transformToResponseDto(appointmentWithRelations);
   }
 
   /**
@@ -1191,6 +1155,56 @@ export class AppointmentsService {
   }
 
   /**
+   * Mark appointment as absent
+   *
+   * Changes appointment status to ABSENT when patient does not attend.
+   * Accepts both PENDING and CONFIRMED appointments.
+   *
+   * @param appointmentId - Appointment UUID
+   * @returns Updated appointment details
+   * @throws NotFoundException if appointment not found
+   * @throws BadRequestException if appointment status is not PENDING or CONFIRMED
+   */
+  async markAppointmentAbsent(
+    appointmentId: string,
+  ): Promise<AppointmentResponseDto> {
+    // Find appointment with relations
+    const appointment =
+      await this.appointmentRepository.findByIdWithRelations(appointmentId);
+
+    if (!appointment || appointment.deletedAt) {
+      throw new NotFoundException('Appointment not found.');
+    }
+
+    // Validate current status - only PENDING or CONFIRMED appointments can be marked absent
+    if (
+      appointment.status !== AppointmentStatus.PENDING &&
+      appointment.status !== AppointmentStatus.CONFIRMED
+    ) {
+      throw new BadRequestException(
+        `Cannot mark appointment as absent with status "${appointment.status}". Only pending (PENDING) or confirmed (CONFIRMED) appointments can be marked absent.`,
+      );
+    }
+
+    // Update status to ABSENT
+    appointment.status = AppointmentStatus.ABSENT;
+
+    // Save changes
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
+
+    // Load services and clinic rooms
+    const { services, clinicRooms } =
+      await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(
+      updatedAppointment,
+      services,
+      clinicRooms,
+    );
+  }
+
+  /**
    * Accept extra-hour appointment (Doctor only)
    *
    * Allows doctor to accept an extra-hour appointment.
@@ -1550,6 +1564,39 @@ export class AppointmentsService {
         'Clinic shift hour is full. Please choose another slot.',
       );
     }
+  }
+
+  /**
+   * Resolve appointmentHour from clinic_shift_hour.start_hour and appointmentDate.
+   * This ensures staff create flow does not trust client-provided appointmentHour.
+   */
+  private async getAppointmentHourFromShift(
+    clinicId: string,
+    clinicShiftHourId: string,
+    appointmentDate: Date,
+  ): Promise<Date> {
+    const shiftHour = await this.dataSource
+      .createQueryBuilder()
+      .select('csh.start_hour', 'startHour')
+      .from('clinic_shift_hour', 'csh')
+      .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+      .where('csh._id = :clinicShiftHourId', { clinicShiftHourId })
+      .andWhere('cs.clinic_id = :clinicId', { clinicId })
+      .andWhere('csh.deleted_at IS NULL')
+      .andWhere('cs.deleted_at IS NULL')
+      .getRawOne();
+
+    if (!shiftHour?.startHour) {
+      throw new NotFoundException(
+        'Clinic shift hour not found for this clinic',
+      );
+    }
+
+    const [h, m] = shiftHour.startHour.split(':');
+    const resolvedAppointmentHour = new Date(appointmentDate);
+    resolvedAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
+
+    return resolvedAppointmentHour;
   }
 
   /**
@@ -2240,32 +2287,17 @@ export class AppointmentsService {
       );
     }
 
-    // Get appointment package
-    const appointmentPackage = await this.dataSource
-      .getRepository(AppointmentPackage)
-      .findOne({
-        where: {
-          appointmentId: appointment._id,
-        },
-      });
-
-    if (!appointmentPackage) {
-      return {
-        pendingServices: [],
-        inProgressServices: [],
-      };
-    }
-
-    // Get all service appointments with ERM data
+    // Get all service appointments from all packages of this appointment.
+    // An appointment can have multiple packages (initial + additional services).
     const serviceAppointments = await this.dataSource
       .getRepository(ServiceAppointment)
       .createQueryBuilder('sa')
+      .innerJoin('sa.appointmentPackage', 'pkg')
       .leftJoinAndSelect('sa.clinicService', 'clinicServiceConfig')
       .leftJoinAndSelect('clinicServiceConfig.service', 'clinicService')
       .leftJoinAndSelect('sa.erm', 'erm')
-      .where('sa.appointment_package_id = :packageId', {
-        packageId: appointmentPackage._id,
-      })
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('pkg.deleted_at IS NULL')
       .andWhere('sa.deleted_at IS NULL')
       .getMany();
 
