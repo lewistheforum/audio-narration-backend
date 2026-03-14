@@ -11,6 +11,7 @@ import {
   GetAllPatientsResponseDto,
 } from './dto';
 import { AccountRepository, GeneralAccountRepository } from '../repositories';
+import { ZaloWebhookService } from '../zalo-webhook.service';
 import { AccountRole, AccountStatus } from '../enums';
 import { MailerService } from '../../mailer/mailer.service';
 import { MESSAGES } from 'src/common/message';
@@ -37,6 +38,7 @@ export class StaffPatientsService {
     private readonly accountRepository: AccountRepository,
     private readonly generalAccountRepository: GeneralAccountRepository,
     private readonly mailerService: MailerService,
+    private readonly zaloWebhookService: ZaloWebhookService,
   ) {}
 
   /**
@@ -135,6 +137,9 @@ export class StaffPatientsService {
       });
 
       const savedAccount = await queryRunner.manager.save(account);
+
+      // Call Zalo webhook to send friend request
+      await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Staff Create Patient (With Email)');
 
       // Create GeneralAccount profile with minimal data
       const generalAccount = this.generalAccountRepository.createGeneralAccount(
@@ -482,6 +487,9 @@ export class StaffPatientsService {
       });
 
       const savedAccount = await queryRunner.manager.save(account);
+
+      // Call Zalo webhook to send friend request
+      await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Staff Create Patient (No Email)');
 
       // Create GeneralAccount profile with DOB
       const generalAccount = this.generalAccountRepository.createGeneralAccount(

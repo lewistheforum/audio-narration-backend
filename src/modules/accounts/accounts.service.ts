@@ -77,6 +77,7 @@ import { UsernameEmailListDto } from './dto/username-email-list.dto';
 import { GetEmployeesByClinicDto } from './dto/get-employees-by-clinic.dto';
 
 import { generateVerificationCode } from 'src/common/utils/util';
+import { ZaloWebhookService } from './zalo-webhook.service';
 import { MailerService } from '../mailer/mailer.service';
 import {
   ClinicSubscriptionRepository,
@@ -165,7 +166,8 @@ export class AccountsService {
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
-  ) {}
+    private readonly zaloWebhookService: ZaloWebhookService,
+  ) { }
 
 
 
@@ -571,6 +573,9 @@ export class AccountsService {
 
     const savedAccount = await this.accountRepository.saveAccount(account);
 
+    // Call Zalo webhook to send friend request
+    await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Patient Registration');
+
     // Step 4: Create and save GeneralAccount entity with the Account ID
     let generalAccount: GeneralAccount | null = null;
     if (
@@ -666,6 +671,9 @@ export class AccountsService {
 
     const savedAccount = await this.accountRepository.saveAccount(account);
 
+    // Call Zalo webhook to send friend request
+    await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'OAuth Registration');
+
     // Step 4: Create GeneralAccount with fullName and profilePicture if provided
     let generalAccount: GeneralAccount | null = null;
     if (dto.fullName || dto.profilePicture) {
@@ -745,6 +753,7 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
 
     let emailChanged = false;
+    const oldPhone = account.phone;
 
     // Validate email change permission - only PATIENT can change their own email
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
@@ -883,8 +892,15 @@ export class AccountsService {
     await this.updateAddressAndGoogleIframe(id, updateAccountDto);
 
     // Retrieve updated information for response
+    const updatedUser = await this.getAccountInformationByRole(id);
+
+    // If phone number changed, call Zalo webhook
+    if (updateAccountDto.phone && updateAccountDto.phone !== oldPhone) {
+      await this.zaloWebhookService.sendFriendRequest(updateAccountDto.phone, 'Profile Update (Phone Change)');
+    }
+
     return {
-      user: await this.getAccountInformationByRole(id),
+      user: updatedUser,
       emailChanged,
     };
   }
@@ -2729,6 +2745,9 @@ export class AccountsService {
         await queryRunner.manager.save(generalAccount);
 
       await queryRunner.commitTransaction();
+
+      // Call Zalo webhook to send friend request
+      await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Patient Registration (Manual)');
 
       // Generate new 6-digit code
       const code = generateVerificationCode();
