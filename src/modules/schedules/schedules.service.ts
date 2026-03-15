@@ -41,7 +41,7 @@ export class SchedulesService {
     @InjectRepository(DoctorInformation)
     private readonly doctorInfoRepository: Repository<DoctorInformation>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   // ... (rest of methods)
 
@@ -561,9 +561,9 @@ export class SchedulesService {
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
-                id: schedule.rooms[0]._id,
-                name: schedule.rooms[0].roomName,
-              }
+              id: schedule.rooms[0]._id,
+              name: schedule.rooms[0].roomName,
+            }
             : null,
       };
     });
@@ -1416,9 +1416,9 @@ export class SchedulesService {
           shiftEndTime: '00:00:00', // Will be calculated from slots
           room: scheduleRoom
             ? {
-                roomId: scheduleRoom.room_id,
-                roomName: scheduleRoom.room_name,
-              }
+              roomId: scheduleRoom.room_id,
+              roomName: scheduleRoom.room_name,
+            }
             : null,
           availableSlots: [],
           bookedSlots: [],

@@ -29,7 +29,7 @@ export class QueryDoctorsDto {
 
   @ApiProperty({
     description: 'Search by doctor full name',
-    example: 'Nguyễn Văn',
+    example: 'John',
     required: false,
   })
   @IsOptional()
@@ -38,7 +38,7 @@ export class QueryDoctorsDto {
 
   @ApiProperty({
     description: 'Filter by specialization',
-    example: 'Bác sĩ Xương Khớp',
+    example: 'Orthopedic Surgeon',
     required: false,
   })
   @IsOptional()
@@ -67,13 +67,13 @@ export class DoctorResponseDto {
 
   @ApiProperty({
     description: 'Doctor full name',
-    example: 'BS. Nguyễn Văn A',
+    example: 'Dr. John Smith',
   })
   full_name: string;
 
   @ApiProperty({
     description: 'Doctor specialization',
-    example: 'Bác sĩ Xương Khớp',
+    example: 'Orthopedic Surgeon',
   })
   specialization: string;
 

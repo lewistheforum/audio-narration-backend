@@ -24,6 +24,7 @@ import {
   ApiNotFoundResponse,
   ApiForbiddenResponse,
   ApiProduces,
+  ApiExtraModels,
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { getDateString } from 'src/common/utils/date.util';
@@ -32,7 +33,6 @@ import { BookingSessionService } from './booking-session.service';
 import {
   QueryAppointmentDto,
   PaginatedAppointmentResponseDto,
-  CreateAppointmentDto,
   StaffCreateAppointmentDto,
   StaffCancelAppointmentDto,
   PatientCancelAppointmentDto,
@@ -55,6 +55,14 @@ import {
   CreateBookingSessionDto,
   UpdateBookingSessionDto,
   CreateAppointmentFromSessionDto,
+  ServiceInitialDataDto,
+  DoctorInitialDataDto,
+  DateInitialDataDto,
+  OutOfHoursInitialDataDto,
+  UpdateSessionStep2Dto,
+  UpdateSessionStep3Dto,
+  UpdateSessionStep4Dto,
+  UpdateSessionStep5Dto,
   WorkHistoryQueryDto,
   DoctorPatientHistoryQueryDto,
   DoctorPatientHistoryResponseDto,
@@ -84,9 +92,9 @@ import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
  * - PATCH /appointments/staff/:id/reschedule - Staff reschedule appointment (Staff only)
  * - PATCH /appointments/staff/:id/assign-to-doctor - Assign appointment to doctor (PENDING → PENDING_DOCTOR) (Staff only)
  * - PATCH /appointments/staff/:id/check-in - Check in patient (Staff only)
+ * - PATCH /appointments/staff/:id/mark-absent - Mark patient absent (Staff only)
  * - GET /appointments/staff/:id/packages - Get payment packages (Staff only)
  * - POST /appointments/staff/:id/packages/:packageId/confirm-cash-payment - Confirm cash payment (Staff only)
- * - POST /appointments - Create new appointment (Patient only)
  * - PATCH /appointments/patient/:id/cancel - Patient cancel their own appointment (Patient only)
  * - PATCH /appointments/:id/accept - Accept appointment (Doctor only)
  * - PATCH /appointments/:id/decline - Decline appointment (Doctor only)
@@ -110,13 +118,26 @@ import {
 } from '../prescriptions/dto';
 
 @ApiTags('Appointments')
+@ApiExtraModels(
+  ServiceInitialDataDto,
+  DoctorInitialDataDto,
+  DateInitialDataDto,
+  OutOfHoursInitialDataDto,
+  UpdateSessionStep2Dto,
+  UpdateSessionStep3Dto,
+  UpdateSessionStep4Dto,
+  UpdateSessionStep5Dto,
+  CreateBookingSessionDto,
+  UpdateBookingSessionDto,
+  CreateAppointmentFromSessionDto,
+)
 @Controller('appointments')
 export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for staff's clinic
@@ -470,7 +491,7 @@ export class AppointmentsController {
     required: false,
     type: String,
     description: 'Search by patient name, phone, or email',
-    example: 'Nguyễn Văn A',
+    example: 'John Doe',
   })
   @ApiQuery({
     name: 'sort_by',
@@ -575,13 +596,13 @@ export class AppointmentsController {
       example: {
         patient: {
           patient_id: '123e4567-e89b-12d3-a456-426614174000',
-          full_name: 'Nguyễn Văn A',
+          full_name: 'John Doe',
           phone: '0901234567',
           email: 'patient@example.com',
           gender: 'male',
           date_of_birth: '1990-05-15',
           age: 34,
-          address: '123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM',
+          address: '123 Nguyen Hue, Ben Nghe Ward, District 1, Ho Chi Minh City',
         },
         statistics: {
           first_visit: '2023-06-15',
@@ -601,7 +622,7 @@ export class AppointmentsController {
               status: 'COMPLETED',
               services: [
                 {
-                  service_name: 'Khám tổng quát',
+                  service_name: 'General Consultation',
                   service_type: 'general',
                 },
               ],
@@ -893,7 +914,7 @@ export class AppointmentsController {
           items: {
             type: 'object',
             properties: {
-              serviceName: { type: 'string', example: 'Khám tư vấn' },
+              serviceName: { type: 'string', example: 'Consultation' },
               ermId: { type: 'string', example: 'erm-uuid' },
               status: { type: 'string', example: 'COMPLETED' },
             },
@@ -1176,51 +1197,6 @@ export class AppointmentsController {
   }
 
   /**
-   * Create a new appointment
-   *
-   * Allows patients to create appointments with clinics
-   *
-   * @param createDto - Appointment creation data
-   * @returns Created appointment details
-   */
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Create new appointment',
-    description:
-      'Create a new appointment with a clinic. Patient can optionally select a specific doctor.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Appointment created successfully',
-    type: AppointmentResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad Request - Invalid input data',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - User is not a patient',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'Conflict - Time slot already booked',
-  })
-  async createAppointment(
-    @Body() createDto: CreateAppointmentDto,
-  ): Promise<AppointmentResponseDto> {
-    return this.appointmentsService.createAppointment(createDto);
-  }
-
-  /**
    * Staff cancel an appointment
    *
    * Allows staff to cancel appointments on behalf of patients
@@ -1497,6 +1473,58 @@ export class AppointmentsController {
     @Param('id') id: string,
   ): Promise<AppointmentResponseDto> {
     return this.appointmentsService.checkInPatient(id);
+  }
+
+  /**
+   * Mark appointment as absent
+   *
+   * Allows clinic staff to mark a patient as absent when they did not attend
+   * Changes appointment status from PENDING or CONFIRMED to ABSENT
+   *
+   * @param id - Appointment UUID
+   * @returns Updated appointment details
+   */
+  @Patch('staff/:id/mark-absent')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark patient absent for appointment',
+    description:
+      'Mark a patient as absent. Changes status from PENDING or CONFIRMED to ABSENT.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment marked absent successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Appointment status is not PENDING or CONFIRMED',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a clinic staff member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async markAppointmentAbsent(
+    @Param('id') id: string,
+  ): Promise<AppointmentResponseDto> {
+    return this.appointmentsService.markAppointmentAbsent(id);
   }
 
   /**
@@ -1805,16 +1833,16 @@ export class AppointmentsController {
           {
             clinic_service_config_id: 'uuid',
             clinic_id: 'uuid',
-            clinic_name: 'Phòng khám ABC',
-            clinic_address: '123 Đường X, Q.1, TP.HCM',
+            clinic_name: 'ABC Clinic',
+            clinic_address: '123 Main Street, District 1, Ho Chi Minh City',
             service_id: 'uuid',
-            service_name: 'Khám Xương Khớp',
+            service_name: 'Orthopedic Consultation',
             category_id: 'uuid',
-            category_name: 'Khám Chuyên Khoa',
+            category_name: 'Specialist Consultation',
             price: 300000,
             discount: 10,
             final_price: 270000,
-            description: 'Khám và điều trị bệnh xương khớp',
+            description: 'Diagnosis and treatment of orthopedic conditions',
           },
         ],
         meta: {
@@ -1875,12 +1903,12 @@ export class AppointmentsController {
   /**
    * Get clinic schedules (VERSION 4.5 - Option 1 & Option 3)
    *
-   * Gộp 2 API cũ (working-days + slots) thành 1 API duy nhất.
+   * Merged 2 legacy APIs (working-days + slots) into single API.
    * Returns nested structure: Dates -> Shifts -> Slots with Doctor info.
    *
-   * VERSION 4.5: Thêm query parameter working_date
-   * - Nếu có working_date: Trả về lịch của ngày cụ thể (Option 3)
-   * - Nếu không có working_date: Trả về lịch 60 ngày tới (Option 1)
+   * VERSION 4.5: Added query parameter working_date
+   * - If working_date provided: Returns schedule for specific date (Option 3)
+   * - If no working_date: Returns 60-day schedule (Option 1)
    *
    * @param clinicId - Clinic UUID
    * @param workingDate - Optional date filter (YYYY-MM-DD)
@@ -1912,13 +1940,13 @@ export class AppointmentsController {
                   {
                     clinic_shift_hour_id: 'uuid',
                     doctor_id: 'uuid',
-                    doctor_name: 'BS. Nguyễn Văn A',
-                    doctor_specialty: 'Bác sĩ Xương Khớp',
+                    doctor_name: 'Dr. John Smith',
+                    doctor_specialty: 'Orthopedic Surgeon',
                     start_time: '08:00:00',
                     end_time: '08:30:00',
                     limit: 5,
                     available_slots: 3,
-                    clinic_room: 'Phòng 101',
+                    clinic_room: 'Room 101',
                   },
                 ],
               },
@@ -1938,13 +1966,13 @@ export class AppointmentsController {
                   {
                     clinic_shift_hour_id: 'uuid2',
                     doctor_id: 'uuid2',
-                    doctor_name: 'BS. Trần Thị B',
-                    doctor_specialty: 'Bác sĩ Tim Mạch',
+                    doctor_name: 'Dr. Jane Doe',
+                    doctor_specialty: 'Cardiologist',
                     start_time: '09:00:00',
                     end_time: '09:30:00',
                     limit: 4,
                     available_slots: 4,
-                    clinic_room: 'Phòng 102',
+                    clinic_room: 'Room 102',
                   },
                 ],
               },
@@ -2007,12 +2035,12 @@ export class AppointmentsController {
             _id: '550e8400-e29b-41d4-a716-446655440000',
             clinic: {
               _id: '550e8400-e29b-41d4-a716-446655440001',
-              name: 'Phòng khám ABC',
-              address: '123 Đường ABC, Quận 1, TP.HCM',
+              name: 'ABC Clinic',
+              address: '123 Main Street, District 1, Ho Chi Minh City',
             },
             doctor: {
               _id: '550e8400-e29b-41d4-a716-446655440002',
-              name: 'BS. Nguyễn Văn A',
+              name: 'Dr. John Smith',
               profilePicture: 'https://example.com/doctor.jpg',
             },
             appointment_date: '2026-03-15',
@@ -2022,15 +2050,17 @@ export class AppointmentsController {
             services: [
               {
                 service_id: '550e8400-e29b-41d4-a716-446655440003',
-                service_name: 'Khám Xương Khớp',
-                price: 270000,
+                service_name: 'Orthopedic Consultation',
+                price: 300000,
+                discount: 10,
+                final_price: 270000,
               },
             ],
             feedbacks: [
               {
                 id: '550e8400-e29b-41d4-a716-446655440004',
                 rating: 5,
-                description: 'Bác sĩ rất tận tâm',
+                description: 'Excellent doctor, very attentive',
                 type: 'DOCTOR',
                 createdAt: '2026-03-16T10:00:00.000Z',
               },
@@ -2387,23 +2417,23 @@ export class AppointmentsController {
         data: [
           {
             admin_id: 'admin-uuid-1',
-            system_name: 'Phòng khám Đa khoa Hoàn Mỹ',
+            system_name: 'Hoan My Multi-Choice Clinic System',
             logo: 'https://example.com/logo.png',
-            description: 'Hệ thống phòng khám đa khoa uy tín',
+            description: 'Trusted multi-specialty clinic network',
             branches: [
               {
-                clinic_id: 'branch-uuid-1', // ⚠️ Use this ID for booking
-                branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',
-                address: '123 Đường X, Quận 1, TP.HCM',
-                district: 'Quận 1',
+                clinic_id: 'branch-uuid-1',
+                branch_name: 'Hoan My Multi-Choice Clinic - District 1 Branch',
+                address: '123 Main Street, District 1, Ho Chi Minh City',
+                district: 'District 1',
                 available_slots: 25,
                 available_doctors: 5,
               },
               {
                 clinic_id: 'branch-uuid-2',
-                branch_name: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 2',
-                address: '456 Đường Y, Quận 2, TP.HCM',
-                district: 'Quận 2',
+                branch_name: 'Hoan My Multi-Choice Clinic - District 2 Branch',
+                address: '456 Oak Avenue, District 2, Ho Chi Minh City',
+                district: 'District 2',
                 available_slots: 15,
                 available_doctors: 3,
               },
@@ -2411,15 +2441,15 @@ export class AppointmentsController {
           },
           {
             admin_id: 'admin-uuid-2',
-            system_name: 'Phòng khám Đa khoa Medlatec',
+            system_name: 'Medlatec Multi-Choice Clinic System',
             logo: null,
             description: null,
             branches: [
               {
                 clinic_id: 'branch-uuid-3',
-                branch_name: 'Phòng khám Đa khoa Medlatec - Chi nhánh Quận 3',
-                address: '789 Đường Z, Quận 3, TP.HCM',
-                district: 'Quận 3',
+                branch_name: 'Medlatec Multi-Choice Clinic - District 3 Branch',
+                address: '789 Pine Road, District 3, Ho Chi Minh City',
+                district: 'District 3',
                 available_slots: 10,
                 available_doctors: 2,
               },
@@ -2522,14 +2552,14 @@ export class AppointmentsController {
     description: 'Booking session created successfully',
     schema: {
       example: {
-        message: 'Phiên đặt lịch được tạo thành công',
+        message: 'Booking session created successfully',
         data: {
           session_id: '123e4567-e89b-12d3-a456-426614174000',
           booking_option: 'service',
           current_step: 1,
           expires_at: '2026-02-25T11:30:00.000Z',
           booking_data: {
-            clinic_service_config_id: '123e4567-e89b-12d3-a456-426614174001',
+            service_ids: ['123e4567-e89b-12d3-a456-426614174001', '123e4567-e89b-12d3-a456-426614174002'],
             clinic_id: '123e4567-e89b-12d3-a456-426614174002',
           },
         },
@@ -2559,7 +2589,7 @@ export class AppointmentsController {
       createDto,
     );
     return {
-      message: 'Phiên đặt lịch được tạo thành công',
+      message: 'Booking session created successfully',
       data: result,
     };
   }
@@ -2592,12 +2622,12 @@ export class AppointmentsController {
     description: 'Booking session updated successfully',
     schema: {
       example: {
-        message: 'Cập nhật phiên đặt lịch thành công',
+        message: 'Booking session updated successfully',
         data: {
           session_id: '123e4567-e89b-12d3-a456-426614174000',
           current_step: 2,
           booking_data: {
-            clinic_service_config_id: '123e4567-e89b-12d3-a456-426614174001',
+            service_ids: ['123e4567-e89b-12d3-a456-426614174001'],
             clinic_id: '123e4567-e89b-12d3-a456-426614174002',
             appointment_date: '2026-02-25',
           },
@@ -2639,7 +2669,7 @@ export class AppointmentsController {
       updateDto,
     );
     return {
-      message: 'Cập nhật phiên đặt lịch thành công',
+      message: 'Booking session updated successfully',
       data: result,
     };
   }
@@ -2682,16 +2712,23 @@ export class AppointmentsController {
         {
           // COD Response
           example: {
-            message: 'Đặt lịch hẹn thành công',
+            message: 'Appointment booked successfully',
             data: {
               appointment_id: '123e4567-e89b-12d3-a456-426614174000',
               clinic_id: '123e4567-e89b-12d3-a456-426614174002',
-              service_name: 'Khám Xương Khớp',
+              services: [
+                {
+                  service_name: 'Orthopedic Consultation',
+                  price: 200000,
+                  discount: 10,
+                  final_price: 180000
+                }
+              ],
               appointment_date: '2026-02-25',
               appointment_hour: '2026-02-25T08:00:00.000Z',
               start_time: '08:00:00',
               end_time: '08:30:00',
-              total: 270000,
+              total: 180000,
               status: 'PENDING',
               payment_type: 'cod',
             },
@@ -2700,7 +2737,7 @@ export class AppointmentsController {
         {
           // ONLINE Response (Placeholder)
           example: {
-            message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
+            message: 'Please complete the payment to finish booking',
             data: {
               payment_url:
                 'https://sandbox.payment-gateway.com/pay?order_id=xyz',
@@ -2749,9 +2786,9 @@ export class AppointmentsController {
     return result.message
       ? result
       : {
-          message: 'Đặt lịch hẹn thành công',
-          data: result,
-        };
+        message: 'Đặt lịch hẹn thành công',
+        data: result,
+      };
   }
 
   @Post('patients/appointments/:sessionId/payment-qr')
@@ -2836,13 +2873,13 @@ export class AppointmentsController {
         data: [
           {
             doctor_id: 'uuid',
-            full_name: 'BS. Nguyễn Văn A',
-            specialization: 'Bác sĩ Xương Khớp',
+            full_name: 'Dr. John Smith',
+            specialization: 'Orthopedic Surgeon',
             clinics: [
               {
                 clinic_id: 'uuid',
-                clinic_name: 'Phòng khám ABC',
-                clinic_address: '123 Đường X, Q.1, TP.HCM',
+                clinic_name: 'ABC Clinic',
+                clinic_address: '123 Main Street, District 1, Ho Chi Minh City',
               },
             ],
           },
@@ -2905,9 +2942,9 @@ export class AppointmentsController {
   /**
    * Get doctor schedules (VERSION 4.4 - Option 2: Doctor-first - Step 2)
    *
-   * TÁCH RỜI LỊCH KHÁM VÀ DỊCH VỤ
-   * API này CHỈ trả về lịch khám (nested structure).
-   * KHÔNG trả về services - services được lấy từ endpoint riêng.
+   * SEPARATE SCHEDULES AND SERVICES
+   * This API ONLY returns schedules (nested structure).
+   * Does NOT return services - services are fetched from separate endpoint.
    *
    * @param doctorId - Doctor UUID
    * @param clinicId - Clinic UUID (REQUIRED)
@@ -2942,7 +2979,7 @@ export class AppointmentsController {
                     end_time: '08:30:00',
                     limit: 5,
                     available_slots: 3,
-                    clinic_room: 'Phòng 101',
+                    clinic_room: 'Room 101',
                   },
                 ],
               },
@@ -3086,7 +3123,7 @@ export class AppointmentsController {
       properties: {
         message: {
           type: 'string',
-          example: 'Xác nhận thanh toán tiền mặt thành công',
+          example: 'Cash payment confirmed successfully',
         },
         appointmentId: { type: 'string' },
         package: {

@@ -61,4 +61,4 @@ import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
   ],
   exports: [TypeOrmModule, AppointmentsService, BookingSessionService],
 })
-export class AppointmentsModule {}
+export class AppointmentsModule { }

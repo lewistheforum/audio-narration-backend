@@ -11,20 +11,20 @@ export class ClinicBranchDto {
   clinic_id: string;
 
   @ApiProperty({
-    description: 'Branch name with parent clinic name (e.g., "Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1")',
-    example: 'Phòng khám Đa khoa Hoàn Mỹ - Chi nhánh Quận 1',
+    description: 'Branch name with parent clinic name (e.g., "Hoan My Multi-Choice Clinic - District 1 Branch")',
+    example: 'Hoan My Multi-Choice Clinic - District 1 Branch',
   })
   branch_name: string;
 
   @ApiProperty({
     description: 'Branch address',
-    example: '123 Đường X, Quận 1, TP.HCM',
+    example: '123 Main Street, District 1, Ho Chi Minh City',
   })
   address: string;
 
   @ApiProperty({
     description: 'District of the branch',
-    example: 'Quận 1',
+    example: 'District 1',
     nullable: true,
   })
   district: string | null;
@@ -54,7 +54,7 @@ export class ClinicSystemDto {
 
   @ApiProperty({
     description: 'Name of the clinic system',
-    example: 'Phòng khám Đa khoa Hoàn Mỹ',
+    example: 'Hoan My Multi-Choice Clinic System',
   })
   system_name: string;
 
@@ -67,7 +67,7 @@ export class ClinicSystemDto {
 
   @ApiProperty({
     description: 'Description of the clinic system',
-    example: 'Hệ thống phòng khám đa khoa uy tín với nhiều chi nhánh',
+    example: 'Trusted multi-specialty clinic network with multiple branches',
     nullable: true,
   })
   description: string | null;

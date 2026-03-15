@@ -12,7 +12,7 @@ export class AvailableDoctorDto {
 
   @ApiProperty({
     description: 'Doctor full name',
-    example: 'Dr. Nguyễn Văn A',
+    example: 'Dr. John Smith',
   })
   doctor_name: string;
 
@@ -25,14 +25,14 @@ export class AvailableDoctorDto {
 
   @ApiProperty({
     description: 'Doctor academic degree',
-    example: 'Bác sĩ',
+    example: 'Doctor',
     nullable: true,
   })
   academic_degree?: string | null;
 
   @ApiProperty({
     description: 'Doctor position/specialty',
-    example: 'Chuyên khoa nội',
+    example: 'Internal Medicine Specialist',
     nullable: true,
   })
   position?: string | null;

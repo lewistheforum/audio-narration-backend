@@ -55,7 +55,7 @@ export class DoctorViewPatientDetailDto {
 
   @ApiProperty({
     description: 'Full address string',
-    example: '123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM',
+    example: '123 Nguyen Hue, Ben Nghe Ward, District 1, Ho Chi Minh City',
     nullable: true,
   })
   address: string | null;
@@ -107,7 +107,7 @@ export class PatientVisitStatisticsDto {
 export class AppointmentServiceSummaryDto {
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tổng quát',
+    example: 'General Consultation',
   })
   service_name: string;
 

@@ -74,19 +74,19 @@ export class ClinicItemDto {
 
   @ApiProperty({
     description: 'Clinic name',
-    example: 'Phòng khám Đa khoa Bonix',
+    example: 'Bonix Multi-Choice Clinic',
   })
   clinic_name: string;
 
   @ApiProperty({
     description: 'Clinic address',
-    example: '123 Đường X, Quận 1, TP.HCM',
+    example: '123 Main Street, District 1, Ho Chi Minh City',
   })
   clinic_address: string;
 
   @ApiProperty({
     description: 'District',
-    example: 'Quận 1',
+    example: 'District 1',
     nullable: true,
   })
   district: string | null;

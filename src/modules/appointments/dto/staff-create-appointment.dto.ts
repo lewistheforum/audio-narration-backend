@@ -58,13 +58,13 @@ export class StaffCreateAppointmentDto {
   doctorId?: string;
 
   @ApiProperty({
-    description: 'Clinic shift hour ID (optional)',
+    description: 'Clinic shift hour ID (required)',
     example: '123e4567-e89b-12d3-a456-426614174003',
-    required: false,
+    required: true,
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'Clinic shift hour ID is required' })
   @IsUUID('4', { message: 'Invalid clinic shift hour ID format' })
-  clinicShiftHourId?: string;
+  clinicShiftHourId: string;
 
   @ApiProperty({
     description: 'Appointment date (YYYY-MM-DD)',
@@ -75,12 +75,13 @@ export class StaffCreateAppointmentDto {
   appointmentDate: string;
 
   @ApiProperty({
-    description: 'Appointment hour (ISO 8601 format)',
+    description: 'Appointment hour (optional, server will derive from clinic shift hour)',
     example: '2026-01-26T09:00:00.000Z',
+    required: false,
   })
-  @IsNotEmpty({ message: 'Appointment hour is required' })
+  @IsOptional()
   @IsDateString({}, { message: 'Invalid datetime format' })
-  appointmentHour: string;
+  appointmentHour?: string;
 
   @ApiProperty({
     description: 'Extra hour if applicable (ISO 8601 format)',

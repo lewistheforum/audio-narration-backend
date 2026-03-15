@@ -8,7 +8,12 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
-import { AccountRole, AccountStatus, VerificationType, ClinicRole } from './enums';
+import {
+  AccountRole,
+  AccountStatus,
+  VerificationType,
+  ClinicRole,
+} from './enums';
 import { generateRSAKeyPair } from 'src/common/utils/util';
 import * as crypto from 'crypto';
 import {
@@ -167,7 +172,7 @@ export class AccountsService {
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
     private readonly zaloWebhookService: ZaloWebhookService,
-  ) { }
+  ) {}
 
 
 

@@ -40,6 +40,12 @@ export class AddressDto {
  * Contains service information for an appointment
  */
 export class ServiceDetailDto {
+  @ApiProperty({
+    description: 'Service appointment ID',
+    required: false,
+  })
+  serviceAppointmentId?: string;
+
   @ApiProperty({ description: 'Service ID' })
   id: string;
 

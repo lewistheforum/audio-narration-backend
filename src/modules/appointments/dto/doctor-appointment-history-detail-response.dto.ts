@@ -118,13 +118,13 @@ export class AppointmentClinicInfoDto {
 
   @ApiProperty({
     description: 'Clinic name',
-    example: 'Phòng khám Cơ Xương Khớp ABC',
+    example: 'ABC Orthopedic Clinic',
   })
   clinic_name: string;
 
   @ApiProperty({
     description: 'Clinic address',
-    example: '123 Nguyễn Huệ, Q1, TP.HCM',
+    example: '123 Nguyen Hue, District 1, Ho Chi Minh City',
   })
   address: string;
 
@@ -183,7 +183,7 @@ export class AppointmentShiftHourInfoDto {
 
   @ApiProperty({
     description: 'Room name',
-    example: 'Phòng khám số 1',
+    example: 'Consultation Room 1',
     nullable: true,
   })
   room_name: string | null;
@@ -213,7 +213,7 @@ export class AppointmentServiceDetailDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tư vấn cơ xương khớp',
+    example: 'Orthopedic Consultation',
   })
   service_name: string;
 
@@ -269,7 +269,7 @@ export class PackageServiceDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tư vấn cơ xương khớp',
+    example: 'Orthopedic Consultation',
   })
   serviceName: string;
 
@@ -361,7 +361,7 @@ export class AppointmentERMSummaryDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tư vấn cơ xương khớp',
+    example: 'Orthopedic Consultation',
   })
   service_name: string;
 
