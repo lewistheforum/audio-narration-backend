@@ -3408,38 +3408,38 @@ export class AppointmentsService {
     sessionId: string,
     session: any,
   ): Promise<any> {
-    // 1. Calculate Price from Service Config
-    const serviceConfig = await this.dataSource
+    // 1. Calculate Price from ALL Service Configs (V5.0 - Multi-Service Support)
+    const serviceIds: string[] = session.serviceIds || [];
+    const uniqueServiceIds = Array.from(new Set(serviceIds));
+
+    if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+      throw new BadRequestException('Service IDs array cannot be empty');
+    }
+
+    const serviceConfigs = await this.dataSource
       .getRepository(ClinicServiceConfig)
       .createQueryBuilder('csc')
       .leftJoinAndSelect('csc.service', 'service')
-      .where('csc._id = :configId', { configId: session.clinicServiceConfigId })
+      .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
       .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
       .andWhere('csc.is_active = true')
       .andWhere('csc.deleted_at IS NULL')
       .andWhere('service.deleted_at IS NULL')
-      .getOne();
-    // ========================================================================
-    // PLACEHOLDER LOGIC - TO BE REPLACED WITH REAL PAYMENT GATEWAY
-    // ========================================================================
+      .getMany();
 
-    const { v4: uuidv4 } = require('uuid');
-
-    // Generate unique payment reference ID
-    const paymentReferenceId = uuidv4();
-
-    // Calculate total amount (same logic as COD)
-    // In real implementation, this should query the actual service price
-    // For now, return a placeholder amount
-    const totalAmount = 300000; // Placeholder - will be calculated from session data
-
-    if (!serviceConfig) {
-      throw new BadRequestException('Service is not available or has been discontinued');
+    if (serviceConfigs.length !== uniqueServiceIds.length) {
+      throw new BadRequestException('One or more services are not available or have been discontinued');
     }
 
-    const basePrice = parseFloat(serviceConfig.price.toString());
-    const discount = serviceConfig.discount ? parseFloat(serviceConfig.discount.toString()) : 0;
-    const finalPrice = Math.round(basePrice - (basePrice * discount / 100));
+    // Calculate total amount (Sum of all service prices after discounts)
+    let totalAmount = 0;
+    for (const sc of serviceConfigs) {
+      const basePrice = parseFloat(sc.price.toString());
+      const discount = sc.discount ? parseFloat(sc.discount.toString()) : 0;
+      const finalPrice = basePrice - (basePrice * discount / 100);
+      totalAmount += finalPrice;
+    }
+    const finalRoundedTotal = Math.round(totalAmount);
 
     // 2. Resolve Clinic Admin ID for Seepay Config
     const managerAccount = await this.accountRepository.findAccountById(session.clinicId);
@@ -3459,13 +3459,13 @@ export class AppointmentsService {
     // 3. Generate QR via TransactionsService
     const seepayConfig = await this.transactionsService.resolveSepayConfig(clinicAdminInfoId);
     const qrCodeUrl = this.transactionsService.buildQrUrl(
-      finalPrice,
+      finalRoundedTotal,
       sessionId, // Use sessionId as the description/reference
       seepayConfig.acc,
       seepayConfig.bank,
     );
     const qrPayload = this.transactionsService.buildQrPayload(
-      finalPrice,
+      finalRoundedTotal,
       sessionId,
       seepayConfig.acc,
       seepayConfig.bank,
@@ -3474,7 +3474,7 @@ export class AppointmentsService {
     // 4. Update Session in Redis with calculated amount
     const updatedSession = {
       ...session,
-      paymentAmount: finalPrice,
+      paymentAmount: finalRoundedTotal,
       paymentProvider: 'seepay',
       paymentReferenceId: sessionId,
     };
@@ -3493,7 +3493,7 @@ export class AppointmentsService {
         qr_code_url: qrCodeUrl,
         qr_payload: qrPayload,
         session_id: sessionId,
-        amount: finalPrice,
+        amount: finalRoundedTotal,
         currency: 'VND',
         expires_at: addToVietnamTime(15, 'minute'), // 15 minutes
       },

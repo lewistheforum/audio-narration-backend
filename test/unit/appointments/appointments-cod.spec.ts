@@ -109,6 +109,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       }),
       create: jest.fn().mockImplementation((data: any) => data),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
 
     // Repository for employee_schedule
@@ -116,10 +117,11 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       findOne: jest.fn().mockResolvedValue({
         employeeId: mockDoctorId,
         clinicId: mockClinicId,
-        workDate: new Date('2026-03-15'),
+        workDate: new Date('2026-03-20'),
       }),
       create: jest.fn().mockImplementation((data: any) => data),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
 
     // Repository for appointments
@@ -133,6 +135,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         _id: 'appointment-id-1',
         ...data,
       })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
 
     // Repository for appointment_package
@@ -142,6 +145,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         _id: 'package-id-1',
         ...data,
       })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve({
         _id: 'package-id-1',
         ...data,
@@ -205,14 +209,17 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
           };
 
           if (entityName === 'ClinicServiceConfig') {
-            baseBuilder.getOne = jest.fn().mockResolvedValue({
+            const mockService = {
               _id: mockServiceConfigId,
               clinicId: mockClinicId,
               isActive: true,
               price: 300000,
               discount: 10,
-              service: { serviceName: 'Khám Xương Khớp' },
-            });
+              service: { serviceName: 'Khám Xương Khớp', isActive: true, deletedAt: null },
+              deletedAt: null,
+            };
+            baseBuilder.getOne = jest.fn().mockResolvedValue(mockService);
+            baseBuilder.getMany = jest.fn().mockResolvedValue([mockService]);
           } else {
             noEntityCallCount++;
             if (noEntityCallCount === 1) {
@@ -368,11 +375,12 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       sessionId: mockSessionId,
       patientId: mockPatientId,
       bookingOption: 'service',
+      serviceIds: [mockServiceConfigId],
       clinicServiceConfigId: mockServiceConfigId,
       clinicId: mockClinicId,
       doctorId: mockDoctorId,
       clinicShiftHourId: mockSlotId,
-      appointmentDate: '2026-03-15',
+      appointmentDate: '2026-03-20',
       paymentMethod: 'cod',
       patientNote: 'Đau mỏi vai gáy',
       currentStep: 4,
@@ -409,6 +417,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         // Setup incomplete session (step 2 - missing payment method and patient note)
         setupValidSessionMock({
           currentStep: 2,
+          serviceIds: [], // Empty or missing in step 2
           paymentMethod: undefined, // Not set yet in step 2
           patientNote: undefined, // Not set yet in step 2
         });
@@ -522,6 +531,52 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
 
         // Verify patient note is in response
         expect(result.patient_note).toBe('Đau mỏi vai gáy');
+      });
+
+      it('should calculate grand total correctly for multiple services in COD flow', async () => {
+        setupValidSessionMock({
+          serviceIds: ['service-1', 'service-2'],
+        });
+
+        // Mock query builder to handle different entities during the transaction
+        let getOneCallCount = 0;
+        mockEntityManager.createQueryBuilder.mockImplementation((entity: any) => {
+          const entityName = typeof entity === 'function' ? entity.name : '';
+          
+          if (entityName === 'ClinicServiceConfig') {
+            return {
+              ...mockQueryBuilder,
+              getMany: jest.fn().mockResolvedValue([
+                { _id: 'service-1', price: 100000, discount: 0, isActive: true, service: { serviceName: 'Service 1', isActive: true } },
+                { _id: 'service-2', price: 200000, discount: 10, isActive: true, service: { serviceName: 'Service 2', isActive: true } },
+              ]),
+            };
+          }
+          
+          // For slot (shiftHour) and duplicate check
+          return {
+            ...mockQueryBuilder,
+            getOne: jest.fn().mockImplementation(async () => {
+              getOneCallCount++;
+              if (getOneCallCount === 1) {
+                // First call: shiftHour
+                return {
+                  _id: mockSlotId,
+                  limit: 10,
+                  startHour: '08:00:00',
+                  endHour: '08:30:00',
+                };
+              }
+              // Second call: duplicate check
+              return null;
+            }),
+          };
+        });
+
+        const result = await service.createAppointmentFromSession(mockSessionId, mockPatientId);
+
+        // Total: 100,000 + 180,000 = 280,000
+        expect(result.total).toBe(280000);
       });
     });
 
@@ -650,7 +705,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
               builder.getOne = jest.fn().mockResolvedValue({
                 _id: 'existing-appointment-id',
                 patientId: mockPatientId,
-                appointmentDate: new Date('2026-03-15'),
+                appointmentDate: new Date('2026-03-20'),
                 status: 'PENDING',
               });
             }
@@ -680,11 +735,12 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         sessionId: mockSessionId,
         patientId: mockPatientId,
         bookingOption: 'service',
+        serviceIds: [mockServiceConfigId],
         clinicServiceConfigId: mockServiceConfigId,
         clinicId: mockClinicId,
         doctorId: mockDoctorId,
         clinicShiftHourId: mockSlotId,
-        appointmentDate: '2026-03-15',
+        appointmentDate: '2026-03-20',
         paymentMethod: 'cod',
         currentStep: 4,
       } as any);
@@ -697,11 +753,12 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         sessionId: 'other-session-id',
         patientId: 'other-patient-id',
         bookingOption: 'service',
+        serviceIds: [mockServiceConfigId],
         clinicServiceConfigId: mockServiceConfigId,
         clinicId: mockClinicId,
         doctorId: mockDoctorId,
         clinicShiftHourId: mockSlotId,
-        appointmentDate: '2026-03-15',
+        appointmentDate: '2026-03-20',
         paymentMethod: 'cod',
         currentStep: 4,
       } as any);

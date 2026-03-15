@@ -44,7 +44,8 @@ interface BookingSession {
   bookingOption: 'service' | 'doctor' | 'date';
   
   // Step 1 - Initial data (depends on booking_option)
-  clinicServiceConfigId?: string; // Option 1: Service-first
+  serviceIds: string[];         // Multiple service IDs support
+  clinicServiceConfigId?: string; // Option 1: Legacy (will be replaced by serviceIds)
   clinicId: string;               // All options
   doctorId?: string;              // Option 2: Doctor-first
   appointmentDate?: string;       // Option 3: Date-first (YYYY-MM-DD)
@@ -147,7 +148,7 @@ GET /schedules/clinic/:clinicId/service/:serviceId
 
 | Step | Action | Data Added | Mandatory? | Validated By Tests |
 |------|--------|------------|------------|-------------------|
-| **1** | Khởi tạo booking | `booking_option`, `clinic_id`, `service_id`/`doctor_id`/`date` | ✅ Yes | ✅ 7 tests |
+| **1** | Khởi tạo booking | `booking_option`, `clinic_id`, `service_ids`/`doctor_id`/`date` | ✅ Yes | ✅ 7 tests |
 | **2** | Chọn ngày + slot + bác sĩ/dịch vụ | `appointment_date`, `clinic_shift_hour_id`, missing fields from step 1 | ✅ Yes | ✅ 11 tests |
 | **3** | Chọn phương thức thanh toán | `payment_method` = 'cod' | ✅ Yes | ✅ 3 tests |
 | **4** | Ghi chú bệnh nhân (tùy chọn) | `patient_note` | ❌ No | ✅ 11 tests |
@@ -288,7 +289,8 @@ if (!['cod', 'online'].includes(session.paymentMethod)) {
 2. Validate Business Rules
    ├─ Date >= today AND <= today + 60 days
    ├─ Time >= now + 2 hours
-   ├─ Service active (is_active = true)
+   ├─ Services active (is_active = true)
+   ├─ Multi-service support (all selected services must be active)
    ├─ Clinic active
    └─ Doctor has schedule on that date
    
@@ -298,8 +300,8 @@ if (!['cod', 'online'].includes(session.paymentMethod)) {
    ├─ CHECK slot.limit > 0
    ├─ UPDATE slot SET limit = limit - 1       ← Atomic decrement
    ├─ INSERT INTO appointments (status='PENDING')
-   ├─ INSERT INTO appointment_package (paymentType='cod', transactionId=null)
-   ├─ INSERT INTO service_appointments
+   ├─ INSERT INTO appointment_package (paymentType='cod', transactionId=null, amount=SUM(services))
+   ├─ INSERT INTO service_appointments (Price snapshot for each service)
    └─ COMMIT
    
 4. Cleanup Redis Session
@@ -346,7 +348,7 @@ if (!['cod', 'online'].includes(session.paymentMethod)) {
 ```
 1. Patient hoàn tất Session (Step 1→4) với paymentMethod = 'online'
    ├─ Session lưu trong Redis (TTL 30 phút)
-   └─ paymentAmount đã được tính sẵn
+   └─ paymentAmount đã được tính bằng tổng tất cả dịch vụ đã chọn (V5.1)
 
 2. Lấy QR Code (GET /patients/appointments/:sessionId/payment-qr)
    ├─ Validate session ownership (patientId)
@@ -362,8 +364,9 @@ if (!['cod', 'online'].includes(session.paymentMethod)) {
    ├─ START TRANSACTION
    ├─ SELECT ... FOR UPDATE (lock slot)       ← Pessimistic Lock
    ├─ CHECK slot.limit > 0
-   ├─ Validate Service Config (is_active)
-   ├─ INSERT INTO appointments (status='CONFIRMED')
+   ├─ Validate ALL Service Configs (is_active)
+   ├─ Calculate total from all selected services
+   ├─ INSERT INTO appointments (status='CONFIRMED', total=SUM(services))
    ├─ Find TransactionType WHERE code='ONLINE' ← Map từ bảng transaction_type
    ├─ INSERT INTO transactions (type=ONLINE, status=SUCCESS)
    ├─ INSERT INTO appointment_package (transactionId=ref, paymentType=ONLINE, status=PAID)

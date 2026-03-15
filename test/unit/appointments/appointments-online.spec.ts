@@ -77,12 +77,12 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
     sessionId: mockSessionId,
     patientId: mockPatientId,
     bookingOption: 'service',
-    clinicServiceConfigId: mockServiceConfigId,
+    serviceIds: [mockServiceConfigId],
     clinicId: mockClinicId,
     doctorId: mockDoctorId,
     clinicShiftHourId: mockSlotId,
-    appointmentDate: '2026-03-15',
-    appointmentHour: '2026-03-15T08:00:00',
+    appointmentDate: '2026-03-20',
+    appointmentHour: '2026-03-20T08:00:00',
     paymentMethod: 'online',
     paymentAmount: 270000,
     patientNote: 'Đau mỏi vai gáy',
@@ -95,7 +95,7 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
   const mockSeepayPayload = {
     id: 92704,
     gateway: 'Vietcombank',
-    transactionDate: '2026-03-15 08:15:00',
+    transactionDate: '2026-03-20 08:15:00',
     accountNumber: '0123499999',
     code: null,
     content: `BONIX ${mockSessionId}`,
@@ -116,6 +116,7 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
     createQueryBuilder: jest.fn().mockReturnValue({
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(null),
       getMany: jest.fn().mockResolvedValue([]),
     }),
@@ -143,7 +144,14 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
         set: jest.fn().mockReturnThis(),
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
         leftJoinAndSelect: jest.fn().mockReturnThis(),
-        getMany: jest.fn().mockResolvedValue([]),
+        getMany: jest.fn().mockResolvedValue([{
+          _id: mockServiceConfigId,
+          price: 300000,
+          discount: 10,
+          isActive: true,
+          deletedAt: null,
+          service: { serviceName: 'Test Service', deletedAt: null }
+        }]),
         getRawMany: jest.fn().mockResolvedValue([]),
         getRawOne: jest.fn().mockResolvedValue(null),
       }),
@@ -211,6 +219,9 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
           useValue: {
             handleCallback: jest.fn(),
             createDynamicQr: jest.fn(),
+            resolveSepayConfig: jest.fn().mockResolvedValue({ seepayVa: '123', bankName: 'VCB' }),
+            buildQrUrl: jest.fn().mockReturnValue('https://qr.sepay.vn/img?acc=123&bank=VCB&amount=280000'),
+            buildQrPayload: jest.fn().mockReturnValue({ accountNo: '123', template: 'qr_only' }),
           },
         },
         {
@@ -461,7 +472,7 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
 
         expect(result).toHaveProperty('appointment_id');
         expect(result).toHaveProperty('transaction_id');
-        expect(result.message).toBe('Đặt lịch thành công');
+        expect(result.message).toBe('Booking successful');
       });
     });
 
@@ -478,6 +489,37 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
 
         // Session should NOT be deleted
         expect(mockDeleteSession).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('Multi-service calculation', () => {
+      it('TC-ONL-17: should calculate total sum correctly for multiple services', async () => {
+        const multiServiceSession = {
+          ...completeOnlineSession,
+          serviceIds: ['service-1', 'service-2'],
+        };
+        mockGetSession.mockResolvedValue(multiServiceSession);
+
+        // Mock getRepository to return a builder and findOne
+        jest.spyOn(dataSource, 'getRepository').mockReturnValue({
+          findOne: jest.fn().mockResolvedValue({ _id: 'admin-info-id' }),
+          createQueryBuilder: jest.fn().mockReturnValue({
+            leftJoinAndSelect: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getMany: jest.fn().mockResolvedValue([
+              { _id: 'service-1', price: 100000, discount: 0, isActive: true, service: { serviceName: 'Service 1' } },
+              { _id: 'service-2', price: 200000, discount: 10, isActive: true, service: { serviceName: 'Service 2' } },
+            ]),
+          }),
+        } as any);
+
+        const result = await service.createPaymentRequestOnline(mockSessionId, multiServiceSession);
+
+        // Service 1: 100,000
+        // Service 2: 200,000 - 10% = 180,000
+        // Total: 280,000
+        expect(result.data.amount).toBe(280000);
       });
     });
   });
