@@ -331,6 +331,8 @@ export class AccountsService {
     query: SearchPatientQueryDto,
   ): Promise<PatientSearchResponseDto> {
     const { phone, email, fullName } = query;
+    const invalidRoleMessage =
+      'This account can not book appointment, Please enter different information';
 
     // Validate at least one search parameter is provided
     if (!phone && !email && !fullName) {
@@ -344,11 +346,23 @@ export class AccountsService {
     // Priority 1: Search by phone (primary key, exact match)
     if (phone) {
       account = await this.accountRepository.findByPhone(phone);
+      if (account && account.role !== AccountRole.PATIENT) {
+        return {
+          found: false,
+          message: invalidRoleMessage,
+        };
+      }
     }
 
     // Priority 2: Search by email (exact match) if phone search failed
     if (!account && email) {
       account = await this.accountRepository.findByEmail(email);
+      if (account && account.role !== AccountRole.PATIENT) {
+        return {
+          found: false,
+          message: invalidRoleMessage,
+        };
+      }
     }
 
     // Priority 3: Search by full name (fuzzy search) if both phone and email failed
@@ -359,6 +373,12 @@ export class AccountsService {
         account = await this.accountRepository.findAccountById(
           generalAccount.accountId,
         );
+        if (account && account.role !== AccountRole.PATIENT) {
+          return {
+            found: false,
+            message: invalidRoleMessage,
+          };
+        }
       }
     }
 
