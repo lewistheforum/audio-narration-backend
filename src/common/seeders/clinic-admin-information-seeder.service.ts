@@ -117,6 +117,7 @@ export class ClinicAdminInformationSeederService {
           bankNumber: this.randomBankNumber(),
           bankBranch: this.getRandomBankBranch(),
           sepayVa: this.randomSePayVa(),
+          sepayKey: this.randomSepayKey(),
           isVerify: true,
         });
 
@@ -207,6 +208,13 @@ export class ClinicAdminInformationSeederService {
    */
   private randomSePayVa(): string {
     return `VA${this.randomDigits(8)}`;
+  }
+
+  /**
+   * Generate random SePay API key
+   */
+  private randomSepayKey(): string {
+    return `sepay_test_key_${this.randomDigits(12)}`;
   }
 
   /**
