@@ -125,66 +125,52 @@ export class AiRagChatBotService {
    *
    * internal helper to transform entity structure to DTO response format
    */
-  private mapSchedules(schedules: any[]) {
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const currentTimeStr = `${today.getHours().toString().padStart(2, '0')}:${today.getMinutes().toString().padStart(2, '0')}`;
+ private mapSchedules(schedules: any[]) {
+    const now = new Date();
+    return schedules.map((schedule) => {
+      const emp: any = schedule.employee;
+      const doctorInfo = emp?.doctorInformation;
 
-    return schedules
-      .map((schedule) => {
-        const emp: any = schedule.employee;
-        const doctorInfo = emp?.doctorInformation;
+      return {
+        id: schedule._id,
+        workDate: schedule.workDate,
+        weekDay: schedule.weekDay,
+        employee: {
+          id: emp?._id,
+          fullName: doctorInfo?.fullName || emp?.username || 'Unknown',
+          avatar: doctorInfo?.profilePicture || null,
+        },
+        shift: {
+          id: schedule.clinicShift?._id,
+          name: schedule.clinicShift?.shift,
+          hours:
+            schedule.clinicShift?.hours
+              ?.map((hour: any) => {
+                const [endH, endM] = hour.endHour.split(':').map(Number);
+                const slotEndTime = new Date(schedule.workDate);
+                slotEndTime.setHours(endH, endM, 0, 0);
 
-        const scheduleDate = new Date(schedule.workDate);
-        const scheduleStart = new Date(scheduleDate.getFullYear(), scheduleDate.getMonth(), scheduleDate.getDate());
-        const isToday = scheduleStart.getTime() === todayStart.getTime();
-
-        return {
-          id: schedule._id,
-          workDate: schedule.workDate,
-          weekDay: schedule.weekDay,
-          employee: {
-            id: emp?._id,
-            fullName: doctorInfo?.fullName || emp?.username || 'Unknown',
-            avatar: doctorInfo?.profilePicture || null,
-          },
-          shift: {
-            id: schedule.clinicShift?._id,
-            name: schedule.clinicShift?.shift,
-            hours:
-              schedule.clinicShift?.hours
-                ?.map((hour: any) => ({
+                return {
                   id: hour._id,
                   startHour: hour.startHour,
                   endHour: hour.endHour,
                   limit: hour.limit,
                   bookedCount: hour.bookedCount || 0,
-                  isFull: (hour.bookedCount || 0) >= hour.limit,
-                }))
-                .filter((hour: any) => {
-                  if (isToday) {
-                    return hour.startHour >= currentTimeStr;
-                  }
-                  return true;
-                })
-                .sort((a: any, b: any) => a.startHour.localeCompare(b.startHour)) || [],
-          },
-          room:
-            schedule.rooms && schedule.rooms.length > 0
-              ? {
-                  id: schedule.rooms[0]._id,
-                  name: schedule.rooms[0].roomName,
-                }
-              : null,
-        };
-      })
-      .filter((mapped) => {
-        // Only show schedules that have at least one hour not full
-        if (!mapped.shift.hours || mapped.shift.hours.length === 0) {
-          return true;
-        }
-        return mapped.shift.hours.some((hour: any) => !hour.isFull);
-      });
+                  isFull:
+                    (hour.bookedCount || 0) >= hour.limit || now > slotEndTime,
+                };
+              })
+              .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
+        },
+        room:
+          schedule.rooms && schedule.rooms.length > 0
+            ? {
+                id: schedule.rooms[0]._id,
+                name: schedule.rooms[0].roomName,
+              }
+            : null,
+      };
+    });
   }
 
   async createConversation(
