@@ -4,7 +4,7 @@ import { JwtModuleOptions } from '@nestjs/jwt';
 export const getJwtConfig = async (
   configService: ConfigService,
 ): Promise<JwtModuleOptions> => {
-  const jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = configService.get<string>('JWT_SECRET') || process.env.JWT_SECRET;
   console.log(`[getJwtConfig] Loading JWT_SECRET: ${jwtSecret}`);
 
   if (!jwtSecret) {
