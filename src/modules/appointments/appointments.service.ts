@@ -4529,14 +4529,19 @@ export class AppointmentsService {
       // Group services by appointment_id
       servicesRaw.forEach((service) => {
         const aptId = service.appointment_id;
+        const price = parseFloat(service.price || '0');
+        const discount = parseFloat(service.discount || '0');
+        const finalPrice = price - (price * discount) / 100;
+
         if (!servicesMap.has(aptId)) {
           servicesMap.set(aptId, []);
         }
         servicesMap.get(aptId)!.push({
           service_id: service.service_id,
           service_name: service.service_name,
-          price: parseFloat(service.price || '0'),
-          discount: parseFloat(service.discount || '0'),
+          price: price,
+          discount: discount,
+          final_price: finalPrice,
         });
 
         if (service.erm_id) {
