@@ -736,6 +736,7 @@ export class AppointmentsService {
     const cancellableStatuses = [
       AppointmentStatus.PENDING,
       AppointmentStatus.CONFIRMED,
+      AppointmentStatus.CHECKED_IN,
     ];
 
     if (!cancellableStatuses.includes(appointment.status)) {
@@ -1008,6 +1009,41 @@ export class AppointmentsService {
 
     if (dateChanged || shiftChanged) {
       if (newClinicShiftHourId) {
+        const activeStatuses = [
+          AppointmentStatus.PENDING,
+          AppointmentStatus.PENDING_DOCTOR,
+          AppointmentStatus.CONFIRMED,
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.NEED_FINAL_PAYMENT,
+        ];
+
+        const duplicatedAppointment = await this.dataSource
+          .createQueryBuilder()
+          .select('app._id', 'id')
+          .from('appointments', 'app')
+          .where('app.patient_id = :patientId', {
+            patientId: appointment.patientId,
+          })
+          .andWhere('app.clinic_shift_hour_id = :clinicShiftHourId', {
+            clinicShiftHourId: newClinicShiftHourId,
+          })
+          .andWhere('app.appointment_date = :appointmentDate', {
+            appointmentDate: newAppointmentDate,
+          })
+          .andWhere('app._id != :appointmentId', { appointmentId })
+          .andWhere('app.deleted_at IS NULL')
+          .andWhere('app.status IN (:...activeStatuses)', {
+            activeStatuses,
+          })
+          .getRawOne();
+
+        if (duplicatedAppointment) {
+          throw new ConflictException(
+            'Patient already has an active appointment in this shift on the selected date.',
+          );
+        }
+
         await this.validateShiftHourCapacity(
           appointment.clinicId,
           newClinicShiftHourId,
@@ -1135,7 +1171,8 @@ export class AppointmentsService {
     // Validate current status - only PENDING or CONFIRMED appointments can be checked in
     if (
       appointment.status !== AppointmentStatus.PENDING &&
-      appointment.status !== AppointmentStatus.CONFIRMED
+      appointment.status !== AppointmentStatus.CONFIRMED &&
+      appointment.status !== AppointmentStatus.ABSENT
     ) {
       throw new BadRequestException(
         `Cannot check in appointment with status "${appointment.status}". Only pending (PENDING) or confirmed (CONFIRMED) appointments can be checked in.`,
@@ -1185,10 +1222,11 @@ export class AppointmentsService {
     // Validate current status - only PENDING or CONFIRMED appointments can be marked absent
     if (
       appointment.status !== AppointmentStatus.PENDING &&
-      appointment.status !== AppointmentStatus.CONFIRMED
+      appointment.status !== AppointmentStatus.CONFIRMED &&
+      appointment.status !== AppointmentStatus.CHECKED_IN
     ) {
       throw new BadRequestException(
-        `Cannot mark appointment as absent with status "${appointment.status}". Only pending (PENDING) or confirmed (CONFIRMED) appointments can be marked absent.`,
+        `Cannot mark appointment as absent with status "${appointment.status}". Only pending (PENDING) or confirmed (CONFIRMED) or CHECKED IN appointments can be marked absent.`,
       );
     }
 
@@ -4760,14 +4798,19 @@ export class AppointmentsService {
       // Group services by appointment_id
       servicesRaw.forEach((service) => {
         const aptId = service.appointment_id;
+        const price = parseFloat(service.price || '0');
+        const discount = parseFloat(service.discount || '0');
+        const finalPrice = price - (price * discount) / 100;
+
         if (!servicesMap.has(aptId)) {
           servicesMap.set(aptId, []);
         }
         servicesMap.get(aptId)!.push({
           service_id: service.service_id,
           service_name: service.service_name,
-          price: parseFloat(service.price || '0'),
-          discount: parseFloat(service.discount || '0'),
+          price: price,
+          discount: discount,
+          final_price: finalPrice,
         });
 
         if (service.erm_id) {

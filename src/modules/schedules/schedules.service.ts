@@ -530,6 +530,7 @@ export class SchedulesService {
    * internal helper to transform entity structure to DTO response format
    */
   private mapSchedules(schedules: any[]) {
+    const now = new Date();
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
@@ -548,14 +549,21 @@ export class SchedulesService {
           name: schedule.clinicShift?.shift,
           hours:
             schedule.clinicShift?.hours
-              ?.map((hour: any) => ({
-                id: hour._id,
-                startHour: hour.startHour,
-                endHour: hour.endHour,
-                limit: hour.limit,
-                bookedCount: hour.bookedCount || 0,
-                isFull: (hour.bookedCount || 0) >= hour.limit,
-              }))
+              ?.map((hour: any) => {
+                const [endH, endM] = hour.endHour.split(':').map(Number);
+                const slotEndTime = new Date(schedule.workDate);
+                slotEndTime.setHours(endH, endM, 0, 0);
+
+                return {
+                  id: hour._id,
+                  startHour: hour.startHour,
+                  endHour: hour.endHour,
+                  limit: hour.limit,
+                  bookedCount: hour.bookedCount || 0,
+                  isFull:
+                    (hour.bookedCount || 0) >= hour.limit || now > slotEndTime,
+                };
+              })
               .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
         },
         room:
@@ -749,6 +757,22 @@ export class SchedulesService {
     });
   }
 
+  async getRoomsByStaffId(staffId: string) {
+    if (!staffId) return [];
+
+    const staffAccount = await this.accountRepository.findOne({
+      where: { _id: staffId },
+    });
+
+    if (!staffAccount || !staffAccount.parentId) return [];
+
+    return this.roomRepository.find({
+      where: { clinicId: staffAccount.parentId },
+      select: ['_id', 'roomName'],
+      order: { roomName: 'ASC' },
+    });
+  }
+
   /**
    * ---------------------------------------------------------
    * CLINIC ROOM CRUD APIs
@@ -779,6 +803,45 @@ export class SchedulesService {
     const qb = this.roomRepository
       .createQueryBuilder('room')
       .where('room.clinicId = :clinicId', { clinicId });
+
+    if (search) {
+      qb.andWhere('LOWER(room.roomName) LIKE LOWER(:search)', {
+        search: `%${search}%`,
+      });
+    }
+
+    qb.orderBy('room.createdAt', 'DESC').skip(skip).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getPaginatedClinicRoomsByStaffId(staffId: string, query: ClinicRoomQueryDto) {
+    if (!staffId) throw new BadRequestException('Staff ID is required');
+
+    const staffAccount = await this.accountRepository.findOne({
+      where: { _id: staffId },
+    });
+
+    if (!staffAccount || !staffAccount.parentId) {
+      throw new BadRequestException('Staff not found or not assigned to a clinic');
+    }
+
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    const qb = this.roomRepository
+      .createQueryBuilder('room')
+      .where('room.clinicId = :clinicId', { clinicId: staffAccount.parentId });
 
     if (search) {
       qb.andWhere('LOWER(room.roomName) LIKE LOWER(:search)', {

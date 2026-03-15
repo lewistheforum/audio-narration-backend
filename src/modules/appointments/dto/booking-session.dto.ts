@@ -30,16 +30,22 @@ export enum BookingOption {
 }
 
 /**
- * Initial Data DTO for Service-First Booking
+ * Initial Data DTO for Service-First Booking (V5.0 - Multi-Service)
  */
 export class ServiceInitialDataDto {
   @ApiProperty({
-    description: 'Clinic service configuration ID',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Array of clinic service configuration IDs (Multi-Service)',
+    type: [String],
+    example: [
+      '123e4567-e89b-12d3-a456-426614174005',
+      '123e4567-e89b-12d3-a456-426614174006',
+    ],
   })
-  @IsNotEmpty({ message: 'Clinic service config ID is required for service-first booking' })
-  @IsUUID('4', { message: 'Invalid clinic service config ID format' })
-  clinic_service_config_id: string;
+  @IsArray({ message: 'service_ids must be an array' })
+  @ArrayMinSize(1, { message: 'At least one service ID is required' })
+  @ArrayUnique({ message: 'service_ids must not contain duplicate IDs' })
+  @IsUUID('4', { each: true, message: 'Each service_id must be a valid UUID v4' })
+  service_ids: string[];
 
   @ApiProperty({
     description: 'Clinic ID',
@@ -408,8 +414,17 @@ export class BookingSessionResponseDto {
   @ApiProperty({
     description: 'Booking data accumulated so far',
     example: {
-      clinic_service_config_id: '123e4567-e89b-12d3-a456-426614174000',
       clinic_id: '123e4567-e89b-12d3-a456-426614174001',
+      doctor_id: '123e4567-e89b-12d3-a456-426614174002',
+      service_ids: [
+        '123e4567-e89b-12d3-a456-426614174005',
+        '123e4567-e89b-12d3-a456-426614174006',
+      ],
+      appointment_date: '2026-03-15',
+      clinic_shift_hour_id: '123e4567-e89b-12d3-a456-426614174003',
+      extra_hour: null,
+      payment_method: null,
+      patient_note: null,
     },
   })
   booking_data: Record<string, any>;
