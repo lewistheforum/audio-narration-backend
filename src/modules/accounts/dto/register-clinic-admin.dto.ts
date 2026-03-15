@@ -214,4 +214,16 @@ export class RegisterClinicAdminDto {
   @MaxLength(50, { message: 'SePay VA must not exceed 50 characters' })
   @Transform(({ value }) => value?.trim())
   sepayVa: string;
+
+  @ApiProperty({
+    description: 'SePay API key for payment processing',
+    example: 'sepay_test_key_1234567890',
+    required: false,
+    maxLength: 255,
+  })
+  @IsOptional()
+  @IsString({ message: 'SePay key must be a string' })
+  @MaxLength(255, { message: 'SePay key must not exceed 255 characters' })
+  @Transform(({ value }) => value?.trim())
+  sepayKey?: string;
 }

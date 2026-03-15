@@ -11,6 +11,7 @@ export * from './staff-cancel-appointment.dto';
 export * from './patient-cancel-appointment.dto';
 export * from './reschedule-appointment.dto';
 export * from './staff-reschedule-appointment.dto';
+export * from './patient-reschedule-appointment.dto';
 export * from './check-in.dto';
 export * from './accept-appointment.dto';
 export * from './decline-appointment.dto';
