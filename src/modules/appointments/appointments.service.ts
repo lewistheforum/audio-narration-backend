@@ -1003,6 +1003,41 @@ export class AppointmentsService {
 
     if (dateChanged || shiftChanged) {
       if (newClinicShiftHourId) {
+        const activeStatuses = [
+          AppointmentStatus.PENDING,
+          AppointmentStatus.PENDING_DOCTOR,
+          AppointmentStatus.CONFIRMED,
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.NEED_FINAL_PAYMENT,
+        ];
+
+        const duplicatedAppointment = await this.dataSource
+          .createQueryBuilder()
+          .select('app._id', 'id')
+          .from('appointments', 'app')
+          .where('app.patient_id = :patientId', {
+            patientId: appointment.patientId,
+          })
+          .andWhere('app.clinic_shift_hour_id = :clinicShiftHourId', {
+            clinicShiftHourId: newClinicShiftHourId,
+          })
+          .andWhere('app.appointment_date = :appointmentDate', {
+            appointmentDate: newAppointmentDate,
+          })
+          .andWhere('app._id != :appointmentId', { appointmentId })
+          .andWhere('app.deleted_at IS NULL')
+          .andWhere('app.status IN (:...activeStatuses)', {
+            activeStatuses,
+          })
+          .getRawOne();
+
+        if (duplicatedAppointment) {
+          throw new ConflictException(
+            'Patient already has an active appointment in this shift on the selected date.',
+          );
+        }
+
         await this.validateShiftHourCapacity(
           appointment.clinicId,
           newClinicShiftHourId,
