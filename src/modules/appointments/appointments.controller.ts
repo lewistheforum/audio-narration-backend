@@ -2045,8 +2045,13 @@ export class AppointmentsController {
             },
             appointment_date: '2026-03-15',
             appointment_hour: '2026-03-15T08:00:00.000Z',
+            start_hour: '08:00:00',
+            end_hour: '09:00:00',
+            clinic_room: 'Room 101',
             status: 'COMPLETED',
             total: 270000,
+            payment_type: 'cod',
+            payment_status: 'paid',
             services: [
               {
                 service_id: '550e8400-e29b-41d4-a716-446655440003',
@@ -2054,15 +2059,6 @@ export class AppointmentsController {
                 price: 300000,
                 discount: 10,
                 final_price: 270000,
-              },
-            ],
-            feedbacks: [
-              {
-                id: '550e8400-e29b-41d4-a716-446655440004',
-                rating: 5,
-                description: 'Excellent doctor, very attentive',
-                type: 'DOCTOR',
-                createdAt: '2026-03-16T10:00:00.000Z',
               },
             ],
           },
