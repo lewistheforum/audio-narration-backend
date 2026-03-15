@@ -11,10 +11,13 @@ export const getJwtConfig = async (
     throw new Error('JWT_SECRET is not defined in the environment variables');
   }
 
+  const jwtExpiresIn =
+    configService.get<string>('JWT_EXPIRES_IN') || process.env.JWT_EXPIRES_IN;
+
   return {
     secret: jwtSecret,
     signOptions: {
-      expiresIn: process.env.JWT_EXPIRES_IN,
+      expiresIn: jwtExpiresIn as any,
     },
   };
 };
