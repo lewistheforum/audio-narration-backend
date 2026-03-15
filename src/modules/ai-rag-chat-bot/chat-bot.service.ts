@@ -126,10 +126,18 @@ export class AiRagChatBotService {
    * internal helper to transform entity structure to DTO response format
    */
   private mapSchedules(schedules: any[]) {
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const currentTimeStr = `${today.getHours().toString().padStart(2, '0')}:${today.getMinutes().toString().padStart(2, '0')}`;
+
     return schedules
       .map((schedule) => {
         const emp: any = schedule.employee;
         const doctorInfo = emp?.doctorInformation;
+
+        const scheduleDate = new Date(schedule.workDate);
+        const scheduleStart = new Date(scheduleDate.getFullYear(), scheduleDate.getMonth(), scheduleDate.getDate());
+        const isToday = scheduleStart.getTime() === todayStart.getTime();
 
         return {
           id: schedule._id,
@@ -153,7 +161,13 @@ export class AiRagChatBotService {
                   bookedCount: hour.bookedCount || 0,
                   isFull: (hour.bookedCount || 0) >= hour.limit,
                 }))
-                .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
+                .filter((hour: any) => {
+                  if (isToday) {
+                    return hour.startHour >= currentTimeStr;
+                  }
+                  return true;
+                })
+                .sort((a: any, b: any) => a.startHour.localeCompare(b.startHour)) || [],
           },
           room:
             schedule.rooms && schedule.rooms.length > 0
