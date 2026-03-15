@@ -33,7 +33,6 @@ import { BookingSessionService } from './booking-session.service';
 import {
   QueryAppointmentDto,
   PaginatedAppointmentResponseDto,
-  CreateAppointmentDto,
   StaffCreateAppointmentDto,
   StaffCancelAppointmentDto,
   PatientCancelAppointmentDto,
@@ -93,9 +92,9 @@ import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
  * - PATCH /appointments/staff/:id/reschedule - Staff reschedule appointment (Staff only)
  * - PATCH /appointments/staff/:id/assign-to-doctor - Assign appointment to doctor (PENDING → PENDING_DOCTOR) (Staff only)
  * - PATCH /appointments/staff/:id/check-in - Check in patient (Staff only)
+ * - PATCH /appointments/staff/:id/mark-absent - Mark patient absent (Staff only)
  * - GET /appointments/staff/:id/packages - Get payment packages (Staff only)
  * - POST /appointments/staff/:id/packages/:packageId/confirm-cash-payment - Confirm cash payment (Staff only)
- * - POST /appointments - Create new appointment (Patient only)
  * - PATCH /appointments/patient/:id/cancel - Patient cancel their own appointment (Patient only)
  * - PATCH /appointments/:id/accept - Accept appointment (Doctor only)
  * - PATCH /appointments/:id/decline - Decline appointment (Doctor only)
@@ -1198,51 +1197,6 @@ export class AppointmentsController {
   }
 
   /**
-   * Create a new appointment
-   *
-   * Allows patients to create appointments with clinics
-   *
-   * @param createDto - Appointment creation data
-   * @returns Created appointment details
-   */
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Create new appointment',
-    description:
-      'Create a new appointment with a clinic. Patient can optionally select a specific doctor.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Appointment created successfully',
-    type: AppointmentResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad Request - Invalid input data',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - User is not a patient',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'Conflict - Time slot already booked',
-  })
-  async createAppointment(
-    @Body() createDto: CreateAppointmentDto,
-  ): Promise<AppointmentResponseDto> {
-    return this.appointmentsService.createAppointment(createDto);
-  }
-
-  /**
    * Staff cancel an appointment
    *
    * Allows staff to cancel appointments on behalf of patients
@@ -1519,6 +1473,58 @@ export class AppointmentsController {
     @Param('id') id: string,
   ): Promise<AppointmentResponseDto> {
     return this.appointmentsService.checkInPatient(id);
+  }
+
+  /**
+   * Mark appointment as absent
+   *
+   * Allows clinic staff to mark a patient as absent when they did not attend
+   * Changes appointment status from PENDING or CONFIRMED to ABSENT
+   *
+   * @param id - Appointment UUID
+   * @returns Updated appointment details
+   */
+  @Patch('staff/:id/mark-absent')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark patient absent for appointment',
+    description:
+      'Mark a patient as absent. Changes status from PENDING or CONFIRMED to ABSENT.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment marked absent successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Appointment status is not PENDING or CONFIRMED',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a clinic staff member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  async markAppointmentAbsent(
+    @Param('id') id: string,
+  ): Promise<AppointmentResponseDto> {
+    return this.appointmentsService.markAppointmentAbsent(id);
   }
 
   /**

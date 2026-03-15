@@ -5,7 +5,6 @@ export * from './appointment-detail-response.dto';
 export * from './patient-appointment-list-response.dto';
 export * from './patient-appointment-detail-response.dto';
 export * from './booking-session.dto';
-export * from './create-appointment.dto';
 export * from './staff-create-appointment.dto';
 export * from './cancel-appointment.dto';
 export * from './staff-cancel-appointment.dto';

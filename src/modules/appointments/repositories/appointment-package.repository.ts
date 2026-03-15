@@ -139,6 +139,7 @@ export class AppointmentPackageRepository {
       .andWhere('serviceAppointment.deleted_at IS NULL')
       .select([
         'package.appointment_id',
+        'serviceAppointment._id',
         'clinicService._id',
         'clinicService.service_name',
         'clinicService.description',
@@ -152,6 +153,7 @@ export class AppointmentPackageRepository {
     result.forEach((row) => {
       const appointmentId = row.appointment_id; // Fixed: was package_appointment_id
       const service = {
+        serviceAppointmentId: row.serviceAppointment__id,
         id: row.clinicService__id,
         serviceName: row.service_name, // Fixed: was clinicService_service_name
         description: row.clinicService_description,
