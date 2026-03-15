@@ -361,7 +361,8 @@ export class AppointmentsController {
     summary: "Get doctor's appointments (Step 1 - ERM Flow)",
     description:
       'Retrieve list of appointments assigned to the authenticated doctor. ' +
-      'Shows CHECKED_IN and IN_PROGRESS appointments by default. ' +
+      'Excludes appointments with extra_hour. ' +
+      'Shows CHECKED_IN, IN_PROGRESS and COMPLETED appointments by default. ' +
       'Can filter by specific date and status.',
   })
   @ApiResponse({
@@ -387,7 +388,7 @@ export class AppointmentsController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['CHECKED_IN', 'IN_PROGRESS', 'CONFIRMED'],
+    enum: ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED', 'CONFIRMED'],
     description: 'Filter by appointment status',
     example: 'CHECKED_IN',
   })
@@ -408,16 +409,16 @@ export class AppointmentsController {
    * @param req - Request object containing authenticated doctor
    * @returns List of appointments with extra hour in pending or confirmed status
    */
-  @Get('doctor/me/extra-hour-pending')
+  @Get('doctor/me/extra-hour')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get appointments with extra hour (PENDING_DOCTOR or CONFIRMED)',
+    summary: 'Get appointments with extra hour',
     description:
-      'Retrieve list of appointments that have extra_hour and are in PENDING_DOCTOR or CONFIRMED status. ' +
-      'Includes both appointments awaiting doctor confirmation and confirmed extra hour appointments.',
+      'Retrieve list of appointments that have extra_hour in statuses: ' +
+      'PENDING_DOCTOR, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED.',
   })
   @ApiResponse({
     status: 200,
