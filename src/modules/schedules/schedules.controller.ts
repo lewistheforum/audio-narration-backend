@@ -148,6 +148,38 @@ export class SchedulesController {
   }
 
   /**
+   * Get Clinic Rooms by Staff ID
+   *
+   * Retrieves list of available rooms for a specific clinic by a staff member's ID.
+   *
+   * Roles: ADMIN, CLINIC_ADMIN, CLINIC_MANAGER, CLINIC_STAFF
+   */
+  @Get('options/rooms/staff/:staffId')
+  @Roles(
+    AccountRole.ADMIN,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+    AccountRole.CLINIC_STAFF,
+  )
+  @ApiOperation({ summary: 'Get clinic rooms list by staff ID' })
+  async getRoomsByManagerId(@Param('staffId') staffId: string) {
+    return this.schedulesService.getRoomsByStaffId(staffId);
+  }
+
+  /**
+   * Get Clinic Rooms by Staff ID
+   *
+   * Retrieves list of available rooms for a specific clinic by staff ID.
+   *
+   * Roles: ANY
+   */
+  @Get('options/rooms/staff-account/:staffId')
+  @ApiOperation({ summary: 'Get clinic rooms for dropdown by staff ID' })
+  async getRoomsByStaffIdRoute(@Param('staffId') staffId: string) {
+    return this.schedulesService.getRoomsByStaffId(staffId);
+  }
+
+  /**
    * Get Clinic Employees
    *
    * Retrieves list of employees for a specific clinic.
@@ -345,6 +377,21 @@ export class SchedulesController {
   @ApiOperation({ summary: 'Get paginated list of clinic rooms' })
   getRoomsPaginated(@Request() req, @Query() query: ClinicRoomQueryDto) {
     return this.schedulesService.getPaginatedClinicRooms(req.user, query);
+  }
+
+  @Get('rooms/staff/:staffId')
+  @Roles(
+    AccountRole.ADMIN,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+    AccountRole.CLINIC_STAFF,
+  )
+  @ApiOperation({ summary: 'Get paginated list of clinic rooms by staff ID' })
+  getPaginatedRoomsByManagerId(
+    @Param('staffId') staffId: string,
+    @Query() query: ClinicRoomQueryDto,
+  ) {
+    return this.schedulesService.getPaginatedClinicRoomsByStaffId(staffId, query);
   }
 
   @Get('rooms/:id')
