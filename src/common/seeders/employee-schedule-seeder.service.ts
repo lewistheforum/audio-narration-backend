@@ -132,8 +132,9 @@ export class EmployeeScheduleSeederService {
     let createdCount = 0;
     const today = getStartOfDay();
 
-    // Generate schedules for the next 60 days (matching booking window)
-    for (let dayOffset = 1; dayOffset <= this.DAYS_TO_GENERATE; dayOffset++) {
+    // Generate schedules starting from 2 days in the past through the next 60 days
+    // This ensures historical schedules appear in the application (for past appointments)
+    for (let dayOffset = -2; dayOffset <= this.DAYS_TO_GENERATE; dayOffset++) {
       const workDate = addToDate(today, dayOffset, 'day');
 
       // Calculate week_day based on work_date
@@ -141,13 +142,14 @@ export class EmployeeScheduleSeederService {
 
       // CRITICAL FIX: Always create schedules for the first 7 days to ensure API returns data
       // After day 7, use random probability (70%) for realistic scheduling
-      const shouldCreate = dayOffset <= 7 || this.shouldAssignSchedule();
+      // First 7 days: -2, -1, 0, 1, 2, 3, 4
+      const shouldCreate = dayOffset <= 4 || this.shouldAssignSchedule();
 
       if (shouldCreate) {
         // For first 7 days, rotate through all shifts evenly
         // After day 7, randomly assign shifts
-        const shiftIndex = dayOffset <= 7 
-          ? ((dayOffset - 1) % shifts.length) 
+        const shiftIndex = dayOffset <= 4 
+          ? ((dayOffset + 2) % shifts.length)  // Adjust index for -2 offset
           : this.getRandomInt(0, shifts.length - 1);
         
         const selectedShift = shifts[shiftIndex];
