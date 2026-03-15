@@ -58,7 +58,7 @@ export class ConfirmedPackageDetailsDto {
 export class ConfirmCashPaymentResponseDto {
   @ApiProperty({
     description: 'Success message',
-    example: 'Xác nhận thanh toán tiền mặt thành công',
+    example: 'Cash payment confirmed successfully',
   })
   message: string;
 

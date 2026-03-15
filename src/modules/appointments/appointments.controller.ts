@@ -36,6 +36,7 @@ import {
   StaffCreateAppointmentDto,
   StaffCancelAppointmentDto,
   PatientCancelAppointmentDto,
+  PatientRescheduleAppointmentDto,
   AppointmentResponseDto,
   StaffRescheduleAppointmentDto,
   AcceptAppointmentDto,
@@ -1310,6 +1311,95 @@ export class AppointmentsController {
   }
 
   /**
+   * Patient reschedule their own appointment
+   *
+   * Allows patients to reschedule their own appointments to a new date/time.
+   * Supports both Standard Bookings (via clinic_shift_hour_id) and Out-of-Hours Bookings (via extra_hour).
+   * Does NOT allow changing doctor, clinic, or services.
+   *
+   * Validation:
+   * - Standard Bookings: Status must be PENDING only
+   * - Out-of-Hours Bookings: Status can be PENDING or PENDING_DOCTOR
+   *
+   * @param req - Request object containing authenticated user
+   * @param appointmentId - Appointment UUID
+   * @param rescheduleDto - Reschedule data (new date and optional shift or extra hour)
+   * @returns Updated appointment details
+   */
+  @Patch('patients/me/:appointmentId/reschedule')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Patient reschedule appointment',
+    description:
+      'Reschedule own appointment to a new date/time. For standard bookings, provide clinicShiftHourId. For out-of-hours bookings, provide extraHour. Doctor, clinic, and services cannot be changed.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment rescheduled successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Appointment cannot be rescheduled or validation failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not the patient of this appointment',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - New time slot is already booked',
+  })
+  @ApiParam({
+    name: 'appointmentId',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiBody({
+    type: PatientRescheduleAppointmentDto,
+    examples: {
+      standard: {
+        summary: 'Standard Booking Reschedule',
+        value: {
+          appointmentDate: '2026-03-25',
+          clinicShiftHourId: '123e4567-e89b-12d3-a456-426614174003',
+        },
+      },
+      outOfHours: {
+        summary: 'Out-of-Hours Booking Reschedule',
+        value: {
+          appointmentDate: '2026-03-25',
+          extraHour: '2026-03-25T19:30:00.000+07:00',
+        },
+      },
+    },
+  })
+  async patientRescheduleAppointment(
+    @Request() req: any,
+    @Param('appointmentId') appointmentId: string,
+    @Body() rescheduleDto: PatientRescheduleAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    const patientId = req.user._id;
+    return this.appointmentsService.patientRescheduleAppointment(
+      patientId,
+      appointmentId,
+      rescheduleDto,
+    );
+  }
+
+  /**
    * Staff reschedule an appointment
    *
    * Allows staff to reschedule appointments to a new date/time
@@ -2045,8 +2135,13 @@ export class AppointmentsController {
             },
             appointment_date: '2026-03-15',
             appointment_hour: '2026-03-15T08:00:00.000Z',
+            start_hour: '08:00:00',
+            end_hour: '09:00:00',
+            clinic_room: 'Room 101',
             status: 'COMPLETED',
             total: 270000,
+            payment_type: 'cod',
+            payment_status: 'paid',
             services: [
               {
                 service_id: '550e8400-e29b-41d4-a716-446655440003',
@@ -2054,15 +2149,6 @@ export class AppointmentsController {
                 price: 300000,
                 discount: 10,
                 final_price: 270000,
-              },
-            ],
-            feedbacks: [
-              {
-                id: '550e8400-e29b-41d4-a716-446655440004',
-                rating: 5,
-                description: 'Excellent doctor, very attentive',
-                type: 'DOCTOR',
-                createdAt: '2026-03-16T10:00:00.000Z',
               },
             ],
           },

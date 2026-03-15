@@ -5,7 +5,7 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { REDIS_CLIENT } from 'src/config/redis.config';
@@ -112,10 +112,8 @@ export class BookingSessionService {
     // Populate initial data based on booking option
     if (createDto.booking_option === BookingOption.SERVICE) {
       const data = createDto.initial_data as ServiceInitialDataDto;
-      // V5.0: Store service_ids as array; initial data may carry one or many ids
-      session.serviceIds = Array.isArray((data as any).service_ids)
-        ? (data as any).service_ids
-        : [data.clinic_service_config_id];
+      // V5.0: Store service_ids as array from initial data
+      session.serviceIds = data.service_ids;
       session.clinicId = data.clinic_id;
     } else if (createDto.booking_option === BookingOption.DOCTOR) {
       const data = createDto.initial_data as DoctorInitialDataDto;
@@ -468,21 +466,22 @@ export class BookingSessionService {
     if (option === BookingOption.SERVICE) {
       const serviceData = data as ServiceInitialDataDto;
       
-      // Verify clinic service config exists and is active
-      const serviceConfig = await this.dataSource.getRepository(ClinicServiceConfig).findOne({
+      // Verify all clinic service configs exist and are active (V5.0 - Multi-Service)
+      const serviceConfigs = await this.dataSource.getRepository(ClinicServiceConfig).find({
         where: { 
-          _id: serviceData.clinic_service_config_id,
+          _id: In(serviceData.service_ids),
           clinicId: serviceData.clinic_id,
         },
         relations: ['service'],
       });
 
-      if (!serviceConfig) {
-        throw new BadRequestException('Clinic service configuration not found');
+      if (serviceConfigs.length !== serviceData.service_ids.length) {
+        throw new BadRequestException('One or more clinic service configurations not found');
       }
 
-      if (!serviceConfig.isActive) {
-        throw new BadRequestException('This service is currently not available');
+      const inactiveServices = serviceConfigs.filter(sc => !sc.isActive);
+      if (inactiveServices.length > 0) {
+        throw new BadRequestException('One or more services are currently not available');
       }
 
       // Verify clinic exists and is active (can be CLINIC_ADMIN or CLINIC_MANAGER)
