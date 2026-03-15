@@ -529,6 +529,7 @@ export class SchedulesService {
    * internal helper to transform entity structure to DTO response format
    */
   private mapSchedules(schedules: any[]) {
+    const now = new Date();
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
@@ -547,14 +548,21 @@ export class SchedulesService {
           name: schedule.clinicShift?.shift,
           hours:
             schedule.clinicShift?.hours
-              ?.map((hour: any) => ({
-                id: hour._id,
-                startHour: hour.startHour,
-                endHour: hour.endHour,
-                limit: hour.limit,
-                bookedCount: hour.bookedCount || 0,
-                isFull: (hour.bookedCount || 0) >= hour.limit,
-              }))
+              ?.map((hour: any) => {
+                const [endH, endM] = hour.endHour.split(':').map(Number);
+                const slotEndTime = new Date(schedule.workDate);
+                slotEndTime.setHours(endH, endM, 0, 0);
+
+                return {
+                  id: hour._id,
+                  startHour: hour.startHour,
+                  endHour: hour.endHour,
+                  limit: hour.limit,
+                  bookedCount: hour.bookedCount || 0,
+                  isFull:
+                    (hour.bookedCount || 0) >= hour.limit || now > slotEndTime,
+                };
+              })
               .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
         },
         room:
