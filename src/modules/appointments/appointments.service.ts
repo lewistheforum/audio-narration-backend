@@ -4014,7 +4014,18 @@ export class AppointmentsService {
         'cmi',
         'cmi.account_id = clinic._id',
       )
-      .leftJoin('addresses', 'addr', 'addr.account_id = clinic._id')
+      // FIX: Use subquery to get only ONE address per clinic to prevent duplicates
+      // This avoids Cartesian product when multiple addresses exist for the same account
+      .leftJoin(
+        (qb) =>
+          qb
+            .select(['account_id', 'address'])
+            .from('addresses', 'addr')
+            .where('addr.deleted_at IS NULL')
+            .limit(1),
+        'addr',
+        'addr.account_id = clinic._id',
+      )
       .leftJoin('clinic_service_category', 'cat', 'cat._id = cs.category_id')
       .where('csc.is_active = :active', { active: true })
       .andWhere('cs.is_active = :active', { active: true })
@@ -5924,7 +5935,7 @@ export class AppointmentsService {
     );
 
     // 6. Prepare email context
-    const clinicAddress = appointment.clinic?.addresses?.[0];
+    const clinicAddress = appointment.clinic?.address;
     const doctorInfo = appointment.doctor?.doctorInformation;
     const patientInfo = appointment.patient?.generalAccount;
 
@@ -6088,7 +6099,7 @@ export class AppointmentsService {
             );
 
             // Prepare email context
-            const clinicAddress = appointment.clinic?.addresses?.[0];
+            const clinicAddress = appointment.clinic?.address;
             const doctorInfo = appointment.doctor?.doctorInformation;
             const patientInfo = appointment.patient?.generalAccount;
 
@@ -7363,15 +7374,19 @@ export class AppointmentsService {
       email: appointment.patient?.email || 'N/A',
       profile_image_url: patientGeneral?.profilePicture || null,
       addresses:
-        appointment.patient?.addresses?.map((addr) => ({
-          address: addr.address || '',
-          ward: addr.ward || '',
-          wardName: addr.wardName || '',
-          district: addr.district || '',
-          districtName: addr.districtName || '',
-          province: addr.province || '',
-          provinceName: addr.provinceName || '',
-        })) || [],
+        appointment.patient?.address
+          ? [
+              {
+                address: appointment.patient.address.address || '',
+                ward: appointment.patient.address.ward || '',
+                wardName: appointment.patient.address.wardName || '',
+                district: appointment.patient.address.district || '',
+                districtName: appointment.patient.address.districtName || '',
+                province: appointment.patient.address.province || '',
+                provinceName: appointment.patient.address.provinceName || '',
+              },
+            ]
+          : [],
     };
 
     // Step 4: Build doctor info
@@ -7387,7 +7402,7 @@ export class AppointmentsService {
 
     // Step 5: Build clinic info
     const clinicInfo = appointment.clinic?.clinicManagerInformation;
-    const clinicAddress = appointment.clinic?.addresses?.[0];
+    const clinicAddress = appointment.clinic?.address;
     const clinic: AppointmentClinicInfoDto = {
       clinic_id: appointment.clinicId,
       clinic_name: clinicInfo?.clinicBranchName || 'N/A',
