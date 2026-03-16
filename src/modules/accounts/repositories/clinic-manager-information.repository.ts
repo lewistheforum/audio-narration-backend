@@ -298,7 +298,7 @@ export class ClinicManagerInformationRepository {
       .leftJoinAndSelect('children.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('children.clinicStaffInformation', 'staffInfo')
       .leftJoinAndSelect('account.legalDocuments', 'legal')
-      .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('address.googleIframe', 'iframe')
       .where('account._id = :managerId', { managerId })
       .andWhere('account.deleted_at IS NULL')

@@ -158,6 +158,6 @@ export class ClinicAdminDetailResponseDto extends ClinicAdminResponseDto {
   })
   subscriptionStatus?: RegistrationStatus;
 
-  @ApiProperty({ type: [ClinicAdminAddressDto], required: false })
-  addresses?: ClinicAdminAddressDto[];
+  @ApiProperty({ type: ClinicAdminAddressDto, required: false })
+  address?: ClinicAdminAddressDto;
 }

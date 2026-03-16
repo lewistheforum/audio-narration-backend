@@ -99,7 +99,7 @@ export class ClinicAdminsService {
   async findOne(id: string): Promise<ClinicAdminDetailResponseDto> {
     const account = await this.accountRepository.findOne({
       where: { _id: id, role: AccountRole.CLINIC_ADMIN },
-      relations: ['clinicAdminInformation', 'addresses'],
+      relations: ['clinicAdminInformation', 'address'],
     });
 
     if (!account) {
@@ -168,18 +168,16 @@ export class ClinicAdminsService {
     }
 
     if (account.address) {
-      dto.addresses = [
-        {
-          _id: account.address._id,
-          address: account.address.address,
-          ward: account.address.ward,
-          district: account.address.district,
-          province: account.address.province,
-          wardName: account.address.wardName,
-          districtName: account.address.districtName,
-          provinceName: account.address.provinceName,
-        },
-      ];
+      dto.address = {
+        _id: account.address._id,
+        address: account.address.address,
+        ward: account.address.ward,
+        district: account.address.district,
+        province: account.address.province,
+        wardName: account.address.wardName,
+        districtName: account.address.districtName,
+        provinceName: account.address.provinceName,
+      };
     }
 
     return dto;
