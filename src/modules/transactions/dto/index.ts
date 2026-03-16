@@ -1,4 +1,5 @@
 export * from './create-transaction.dto';
+export * from './create-transaction-body.dto';
 export * from './payment-response.dto';
 export * from './payment-history-response.dto';
 export * from './seepay-callback.dto';

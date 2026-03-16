@@ -24,7 +24,7 @@ import {
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
-import { AppointmentPackageStatus, PaymentType } from '../appointments/enums';
+import { AppointmentPackageStatus, AppointmentStatus, PaymentType } from '../appointments/enums';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
@@ -545,24 +545,24 @@ export class TransactionsService {
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
 
     // Calculate sum of all pending packages for this appointment
-    const pendingPackages = await this.packageRepo.find({
+    const pendingFinalAppointments = await this.appointmentRepository.find({
       where: {
-        appointmentId: dto.appointmentId,
-        status: AppointmentPackageStatus.PENDING_PAYMENT
+        _id: dto.appointmentId,
+        status: AppointmentStatus.NEED_FINAL_PAYMENT
       }
     });
 
-    if (pendingPackages.length === 0) {
+    if (pendingFinalAppointments.length === 0) {
       throw new BadRequestException('No pending payments for this appointment');
     }
 
-    const amount = pendingPackages.reduce((sum, pkg) => sum + Number(pkg.amount), 0);
+    // const amount = pendingFinalAppointments.reduce((sum, apt) => sum + Number(apt.amount), 0);
     // Ignore dto.amount, use source of truth from DB packages
 
     const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
+    const qrCodeUrl = this.buildQrUrl(dto.amount, dto.appointmentId, acc, bank);
     const qrPayload = this.buildQrPayload(
-      amount,
+      dto.amount,
       dto.appointmentId,
       acc,
       bank,
@@ -570,7 +570,7 @@ export class TransactionsService {
 
     return new PaymentResponseDto({
       id: null,
-      amount: amount,
+      amount: dto.amount,
       currency: 'VND',
       status: PaymentStatus.PENDING,
       qrCodeUrl,

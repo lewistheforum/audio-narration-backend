@@ -22,6 +22,7 @@ import {
 import { TransactionsService } from './transactions.service';
 import {
   CreateTransactionDto,
+  CreateTransactionBodyDto,
   PaymentHistoryResponseDto,
   PaymentResponseDto,
   SeepayCallbackDto,
@@ -74,9 +75,13 @@ export class TransactionsController {
     status: HttpStatus.CREATED,
     message: 'Payment QR created successfully',
   })
+  @ApiBody({
+    type: CreateTransactionBodyDto,
+    description: 'Transaction payload (appointmentId is provided from path)',
+  })
   async createQr(
     @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
-    @Body() body: Omit<CreateTransactionDto, 'appointmentId'>,
+    @Body() body: CreateTransactionBodyDto,
   ) {
     const payment = await this.transactionsService.createDynamicQr({
       ...body,
@@ -109,9 +114,13 @@ export class TransactionsController {
     status: HttpStatus.CREATED,
     message: 'Payment QR created successfully',
   })
+  @ApiBody({
+    type: CreateTransactionBodyDto,
+    description: 'Transaction payload (appointmentId is provided from path)',
+  })
   async createStaffQrPayment(
     @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
-    @Body() body: Omit<CreateTransactionDto, 'appointmentId'>,
+    @Body() body: CreateTransactionBodyDto,
   ) {
     const payment = await this.transactionsService.createDynamicQrAtClinic({
       ...body,
