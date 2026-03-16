@@ -62,11 +62,11 @@ export class DoctorPatientSummaryDto {
   profileImageUrl: string | null;
 
   @ApiProperty({
-    description: 'Patient addresses',
-    type: [AddressDto],
+    description: 'Patient address',
+    type: AddressDto,
     required: false,
   })
-  addresses?: AddressDto[];
+  address?: AddressDto;
 
   @ApiProperty({
     description: 'First visit date with this doctor',

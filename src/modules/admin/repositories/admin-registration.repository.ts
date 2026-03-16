@@ -51,12 +51,12 @@ export class AdminRegistrationRepository {
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.children', 'childAccounts')
-      .leftJoinAndSelect('account.addresses', 'adminAddresses')
+      .leftJoinAndSelect('account.address', 'adminAddress')
       .leftJoinAndSelect(
         'childAccounts.clinicManagerInformation',
         'clinicManagerInfo',
       )
-      .leftJoinAndSelect('childAccounts.addresses', 'managerAddresses')
+      .leftJoinAndSelect('childAccounts.address', 'managerAddress')
       .leftJoinAndSelect(
         'clinic_subcriptions',
         'subscription',
@@ -121,15 +121,15 @@ export class AdminRegistrationRepository {
       pros: account.clinicAdminInformation?.pros,
       paraclinical: account.clinicAdminInformation?.paraclinical,
       address:
-        account.addresses && account.addresses.length > 0
+        account.address
           ? {
-              address: account.addresses[0].address,
-              ward: account.addresses[0].ward,
-              wardName: account.addresses[0].wardName,
-              district: account.addresses[0].district,
-              districtName: account.addresses[0].districtName,
-              province: account.addresses[0].province,
-              provinceName: account.addresses[0].provinceName,
+              address: account.address.address,
+              ward: account.address.ward,
+              wardName: account.address.wardName,
+              district: account.address.district,
+              districtName: account.address.districtName,
+              province: account.address.province,
+              provinceName: account.address.provinceName,
             }
           : undefined,
     };
@@ -142,16 +142,15 @@ export class AdminRegistrationRepository {
       clinicBranchName:
         clinicManagerAccount.clinicManagerInformation?.clinicBranchName || '',
       address:
-        clinicManagerAccount.addresses &&
-        clinicManagerAccount.addresses.length > 0
+        clinicManagerAccount.address
           ? {
-              address: clinicManagerAccount.addresses[0].address,
-              ward: clinicManagerAccount.addresses[0].ward,
-              wardName: clinicManagerAccount.addresses[0].wardName,
-              district: clinicManagerAccount.addresses[0].district,
-              districtName: clinicManagerAccount.addresses[0].districtName,
-              province: clinicManagerAccount.addresses[0].province,
-              provinceName: clinicManagerAccount.addresses[0].provinceName,
+              address: clinicManagerAccount.address.address,
+              ward: clinicManagerAccount.address.ward,
+              wardName: clinicManagerAccount.address.wardName,
+              district: clinicManagerAccount.address.district,
+              districtName: clinicManagerAccount.address.districtName,
+              province: clinicManagerAccount.address.province,
+              provinceName: clinicManagerAccount.address.provinceName,
             }
           : undefined,
     };

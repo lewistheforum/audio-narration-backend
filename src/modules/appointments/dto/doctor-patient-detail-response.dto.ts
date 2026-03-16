@@ -61,11 +61,11 @@ export class DoctorViewPatientDetailDto {
   address: string | null;
 
   @ApiProperty({
-    description: 'Patient addresses with full details',
-    type: [AddressDto],
+    description: 'Patient address details',
+    type: AddressDto,
     required: false,
   })
-  addresses?: AddressDto[];
+  addressDetail?: AddressDto;
 }
 
 /**

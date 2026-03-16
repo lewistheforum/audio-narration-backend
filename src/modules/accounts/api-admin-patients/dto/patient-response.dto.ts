@@ -65,8 +65,8 @@ export class PatientResponseDto {
   @ApiProperty({ required: false })
   banDescription?: string;
 
-  @ApiProperty({ type: [PatientAddressDto], required: false })
-  addresses?: PatientAddressDto[];
+  @ApiProperty({ type: PatientAddressDto, required: false })
+  address?: PatientAddressDto;
 
   @ApiProperty()
   @Transform(({ value }) => formatToVietnamTime(value))
@@ -89,17 +89,17 @@ export class PatientResponseDto {
       this.profilePicture = account.generalAccount.profilePicture;
     }
 
-    if (account.addresses) {
-      this.addresses = account.addresses.map((addr) => ({
-        _id: addr._id,
-        address: addr.address,
-        ward: addr.ward,
-        district: addr.district,
-        province: addr.province,
-        wardName: addr.wardName,
-        districtName: addr.districtName,
-        provinceName: addr.provinceName,
-      }));
+    if (account.address) {
+      this.address = {
+        _id: account.address._id,
+        address: account.address.address,
+        ward: account.address.ward,
+        district: account.address.district,
+        province: account.address.province,
+        wardName: account.address.wardName,
+        districtName: account.address.districtName,
+        provinceName: account.address.provinceName,
+      };
     }
   }
 }

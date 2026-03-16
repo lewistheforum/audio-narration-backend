@@ -127,7 +127,7 @@ export class ClinicManagerService {
     }
 
     // Get address and iframe from loaded relations
-    const address = manager.account.addresses?.[0];
+    const address = manager.account.address;
     const iframe = address?.googleIframe;
 
     // Get legal documents from loaded relations (decrypted automatically by transformer)
