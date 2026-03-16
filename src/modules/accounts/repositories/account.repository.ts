@@ -479,7 +479,7 @@ export class AccountRepository {
         'account.clinicManagerInformation',
         'clinicManagerInfo',
       )
-      .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('account.parent', 'parentAccount')
       .leftJoinAndSelect(
         'parentAccount.clinicAdminInformation',
@@ -533,7 +533,7 @@ export class AccountRepository {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.addresses', 'address')
+      .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
       .andWhere('account.status = :status', { status });

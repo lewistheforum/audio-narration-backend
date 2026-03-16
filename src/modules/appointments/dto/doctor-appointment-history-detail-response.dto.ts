@@ -61,11 +61,11 @@ export class AppointmentPatientInfoDto {
   profile_image_url: string | null;
 
   @ApiProperty({
-    description: 'Patient addresses',
-    type: [PatientAddressDto],
+    description: 'Patient address',
+    type: PatientAddressDto,
     required: false,
   })
-  addresses?: PatientAddressDto[];
+  address?: PatientAddressDto;
 }
 
 /**
