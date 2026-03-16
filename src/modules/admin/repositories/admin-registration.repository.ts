@@ -51,12 +51,12 @@ export class AdminRegistrationRepository {
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.children', 'childAccounts')
-      .leftJoinAndSelect('account.addresses', 'adminAddresses')
+      .leftJoinAndSelect('account.address', 'adminAddress')
       .leftJoinAndSelect(
         'childAccounts.clinicManagerInformation',
         'clinicManagerInfo',
       )
-      .leftJoinAndSelect('childAccounts.addresses', 'managerAddresses')
+      .leftJoinAndSelect('childAccounts.address', 'managerAddress')
       .leftJoinAndSelect(
         'clinic_subcriptions',
         'subscription',

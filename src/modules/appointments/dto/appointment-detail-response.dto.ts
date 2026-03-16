@@ -36,8 +36,8 @@ export class PatientDetailDto {
   @ApiProperty({ description: 'Patient profile picture URL', required: false })
   profilePicture?: string;
 
-  @ApiProperty({ description: 'Patient addresses', type: [AddressDto], required: false })
-  addresses?: AddressDto[];
+  @ApiProperty({ description: 'Patient address', type: AddressDto, required: false })
+  address?: AddressDto;
 }
 
 /**

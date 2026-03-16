@@ -65,8 +65,8 @@ export class AiRagChatBotService {
       'N/A';
     const patientProfileImage = patientGeneral?.profilePicture || null;
 
-    // Get patient addresses
-    const patientAddresses = appointment.patient?.addresses || [];
+    // Get patient address
+    const patientAddress = appointment.patient?.address;
 
     // Get doctor info - support both raw query and relation-based query
     const doctorInfo = appointment.doctor?.doctorInformation;
@@ -92,16 +92,16 @@ export class AiRagChatBotService {
       patientEmail: appointment.patient?.email,
       patientPhone: appointment.patient?.phone,
       patientProfileImage,
-      patientAddresses: patientAddresses.map((addr: any) => ({
-        id: addr._id,
-        address: addr.address,
-        ward: addr.ward,
-        wardName: addr.wardName,
-        district: addr.district,
-        districtName: addr.districtName,
-        province: addr.province,
-        provinceName: addr.provinceName,
-      })),
+      patientAddress: patientAddress ? {
+        id: patientAddress._id,
+        address: patientAddress.address,
+        ward: patientAddress.ward,
+        wardName: patientAddress.wardName,
+        district: patientAddress.district,
+        districtName: patientAddress.districtName,
+        province: patientAddress.province,
+        provinceName: patientAddress.provinceName,
+      } : null,
       clinicId: appointment.clinicId,
       clinicName,
       doctorId: appointment.doctorId,
@@ -485,7 +485,7 @@ export class AiRagChatBotService {
         relations: [
           'patient',
           'patient.generalAccount',
-          'patient.addresses',
+          'patient.address',
           'clinic',
           'clinic.clinicManagerInformation',
           'doctor',
