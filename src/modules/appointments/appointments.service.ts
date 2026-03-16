@@ -2899,33 +2899,33 @@ export class AppointmentsService {
   }
 
   /**
-   * Add additional service to appointment during examination
+   * Add additional services to appointment during examination
    *
    * This method allows doctors to add new services (e.g., X-ray, Lab tests)
-   * during the examination process. The service will be marked as "additional"
+   * during the examination process. The services will be marked as "additional"
    * and will require payment processing by clinic staff.
    *
    * Business Rules:
    * 1. Only allowed when appointment status = IN_PROGRESS
-   * 2. Service must not already exist in the appointment
-   * 3. Service must belong to the current clinic
-   * 4. Creates new AppointmentPackage with transactionId = null
-   * 5. Creates new ServiceAppointment linked to the package
-   * 6. Service is identified as additional by comparing createdAt with appointment start time
+   * 2. Services must not already exist in the appointment
+   * 3. Services must belong to the current clinic
+   * 4. Creates ONE new AppointmentPackage for all added services
+   * 5. Creates multiple ServiceAppointments linked to the package
+   * 6. Services are identified as additional by comparing createdAt with appointment start time
    *
    * @param appointmentId - UUID of the appointment
-   * @param doctorId - UUID of the doctor adding the service
-   * @param clinicServiceId - UUID of the clinic service to add
-   * @returns AddServiceResponseDto with created package and service details
-   * @throws NotFoundException if appointment or service not found
+   * @param doctorId - UUID of the doctor adding the services
+   * @param clinicServiceIds - Array of UUIDs of the clinic services to add
+   * @returns Response object with created package and service details
+   * @throws NotFoundException if appointment or services not found
    * @throws ForbiddenException if doctor not assigned to appointment
    * @throws BadRequestException if validation fails
    */
   async addServiceToAppointment(
     appointmentId: string,
     doctorId: string,
-    clinicServiceId: string,
-  ): Promise<AddServiceResponseDto> {
+    clinicServiceIds: string[],
+  ): Promise<any> {
     // 1. Find and validate appointment
     const appointment = await this.dataSource
       .getRepository(Appointment)
@@ -2951,100 +2951,148 @@ export class AppointmentsService {
       );
     }
 
-    // 3. Validate clinic service exists and get details with relations
-    const clinicService = await this.dataSource
+    if (!clinicServiceIds || clinicServiceIds.length === 0) {
+      throw new BadRequestException('No services provided');
+    }
+
+    // 3. Validate clinic services exist, active and belong to clinic
+    // Use IN clause to fetch all services at once and verify
+    const clinicServices = await this.dataSource
       .getRepository(ClinicServiceConfig)
       .createQueryBuilder('config')
       .leftJoinAndSelect('config.service', 'service')
       .leftJoinAndSelect('service.category', 'category')
-      .where('config._id = :clinicServiceId', { clinicServiceId })
+      .where('config._id IN (:...clinicServiceIds)', { clinicServiceIds })
       .andWhere('config.deleted_at IS NULL')
       .andWhere('config.is_active = true')
-      .getOne();
+      .getMany();
 
-    if (!clinicService) {
-      throw new NotFoundException('Clinic service not found or inactive');
+    if (clinicServices.length !== clinicServiceIds.length) {
+      throw new NotFoundException('One or more clinic services not found or inactive');
     }
 
-    // 4. Validate service belongs to the same clinic as appointment
-    if (clinicService.clinicId !== appointment.clinicId) {
-      throw new BadRequestException(
-        'Service does not belong to the appointment clinic',
-      );
+    for (const service of clinicServices) {
+      if (service.clinicId !== appointment.clinicId) {
+        throw new BadRequestException(
+          `Service ${service.service?.serviceName} does not belong to the appointment clinic`,
+        );
+      }
     }
 
-    // 5. Check if service already exists in this appointment
+    // 4. Check if ANY service already exists in this appointment
     const existingServices = await this.dataSource
       .getRepository(ServiceAppointment)
       .createQueryBuilder('sa')
       .innerJoin('sa.appointmentPackage', 'pkg')
       .where('pkg.appointment_id = :appointmentId', { appointmentId })
-      .andWhere('sa.clinic_service_id = :clinicServiceId', { clinicServiceId })
+      .andWhere('sa.clinic_service_id IN (:...clinicServiceIds)', { clinicServiceIds })
       .andWhere('sa.deleted_at IS NULL')
-      .getOne();
+      .getMany();
 
-    if (existingServices) {
+    if (existingServices.length > 0) {
       throw new BadRequestException(
-        'This service already exists in the appointment',
+        'One or more services already exist in the appointment',
       );
     }
 
-    // 6. Get price and discount from clinic service config
-    const price = parseFloat(clinicService.price.toString());
-    const discount = parseFloat((clinicService.discount || 0).toString());
+    // 5. Calculate prices, discounts and total amount
+    let totalPackageAmount = 0;
+    const serviceDetails = clinicServices.map(service => {
+      const price = parseFloat(service.price.toString());
+      const discount = parseFloat((service.discount || 0).toString());
+      const finalPrice = (price * (100 - discount)) / 100;
+      const amount = Math.round(finalPrice);
+      
+      totalPackageAmount += amount;
 
-    // Calculate package amount: price * (100 - discount%) / 100
-    const finalPrice = (price * (100 - discount)) / 100;
-    const amount = Math.round(finalPrice);
+      return {
+        clinicServiceConfig: service,
+        price,
+        discount,
+        amount
+      };
+    });
 
-    // 7. Create new AppointmentPackage
-    const appointmentPackage = this.dataSource
-      .getRepository(AppointmentPackage)
-      .create({
-        appointmentId: appointment._id,
-        amount: amount,
-        transactionId: null, // Will be set by Clinic Staff during payment
-        paymentType: PaymentType.COD,
-        status: AppointmentPackageStatus.PENDING_PAYMENT,
-      });
+    // We need to use transaction to ensure data integrity
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedPackage = await this.dataSource
-      .getRepository(AppointmentPackage)
-      .save(appointmentPackage);
+    try {
+      // 6. Create ONE new AppointmentPackage
+      const appointmentPackage = queryRunner.manager
+        .getRepository(AppointmentPackage)
+        .create({
+          appointmentId: appointment._id,
+          amount: totalPackageAmount,
+          transactionId: null, // Will be set by Clinic Staff during payment
+          paymentType: PaymentType.COD,
+          status: AppointmentPackageStatus.PENDING_PAYMENT,
+        });
 
-    // 8. Create new ServiceAppointment with price and discount snapshots
-    const serviceAppointment = this.dataSource
-      .getRepository(ServiceAppointment)
-      .create({
-        clinicServiceId: clinicServiceId,
+      const savedPackage = await queryRunner.manager
+        .getRepository(AppointmentPackage)
+        .save(appointmentPackage);
+
+      // 7. Create ServiceAppointments and format response items
+      const savedServiceAppointments = [];
+      const responseServices = [];
+
+      for (const details of serviceDetails) {
+        const serviceAppointment = queryRunner.manager
+          .getRepository(ServiceAppointment)
+          .create({
+            clinicServiceId: details.clinicServiceConfig._id,
+            appointmentPackageId: savedPackage._id,
+            price: details.price,
+            discount: details.discount,
+          });
+
+        const savedServiceAppointment = await queryRunner.manager
+          .getRepository(ServiceAppointment)
+          .save(serviceAppointment);
+          
+        savedServiceAppointments.push(savedServiceAppointment);
+
+        const serviceType = (details.clinicServiceConfig.service?.category?.type ||
+          'CONSULTATION') as ERMRecordType;
+
+        responseServices.push({
+          serviceAppointmentId: savedServiceAppointment._id,
+          clinicServiceId: details.clinicServiceConfig._id,
+          serviceName: details.clinicServiceConfig.service?.serviceName || 'Unknown Service',
+          serviceType: serviceType,
+          price: details.price,
+          discount: details.discount,
+          amount: details.amount,
+        });
+      }
+
+      // 8. Update Total in Appointment entity
+      const currentTotal = parseFloat(appointment.total?.toString() || '0');
+      appointment.total = currentTotal + totalPackageAmount;
+      
+      await queryRunner.manager
+        .getRepository(Appointment)
+        .save(appointment);
+
+      await queryRunner.commitTransaction();
+
+      // 9. Return response
+      return {
         appointmentPackageId: savedPackage._id,
-        price: price,
-        discount: discount,
-      });
-
-    const savedServiceAppointment = await this.dataSource
-      .getRepository(ServiceAppointment)
-      .save(serviceAppointment);
-
-    // 9. Get service type from category
-    const serviceType = (clinicService.service?.category?.type ||
-      'CONSULTATION') as ERMRecordType;
-
-    // 10. Return response
-    return {
-      appointmentPackageId: savedPackage._id,
-      serviceAppointmentId: savedServiceAppointment._id,
-      appointmentId: appointment._id,
-      clinicServiceId: clinicServiceId,
-      serviceName: clinicService.service?.serviceName || 'Unknown Service',
-      serviceType: serviceType,
-      price: price,
-      discount: discount,
-      amount: amount,
-      addedDuringExamination: true, // Always true for this method
-      addedBy: doctorId,
-      createdAt: savedServiceAppointment.createdAt,
-    };
+        appointmentId: appointment._id,
+        services: responseServices,
+        packageTotalAmount: totalPackageAmount,
+        addedBy: doctorId,
+        createdAt: savedPackage.createdAt,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
