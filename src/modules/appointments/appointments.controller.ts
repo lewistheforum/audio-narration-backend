@@ -36,6 +36,7 @@ import {
   StaffCreateAppointmentDto,
   StaffCancelAppointmentDto,
   PatientCancelAppointmentDto,
+  PatientRescheduleAppointmentDto,
   AppointmentResponseDto,
   StaffRescheduleAppointmentDto,
   AcceptAppointmentDto,
@@ -360,7 +361,8 @@ export class AppointmentsController {
     summary: "Get doctor's appointments (Step 1 - ERM Flow)",
     description:
       'Retrieve list of appointments assigned to the authenticated doctor. ' +
-      'Shows CHECKED_IN and IN_PROGRESS appointments by default. ' +
+      'Excludes appointments with extra_hour. ' +
+      'Shows CHECKED_IN, IN_PROGRESS and COMPLETED appointments by default. ' +
       'Can filter by specific date and status.',
   })
   @ApiResponse({
@@ -386,7 +388,7 @@ export class AppointmentsController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['CHECKED_IN', 'IN_PROGRESS', 'CONFIRMED'],
+    enum: ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED', 'CONFIRMED'],
     description: 'Filter by appointment status',
     example: 'CHECKED_IN',
   })
@@ -407,16 +409,16 @@ export class AppointmentsController {
    * @param req - Request object containing authenticated doctor
    * @returns List of appointments with extra hour in pending or confirmed status
    */
-  @Get('doctor/me/extra-hour-pending')
+  @Get('doctor/me/extra-hour')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.DOCTOR)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get appointments with extra hour (PENDING_DOCTOR or CONFIRMED)',
+    summary: 'Get appointments with extra hour',
     description:
-      'Retrieve list of appointments that have extra_hour and are in PENDING_DOCTOR or CONFIRMED status. ' +
-      'Includes both appointments awaiting doctor confirmation and confirmed extra hour appointments.',
+      'Retrieve list of appointments that have extra_hour in statuses: ' +
+      'PENDING_DOCTOR, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED.',
   })
   @ApiResponse({
     status: 200,
@@ -1306,6 +1308,95 @@ export class AppointmentsController {
       id,
       patientId,
       cancelDto,
+    );
+  }
+
+  /**
+   * Patient reschedule their own appointment
+   *
+   * Allows patients to reschedule their own appointments to a new date/time.
+   * Supports both Standard Bookings (via clinic_shift_hour_id) and Out-of-Hours Bookings (via extra_hour).
+   * Does NOT allow changing doctor, clinic, or services.
+   *
+   * Validation:
+   * - Standard Bookings: Status must be PENDING only
+   * - Out-of-Hours Bookings: Status can be PENDING or PENDING_DOCTOR
+   *
+   * @param req - Request object containing authenticated user
+   * @param appointmentId - Appointment UUID
+   * @param rescheduleDto - Reschedule data (new date and optional shift or extra hour)
+   * @returns Updated appointment details
+   */
+  @Patch('patients/me/:appointmentId/reschedule')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Patient reschedule appointment',
+    description:
+      'Reschedule own appointment to a new date/time. For standard bookings, provide clinicShiftHourId. For out-of-hours bookings, provide extraHour. Doctor, clinic, and services cannot be changed.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment rescheduled successfully',
+    type: AppointmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Appointment cannot be rescheduled or validation failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not the patient of this appointment',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - New time slot is already booked',
+  })
+  @ApiParam({
+    name: 'appointmentId',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiBody({
+    type: PatientRescheduleAppointmentDto,
+    examples: {
+      standard: {
+        summary: 'Standard Booking Reschedule',
+        value: {
+          appointmentDate: '2026-03-25',
+          clinicShiftHourId: '123e4567-e89b-12d3-a456-426614174003',
+        },
+      },
+      outOfHours: {
+        summary: 'Out-of-Hours Booking Reschedule',
+        value: {
+          appointmentDate: '2026-03-25',
+          extraHour: '2026-03-25T19:30:00.000+07:00',
+        },
+      },
+    },
+  })
+  async patientRescheduleAppointment(
+    @Request() req: any,
+    @Param('appointmentId') appointmentId: string,
+    @Body() rescheduleDto: PatientRescheduleAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    const patientId = req.user._id;
+    return this.appointmentsService.patientRescheduleAppointment(
+      patientId,
+      appointmentId,
+      rescheduleDto,
     );
   }
 

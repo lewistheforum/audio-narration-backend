@@ -393,8 +393,10 @@ export class BookingSessionService {
     } else if (session.bookingOption === BookingOption.OUT_OF_HOURS) {
       // VERSION 4.7: Option 4 (out-of-hours) flow
       // Step 1 (initial): optional clinic_id
-      // Step 2: Add appointment_date + extra_hour (hardcode clinicShiftHourId = null)
-      // Step 3-5: Similar to other options
+      // Step 2: Add appointment_date + extra_hour + doctor_id
+      // Step 3: Add service_ids (select services - V5.0 multi-service)
+      // Step 4: Add payment_method (select payment)
+      // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
         
@@ -430,12 +432,59 @@ export class BookingSessionService {
         
         // MERGE: Explicitly preserve all existing fields
         // SPECIAL: Hardcode clinicShiftHourId = null for out-of-hours
-        Object.assign(session, {
+        const updateFields: any = {
           appointmentDate: data.appointment_date,
           extraHour: data.extra_hour,
           clinicShiftHourId: null,
           currentStep: 2,
+        };
+        
+        // Extract doctor_id for out-of-hours (REQUIRED)
+        if (data.doctor_id) {
+          updateFields.doctorId = data.doctor_id;
+        }
+        
+        Object.assign(session, updateFields);
+      } else if (updateDto.step === 3) {
+        const data = updateDto.data as any;
+        
+        // V5.0: Accept service_ids (multi-service array) for out-of-hours
+        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
+          throw new BadRequestException('service_ids (array) is required in step 3 for out-of-hours booking');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          serviceIds: data.service_ids,
+          currentStep: 3,
         });
+      } else if (updateDto.step === 4) {
+        const data = updateDto.data as any;
+        
+        // Payment method is REQUIRED in step 4 for out-of-hours
+        if (!data.payment_method) {
+          throw new BadRequestException('Payment method is required in step 4 for out-of-hours booking');
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, {
+          paymentMethod: data.payment_method,
+          currentStep: 4,
+        });
+      } else if (updateDto.step === 5) {
+        const data = updateDto.data as any;
+        
+        // Patient note is optional in step 5 for out-of-hours
+        const updateFields: any = {
+          currentStep: 5,
+        };
+        
+        if (data.patient_note !== undefined) {
+          updateFields.patientNote = data.patient_note;
+        }
+        
+        // MERGE: Explicitly preserve all existing fields
+        Object.assign(session, updateFields);
       }
     }
 
@@ -491,6 +540,11 @@ export class BookingSessionService {
     if (option === BookingOption.SERVICE) {
       const serviceData = data as ServiceInitialDataDto;
       
+      // Verify service_ids is a valid array (prevent TypeError: parameterValue.value is not iterable)
+      if (!serviceData.service_ids || !Array.isArray(serviceData.service_ids) || serviceData.service_ids.length === 0) {
+        throw new BadRequestException('service_ids must be a non-empty array');
+      }
+
       // Verify all clinic service configs exist and are active (V5.0 - Multi-Service)
       const serviceConfigs = await this.dataSource.getRepository(ClinicServiceConfig).find({
         where: { 

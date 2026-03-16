@@ -6,6 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { AppointmentWebhookService } from '../appointments/appointment-webhook.service';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
@@ -69,6 +70,7 @@ export class TransactionsService {
     private readonly bookingSessionService: BookingSessionService,
     @Inject(forwardRef(() => AppointmentsService))
     private readonly appointmentsService: AppointmentsService,
+    private readonly appointmentWebhookService: AppointmentWebhookService,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
@@ -796,6 +798,11 @@ export class TransactionsService {
           appointmentId,
           payload,
         );
+
+        // Kích hoạt Webhook xác nhận lịch hẹn gửi thông tin sang n8n
+        if (appointmentResult && appointmentResult.appointment_id) {
+          await this.appointmentWebhookService.sendConfirmation(appointmentResult.appointment_id);
+        }
 
         return new PaymentResponseDto({
           id: appointmentResult.transaction_id,

@@ -3939,6 +3939,7 @@ export class AccountsService {
         bankNumber: dto.bankNumber,
         bankBranch: dto.bankBranch,
         sepayVa: dto.sepayVa,
+        sepayKey: dto.sepayKey,
       });
 
       await queryRunner.manager.save(clinicAdminInfo);

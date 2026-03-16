@@ -139,7 +139,7 @@ export class CreateBookingSessionDto {
  * - Option 1 (service-first): appointment_date + clinic_shift_hour_id + doctor_id
  * - Option 2 (doctor-first): appointment_date + clinic_shift_hour_id
  * - Option 3 (date-first): clinic_id
- * - Option 4 (out-of-hours): appointment_date + extra_hour
+ * - Option 4 (out-of-hours): appointment_date + extra_hour + doctor_id
  */
 export class UpdateSessionStep2Dto {
   @ApiProperty({
@@ -161,7 +161,7 @@ export class UpdateSessionStep2Dto {
   clinic_shift_hour_id?: string;
 
   @ApiProperty({
-    description: 'Doctor ID (Option 1 only)',
+    description: 'Doctor ID (Option 1 & 4)',
     example: '123e4567-e89b-12d3-a456-426614174002',
     required: false,
   })
@@ -203,6 +203,7 @@ export class UpdateSessionStep2Dto {
  * - Option 1 (service-first): payment_method
  * - Option 2 (doctor-first): service_ids (ARRAY of clinic_service_config_id)
  * - Option 3 (date-first): clinic_shift_hour_id + doctor_id (V4.6 - MOVED UP)
+ * - Option 4 (out-of-hours): service_ids (ARRAY - V5.0 multi-service)
  */
 export class UpdateSessionStep3Dto {
   @ApiProperty({
@@ -265,10 +266,11 @@ export class UpdateSessionStep3Dto {
  * - Option 1 (service-first): patient_note (optional)
  * - Option 2 (doctor-first): payment_method (REQUIRED)
  * - Option 3 (date-first): service_ids (ARRAY - V5.0 multi-service)
+ * - Option 4 (out-of-hours): payment_method (REQUIRED)
  */
 export class UpdateSessionStep4Dto {
   @ApiProperty({
-    description: 'Payment method (Option 2 only)',
+    description: 'Payment method (Option 2 & 4)',
     enum: ['cod', 'online'],
     example: 'cod',
     required: false,
@@ -309,6 +311,7 @@ export class UpdateSessionStep4Dto {
  * 
  * - Option 2 (doctor-first): patient_note (optional)
  * - Option 3 (date-first): payment_method + patient_note
+ * - Option 4 (out-of-hours): patient_note (optional)
  */
 export class UpdateSessionStep5Dto {
   @ApiProperty({
@@ -322,7 +325,7 @@ export class UpdateSessionStep5Dto {
   payment_method?: 'cod' | 'online';
 
   @ApiProperty({
-    description: 'Patient note (for Option 2 and Option 3)',
+    description: 'Patient note (for Option 2, 3 and 4)',
     example: 'Patient has neck and shoulder pain for 1 week',
     required: false,
   })

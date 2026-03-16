@@ -15,6 +15,8 @@ import { RedisModule } from '../../config/redis.config';
 import { MailerModule } from '../mailer/mailer.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
+import { HttpModule } from '@nestjs/axios';
+import { AppointmentWebhookService } from './appointment-webhook.service';
 
 /**
  * Appointments Module
@@ -48,17 +50,19 @@ import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
     MailerModule,
     forwardRef(() => TransactionsModule),
     PrescriptionsModule,
+    HttpModule,
   ],
   controllers: [AppointmentsController],
   providers: [
     AppointmentsService,
     BookingSessionService,
+    AppointmentWebhookService,
     AppointmentRepository,
     AppointmentPackageRepository,
     ClinicStaffInformationRepository,
     EmployeeScheduleRepository,
     AccountRepository,
   ],
-  exports: [TypeOrmModule, AppointmentsService, BookingSessionService],
+  exports: [TypeOrmModule, AppointmentsService, BookingSessionService, AppointmentWebhookService],
 })
 export class AppointmentsModule { }

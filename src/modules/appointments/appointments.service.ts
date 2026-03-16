@@ -37,6 +37,7 @@ import {
   PatientCancelAppointmentDto,
   RescheduleAppointmentDto,
   StaffRescheduleAppointmentDto,
+  PatientRescheduleAppointmentDto,
   AcceptAppointmentDto,
   DeclineAppointmentDto,
   UpdateAppointmentStatusDto,
@@ -832,6 +833,281 @@ export class AppointmentsService {
       services,
       clinicRooms,
     );
+  }
+
+  /**
+   * Patient reschedule appointment
+   *
+   * Allows patient to reschedule their appointment to a new date/time.
+   * Supports both Standard Bookings (via clinic_shift_hour_id) and Out-of-Hours Bookings (via extra_hour).
+   * Does NOT allow changing doctor, clinic, or services - only date/time.
+   *
+   * Validation Logic:
+   * - Standard Bookings: Status must be PENDING only
+   * - Out-of-Hours Bookings: Status can be PENDING or PENDING_DOCTOR
+   *
+   * @param patientId - Patient UUID (from JWT)
+   * @param appointmentId - Appointment UUID
+   * @param rescheduleDto - Reschedule data (new date and optionally new shift or extra hour)
+   * @returns Updated appointment details
+   * @throws NotFoundException if appointment not found
+   * @throws ForbiddenException if patient does not own this appointment
+   * @throws BadRequestException if appointment cannot be rescheduled or validation fails
+   * @throws ConflictException if new time slot is already booked
+   */
+  async patientRescheduleAppointment(
+    patientId: string,
+    appointmentId: string,
+    rescheduleDto: PatientRescheduleAppointmentDto,
+  ): Promise<AppointmentResponseDto> {
+    // Find appointment with relations
+    const appointment =
+      await this.appointmentRepository.findByIdWithRelations(appointmentId);
+
+    if (!appointment || appointment.deletedAt) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Verify patient owns this appointment
+    if (appointment.patientId !== patientId) {
+      throw new ForbiddenException('You can only reschedule your own appointments');
+    }
+
+    // Determine appointment type: Standard vs Out-of-Hours
+    const isOutOfHours = appointment.clinicShiftHourId === null && appointment.extraHour !== null;
+
+    // Check if appointment can be rescheduled based on type
+    if (isOutOfHours) {
+      // Out-of-Hours: Allow PENDING or PENDING_DOCTOR
+      const allowedStatuses = [
+        AppointmentStatus.PENDING,
+        AppointmentStatus.PENDING_DOCTOR,
+      ];
+      if (!allowedStatuses.includes(appointment.status)) {
+        throw new BadRequestException(
+          `Cannot reschedule appointment with status "${appointment.status}". Only PENDING or PENDING_DOCTOR appointments can be rescheduled.`,
+        );
+      }
+    } else {
+      // Standard Booking: Allow PENDING only
+      if (appointment.status !== AppointmentStatus.PENDING) {
+        throw new BadRequestException(
+          `Cannot reschedule appointment with status "${appointment.status}". Only PENDING appointments can be rescheduled.`,
+        );
+      }
+    }
+
+    // Convert new date to Date object
+    const newAppointmentDate = new Date(rescheduleDto.appointmentDate);
+    newAppointmentDate.setHours(0, 0, 0, 0);
+
+    // Validate new appointment date
+    const today = getStartOfDay();
+    const maxDate = addToVietnamTime(60, 'day');
+
+    if (newAppointmentDate < today) {
+      throw new BadRequestException('Appointment date must be today or in the future');
+    }
+
+    if (newAppointmentDate > maxDate) {
+      throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+    }
+
+    // Handle based on appointment type
+    if (isOutOfHours) {
+      // === OUT-OF-HOURS RESCHEDULE ===
+      return this.handleOutOfHoursReschedule(appointment, rescheduleDto, newAppointmentDate);
+    } else {
+      // === STANDARD BOOKING RESCHEDULE ===
+      return this.handleStandardReschedule(appointment, rescheduleDto, newAppointmentDate);
+    }
+  }
+
+  /**
+   * Handle standard booking reschedule
+   *
+   * Uses pessimistic locking to safely update slot limits
+   */
+  private async handleStandardReschedule(
+    appointment: any,
+    rescheduleDto: PatientRescheduleAppointmentDto,
+    newAppointmentDate: Date,
+  ): Promise<AppointmentResponseDto> {
+    // Validate clinic_shift_hour_id is provided
+    if (!rescheduleDto.clinicShiftHourId) {
+      throw new BadRequestException('Clinic shift hour ID is required for standard booking reschedule');
+    }
+
+    // Use transaction with pessimistic locking
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Lock and verify new shift hour exists and has available slots
+      const newShiftHour = await queryRunner.manager
+        .createQueryBuilder()
+        .select('csh')
+        .from('clinic_shift_hour', 'csh')
+        .where('csh._id = :id', { id: rescheduleDto.clinicShiftHourId })
+        .setLock('pessimistic_write')
+        .getOne();
+
+      if (!newShiftHour) {
+        throw new NotFoundException('Clinic shift hour not found');
+      }
+
+      if (newShiftHour.limit <= 0) {
+        throw new BadRequestException('This time slot is fully booked. Please select another time.');
+      }
+
+      // Verify new shift belongs to same clinic
+      if (newShiftHour.clinicId !== appointment.clinicId) {
+        throw new BadRequestException('New time slot must belong to the same clinic');
+      }
+
+      // Check for conflicts at new slot
+      const conflictQuery = `
+        SELECT a._id FROM appointments a
+        WHERE a.clinic_id = :clinicId
+        AND a.appointment_date = :appointmentDate
+        AND a.clinic_shift_hour_id = :shiftHourId
+        AND a.status NOT IN ('CANCELLED', 'ABSENT')
+        AND a.deleted_at IS NULL
+        AND a._id != :appointmentId
+      `;
+
+      const conflicts = await queryRunner.manager.query(conflictQuery, [
+        appointment.clinicId,
+        newAppointmentDate.toISOString().split('T')[0],
+        rescheduleDto.clinicShiftHourId,
+        appointment._id,
+      ]);
+
+      if (conflicts.length > 0) {
+        throw new ConflictException('This time slot is already booked. Please choose another time.');
+      }
+
+      // Update slot limits (release old, claim new)
+      const oldShiftHourId = appointment.clinicShiftHourId;
+      const newShiftHourId = rescheduleDto.clinicShiftHourId;
+
+      // Release old slot (if different from new)
+      if (oldShiftHourId !== newShiftHourId) {
+        await queryRunner.manager
+          .createQueryBuilder()
+          .update('clinic_shift_hour')
+          .set({ limit: () => 'limit + 1' })
+          .where('_id = :id', { id: oldShiftHourId })
+          .execute();
+
+        // Claim new slot
+        await queryRunner.manager
+          .createQueryBuilder()
+          .update('clinic_shift_hour')
+          .set({ limit: () => 'limit - 1' })
+          .where('_id = :id', { id: newShiftHourId })
+          .execute();
+      }
+
+      // Calculate new appointment hour from shift
+      const appointmentHour = new Date(newAppointmentDate);
+      const [hours, minutes] = newShiftHour.startHour.split(':').map(Number);
+      appointmentHour.setHours(hours, minutes, 0, 0);
+
+      // Update appointment
+      await queryRunner.manager
+        .createQueryBuilder()
+        .update('appointments')
+        .set({
+          appointmentDate: newAppointmentDate,
+          clinicShiftHourId: newShiftHourId,
+          appointmentHour: appointmentHour,
+          updatedAt: getCurrentVietnamTime(),
+        })
+        .where('_id = :id', { id: appointment._id })
+        .execute();
+
+      await queryRunner.commitTransaction();
+
+      // Fetch updated appointment with relations
+      const updatedAppointment =
+        await this.appointmentRepository.findByIdWithRelations(appointment._id);
+
+      // Load services and clinic rooms
+      const { services, clinicRooms } =
+        await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+      return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Handle out-of-hours booking reschedule
+   */
+  private async handleOutOfHoursReschedule(
+    appointment: any,
+    rescheduleDto: PatientRescheduleAppointmentDto,
+    newAppointmentDate: Date,
+  ): Promise<AppointmentResponseDto> {
+    // Validate extra_hour is provided
+    if (!rescheduleDto.extraHour) {
+      throw new BadRequestException('Extra hour is required for out-of-hours booking reschedule');
+    }
+
+    const newExtraHour = new Date(rescheduleDto.extraHour);
+
+    // Validate extra_hour is in the future
+    if (newExtraHour <= new Date()) {
+      throw new BadRequestException('Extra hour must be in the future');
+    }
+
+    // Validate extra_hour is outside business hours (before 7am or after 6pm)
+    const hour = newExtraHour.getHours();
+    if (hour >= 7 && hour < 18) {
+      throw new BadRequestException('Extra hour must be outside business hours (before 7:00 AM or after 6:00 PM)');
+    }
+
+    // Check for conflicts
+    const conflictQuery = `
+      SELECT a._id FROM appointments a
+      WHERE a.clinic_id = :clinicId
+      AND a.appointment_date = :appointmentDate
+      AND a.extra_hour = :extraHour
+      AND a.status NOT IN ('CANCELLED', 'ABSENT')
+      AND a.deleted_at IS NULL
+      AND a._id != :appointmentId
+    `;
+
+    const conflicts = await this.dataSource.query(conflictQuery, [
+      appointment.clinicId,
+      newAppointmentDate.toISOString().split('T')[0],
+      newExtraHour.toISOString(),
+      appointment._id,
+    ]);
+
+    if (conflicts.length > 0) {
+      throw new ConflictException('This time slot is already booked. Please choose another time.');
+    }
+
+    // Update appointment
+    appointment.appointmentDate = newAppointmentDate;
+    appointment.extraHour = newExtraHour;
+    appointment.updatedAt = getCurrentVietnamTime();
+
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
+
+    // Load services and clinic rooms
+    const { services, clinicRooms } =
+      await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    return this.transformToResponseDto(updatedAppointment, services, clinicRooms);
   }
 
   /**
@@ -1995,8 +2271,9 @@ export class AppointmentsService {
    *
    * Business Rules:
    * - Only show appointments assigned to this doctor (doctor_id matches)
+   * - Exclude appointments with extra_hour (those are handled by a separate endpoint)
    * - Filter by date and status if provided
-   * - Show CHECKED_IN and IN_PROGRESS appointments by default
+   * - Show CHECKED_IN, IN_PROGRESS and COMPLETED appointments by default
    * - Include patient details, addresses, profile images
    * - Include doctor details and profile image
    * - Include services and clinic rooms
@@ -2016,7 +2293,8 @@ export class AppointmentsService {
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicManagerInfo')
       .where('appointment.doctor_id = :doctorId', { doctorId })
-      .andWhere('appointment.deleted_at IS NULL');
+      .andWhere('appointment.deleted_at IS NULL')
+      .andWhere('appointment.extra_hour IS NULL');
 
     // Filter by date if provided
     if (queryDto.date) {
@@ -2025,14 +2303,18 @@ export class AppointmentsService {
       });
     }
 
-    // Filter by status if provided, otherwise default to CHECKED_IN and IN_PROGRESS
+    // Filter by status if provided, otherwise default to CHECKED_IN, IN_PROGRESS and COMPLETED
     if (queryDto.status) {
       queryBuilder.andWhere('appointment.status = :status', {
         status: queryDto.status,
       });
     } else {
       queryBuilder.andWhere('appointment.status IN (:...statuses)', {
-        statuses: [AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS],
+        statuses: [
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.COMPLETED,
+        ],
       });
     }
 
@@ -2084,19 +2366,19 @@ export class AppointmentsService {
   }
 
   /**
-   * Get appointments with extra hour pending doctor confirmation
+   * Get appointments with extra hour
    *
    * Retrieves list of appointments that:
    * - Have extra_hour (not null)
-   * - Are in PENDING_DOCTOR or CONFIRMED status
+   * - Are in PENDING_DOCTOR, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED or CANCELLED status
    * - Belong to the authenticated doctor
    *
    * @param doctorId - ID of the authenticated doctor
-   * @returns List of appointments with extra hour in pending or confirmed status
+   * @returns List of appointments with extra hour across all relevant statuses
    *
    * Business Rules:
    * - Only show appointments with extra_hour set
-   * - Show both PENDING_DOCTOR and CONFIRMED statuses
+   * - Show all relevant statuses: PENDING_DOCTOR, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED
    * - Include patient details, services, and clinic rooms
    * - Order by appointment date and hour
    */
@@ -2119,6 +2401,10 @@ export class AppointmentsService {
         statuses: [
           AppointmentStatus.PENDING_DOCTOR,
           AppointmentStatus.CONFIRMED,
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.COMPLETED,
+          AppointmentStatus.CANCELLED,
         ],
       })
       .andWhere('appointment.deleted_at IS NULL')
@@ -3110,11 +3396,11 @@ export class AppointmentsService {
    * @returns Created appointment data
    */
   private async createAppointmentCOD(
-        sessionId: string,
-        patientId: string,
-        session: any,
-        dateString: string,
-      ): Promise<any> {
+    sessionId: string,
+    patientId: string,
+    session: any,
+    dateString: string,
+  ): Promise<any> {
     // Execute transaction with SERIALIZABLE isolation level
     // This ensures ACID compliance and prevents race conditions
     const result = await this.dataSource.transaction(
@@ -3959,7 +4245,18 @@ export class AppointmentsService {
         'cmi',
         'cmi.account_id = clinic._id',
       )
-      .leftJoin('addresses', 'addr', 'addr.account_id = clinic._id')
+      // FIX: Use subquery to get only ONE address per clinic to prevent duplicates
+      // This avoids Cartesian product when multiple addresses exist for the same account
+      .leftJoin(
+        (qb) =>
+          qb
+            .select(['account_id', 'address'])
+            .from('addresses', 'addr')
+            .where('addr.deleted_at IS NULL')
+            .limit(1),
+        'addr',
+        'addr.account_id = clinic._id',
+      )
       .leftJoin('clinic_service_category', 'cat', 'cat._id = cs.category_id')
       .where('csc.is_active = :active', { active: true })
       .andWhere('cs.is_active = :active', { active: true })
@@ -5794,7 +6091,7 @@ export class AppointmentsService {
     );
 
     // 6. Prepare email context
-    const clinicAddress = appointment.clinic?.addresses?.[0];
+    const clinicAddress = appointment.clinic?.address;
     const doctorInfo = appointment.doctor?.doctorInformation;
     const patientInfo = appointment.patient?.generalAccount;
 
@@ -5958,7 +6255,7 @@ export class AppointmentsService {
             );
 
             // Prepare email context
-            const clinicAddress = appointment.clinic?.addresses?.[0];
+            const clinicAddress = appointment.clinic?.address;
             const doctorInfo = appointment.doctor?.doctorInformation;
             const patientInfo = appointment.patient?.generalAccount;
 
@@ -7295,15 +7592,19 @@ export class AppointmentsService {
       email: appointment.patient?.email || 'N/A',
       profile_image_url: patientGeneral?.profilePicture || null,
       addresses:
-        appointment.patient?.addresses?.map((addr) => ({
-          address: addr.address || '',
-          ward: addr.ward || '',
-          wardName: addr.wardName || '',
-          district: addr.district || '',
-          districtName: addr.districtName || '',
-          province: addr.province || '',
-          provinceName: addr.provinceName || '',
-        })) || [],
+        appointment.patient?.address
+          ? [
+            {
+              address: appointment.patient.address.address || '',
+              ward: appointment.patient.address.ward || '',
+              wardName: appointment.patient.address.wardName || '',
+              district: appointment.patient.address.district || '',
+              districtName: appointment.patient.address.districtName || '',
+              province: appointment.patient.address.province || '',
+              provinceName: appointment.patient.address.provinceName || '',
+            },
+          ]
+          : [],
     };
 
     // Step 4: Build doctor info
@@ -7319,7 +7620,7 @@ export class AppointmentsService {
 
     // Step 5: Build clinic info
     const clinicInfo = appointment.clinic?.clinicManagerInformation;
-    const clinicAddress = appointment.clinic?.addresses?.[0];
+    const clinicAddress = appointment.clinic?.address;
     const clinic: AppointmentClinicInfoDto = {
       clinic_id: appointment.clinicId,
       clinic_name: clinicInfo?.clinicBranchName || 'N/A',
