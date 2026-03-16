@@ -259,7 +259,7 @@ export class TransactionsController {
    * @returns Payment response success confirmation
    */
   @Post('seepay/callback')
-  // @UseGuards(SeepayAuthGuard)
+  @UseGuards(SeepayAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Webhook callback từ Seepay' })
   @ApiBody({ type: SeepayCallbackDto })

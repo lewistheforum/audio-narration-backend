@@ -70,4 +70,9 @@ export class SeepayCallbackDto {
   @IsOptional()
   @IsString()
   appointmentId?: string;
+
+  @ApiProperty({ description: 'SePay API Key (Multi-key support)', required: false })
+  @IsOptional()
+  @IsString()
+  apiKey?: string;
 }
