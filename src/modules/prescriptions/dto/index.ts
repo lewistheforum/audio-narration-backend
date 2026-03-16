@@ -32,3 +32,5 @@ export {
   VitalSignsDto,
   ImageUrlDto,
 } from './doctor-erm-detail-response.dto';
+export { PaginatedMedicinesResponseDto } from './paginated-medicines-response.dto';
+export { SearchMedicinesQueryDto } from './search-medicines-query.dto';

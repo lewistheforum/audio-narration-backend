@@ -125,7 +125,7 @@ export class ClinicServiceConfigSeederService {
    * Generate price based on service code
    */
   private generatePrice(serviceCode: string): number {
-    const basePrice = 100000;
+    const basePrice = 1000;
     const multiplier = (serviceCode.length % 5) + 1; // 1-5
     return basePrice * multiplier;
   }

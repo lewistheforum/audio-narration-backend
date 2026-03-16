@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -52,6 +53,7 @@ import {
   CompleteExaminationResponseDto,
   AddServiceDto,
   AddServiceResponseDto,
+  RemoveAddedServiceResponseDto,
   PatientAppointmentDetailResponseDto,
   CreateBookingSessionDto,
   UpdateBookingSessionDto,
@@ -604,7 +606,8 @@ export class AppointmentsController {
           gender: 'male',
           date_of_birth: '1990-05-15',
           age: 34,
-          address: '123 Nguyen Hue, Ben Nghe Ward, District 1, Ho Chi Minh City',
+          address:
+            '123 Nguyen Hue, Ben Nghe Ward, District 1, Ho Chi Minh City',
         },
         statistics: {
           first_visit: '2023-06-15',
@@ -784,18 +787,16 @@ export class AppointmentsController {
   }
 
   /**
-   * Get pending and in-progress services (Step 6)
+   * Get pending, in-progress and completed services (Step 6)
    *
    * Returns list of services that:
    * - Do not have ERM yet (pending_services)
-   * - Have ERM with IN_PROGRESS status (in_progress_services)
-   *
-   * Allows doctor to see which services still need to be completed
-   * or are currently being worked on.
+   * - Have ERM but required fields are not fully filled (in_progress_services)
+   * - Have ERM and all required fields are filled (completed_services)
    *
    * @param req - Request object containing authenticated doctor
    * @param appointmentId - UUID of the appointment
-   * @returns Pending and in-progress services
+   * @returns Pending, in-progress and completed services
    */
   @Get('doctor/:id/pending-services')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -803,12 +804,13 @@ export class AppointmentsController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get pending and in-progress services (Step 6 - ERM Flow)',
+    summary:
+      'Get pending, in-progress and completed services (Step 6 - ERM Flow)',
     description:
       'Retrieve list of services for an appointment that either have no ERM yet ' +
-      'or have ERM with IN_PROGRESS status. Helps doctor track which services ' +
-      'still need to be completed or can be edited. Doctor can loop back to Step 3-5 ' +
-      'for pending services or edit in-progress ERMs.',
+      'or have ERM data that is either incomplete or complete based on required fields. ' +
+      'Helps doctor track which services still need ERM initialization, which ERMs are ' +
+      'still missing required data, and which services are already complete.',
   })
   @ApiResponse({
     status: 200,
@@ -911,7 +913,7 @@ export class AppointmentsController {
           format: 'date-time',
           example: '2026-02-25T10:30:00Z',
         },
-              ermsSummary: {
+        ermsSummary: {
           type: 'array',
           items: {
             type: 'object',
@@ -1105,6 +1107,80 @@ export class AppointmentsController {
       appointmentId,
       doctorId,
       addServiceDto.clinicServiceId,
+    );
+  }
+
+  /**
+   * Remove additional service from appointment
+   *
+   * Allows doctor to remove an additional service that was added during examination.
+   *
+   * API: DELETE /api/appointments/:id/add-service/:serviceAppointmentId
+   *
+   * Business Rules:
+   * - Only allowed when appointment status = IN_PROGRESS
+   * - Appointment must belong to current doctor
+   * - Service must belong to the appointment
+   * - Service must be an additional service added during examination
+   * - Service cannot be removed if ERM already exists
+   * - Service cannot be removed if related package is already paid
+   */
+  @Delete(':id/delete-service/:serviceAppointmentId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.DOCTOR)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Remove additional service from appointment (ERM Flow - Additional Service)',
+    description:
+      'Remove an additional service that was added during examination. ' +
+      'Only allowed when appointment is IN_PROGRESS and the service has no ERM yet.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Additional service removed successfully',
+    type: RemoveAddedServiceResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad Request - Invalid status, service is not additional, ERM already exists, or package already paid',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Appointment not assigned to this doctor',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Appointment or service not found',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Appointment UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiParam({
+    name: 'serviceAppointmentId',
+    type: String,
+    description: 'Service appointment UUID to remove',
+    example: '123e4567-e89b-12d3-a456-426614174001',
+  })
+  async removeAddedServiceFromAppointment(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Param('serviceAppointmentId', ParseUUIDPipe) serviceAppointmentId: string,
+  ): Promise<RemoveAddedServiceResponseDto> {
+    const doctorId = req.user._id;
+    return this.appointmentsService.removeAddedServiceFromAppointment(
+      appointmentId,
+      doctorId,
+      serviceAppointmentId,
     );
   }
 
@@ -1344,7 +1420,8 @@ export class AppointmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Appointment cannot be rescheduled or validation failed',
+    description:
+      'Bad Request - Appointment cannot be rescheduled or validation failed',
   })
   @ApiResponse({
     status: 401,
@@ -2646,7 +2723,10 @@ export class AppointmentsController {
           current_step: 1,
           expires_at: '2026-02-25T11:30:00.000Z',
           booking_data: {
-            service_ids: ['123e4567-e89b-12d3-a456-426614174001', '123e4567-e89b-12d3-a456-426614174002'],
+            service_ids: [
+              '123e4567-e89b-12d3-a456-426614174001',
+              '123e4567-e89b-12d3-a456-426614174002',
+            ],
             clinic_id: '123e4567-e89b-12d3-a456-426614174002',
           },
         },
@@ -2808,8 +2888,8 @@ export class AppointmentsController {
                   service_name: 'Orthopedic Consultation',
                   price: 200000,
                   discount: 10,
-                  final_price: 180000
-                }
+                  final_price: 180000,
+                },
               ],
               appointment_date: '2026-02-25',
               appointment_hour: '2026-02-25T08:00:00.000Z',
