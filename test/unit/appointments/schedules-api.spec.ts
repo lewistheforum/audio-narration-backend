@@ -17,6 +17,8 @@ import { AppointmentRepository, AppointmentPackageRepository } from '../../../sr
 import { ClinicStaffInformationRepository, AccountRepository } from '../../../src/modules/accounts/repositories';
 import { EmployeeScheduleRepository } from '../../../src/modules/schedules/repositories/employee-schedule.repository';
 import { BookingSessionService } from '../../../src/modules/appointments/booking-session.service';
+import { TransactionsService } from '../../../src/modules/transactions/transactions.service';
+import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { REDIS_CLIENT } from '../../../src/config/redis.config';
 import { mockRawScheduleData, mockServicesList } from './fixtures/mock-data';
 
@@ -165,6 +167,19 @@ describe('Schedules API (V4.3) - Unit Tests', () => {
             get: jest.fn(),
             set: jest.fn(),
             del: jest.fn(),
+          },
+        },
+        {
+          provide: TransactionsService,
+          useValue: {
+            createTransaction: jest.fn(),
+          },
+        },
+        {
+          provide: MailerService,
+          useValue: {
+            sendAppointmentReminder: jest.fn(),
+            sendMail: jest.fn(),
           },
         },
       ],

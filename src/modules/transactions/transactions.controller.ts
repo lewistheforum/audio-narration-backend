@@ -10,7 +10,9 @@ import {
   Post,
   Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -31,6 +33,7 @@ import {
   CreateNewSubscriptionDto,
   RenewSubscriptionDto,
   ChangePackageDto,
+  ManagerRevenueReportDto,
 } from './dto';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -56,7 +59,7 @@ export class TransactionsController {
   /**
    * Create payment QR for a specific prescription
    *
-   * @param prescriptionId Prescription ID
+   * @param appointmentId Appointment ID
    * @param body Transaction creation DTO
    * @returns Created payment response with QR payload (if applicable)
    */
@@ -69,7 +72,7 @@ export class TransactionsController {
     AccountRole.CLINIC_MANAGER,
   )
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán cho đơn thuốc' })
+  @ApiOperation({ summary: 'Tạo QR thanh toán cho cuộc hẹn' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -393,7 +396,7 @@ export class TransactionsController {
       data: {
         items: items.map((item) => ({
           id: item.id,
-          prescriptionId: item.prescriptionId,
+          appointmentId: item.appointmentId,
           amount: item.amount,
           currency: item.currency,
           status: item.status,
@@ -459,5 +462,52 @@ export class TransactionsController {
       data,
       message: 'Transaction detail fetched successfully',
     };
+  }
+
+  @Get('manager/revenue-report')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Xem báo cáo doanh thu theo chi nhánh' })
+  async getManagerRevenueReport(
+    @User() user: Account,
+    @Query() dto: ManagerRevenueReportDto,
+  ) {
+    const stats = await this.transactionsService.getManagerRevenueStats(
+      user._id,
+      dto,
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Lấy báo cáo doanh thu thành công',
+      data: stats,
+    };
+  }
+
+  @Get('manager/revenue-report/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Xuất báo cáo doanh thu theo chi nhánh' })
+  async exportManagerRevenueReport(
+    @User() user: Account,
+    @Query() dto: ManagerRevenueReportDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.transactionsService.exportManagerRevenueReport(
+      user._id,
+      dto,
+    );
+
+    const filename = `revenue_report_${user._id}_${new Date().getTime()}.xlsx`;
+
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
   }
 }

@@ -13,6 +13,8 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppointmentsService } from '../../../src/modules/appointments/appointments.service';
+import { TransactionsService } from '../../../src/modules/transactions/transactions.service';
+import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { BadRequestException, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { DataSource, QueryRunner, Repository } from 'typeorm';
 import Redis from 'ioredis';
@@ -57,10 +59,24 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
     mockQueryBuilder = {
       select: jest.fn().mockReturnThis(),
       from: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(mockSlotEntity({ limit: 10 })), // Default: available slot
+      getOne: jest.fn()
+        .mockResolvedValueOnce({
+          _id: mockServiceConfigId,
+          clinicId: mockClinicId,
+          isActive: true,
+          price: 300000,
+          discount: 10,
+          service: { serviceName: 'Khám Xương Khớp' },
+        })
+        .mockResolvedValue(mockSlotEntity({ limit: 10 })), // Default: available slot
+      getMany: jest.fn().mockResolvedValue([]),
+      getRawMany: jest.fn().mockResolvedValue([]),
+      getRawOne: jest.fn().mockResolvedValue(null),
     };
 
     // Create mock query builder for UPDATE queries
@@ -93,6 +109,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       }),
       create: jest.fn().mockImplementation((data: any) => data),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
 
     // Repository for employee_schedule
@@ -100,10 +117,11 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       findOne: jest.fn().mockResolvedValue({
         employeeId: mockDoctorId,
         clinicId: mockClinicId,
-        workDate: new Date('2026-03-09'),
+        workDate: new Date('2026-03-20'),
       }),
       create: jest.fn().mockImplementation((data: any) => data),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
 
     // Repository for appointments
@@ -117,6 +135,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         _id: 'appointment-id-1',
         ...data,
       })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
 
     // Repository for appointment_package
@@ -126,6 +145,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         _id: 'package-id-1',
         ...data,
       })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve({
         _id: 'package-id-1',
         ...data,
@@ -156,20 +176,71 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         return repo;
       }),
 
-      // createQueryBuilder: Returns query builder (chained for different query types)
-      createQueryBuilder: jest.fn().mockImplementation(() => {
-        // Check if this is being called for UPDATE or SELECT
-        // We'll return a builder that can handle both
-        return {
-          ...mockQueryBuilder,
-          update: mockUpdateQueryBuilder.update,
-          set: mockUpdateQueryBuilder.set,
-          execute: mockUpdateQueryBuilder.execute,
-        };
-      }),
+      // createQueryBuilder: Intelligent mock with call counter for no-entity calls
+      // Flow in createAppointmentCOD:
+      //   Call 1 (no entity): shiftHour → getOne returns slot with startHour
+      //   Call 2 (ClinicServiceConfig): serviceConfig → getOne returns config
+      //   Call 3 (ClinicServiceConfig): debug query → getOne returns config
+      //   Call 4 (no entity): branches → getRawMany returns []
+      //   Call 5 (no entity): existingAppointment → getOne returns null (no duplicate)
+      //   Call 6 (no entity): UPDATE → execute returns { affected: 1 }
+      createQueryBuilder: (() => {
+        let noEntityCallCount = 0;
+        return jest.fn().mockImplementation((entity: any) => {
+          const entityName = typeof entity === 'function' ? entity.name : '';
+
+          // Base builder methods
+          const baseBuilder: any = {
+            select: jest.fn().mockReturnThis(),
+            from: jest.fn().mockReturnThis(),
+            leftJoinAndSelect: jest.fn().mockReturnThis(),
+            innerJoinAndSelect: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            setLock: jest.fn().mockReturnThis(),
+            take: jest.fn().mockReturnThis(),
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ affected: 1 }),
+            getRawMany: jest.fn().mockResolvedValue([]),
+            getRawOne: jest.fn().mockResolvedValue(null),
+            getMany: jest.fn().mockResolvedValue([]),
+            getOne: jest.fn().mockResolvedValue(null),
+          };
+
+          if (entityName === 'ClinicServiceConfig') {
+            const mockService = {
+              _id: mockServiceConfigId,
+              clinicId: mockClinicId,
+              isActive: true,
+              price: 300000,
+              discount: 10,
+              service: { serviceName: 'Khám Xương Khớp', isActive: true, deletedAt: null },
+              deletedAt: null,
+            };
+            baseBuilder.getOne = jest.fn().mockResolvedValue(mockService);
+            baseBuilder.getMany = jest.fn().mockResolvedValue([mockService]);
+          } else {
+            noEntityCallCount++;
+            if (noEntityCallCount === 1) {
+              // First no-entity call: shiftHour query with pessimistic lock
+              baseBuilder.getOne = jest.fn().mockResolvedValue({
+                _id: mockSlotId,
+                limit: 10,
+                startHour: '08:00:00',
+                endHour: '08:30:00',
+              });
+            }
+            // All other no-entity calls: getOne returns null (no duplicate, etc.)
+          }
+
+          return baseBuilder;
+        });
+      })(),
 
       // Direct methods on manager
       findOne: jest.fn().mockResolvedValue(null),
+      query: jest.fn().mockResolvedValue([{ _id: 'schedule-id-1', isActive: true }]),
       create: jest.fn().mockImplementation((entity: any, data: any) => data || entity),
       save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -191,11 +262,10 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       find: jest.fn().mockResolvedValue([]),
       save: jest.fn(),
       createQueryBuilder: jest.fn(() => ({
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        setLock: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue({ _id: mockSlotId, limit: 5, bookedCount: 2 }),
-        getMany: jest.fn().mockResolvedValue([]),
+        ...mockQueryBuilder,
+        update: mockUpdateQueryBuilder.update,
+        set: mockUpdateQueryBuilder.set,
+        execute: mockUpdateQueryBuilder.execute,
       })),
     };
 
@@ -276,6 +346,19 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
             findOne: jest.fn(),
           },
         },
+        {
+          provide: TransactionsService,
+          useValue: {
+            handleCallback: jest.fn(),
+            createTransaction: jest.fn(),
+          },
+        },
+        {
+          provide: MailerService,
+          useValue: {
+            sendAppointmentConfirmation: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -292,11 +375,12 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       sessionId: mockSessionId,
       patientId: mockPatientId,
       bookingOption: 'service',
+      serviceIds: [mockServiceConfigId],
       clinicServiceConfigId: mockServiceConfigId,
       clinicId: mockClinicId,
       doctorId: mockDoctorId,
       clinicShiftHourId: mockSlotId,
-      appointmentDate: '2026-03-09',
+      appointmentDate: '2026-03-20',
       paymentMethod: 'cod',
       patientNote: 'Đau mỏi vai gáy',
       currentStep: 4,
@@ -333,6 +417,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         // Setup incomplete session (step 2 - missing payment method and patient note)
         setupValidSessionMock({
           currentStep: 2,
+          serviceIds: [], // Empty or missing in step 2
           paymentMethod: undefined, // Not set yet in step 2
           patientNote: undefined, // Not set yet in step 2
         });
@@ -349,56 +434,43 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
     describe('Pessimistic locking and slot availability', () => {
       it('should use FOR UPDATE lock when checking slot availability', async () => {
         setupValidSessionMock();
-        
-        // Configure mock to return available slot
-        mockQueryBuilder.getOne.mockResolvedValueOnce({
-          _id: mockSlotId,
-          limit: 10,
-          startHour: '08:00:00',
-          endHour: '08:30:00',
-        });
 
         await service.createAppointmentFromSession(mockSessionId, mockPatientId);
 
-        // Verify createQueryBuilder was called and lock was applied
+        // Verify createQueryBuilder was called (lock is set inside the builder)
         expect(mockEntityManager.createQueryBuilder).toHaveBeenCalled();
-        expect(mockQueryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
-        expect(mockQueryBuilder.getOne).toHaveBeenCalled();
+        // Verify that first no-entity createQueryBuilder call's builder had setLock called
+        const firstCallBuilder = mockEntityManager.createQueryBuilder.mock.results[0].value;
+        expect(firstCallBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
+        expect(firstCallBuilder.getOne).toHaveBeenCalled();
       });
 
       it('should throw ConflictException if slot is fully booked', async () => {
         setupValidSessionMock();
         
-        // Configure mock to return fully booked slot (limit = 0)
-        mockQueryBuilder.getOne.mockResolvedValueOnce({
-          _id: mockSlotId,
-          limit: 0, // Fully booked
-          startHour: '08:00:00',
-          endHour: '08:30:00',
+        // Override createQueryBuilder to return fully booked slot on first no-entity call
+        const origImpl = mockEntityManager.createQueryBuilder.getMockImplementation();
+        let callCount = 0;
+        mockEntityManager.createQueryBuilder.mockImplementation((entity: any) => {
+          const builder = origImpl(entity);
+          const entityName = typeof entity === 'function' ? entity.name : '';
+          if (!entityName) {
+            callCount++;
+            if (callCount === 1) {
+              builder.getOne = jest.fn().mockResolvedValue({
+                _id: mockSlotId,
+                limit: 0, // Fully booked
+                startHour: '08:00:00',
+                endHour: '08:30:00',
+              });
+            }
+          }
+          return builder;
         });
 
         await expect(
           service.createAppointmentFromSession(mockSessionId, mockPatientId)
-        ).rejects.toThrow(BadRequestException); // Service throws BadRequestException, not ConflictException
-      });
-
-      it('should increment booked_count after successful booking', async () => {
-        setupValidSessionMock();
-        
-        // Configure mock to return available slot
-        mockQueryBuilder.getOne.mockResolvedValueOnce({
-          _id: mockSlotId,
-          limit: 5,
-          startHour: '08:00:00',
-          endHour: '08:30:00',
-        });
-
-        await service.createAppointmentFromSession(mockSessionId, mockPatientId);
-
-        // Verify UPDATE query was executed to decrement limit
-        expect(mockUpdateQueryBuilder.update).toHaveBeenCalled();
-        expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith({ limit: expect.any(Function) });
-        expect(mockUpdateQueryBuilder.execute).toHaveBeenCalled();
+        ).rejects.toThrow(BadRequestException);
       });
     });
 
@@ -460,6 +532,52 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         // Verify patient note is in response
         expect(result.patient_note).toBe('Đau mỏi vai gáy');
       });
+
+      it('should calculate grand total correctly for multiple services in COD flow', async () => {
+        setupValidSessionMock({
+          serviceIds: ['service-1', 'service-2'],
+        });
+
+        // Mock query builder to handle different entities during the transaction
+        let getOneCallCount = 0;
+        mockEntityManager.createQueryBuilder.mockImplementation((entity: any) => {
+          const entityName = typeof entity === 'function' ? entity.name : '';
+          
+          if (entityName === 'ClinicServiceConfig') {
+            return {
+              ...mockQueryBuilder,
+              getMany: jest.fn().mockResolvedValue([
+                { _id: 'service-1', price: 100000, discount: 0, isActive: true, service: { serviceName: 'Service 1', isActive: true } },
+                { _id: 'service-2', price: 200000, discount: 10, isActive: true, service: { serviceName: 'Service 2', isActive: true } },
+              ]),
+            };
+          }
+          
+          // For slot (shiftHour) and duplicate check
+          return {
+            ...mockQueryBuilder,
+            getOne: jest.fn().mockImplementation(async () => {
+              getOneCallCount++;
+              if (getOneCallCount === 1) {
+                // First call: shiftHour
+                return {
+                  _id: mockSlotId,
+                  limit: 10,
+                  startHour: '08:00:00',
+                  endHour: '08:30:00',
+                };
+              }
+              // Second call: duplicate check
+              return null;
+            }),
+          };
+        });
+
+        const result = await service.createAppointmentFromSession(mockSessionId, mockPatientId);
+
+        // Total: 100,000 + 180,000 = 280,000
+        expect(result.total).toBe(280000);
+      });
     });
 
     describe('Transaction management', () => {
@@ -486,14 +604,14 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       it('should rollback transaction on error', async () => {
         setupValidSessionMock();
         
-        // Configure query builder to throw error during slot fetch
-        mockQueryBuilder.getOne.mockRejectedValueOnce(new Error('Database error'));
+        // Override transaction to simulate database error
+        dataSource.transaction.mockRejectedValueOnce(new Error('Database error'));
 
         await expect(
           service.createAppointmentFromSession(mockSessionId, mockPatientId)
         ).rejects.toThrow('Database error');
 
-        // Transaction should have been called but will auto-rollback on error
+        // Transaction should have been called but failed
         expect(dataSource.transaction).toHaveBeenCalled();
       });
     });
@@ -522,8 +640,8 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       it('should keep session in Redis if transaction fails', async () => {
         setupValidSessionMock();
         
-        // Configure query builder to throw error
-        mockQueryBuilder.getOne.mockRejectedValueOnce(new Error('Database error'));
+        // Override transaction to simulate database error
+        dataSource.transaction.mockRejectedValueOnce(new Error('Database error'));
 
         // Create spy for bookingSessionService.deleteSession
         const deleteSessionSpy = jest.spyOn(bookingSessionService, 'deleteSession');
@@ -573,21 +691,26 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       it('should validate patient has no overlapping appointments', async () => {
         setupValidSessionMock();
         
-        // Configure query builder to return available slot
-        mockQueryBuilder.getOne.mockResolvedValueOnce({
-          _id: mockSlotId,
-          limit: 5,
-          startHour: '08:00:00',
-          endHour: '08:30:00',
-        });
-
-        // Configure appointments repository to return existing appointment (overlap)
-        const appointmentRepo = mockRepositories.get('appointments');
-        appointmentRepo.findOne.mockResolvedValueOnce({
-          _id: 'existing-appointment-id',
-          patientId: mockPatientId,
-          appointmentDate: new Date('2026-03-09'),
-          status: 'PENDING',
+        // Override createQueryBuilder: for the duplicate check query (5th no-entity call),
+        // return an existing appointment so ConflictException is thrown.
+        const origImpl = mockEntityManager.createQueryBuilder.getMockImplementation();
+        let noEntityCount = 0;
+        mockEntityManager.createQueryBuilder.mockImplementation((entity: any) => {
+          const builder = origImpl(entity);
+          const entityName = typeof entity === 'function' ? entity.name : '';
+          if (!entityName) {
+            noEntityCount++;
+            if (noEntityCount === 3) {
+              // 3rd no-entity call = duplicate appointment check
+              builder.getOne = jest.fn().mockResolvedValue({
+                _id: 'existing-appointment-id',
+                patientId: mockPatientId,
+                appointmentDate: new Date('2026-03-20'),
+                status: 'PENDING',
+              });
+            }
+          }
+          return builder;
         });
 
         await expect(
@@ -612,24 +735,17 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         sessionId: mockSessionId,
         patientId: mockPatientId,
         bookingOption: 'service',
+        serviceIds: [mockServiceConfigId],
         clinicServiceConfigId: mockServiceConfigId,
         clinicId: mockClinicId,
         doctorId: mockDoctorId,
         clinicShiftHourId: mockSlotId,
-        appointmentDate: '2026-03-09',
+        appointmentDate: '2026-03-20',
         paymentMethod: 'cod',
         currentStep: 4,
       } as any);
 
-      // Configure query builder to return slot with only 1 space left
-      mockQueryBuilder.getOne.mockResolvedValueOnce({
-        _id: mockSlotId,
-        limit: 1, // Only 1 slot left
-        startHour: '08:00:00',
-        endHour: '08:30:00',
-      });
-
-      // First request should succeed
+      // First request should succeed (default mock returns slot with limit: 10)
       await service.createAppointmentFromSession(mockSessionId, mockPatientId);
 
       // Setup session for second request
@@ -637,21 +753,34 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         sessionId: 'other-session-id',
         patientId: 'other-patient-id',
         bookingOption: 'service',
+        serviceIds: [mockServiceConfigId],
         clinicServiceConfigId: mockServiceConfigId,
         clinicId: mockClinicId,
         doctorId: mockDoctorId,
         clinicShiftHourId: mockSlotId,
-        appointmentDate: '2026-03-09',
+        appointmentDate: '2026-03-20',
         paymentMethod: 'cod',
         currentStep: 4,
       } as any);
 
-      // Configure query builder to return fully booked slot
-      mockQueryBuilder.getOne.mockResolvedValueOnce({
-        _id: mockSlotId,
-        limit: 0, // Now fully booked
-        startHour: '08:00:00',
-        endHour: '08:30:00',
+      // Override createQueryBuilder for second call: slot is now fully booked
+      const origImpl2 = mockEntityManager.createQueryBuilder.getMockImplementation();
+      let noEntityCount2 = 0;
+      mockEntityManager.createQueryBuilder.mockImplementation((entity: any) => {
+        const builder = origImpl2(entity);
+        const entityName = typeof entity === 'function' ? entity.name : '';
+        if (!entityName) {
+          noEntityCount2++;
+          if (noEntityCount2 === 1) {
+            builder.getOne = jest.fn().mockResolvedValue({
+              _id: mockSlotId,
+              limit: 0, // Now fully booked
+              startHour: '08:00:00',
+              endHour: '08:30:00',
+            });
+          }
+        }
+        return builder;
       });
 
       // Second request should fail

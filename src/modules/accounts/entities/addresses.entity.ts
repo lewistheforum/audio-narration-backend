@@ -21,7 +21,7 @@ export class Address {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'account_id', type: 'uuid', unique: true })
+  @Column({ name: 'account_id', type: 'uuid', unique: false })
   accountId: string;
 
   @OneToOne(() => Account, {

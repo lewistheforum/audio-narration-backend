@@ -6,6 +6,8 @@ jest.mock('uuid', () => ({
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppointmentsService } from '../../../../src/modules/appointments/appointments.service';
 import { BookingSessionService } from '../../../../src/modules/appointments/booking-session.service';
+import { TransactionsService } from '../../../../src/modules/transactions/transactions.service';
+import { MailerService } from '../../../../src/modules/mailer/mailer.service';
 import { AppointmentRepository, AppointmentPackageRepository } from '../../../../src/modules/appointments/repositories';
 import { AccountRepository, ClinicStaffInformationRepository } from '../../../../src/modules/accounts/repositories';
 import { EmployeeScheduleRepository } from '../../../../src/modules/schedules/repositories/employee-schedule.repository';
@@ -121,6 +123,7 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
 
     mockAccountRepository = {
       findAccountById: jest.fn(),
+      findByParentIdAndRole: jest.fn(),
     };
 
     mockAppointmentPackageRepository = {
@@ -171,6 +174,19 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
           provide: AccountRepository,
           useValue: mockAccountRepository,
         },
+        {
+          provide: TransactionsService,
+          useValue: {
+            createTransaction: jest.fn(),
+          },
+        },
+        {
+          provide: MailerService,
+          useValue: {
+            sendAppointmentReminder: jest.fn(),
+            sendMail: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -186,10 +202,11 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
   // ============================================================================
 
   describe('Phân Quyền & clinicId Resolution', () => {
-    it('1.1 - CLINIC_ADMIN dùng _id của mình làm clinicId', async () => {
+    it('1.1 - CLINIC_ADMIN dùng findByParentIdAndRole để lấy danh sách managerIds', async () => {
       // Arrange
       const adminAccount = createMockAdmin();
       mockAccountRepository.findAccountById.mockResolvedValue(adminAccount);
+      mockAccountRepository.findByParentIdAndRole.mockResolvedValue([{ _id: 'manager-1' }, { _id: 'manager-2' }]);
 
       const queryDto = { page: 1, limit: 10 };
 
@@ -202,16 +219,16 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
 
       // Assert
       expect(mockAccountRepository.findAccountById).toHaveBeenCalledWith(adminAccount._id);
-      // CLINIC_ADMIN → clinicId = admin._id → andWhere được gọi với admin-uuid
+      expect(mockAccountRepository.findByParentIdAndRole).toHaveBeenCalledWith(adminAccount._id, AccountRole.CLINIC_MANAGER);
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'appointment.clinicId = :clinicId',
-        { clinicId: 'admin-uuid' },
+        'appointment.clinicId IN (:...managerIds)',
+        { managerIds: ['manager-1', 'manager-2'] },
       );
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('total');
     });
 
-    it('1.2 - CLINIC_MANAGER dùng parentId làm clinicId', async () => {
+    it('1.2 - CLINIC_MANAGER dùng _id của chính mình làm clinicId', async () => {
       // Arrange
       const managerAccount = createMockManager({ parentId: 'admin-uuid' });
       mockAccountRepository.findAccountById.mockResolvedValue(managerAccount);
@@ -226,35 +243,32 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
       );
 
       // Assert
-      // CLINIC_MANAGER → clinicId = parentId (= admin-uuid) → andWhere gọi đúng
+      // CLINIC_MANAGER → clinicId = managerAccount._id
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'appointment.clinicId = :clinicId',
-        { clinicId: 'admin-uuid' },
+        { clinicId: managerAccount._id },
       );
       expect(result).toHaveProperty('data');
     });
 
-    it('1.3 - CLINIC_MANAGER không có parentId → không filter theo clinic', async () => {
+    it('1.3 - CLINIC_ADMIN không có branch nào → query 1=0', async () => {
       // Arrange
-      const managerNoParent = createMockManager({ parentId: null });
-      mockAccountRepository.findAccountById.mockResolvedValue(managerNoParent);
+      const adminAccount = createMockAdmin();
+      mockAccountRepository.findAccountById.mockResolvedValue(adminAccount);
+      mockAccountRepository.findByParentIdAndRole.mockResolvedValue([]); // Không có branch
 
       const queryDto = { page: 1, limit: 10 };
 
       // Act
       await appointmentsService.getDoctorWorkHistory(
-        managerNoParent._id,
+        adminAccount._id,
         'doctor-uuid',
         queryDto as any,
       );
 
       // Assert
-      // parentId = null → clinicId = undefined → andWhere về clinic KHÔNG được gọi
-      const andWhereCalls = mockQueryBuilder.andWhere.mock.calls;
-      const clinicFilterCalled = andWhereCalls.some(
-        (call: any[]) => call[0] === 'appointment.clinicId = :clinicId',
-      );
-      expect(clinicFilterCalled).toBe(false);
+      // list branch rỗng → filter an toàn 1=0
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('1 = 0');
     });
 
     it('1.4 - User không tồn tại → NotFoundException', async () => {
@@ -281,6 +295,7 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
   describe('Filter & Query Logic', () => {
     beforeEach(() => {
       mockAccountRepository.findAccountById.mockResolvedValue(createMockAdmin());
+      mockAccountRepository.findByParentIdAndRole.mockResolvedValue([{ _id: 'manager-1' }]);
     });
 
     it('2.1 - Filter bắt buộc theo doctorId', async () => {
@@ -379,6 +394,7 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
   describe('Dữ Liệu Trả Về (services + clinicRooms)', () => {
     beforeEach(() => {
       mockAccountRepository.findAccountById.mockResolvedValue(createMockAdmin());
+      mockAccountRepository.findByParentIdAndRole.mockResolvedValue([{ _id: 'manager-1' }]);
     });
 
     it('3.1 - Services được populate đúng từ appointment packages', async () => {
@@ -471,6 +487,7 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
   describe('Phân Trang', () => {
     beforeEach(() => {
       mockAccountRepository.findAccountById.mockResolvedValue(createMockAdmin());
+      mockAccountRepository.findByParentIdAndRole.mockResolvedValue([{ _id: 'manager-1' }]);
       mockQueryBuilder.getCount.mockResolvedValue(12);
       mockQueryBuilder.getMany.mockResolvedValue([createMockAppointment()]);
     });
@@ -522,6 +539,7 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
     it('5.1 - Doctor không có appointment nào → trả về data rỗng', async () => {
       // Arrange
       mockAccountRepository.findAccountById.mockResolvedValue(createMockAdmin());
+      mockAccountRepository.findByParentIdAndRole.mockResolvedValue([{ _id: 'manager-1' }]);
       mockQueryBuilder.getCount.mockResolvedValue(0);
       mockQueryBuilder.getMany.mockResolvedValue([]);
 
@@ -568,10 +586,10 @@ describe('AppointmentsService - getDoctorWorkHistory', () => {
       );
 
       // Assert
-      // clinicId = parentId = 'clinic-A-admin-uuid'
+      // clinicId = managerClinicA._id
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'appointment.clinicId = :clinicId',
-        { clinicId: 'clinic-A-admin-uuid' },
+        { clinicId: managerClinicA._id },
       );
       // Không có kết quả vì doctor thuộc clinic-B
       expect(result.data).toEqual([]);

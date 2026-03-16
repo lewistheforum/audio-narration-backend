@@ -217,6 +217,8 @@ export class AppointmentSeederService {
           doctors,
           shiftAssignmentsByClinicDoctor,
           clinicRoomsByClinic,
+          serviceConfigs,
+          txTypes,
         );
         overtimeAppointmentsCreated += overtimeAppointments.length;
         appointmentsCreated.push(...overtimeAppointments);
@@ -469,6 +471,8 @@ export class AppointmentSeederService {
     doctors: Account[],
     shiftAssignmentsByClinicDoctor: Map<string, ShiftHourAssignment[]>,
     clinicRoomsByClinic: Map<string, ClinicRoomAssignment[]>,
+    serviceConfigs: any[],
+    txTypes: { online: TransactionType | null; cash: TransactionType | null },
   ): Promise<Appointment[]> {
     const overtimeAppointments: Appointment[] = [];
 
@@ -536,6 +540,23 @@ export class AppointmentSeederService {
         overtimeAppointment,
       );
       overtimeAppointments.push(savedAppointment);
+
+      // Create appointment package and services for overtime appointment
+      await this.createAppointmentPackageAndServices(
+        savedAppointment,
+        clinic,
+        serviceConfigs,
+        txTypes,
+      );
+
+      // Update the appointment total with the calculated package amount
+      const pkg = await this.appointmentPackageRepository.findOne({
+        where: { appointmentId: savedAppointment._id },
+      });
+      if (pkg) {
+        savedAppointment.total = pkg.amount;
+        await this.appointmentRepository.save(savedAppointment);
+      }
 
       this.logger.log(
         `Created overtime appointment ${savedAppointment._id} for patient ${patient._id} in clinic ${clinic._id} using extra room ${room.roomName} (${room.roomId})`,
@@ -699,7 +720,7 @@ export class AppointmentSeederService {
         description: `Payment for appointment ${appointment._id} (${paymentType})`,
         transferType: PaymentDirection.IN,
         gateway: paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH',
-        prescriptionId: appointment._id,
+        appointmentId: appointment._id,
       });
       const savedTransaction = await this.transactionRepository.save(transaction);
       transactionId = savedTransaction.id;

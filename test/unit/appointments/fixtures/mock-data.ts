@@ -32,7 +32,7 @@ export function mockRedisSession(
   // Add fields based on step
   if (step >= 2) {
     Object.assign(baseSession, {
-      appointmentDate: '2026-03-09',
+      appointmentDate: '2026-03-15',
       clinicShiftHourId: '550e8400-e29b-41d4-a716-446655440006',
       doctorId: '550e8400-e29b-41d4-a716-446655440005',
     });
@@ -61,7 +61,7 @@ export function mockRedisSession(
 export function mockRawScheduleData(overrides: Partial<any>[] = []) {
   const defaultData = [
     {
-      work_date: new Date('2026-03-09'),
+      work_date: new Date('2026-03-15'),
       week_day: 'Monday',
       clinic_id: '550e8400-e29b-41d4-a716-446655440003',
       clinic_name: 'Phòng khám ABC',
@@ -77,7 +77,7 @@ export function mockRawScheduleData(overrides: Partial<any>[] = []) {
       clinic_room: 'Phòng 101',
     },
     {
-      work_date: new Date('2026-03-09'),
+      work_date: new Date('2026-03-15'),
       week_day: 'Monday',
       clinic_id: '550e8400-e29b-41d4-a716-446655440003',
       clinic_name: 'Phòng khám ABC',
@@ -93,7 +93,7 @@ export function mockRawScheduleData(overrides: Partial<any>[] = []) {
       clinic_room: 'Phòng 102',
     },
     {
-      work_date: new Date('2026-03-10'),
+      work_date: new Date('2026-03-16'),
       week_day: 'Tuesday',
       clinic_id: '550e8400-e29b-41d4-a716-446655440003',
       clinic_name: 'Phòng khám ABC',
@@ -169,7 +169,7 @@ export function mockSlotEntity(overrides: Record<string, any> = {}) {
     booked_count: 5,
     start_time: '08:00:00',
     end_time: '08:30:00',
-    date: '2026-03-09',
+    date: '2026-03-15',
     ...overrides,
   };
 }
@@ -185,7 +185,7 @@ export function mockAppointmentEntity(overrides: Record<string, any> = {}) {
     clinic_id: '550e8400-e29b-41d4-a716-446655440003',
     clinic_service_config_id: '550e8400-e29b-41d4-a716-446655440004',
     clinic_shift_hour_id: '550e8400-e29b-41d4-a716-446655440006',
-    appointment_date: '2026-03-09',
+    appointment_date: '2026-03-15',
     payment_method: 'cod',
     status: 'pending_confirmation',
     patient_note: '',

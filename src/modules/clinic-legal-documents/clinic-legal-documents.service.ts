@@ -29,6 +29,14 @@ export class ClinicLegalDocumentsService {
     return this.clinicRepo.save(doc);
   }
 
+  async findDocumentByAccountId(accountId: string): Promise<ClinicsLegalDocuments> {
+    const doc = await this.clinicRepo.findOne({ where: { accountId } });
+    if (!doc) {
+      throw new NotFoundException('Clinic legal document not found');
+    }
+    return doc;
+  }
+
   async findOne(_id: string): Promise<ClinicsLegalDocuments> {
     const doc = await this.clinicRepo.findOne({ where: { _id } });
     if (!doc) {

@@ -26,6 +26,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { EmployeeScheduleRepository } from './repositories/employee-schedule.repository';
+import { AppointmentStatus } from '../appointments/enums';
 
 @Injectable()
 export class SchedulesService {
@@ -40,7 +41,7 @@ export class SchedulesService {
     @InjectRepository(DoctorInformation)
     private readonly doctorInfoRepository: Repository<DoctorInformation>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   // ... (rest of methods)
 
@@ -568,9 +569,9 @@ export class SchedulesService {
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
-                id: schedule.rooms[0]._id,
-                name: schedule.rooms[0].roomName,
-              }
+              id: schedule.rooms[0]._id,
+              name: schedule.rooms[0].roomName,
+            }
             : null,
       };
     });
@@ -596,6 +597,37 @@ export class SchedulesService {
 
     // Logic check: Validate new Foreign Keys (Employee, Shift) if changed...
     // ... (Skipping verbose checks for brevity, rely on existing logic or constraints)
+
+    // Conflict Check on Appointments (If trying to modify Shift, Date, or Employee)
+    if (clinicShiftId || workDate || employeeId) {
+      // Check if there are any existing appointments for this schedule
+      const checkQuery = this.dataSource
+        .createQueryBuilder()
+        .select('app._id')
+        .from('appointments', 'app')
+        .innerJoin(
+          'clinic_shift_hour',
+          'csh',
+          'csh._id = app.clinic_shift_hour_id',
+        )
+        .innerJoin(
+          'employee_schedule',
+          'es',
+          'es.clinic_shift_id = csh.shift_id AND es.employee_id = app.doctor_id AND es.work_date = app.appointment_date',
+        )
+        .where('es._id = :scheduleId', { scheduleId: id })
+        .andWhere('app.status NOT IN (:...statuses)', {
+          statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
+        })
+        .andWhere('app.deleted_at IS NULL');
+
+      const existingAppointments = await checkQuery.getRawMany();
+      if (existingAppointments && existingAppointments.length > 0) {
+        throw new ConflictException(
+          'Cannot modify schedule because patients have already booked appointments.',
+        );
+      }
+    }
 
     if (workDate) {
       schedule.workDate = new Date(workDate);
@@ -652,6 +684,39 @@ export class SchedulesService {
    * @returns Success message
    */
   async remove(id: string) {
+    const schedule = await this.scheduleRepository.findOne({
+      where: { _id: id },
+    });
+    if (!schedule) throw new NotFoundException('Schedule not found');
+
+    // Check if there are any existing appointments for this schedule before deleting
+    const checkQuery = this.dataSource
+      .createQueryBuilder()
+      .select('app._id')
+      .from('appointments', 'app')
+      .innerJoin(
+        'clinic_shift_hour',
+        'csh',
+        'csh._id = app.clinic_shift_hour_id',
+      )
+      .innerJoin(
+        'employee_schedule',
+        'es',
+        'es.clinic_shift_id = csh.shift_id AND es.employee_id = app.doctor_id AND es.work_date = app.appointment_date',
+      )
+      .where('es._id = :scheduleId', { scheduleId: id })
+      .andWhere('app.status NOT IN (:...statuses)', {
+        statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
+      })
+      .andWhere('app.deleted_at IS NULL');
+
+    const existingAppointments = await checkQuery.getRawMany();
+    if (existingAppointments && existingAppointments.length > 0) {
+      throw new ConflictException(
+        'Cannot delete schedule because patients have already booked appointments.',
+      );
+    }
+
     const result = await this.scheduleRepository.softDelete(id);
     if (result.affected === 0)
       throw new NotFoundException('Schedule not found');
@@ -1414,9 +1479,9 @@ export class SchedulesService {
           shiftEndTime: '00:00:00', // Will be calculated from slots
           room: scheduleRoom
             ? {
-                roomId: scheduleRoom.room_id,
-                roomName: scheduleRoom.room_name,
-              }
+              roomId: scheduleRoom.room_id,
+              roomName: scheduleRoom.room_name,
+            }
             : null,
           availableSlots: [],
           bookedSlots: [],

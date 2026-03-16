@@ -140,7 +140,7 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for staff's clinic
@@ -1011,48 +1011,38 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Add additional service to appointment (ERM Flow - Additional Service)',
+      'Add additional services to appointment (ERM Flow - Additional Services)',
     description:
-      'Add new service during examination (e.g., X-ray, Lab tests). ' +
+      'Add new services during examination (e.g., X-ray, Lab tests). ' +
       'Only allowed when appointment is IN_PROGRESS. ' +
-      'Creates new AppointmentPackage and ServiceAppointment. ' +
-      'Service will require payment processing by clinic staff after examination.',
+      'Creates one new AppointmentPackage for all added services and multiple ServiceAppointments. ' +
+      'Calculates total amount and updates the appointment total. ' +
+      'Services will require payment processing by clinic staff after examination.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Service added successfully',
+    description: 'Services added successfully',
     schema: {
       type: 'object',
       properties: {
         appointmentPackageId: { type: 'string', example: 'pkg-uuid' },
-        serviceAppointmentId: { type: 'string', example: 'sa-uuid' },
         appointmentId: { type: 'string', example: 'appt-uuid' },
-        clinicServiceId: { type: 'string', example: 'service-uuid' },
-        serviceName: { type: 'string', example: 'X-ray Chest' },
-        serviceType: {
-          type: 'string',
-          enum: [
-            'CONSULTATION',
-            'XRAY',
-            'ULTRASOUND',
-            'LAB',
-            'BONE_DENSITY',
-            'PROCEDURE',
-          ],
-          example: 'XRAY',
+        services: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              serviceAppointmentId: { type: 'string', example: 'sa-uuid' },
+              clinicServiceId: { type: 'string', example: 'service-uuid' },
+              serviceName: { type: 'string', example: 'X-ray Chest' },
+              serviceType: { type: 'string', example: 'XRAY' },
+              price: { type: 'number', example: 200000 },
+              discount: { type: 'number', example: 10 },
+              amount: { type: 'number', example: 180000 },
+            },
+          },
         },
-        price: { type: 'number', example: 200000 },
-        discount: {
-          type: 'number',
-          example: 10,
-          description: 'Discount percentage (%)',
-        },
-        amount: {
-          type: 'number',
-          example: 180000,
-          description: 'Final amount after discount',
-        },
-        addedDuringExamination: { type: 'boolean', example: true },
+        packageTotalAmount: { type: 'number', example: 360000 },
         addedBy: { type: 'string', example: 'doctor-uuid' },
         createdAt: {
           type: 'string',
@@ -1065,7 +1055,7 @@ export class AppointmentsController {
   @ApiResponse({
     status: 400,
     description:
-      'Bad Request - Invalid status, service already exists, or validation failed',
+      'Bad Request - Invalid status, services already exist, or validation failed',
   })
   @ApiResponse({
     status: 401,
@@ -1087,12 +1077,15 @@ export class AppointmentsController {
   })
   @ApiBody({
     type: AddServiceDto,
-    description: 'Service to add',
+    description: 'Services to add',
     examples: {
-      xray: {
-        summary: 'Add X-ray service',
+      xray_and_lab: {
+        summary: 'Add X-ray and Lab services',
         value: {
-          clinicServiceId: '550e8400-e29b-41d4-a716-446655440000',
+          clinicServiceIds: [
+            '550e8400-e29b-41d4-a716-446655440000',
+            '660e8400-e29b-41d4-a716-446655440001',
+          ],
         },
       },
     },
@@ -1101,12 +1094,12 @@ export class AppointmentsController {
     @Request() req: any,
     @Param('id', ParseUUIDPipe) appointmentId: string,
     @Body() addServiceDto: AddServiceDto,
-  ): Promise<AddServiceResponseDto> {
+  ): Promise<any> {
     const doctorId = req.user._id;
     return this.appointmentsService.addServiceToAppointment(
       appointmentId,
       doctorId,
-      addServiceDto.clinicServiceId,
+      addServiceDto.clinicServiceIds,
     );
   }
 
@@ -2953,9 +2946,56 @@ export class AppointmentsController {
     return result.message
       ? result
       : {
-          message: 'Appointment booked successfully',
-          data: result,
-        };
+        message: 'Đặt lịch hẹn thành công',
+        data: result,
+      };
+  }
+
+  @Post('patients/appointments/:sessionId/payment-qr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Lấy mã QR thanh toán từ Redis session (Patient)',
+    description:
+      'Tạo mã QR Seepay từ thông tin booking session đang lưu trên Redis. ' +
+      'Chỉ dùng cho phương thức thanh toán ONLINE. ' +
+      'sessionId phải thuộc về bệnh nhân đang đăng nhập. ' +
+      'Dữ liệu appointment chỉ được ghi vào DB sau khi Seepay callback xác nhận thanh toán thành công.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'Session ID nhận được từ bước tạo booking session (step 4/updateBookingSession)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mã QR được tạo thành công',
+    schema: {
+      example: {
+        message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
+        data: {
+          qr_code_url: 'https://qr.sepay.vn/img?acc=...&bank=...&amount=270000&des=sessionId',
+          qr_payload: '{"acc":"...","bank":"...","amount":270000,"des":"sessionId"}',
+          session_id: '123e4567-e89b-12d3-a456-426614174000',
+          amount: 270000,
+          currency: 'VND',
+          expires_at: '2026-03-10T14:45:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Session không phải thanh toán online hoặc đã hết hạn' })
+  @ApiResponse({ status: 403, description: 'Session không thuộc về bệnh nhân này' })
+  @ApiResponse({ status: 404, description: 'Session không tồn tại' })
+  async getOnlinePaymentQr(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Request() req: any,
+  ): Promise<any> {
+    const patientId = req.user._id;
+    return this.appointmentsService.getOnlinePaymentQr(sessionId, patientId);
   }
 
   // ========================================================================

@@ -6,6 +6,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { CreateContractPackageDto } from './dto/create-contract-package.dto';
 import { CreateContractInfoDto } from './dto/create-contract-info.dto';
+import { RejectContractDto } from './dto/reject-contract.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountRole } from '../accounts/enums/account-role.enum';
@@ -150,6 +151,25 @@ export class ContractsController {
     }
 
     /**
+     * Reject Contract
+     * 
+     * Rejects the contract with a reason.
+     */
+    @Post(':id/reject')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth('JWT-auth')
+    @ApiOperation({ summary: 'Reject a contract with a reason' })
+    @ApiBody({ type: RejectContractDto })
+    @ApiResponse({ status: 200, description: 'Contract rejected successfully' })
+    async rejectContract(
+        @Param('id') id: string,
+        @Body() dto: RejectContractDto,
+        @Req() req
+    ) {
+        return this.contractsService.rejectContract(id, req.user._id, dto.reason);
+    }
+
+    /**
      * Verify Contract
      * 
      * Verifies the digital signatures and integrity of the contract file.
@@ -187,5 +207,23 @@ export class ContractsController {
         @UploadedFile() file: any
     ) {
         return this.contractsService.uploadContractFile(id, file);
+    }
+
+    /**
+     * Cancel/Delete Contract Package
+     * 
+     * Only allowed by Clinic Manager before contract is CURRENT.
+     */
+    @Post('packages/:id/cancel')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER)
+    @ApiBearerAuth('JWT-auth')
+    @ApiOperation({ summary: 'Cancel/Delete a contract package' })
+    @ApiResponse({ status: 200, description: 'Contract package cancelled successfully' })
+    async cancelPackage(
+        @Param('id') id: string,
+        @Req() req
+    ) {
+        return this.contractsService.deletePackage(id, req.user._id);
     }
 }

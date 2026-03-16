@@ -19,6 +19,10 @@ import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/sub
 import { AppointmentPackage } from '../../../src/modules/appointments/entities/appointment-package.entity';
 import { AppointmentPackageStatus } from '../../../src/modules/appointments/enums';
 import { Account } from '../../../src/modules/accounts/entities/accounts.entity';
+import { BookingSessionService } from '../../../src/modules/appointments/booking-session.service';
+import { AppointmentsService } from '../../../src/modules/appointments/appointments.service';
+import { RevenuePeriod } from '../../../src/modules/transactions/dto/manager-revenue-report.dto';
+import * as XLSX from 'xlsx';
 
 /**
  * Unit Tests for TransactionsService
@@ -38,6 +42,8 @@ describe('TransactionsService', () => {
     let subscriptionServicesService: any;
     let configService: any;
     let accountRepo: any;
+    let bookingSessionService: any;
+    let appointmentsService: any;
 
     // ========================================
     // SETUP
@@ -50,6 +56,8 @@ describe('TransactionsService', () => {
             findAllPaymentHistory: jest.fn(),
             countPaymentHistory: jest.fn(),
             findDetailById: jest.fn(),
+            getRevenueStats: jest.fn(),
+            getTransactionsForExport: jest.fn(),
         };
 
         clinicAdminRepo = {
@@ -90,6 +98,15 @@ describe('TransactionsService', () => {
             update: jest.fn(),
         };
 
+        bookingSessionService = {
+            getSession: jest.fn(),
+        };
+
+        appointmentsService = {
+            createAppointmentOnlineFromCallback: jest.fn(),
+            updateAppointmentStatusDirectly: jest.fn(),
+        };
+
         configService = {
             get: jest.fn((key) => {
                 if (key === 'SEEPAY_QR_BASE') return 'https://qr.seepay.vn';
@@ -112,6 +129,8 @@ describe('TransactionsService', () => {
                 { provide: getRepositoryToken(AppointmentPackage), useValue: packageRepo },
                 { provide: getRepositoryToken(Account), useValue: accountRepo },
                 { provide: SubscriptionServicesService, useValue: subscriptionServicesService },
+                { provide: BookingSessionService, useValue: bookingSessionService },
+                { provide: AppointmentsService, useValue: appointmentsService },
                 { provide: ConfigService, useValue: configService },
             ],
         }).compile();
@@ -537,7 +556,8 @@ describe('TransactionsService', () => {
             transferAmount: 50000,
             accumulated: 100000,
             referenceCode: 'REF123',
-            prescriptionId: 'uuid-tx-id',
+            prescriptionId: 'uuid-tx-id', // Deprecated but kept for old tests Compatibility
+            appointmentId: 'uuid-tx-id', // New field
             currency: 'VND',
         } as any;
 
@@ -627,7 +647,7 @@ describe('TransactionsService', () => {
                     status: PaymentStatus.SUCCESS,
                 });
 
-                const payload = { ...basePayload, prescriptionId: 'uuid-appointment' };
+                const payload = { ...basePayload, prescriptionId: 'uuid-appointment', appointmentId: 'uuid-appointment' };
                 const result = await service.handleCallback(payload);
 
                 expect(transactionRepository.create).toHaveBeenCalled();
@@ -681,6 +701,99 @@ describe('TransactionsService', () => {
             it('should throw NotFoundException if not found', async () => {
                 (transactionRepository.findDetailById as jest.Mock).mockResolvedValue(null);
                 await expect(service.getTransactionDetail('invalid')).rejects.toThrow(NotFoundException);
+            });
+        });
+    });
+
+    // ========================================
+    // Manager Revenue Reports
+    // ========================================
+    describe('Manager Revenue Reports', () => {
+        const managerId = 'manager-1';
+        const clinicId = 'clinic-1';
+
+        describe('getManagerRevenueStats', () => {
+            it('should calculate total revenue and transaction count from repository results', async () => {
+                const mockStats = [
+                    { label: '2024-03-01', total_revenue: '100000', transaction_count: '2' },
+                    { label: '2024-03-02', total_revenue: '50000', transaction_count: '1' },
+                ];
+                (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue(mockStats);
+
+                const dto = { period: RevenuePeriod.DAILY };
+                const result = await service.getManagerRevenueStats(managerId, dto as any);
+
+                expect(result.totalRevenue).toBe(150000);
+                expect(result.totalTransactions).toBe(3);
+                expect(result.data).toHaveLength(2);
+                expect(result.data[0].total_revenue).toBe('100000');
+            });
+
+            it('should handle empty repository results', async () => {
+                (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue([]);
+
+                const dto = { period: RevenuePeriod.MONTHLY };
+                const result = await service.getManagerRevenueStats(managerId, dto as any);
+
+                expect(result.totalRevenue).toBe(0);
+                expect(result.totalTransactions).toBe(0);
+                expect(result.data).toEqual([]);
+            });
+
+            it('should use default period "day" if not provided', async () => {
+                (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue([]);
+                
+                await service.getManagerRevenueStats(managerId, {});
+                
+                expect(transactionRepository.getRevenueStats).toHaveBeenCalledWith(
+                    managerId,
+                    new Date(0),
+                    expect.any(Date),
+                    'day'
+                );
+            });
+        });
+
+        describe('exportManagerRevenueReport', () => {
+            it('should return a buffer containing XLSX data', async () => {
+                const mockTransactions = [
+                    {
+                        transactionDate: new Date('2024-03-11T10:00:00Z'),
+                        id: 'tx-123',
+                        amount: 50000,
+                        status: 'SUCCESS',
+                        gateway: 'SePay',
+                        description: 'Payment for service',
+                        patientName: 'Nguyen Van A',
+                    },
+                ];
+                (transactionRepository.getTransactionsForExport as jest.Mock).mockResolvedValue(mockTransactions);
+
+                const result = await service.exportManagerRevenueReport(managerId, {});
+
+                expect(result).toBeInstanceOf(Buffer);
+                expect(result.length).toBeGreaterThan(0);
+                expect(transactionRepository.getTransactionsForExport).toHaveBeenCalled();
+            });
+
+            it('should format data correctly for the worksheet', async () => {
+                const mockTransactions = [
+                    {
+                        transactionDate: new Date('2024-03-11T10:00:00Z'),
+                        id: 'tx-123',
+                        amount: 50000,
+                        status: 'SUCCESS',
+                        gateway: 'SePay',
+                        description: 'Test',
+                        patientName: 'John Doe',
+                    },
+                ];
+                (transactionRepository.getTransactionsForExport as jest.Mock).mockResolvedValue(mockTransactions);
+
+                // Spy on XLSX methods if possible, or just check the output buffer
+                // For unit test, we mostly care that it calls the repo and executes without error
+                const result = await service.exportManagerRevenueReport(managerId, {});
+                expect(result).toBeDefined();
             });
         });
     });

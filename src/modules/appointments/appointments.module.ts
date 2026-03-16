@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentsController } from './appointments.controller';
@@ -13,7 +13,10 @@ import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-
 import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
 import { RedisModule } from '../../config/redis.config';
 import { MailerModule } from '../mailer/mailer.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
+import { HttpModule } from '@nestjs/axios';
+import { AppointmentWebhookService } from './appointment-webhook.service';
 
 /**
  * Appointments Module
@@ -45,18 +48,21 @@ import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
     ]),
     RedisModule,
     MailerModule,
+    forwardRef(() => TransactionsModule),
     PrescriptionsModule,
+    HttpModule,
   ],
   controllers: [AppointmentsController],
   providers: [
     AppointmentsService,
     BookingSessionService,
+    AppointmentWebhookService,
     AppointmentRepository,
     AppointmentPackageRepository,
     ClinicStaffInformationRepository,
     EmployeeScheduleRepository,
     AccountRepository,
   ],
-  exports: [TypeOrmModule, AppointmentsService, BookingSessionService],
+  exports: [TypeOrmModule, AppointmentsService, BookingSessionService, AppointmentWebhookService],
 })
-export class AppointmentsModule {}
+export class AppointmentsModule { }

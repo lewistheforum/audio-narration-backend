@@ -61,8 +61,18 @@ describe('SchedulesService', () => {
         },
     };
 
+    const mockQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn(),
+    };
+
     const mockDataSource = {
         createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner),
+        createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 
     beforeEach(async () => {
@@ -182,26 +192,38 @@ describe('SchedulesService', () => {
 
             const result = await service.findAll(user, query);
 
-            expect(mockScheduleRepository.findSchedules).toHaveBeenCalledWith('clinic-id', expect.objectContaining({ date: query.date }));
+            expect(mockScheduleRepository.findSchedules).toHaveBeenCalledWith('manager-id', expect.objectContaining({ date: query.date }));
             expect(result[0].employee.fullName).toEqual('Dr. House');
             expect(result[0].room.name).toEqual('Room 1');
         });
     });
 
     describe('update', () => {
-        it('should update schedule successfully', async () => {
+        it('should update schedule successfully if no existing appointments', async () => {
             const id = 'sched-id';
             const updateDto = { roomId: 'new-room-id' };
-            const schedule = { _id: id, clinicId: 'clinic-id', rooms: [] };
+            const schedule = { _id: id, clinicId: 'clinic-id', rooms: [], workDate: new Date() };
 
             mockScheduleRepository.findOne.mockResolvedValue(schedule);
             mockRoomRepository.findOne.mockResolvedValue({ _id: 'new-room-id' });
+            mockQueryBuilder.getRawMany.mockResolvedValue([]); // No existing appointments
             mockScheduleRepository.save.mockResolvedValue({ ...schedule, rooms: [{ _id: 'new-room-id' }] });
 
             const result = await service.update(id, updateDto);
 
             expect(mockScheduleRepository.save).toHaveBeenCalled();
             expect(result.message).toEqual('Schedule updated successfully');
+        });
+
+        it('should throw ConflictException if trying to update date/shift/employee with existing appointments', async () => {
+             const id = 'sched-id';
+             const updateDto = { workDate: '2024-05-20' };
+             const schedule = { _id: id, clinicId: 'clinic-id', rooms: [], workDate: new Date() };
+
+             mockScheduleRepository.findOne.mockResolvedValue(schedule);
+             mockQueryBuilder.getRawMany.mockResolvedValue([{ _id: 'app-id' }]); // Has existing appointments
+
+             await expect(service.update(id, updateDto)).rejects.toThrow(ConflictException);
         });
     });
 

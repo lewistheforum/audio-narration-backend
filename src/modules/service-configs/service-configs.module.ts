@@ -6,6 +6,7 @@ import { ServiceConfigsService } from './service-configs.service';
 import {
   ServiceConfigsController,
   ManagerServiceConfigsController,
+  PublicServiceConfigsController,
   DoctorServiceConfigsController,
 } from './service-configs.controller';
 
@@ -19,6 +20,7 @@ import {
   controllers: [
     ServiceConfigsController,
     ManagerServiceConfigsController,
+    PublicServiceConfigsController,
     DoctorServiceConfigsController,
   ],
   providers: [ClinicServiceConfigRepository, ServiceConfigsService],
