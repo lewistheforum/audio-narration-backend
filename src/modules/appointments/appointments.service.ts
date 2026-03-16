@@ -1,10 +1,13 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
   ConflictException,
+  forwardRef,
 } from '@nestjs/common';
+import { TransactionsService } from '../transactions/transactions.service';
 import { DataSource, IsNull } from 'typeorm';
 import {
   getCurrentVietnamTime,
@@ -73,20 +76,15 @@ import {
   PatientAddressDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
-import {
-  Appointment,
-  AppointmentPackage,
-  ServiceAppointment,
-} from './entities';
-import {
-  AppointmentStatus,
-  AppointmentPackageStatus,
-  PaymentType,
-} from './enums';
+import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
+import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from './enums';
+import { Transaction, TransactionType, TransactionTypeCode, PaymentStatus } from '../transactions/entities';
 import { ERMRecordType, ERMStatus } from '../prescriptions/enums';
 import { ERM } from '../prescriptions/entities/erm.entity';
 import { EPrescription } from '../prescriptions/entities/e-prescription.entity';
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
+import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
+import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { BookingSessionService } from './booking-session.service';
 import {
   MailerService,
@@ -118,6 +116,8 @@ export class AppointmentsService {
     private readonly accountRepository: AccountRepository,
     private readonly bookingSessionService: BookingSessionService,
     private readonly mailerService: MailerService,
+    @Inject(forwardRef(() => TransactionsService))
+    private readonly transactionsService: TransactionsService,
   ) { }
 
   /**
@@ -608,13 +608,19 @@ export class AppointmentsService {
       );
     }
 
+    // Capture old status for slot logic
+    const oldStatus = appointment.status;
+    const newStatus = AppointmentStatus.CANCELLED;
+
     // Update appointment
-    appointment.status = AppointmentStatus.CANCELLED;
+    appointment.status = newStatus;
     appointment.rejectReason = cancelDto.rejectReason;
 
     // Save changes
-    const updatedAppointment =
-      await this.appointmentRepository.save(appointment);
+    const updatedAppointment = await this.appointmentRepository.save(appointment);
+
+    // Handle slot return if necessary
+    await this.handleSlotReturn(this.dataSource.manager, updatedAppointment, oldStatus, newStatus);
 
     return this.transformToResponseDto(updatedAppointment);
   }
@@ -1719,8 +1725,11 @@ export class AppointmentsService {
       );
     }
 
+    const oldStatus = appointment.status;
+    const newStatus = updateStatusDto.status;
+
     // Update appointment status
-    appointment.status = updateStatusDto.status;
+    appointment.status = newStatus;
 
     // Update reject reason if provided
     if (updateStatusDto.reason) {
@@ -1728,8 +1737,10 @@ export class AppointmentsService {
     }
 
     // Save changes
-    const updatedAppointment =
-      await this.appointmentRepository.save(appointment);
+    const updatedAppointment = await this.appointmentRepository.save(appointment);
+
+    // Handle slot return if necessary
+    await this.handleSlotReturn(this.dataSource.manager, updatedAppointment, oldStatus, newStatus);
 
     return this.transformToResponseDto(updatedAppointment);
   }
@@ -2862,9 +2873,13 @@ export class AppointmentsService {
     }
 
     // 9. Update appointment status based on payment logic
+    const oldStatus = appointment.status;
     appointment.status = appointmentStatus;
 
     await this.dataSource.getRepository(Appointment).save(appointment);
+
+    // Handle slot return if necessary
+    await this.handleSlotReturn(this.dataSource.manager, appointment, oldStatus, appointmentStatus);
 
     // 10. Get prescription info
     const ePrescription = await this.dataSource
@@ -3309,24 +3324,20 @@ export class AppointmentsService {
           'Incomplete booking session. Please complete all steps (including payment method selection) before confirming.',
         );
       }
-    }
 
-    // Validate payment method (common for all options)
-    if (!['cod', 'online'].includes(session.paymentMethod)) {
-      throw new BadRequestException(
-        'Invalid payment method. Must be \"cod\" or \"online\"',
-      );
-    }
+      // Validate payment method (common for all options)
+      if (!['cod', 'online'].includes(session.paymentMethod)) {
+        throw new BadRequestException(
+          'Invalid payment method. Must be \"cod\" or \"online\"',
+        );
+      }
 
-    // ========================================================================
-    // STEP 2: VALIDATE BUSINESS RULES (FOR OPTIONS 1/2/3 ONLY)
-    // ========================================================================
+      // ========================================================================
+      // STEP 2: VALIDATE BUSINESS RULES (FOR OPTIONS 1/2/3 ONLY)
+      // ========================================================================
 
-    // Skip date validation for out_of_hours (handled in STEP 1)
-    let dateString: string | null = null;
-
-    if (bookingOption !== 'out_of_hours') {
       // Extract date string (YYYY-MM-DD) directly from session
+      let dateString: string | null = null;
       const dateInput = session.appointmentDate;
 
       if (typeof dateInput === 'string') {
@@ -3363,47 +3374,47 @@ export class AppointmentsService {
           'Appointment date cannot be more than 60 days in the future',
         );
       }
-    }
 
-    // ========================================================================
-    // STEP 3: BRANCH BASED ON BOOKING OPTION & PAYMENT METHOD
-    // ========================================================================
+      // ========================================================================
+      // STEP 3: BRANCH BASED ON BOOKING OPTION & PAYMENT METHOD
+      // ========================================================================
 
-    // OPTION 4: Out of Hours Booking
-    if (bookingOption === 'out_of_hours') {
+      // OPTION 4: Out of Hours Booking
+      if (bookingOption as string === 'out_of_hours') {
+        if (session.paymentMethod === 'cod') {
+          return await this.createAppointmentOutOfHours(
+            sessionId,
+            patientId,
+            session,
+          );
+        } else {
+          // TODO: Implement online payment for out_of_hours
+          throw new BadRequestException(
+            'Online payment for out-of-hours appointments is not yet supported',
+          );
+        }
+      }
+
+      // OPTIONS 1/2/3: Standard Booking with Shift Hours
       if (session.paymentMethod === 'cod') {
-        return await this.createAppointmentOutOfHours(
+        // ============================================================
+        // BRANCH A: COD PAYMENT (Cash on Delivery)
+        // Creates appointment immediately, patient pays at clinic
+        // ============================================================
+        return await this.createAppointmentCOD(
           sessionId,
           patientId,
           session,
+          dateString!,
         );
       } else {
-        // TODO: Implement online payment for out_of_hours
-        throw new BadRequestException(
-          'Online payment for out-of-hours appointments is not yet supported',
-        );
+        // ============================================================
+        // BRANCH B: ONLINE PAYMENT (Payment Gateway)
+        // PLACEHOLDER - Payment gateway integration pending
+        // Returns mock payment URL, session will be processed via webhook
+        // ============================================================
+        return await this.createPaymentRequestOnline(sessionId, session);
       }
-    }
-
-    // OPTIONS 1/2/3: Standard Booking with Shift Hours
-    if (session.paymentMethod === 'cod') {
-      // ============================================================
-      // BRANCH A: COD PAYMENT (Cash on Delivery)
-      // Creates appointment immediately, patient pays at clinic
-      // ============================================================
-      return await this.createAppointmentCOD(
-        sessionId,
-        patientId,
-        session,
-        dateString!,
-      );
-    } else {
-      // ============================================================
-      // BRANCH B: ONLINE PAYMENT (Payment Gateway)
-      // PLACEHOLDER - Payment gateway integration pending
-      // Returns mock payment URL, session will be processed via webhook
-      // ============================================================
-      return await this.createPaymentRequestOnline(sessionId, session);
     }
   }
 
@@ -3727,33 +3738,81 @@ export class AppointmentsService {
    * @param session - Booking session data from Redis
    * @returns Mock payment response with payment URL
    */
-  private async createPaymentRequestOnline(
+  async createPaymentRequestOnline(
     sessionId: string,
     session: any,
   ): Promise<any> {
-    // ========================================================================
-    // PLACEHOLDER LOGIC - TO BE REPLACED WITH REAL PAYMENT GATEWAY
-    // ========================================================================
+    // 1. Calculate Price from ALL Service Configs (V5.0 - Multi-Service Support)
+    const serviceIds: string[] = session.serviceIds || [];
+    const uniqueServiceIds = Array.from(new Set(serviceIds));
 
-    const { v4: uuidv4 } = require('uuid');
+    if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+      throw new BadRequestException('Service IDs array cannot be empty');
+    }
 
-    // Generate unique payment reference ID
-    const paymentReferenceId = uuidv4();
+    const serviceConfigs = await this.dataSource
+      .getRepository(ClinicServiceConfig)
+      .createQueryBuilder('csc')
+      .leftJoinAndSelect('csc.service', 'service')
+      .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+      .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
+      .andWhere('csc.is_active = true')
+      .andWhere('csc.deleted_at IS NULL')
+      .andWhere('service.deleted_at IS NULL')
+      .getMany();
 
-    // Calculate total amount (same logic as COD)
-    // In real implementation, this should query the actual service price
-    // For now, return a placeholder amount
-    const totalAmount = 300000; // Placeholder - will be calculated from session data
+    if (serviceConfigs.length !== uniqueServiceIds.length) {
+      throw new BadRequestException('One or more services are not available or have been discontinued');
+    }
 
-    // Update session with payment_reference_id
-    // This allows webhook to find the session later
+    // Calculate total amount (Sum of all service prices after discounts)
+    let totalAmount = 0;
+    for (const sc of serviceConfigs) {
+      const basePrice = parseFloat(sc.price.toString());
+      const discount = sc.discount ? parseFloat(sc.discount.toString()) : 0;
+      const finalPrice = basePrice - (basePrice * discount / 100);
+      totalAmount += finalPrice;
+    }
+    const finalRoundedTotal = Math.round(totalAmount);
+
+    // 2. Resolve Clinic Admin ID for Seepay Config
+    const managerAccount = await this.accountRepository.findAccountById(session.clinicId);
+
+    let clinicIdForConfig = session.clinicId;
+    if (managerAccount && managerAccount.role === AccountRole.CLINIC_MANAGER && managerAccount.parentId) {
+      clinicIdForConfig = managerAccount.parentId;
+    }
+
+    // Resolve ClinicAdminInformation ID (not Account ID)
+    const clinicAdminInfo = await this.dataSource
+      .getRepository(ClinicAdminInformation)
+      .findOne({ where: { accountId: clinicIdForConfig } });
+
+    const clinicAdminInfoId = clinicAdminInfo?._id;
+
+    // 3. Generate QR via TransactionsService
+    const seepayConfig = await this.transactionsService.resolveSepayConfig(clinicAdminInfoId);
+    const qrCodeUrl = this.transactionsService.buildQrUrl(
+      finalRoundedTotal,
+      sessionId, // Use sessionId as the description/reference
+      seepayConfig.acc,
+      seepayConfig.bank,
+    );
+    const qrPayload = this.transactionsService.buildQrPayload(
+      finalRoundedTotal,
+      sessionId,
+      seepayConfig.acc,
+      seepayConfig.bank,
+    );
+
+    // 4. Update Session in Redis with calculated amount
     const updatedSession = {
       ...session,
-      paymentReferenceId,
-      paymentProvider: 'vnpay', // or 'momo'
+      paymentAmount: finalRoundedTotal,
+      paymentProvider: 'seepay',
+      paymentReferenceId: sessionId,
     };
 
-    // Save updated session back to Redis (keep TTL)
     const key = `booking:session:${sessionId}`;
     const ttl = await this.bookingSessionService['redisClient'].ttl(key);
     await this.bookingSessionService['redisClient'].setex(
@@ -3762,28 +3821,212 @@ export class AppointmentsService {
       JSON.stringify(updatedSession),
     );
 
-    // TODO: Call real Payment Gateway API
-    // const paymentGatewayResponse = await this.paymentGatewayService.createPayment({
-    //   order_id: paymentReferenceId,
-    //   amount: totalAmount,
-    //   order_info: `Thanh toan lich kham - ${session.clinicServiceConfigId}`,
-    //   return_url: `${process.env.FRONTEND_URL}/booking/payment-result`,
-    //   ipn_url: `${process.env.BACKEND_URL}/api/webhooks/payment`,
-    //   locale: 'vn',
-    //   currency: 'VND',
-    // });
-
-    // Return mock payment response
     return {
       message: 'Please complete the payment to finish booking',
       data: {
-        payment_url: `https://sandbox.payment-gateway.com/pay?order_id=${paymentReferenceId}`,
-        payment_reference_id: paymentReferenceId,
-        amount: totalAmount,
+        qr_code_url: qrCodeUrl,
+        qr_payload: qrPayload,
+        session_id: sessionId,
+        amount: finalRoundedTotal,
+        currency: 'VND',
         expires_at: addToVietnamTime(15, 'minute'), // 15 minutes
-        // Note: This is MOCK data. Real payment gateway will return actual payment URL
       },
     };
+  }
+
+  /**
+   * PUBLIC: Get Online Payment QR from Redis Session
+   * Called by the dedicated endpoint POST /patients/appointments/:sessionId/payment-qr
+   * Verifies that the session belongs to the requesting patient,
+   * then delegates to createPaymentRequestOnline to generate QR.
+   */
+  async getOnlinePaymentQr(sessionId: string, patientId: string): Promise<any> {
+    // 1. Fetch session from Redis
+    const session = await this.bookingSessionService.getSession(sessionId);
+    if (!session) {
+      throw new NotFoundException('Booking session does not exist or has expired');
+    }
+
+    // 2. Ownership check
+    if (session.patientId !== patientId) {
+      throw new ForbiddenException('You do not have permission to access this booking session');
+    }
+
+    // 3. Must be an ONLINE payment session
+    if (session.paymentMethod !== 'online') {
+      throw new BadRequestException('This booking session does not use online payment');
+    }
+
+    // 4. Generate QR using existing logic
+    return this.createPaymentRequestOnline(sessionId, session);
+  }
+
+  /**
+   * Finalize Online Appointment after successful payment callback
+   * Called from TransactionsService.handleCallback
+   */
+  async createAppointmentOnlineFromCallback(
+    sessionId: string,
+    transactionData: any,
+  ): Promise<any> {
+    const session = await this.bookingSessionService.getSession(sessionId);
+    if (!session) {
+      throw new NotFoundException('Booking session does not exist or has expired');
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Verify Slot Availability (Pessimistic Locking)
+      const slot = await manager
+        .createQueryBuilder(ClinicShiftHour, 'csh')
+        .setLock('pessimistic_write')
+        .where('csh._id = :id', { id: session.clinicShiftHourId })
+        .getOne();
+
+      if (!slot || slot.limit <= 0) {
+        throw new BadRequestException('This slot is currently full. Please choose another slot.');
+      }
+
+      // 2. Validate Service Configs (multi-service)
+      const serviceIds: string[] = session.serviceIds || [];
+      const uniqueServiceIds = Array.from(new Set(serviceIds));
+
+      if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+        throw new BadRequestException('Service IDs array cannot be empty');
+      }
+
+      const serviceConfigs = await manager
+        .createQueryBuilder(ClinicServiceConfig, 'csc')
+        .leftJoinAndSelect('csc.service', 'service')
+        .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+        .andWhere('csc.is_active = true')
+        .getMany();
+
+      if (serviceConfigs.length !== uniqueServiceIds.length) {
+        throw new BadRequestException('One or more services are not available');
+      }
+
+      // Calculate total from session payment or services
+      let calculatedTotal = 0;
+      for (const sc of serviceConfigs) {
+        const p = parseFloat(sc.price.toString());
+        const d = sc.discount ? parseFloat(sc.discount.toString()) : 0;
+        calculatedTotal += p - (p * d / 100);
+      }
+      const finalAmount = session.paymentAmount || calculatedTotal;
+
+      // 3. Create Appointment
+      const appointment = manager.create(Appointment, {
+        patientId: session.patientId,
+        clinicId: session.clinicId,
+        doctorId: session.doctorId,
+        clinicShiftHourId: session.clinicShiftHourId,
+        appointmentDate: new Date(session.appointmentDate),
+        appointmentHour: session.appointmentHour ? new Date(session.appointmentHour) : new Date(session.appointmentDate),
+        total: finalAmount, // Required field
+        status: AppointmentStatus.CONFIRMED, // Paid online -> Confirmed
+        patientNote: session.patientNote,
+      });
+
+      const savedAppointment = await manager.save(Appointment, appointment);
+
+      // 4. Create Transaction record (NEW v4.0)
+      const transactionType = await manager.findOne(TransactionType, {
+        where: { code: TransactionTypeCode.ONLINE },
+      });
+
+      const transaction = manager.create(Transaction, {
+        appointmentId: savedAppointment._id,
+        amount: finalAmount,
+        currency: 'VND',
+        status: PaymentStatus.SUCCESS,
+        gateway: transactionData.gateway,
+        clinicId: savedAppointment.clinicId,
+        senderAccountId: savedAppointment.patientId,
+        transactionTypeId: transactionType?._id,
+        transactionDate: new Date(transactionData.transactionDate),
+        accountNumber: transactionData.accountNumber,
+        code: transactionData.code,
+        transferType: transactionData.transferType,
+        transferAmount: transactionData.transferAmount,
+        accumulated: transactionData.accumulated,
+        subAccount: transactionData.subAccount ?? undefined,
+        referenceCode: transactionData.referenceCode,
+        description: transactionData.description,
+        seepayTransactionId: transactionData.id?.toString(),
+      });
+
+      const savedTransaction = await manager.save(Transaction, transaction);
+
+      // 5. Create Appointment Package (Status: PAID)
+      const appointmentPackage = manager.create(AppointmentPackage, {
+        appointmentId: savedAppointment._id,
+        transactionId: savedTransaction.id, // LINK Transaction ID
+        amount: Math.round(finalAmount),
+        status: AppointmentPackageStatus.PAID,
+        paymentType: PaymentType.ONLINE,
+      });
+      const savedPackage = await manager.save(AppointmentPackage, appointmentPackage);
+
+      // 6. Create Service Appointment links
+      const serviceAppointmentsToSave = serviceConfigs.map((config) => {
+        const p = parseFloat(config.price.toString());
+        const d = config.discount ? parseFloat(config.discount.toString()) : 0;
+        return manager.create(ServiceAppointment, {
+          clinicServiceId: config._id,
+          appointmentPackageId: savedPackage._id,
+          price: p,
+          discount: d,
+        });
+      });
+      await manager.save(ServiceAppointment, serviceAppointmentsToSave);
+
+      // 7. Update Slot Limit (Decrement) - REMOVED: Calculated dynamically
+
+      // 8. Delete Redis Session
+      await this.bookingSessionService.deleteSession(sessionId);
+
+      return {
+        message: 'Booking successful',
+        appointment_id: savedAppointment._id,
+        transaction_id: savedTransaction.id,
+      };
+    });
+  }
+
+  /**
+   * Directly update appointment status (used by internal services like TransactionsService)
+   * Handles slot return logic automatically.
+   */
+  async updateAppointmentStatusDirectly(
+    appointmentId: string,
+    newStatus: AppointmentStatus,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const appointment = await manager.findOne(Appointment, {
+        where: { _id: appointmentId },
+      });
+
+      if (!appointment) return;
+
+      const oldStatus = appointment.status;
+      appointment.status = newStatus;
+      await manager.save(Appointment, appointment);
+
+      // Handle slot return if transitioning to COMPLETED or CANCELLED (REMOVED: Calculated dynamically)
+    });
+  }
+
+  /**
+   * Internal helper to handle slot return logic when appointment reaches terminal state
+   * (REMOVED LOGIC: Slots are now calculated dynamically)
+   */
+  private async handleSlotReturn(
+    manager: any,
+    appointment: Appointment,
+    oldStatus: AppointmentStatus,
+    newStatus: AppointmentStatus,
+  ): Promise<void> {
+    // Logic removed as per Business Rules update. Slots are calculated on-the-fly.
   }
 
   /**
@@ -3795,16 +4038,6 @@ export class AppointmentsService {
    * - NO slot limit check (out-of-hours don't use slots)
    * - Uses extraHour as both appointment_hour and extra_hour
    * - Still validates doctor schedule and prevents double booking
-   *
-   * Steps:
-   * 1. Parse extraHour to Date object
-   * 2. Validate service config
-   * 3. Validate doctor schedule (CRITICAL: must work on that date)
-   * 4. Check double booking (doctor can't have 2 appointments at same time)
-   * 5. Create Appointment with clinic_shift_hour_id = NULL
-   * 6. Create AppointmentPackage and ServiceAppointment
-   * 7. Delete Redis session
-   * 8. Send email notifications
    *
    * @param sessionId - Session UUID for cleanup
    * @param patientId - Patient UUID
@@ -3824,13 +4057,11 @@ export class AppointmentsService {
       throw new BadRequestException('Invalid extraHour format');
     }
 
-    // Extract date string for schedule validation
     const year = extraHourDate.getFullYear();
     const month = String(extraHourDate.getMonth() + 1).padStart(2, '0');
     const day = String(extraHourDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
 
-    // Execute transaction with SERIALIZABLE isolation level
     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
 
       // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
@@ -3886,7 +4117,7 @@ export class AppointmentsService {
          WHERE employee_id = $1 
          AND clinic_id = ANY($2::uuid[])
          AND TO_CHAR(work_date AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') = $3
-         AND deleted_at IS NULL 
+         AND deleted_at IS NULL
          LIMIT 1`,
         [session.doctorId, validClinicIds, dateString],
       );
@@ -5512,82 +5743,7 @@ export class AppointmentsService {
     };
   }
 
-  /**
-   * Get My Appointment Detail (Patient)
-   *
-   * Returns comprehensive appointment details including:
-    const today = getStartOfDay();
-    const maxDate = addToVietnamTime(60, 'day');
 
-    // Build query
-    let query = this.dataSource
-      .createQueryBuilder()
-      .select([
-        'es.work_date AS date',
-        'es.week_day AS week_day',
-        'es.clinic_id AS clinic_id',
-        'cmi.clinic_branch_name AS clinic_name',
-      ])
-      .from('employee_schedule', 'es')
-      .innerJoin('accounts', 'clinic', 'clinic._id = es.clinic_id')
-      .innerJoin('clinic_manager_information', 'cmi', 'cmi.account_id = clinic._id')
-      .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-      .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-      .where('es.employee_id = :doctorId', { doctorId })
-      .andWhere('es.work_date >= :today', { today })
-      .andWhere('es.work_date <= :maxDate', { maxDate })
-      .andWhere('es.deleted_at IS NULL')
-      .andWhere('csh.deleted_at IS NULL')
-      .andWhere('csh.limit > 0')
-      .andWhere('clinic.status = :status', { status: 'ACTIVE' })
-      .andWhere('clinic.deleted_at IS NULL');
-
-    // Apply clinic filter if provided
-    if (clinicId) {
-      query = query.andWhere('es.clinic_id = :clinicId', { clinicId });
-    }
-
-    // Execute query
-    const results = await query
-      .groupBy('es.work_date')
-      .addGroupBy('es.week_day')
-      .addGroupBy('es.clinic_id')
-      .addGroupBy('cmi.clinic_branch_name')
-      .orderBy('es.work_date', 'ASC')
-      .getRawMany();
-
-    // For each date, calculate total available slots
-    const enrichedResults = await Promise.all(
-      results.map(async (row) => {
-        const slotsQuery = this.dataSource
-          .createQueryBuilder()
-          .select('SUM(csh.limit)', 'total_slots')
-          .from('employee_schedule', 'es')
-          .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-          .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-          .where('es.employee_id = :doctorId', { doctorId })
-          .andWhere('es.work_date = :date', { date: row.date })
-          .andWhere('es.clinic_id = :clinicId', { clinicId: row.clinic_id })
-          .andWhere('es.deleted_at IS NULL')
-          .andWhere('csh.deleted_at IS NULL')
-          .andWhere('csh.limit > 0');
-
-        const slotResult = await slotsQuery.getRawOne();
-
-        return {
-          date: row.date,
-          week_day: row.week_day,
-          clinic_id: row.clinic_id,
-          clinic_name: row.clinic_name,
-          available_slots: parseInt(slotResult?.total_slots || '0'),
-        };
-      }),
-    );
-
-    return {
-      data: enrichedResults.filter((r) => r.available_slots > 0),
-    };
-  }
 
   /**
    * Get clinics by working date (Option 3: Date-first booking - Step 2a)
@@ -6173,7 +6329,7 @@ export class AppointmentsService {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
-              doctorName: doctorInfo?.fullName || 'B├íc s─⌐',
+              doctorName: doctorInfo?.fullName || 'Doctor',
               doctorSpecialization: undefined,
               services: services.map((s: any) => ({
                 serviceName: s.service_name,
@@ -6400,9 +6556,7 @@ export class AppointmentsService {
     }
 
     if (packageData.appointmentId !== appointmentId) {
-      throw new BadRequestException(
-        'G├│i thanh to├ín kh├┤ng thuß╗Öc lß╗ïch hß║╣n n├áy',
-      );
+      throw new BadRequestException('Payment package does not belong to this appointment');
     }
 
     // 4. Check if package is pending payment
@@ -6439,7 +6593,7 @@ export class AppointmentsService {
 
     // 8. Return confirmation details
     return {
-      message: 'X├íc nhß║¡n thanh to├ín tiß╗ün mß║╖t th├ánh c├┤ng',
+      message: 'Cash payment confirmed successfully',
       appointmentId,
       package: {
         packageId: updatedPackage._id,
@@ -6511,12 +6665,18 @@ export class AppointmentsService {
       .andWhere('acc.deleted_at IS NULL')
       .getRawMany();
 
+    console.log(`[DEBUG] STEP 1 - Branches found for clinicId as Admin-ID: ${branches.length}`);
+    console.log(`[DEBUG] Branches:`, branches);
+
     const branchIds = branches.map((b) => b._id);
 
     if (branchIds.length === 0) {
       // If no branches, treat clinicId as a branch itself
       branchIds.push(clinicId);
+      console.log(`[DEBUG] No branches found => treating clinicId as Manager ID directly`);
     }
+
+    console.log(`[DEBUG] Final branchIds to query schedules:`, branchIds);
 
     // Build query with conditional date filtering
     const queryBuilder = this.dataSource
@@ -6564,13 +6724,65 @@ export class AppointmentsService {
     }
 
     // Query RAW DATA - Get ALL records without grouping in SQL
+    console.log(`[DEBUG] STEP 2 - Executing main schedule query...`);
     const rawSlots = await queryBuilder
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
       .addOrderBy('csh.start_hour', 'ASC')
       .getRawMany();
 
+    console.log(`[DEBUG] STEP 2 - Raw slots from DB: ${rawSlots.length} records`);
+    if (rawSlots.length > 0) {
+      console.log(`[DEBUG] Sample raw slot[0]:`, JSON.stringify(rawSlots[0], null, 2));
+    }
+
     if (rawSlots.length === 0) {
+      console.log(`[DEBUG] => No raw slots found. Possible reasons:`);
+      console.log(`  - No employee_schedule rows matching branchIds`);
+      console.log(`  - No clinic_shift_hour rows linked to those shifts (INNER JOIN fails)`);
+      console.log(`  - Doctor role/status filter eliminated all rows`);
+      console.log(`  - Date range filter (today to +60 days) eliminated rows`);
+      console.log(`[DEBUG] Checking employee_schedule rows without slot filter...`);
+
+      const rawScheduleCheck = await this.dataSource
+        .createQueryBuilder()
+        .select(['es._id', 'es.work_date', 'es.clinic_id', 'es.employee_id', 'es.clinic_shift_id'])
+        .from('employee_schedule', 'es')
+        .where('es.clinic_id IN (:...branchIds)', { branchIds })
+        .andWhere('es.deleted_at IS NULL')
+        .getRawMany();
+      console.log(`[DEBUG] employee_schedule rows (no date/shift filter): ${rawScheduleCheck.length}`);
+      if (rawScheduleCheck.length > 0) {
+        console.log(`[DEBUG] Sample schedule:`, rawScheduleCheck[0]);
+
+        // Check if clinic_shift_hour exists for those shifts
+        const shiftIds = [...new Set(rawScheduleCheck.map((r) => r.es_clinic_shift_id))];
+        console.log(`[DEBUG] Distinct shift IDs from schedules:`, shiftIds);
+
+        const hourCheck = await this.dataSource
+          .createQueryBuilder()
+          .select(['csh._id', 'csh.shift_id', 'csh.start_hour', 'csh.end_hour', 'csh.limit', 'csh.deleted_at'])
+          .from('clinic_shift_hour', 'csh')
+          .where('csh.shift_id IN (:...shiftIds)', { shiftIds: shiftIds.length ? shiftIds : ['none'] })
+          .getRawMany();
+        console.log(`[DEBUG] clinic_shift_hour rows for those shifts: ${hourCheck.length}`);
+        if (hourCheck.length > 0) {
+          console.log(`[DEBUG] Sample hour:`, hourCheck[0]);
+        } else {
+          console.log(`[DEBUG] *** ROOT CAUSE: clinic_shift_hour table has NO rows for those shifts! ***`);
+        }
+
+        // Check doctor status
+        const empIds = [...new Set(rawScheduleCheck.map((r) => r.es_employee_id))];
+        const doctorCheck = await this.dataSource
+          .createQueryBuilder()
+          .select(['acc._id', 'acc.role', 'acc.status'])
+          .from('accounts', 'acc')
+          .where('acc._id IN (:...empIds)', { empIds: empIds.length ? empIds : ['none'] })
+          .getRawMany();
+        console.log(`[DEBUG] Doctor accounts for those schedules:`, doctorCheck);
+      }
+
       return { data: [] };
     }
 
@@ -6604,7 +6816,13 @@ export class AppointmentsService {
     );
 
     // Filter out fully booked slots
+    console.log(`[DEBUG] STEP 3 - After booking enrichment: ${enrichedSlots.length} total slots`);
+    const fullyBookedCount = enrichedSlots.filter((s) => s.available_slots <= 0).length;
+    if (fullyBookedCount > 0) {
+      console.log(`[DEBUG] Slots filtered out (fully booked): ${fullyBookedCount}`);
+    }
     const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
+    console.log(`[DEBUG] STEP 3 - Available slots after filtering: ${availableSlots.length}`);
 
     // DATA TRANSFORMATION: Group by Date -> Shift -> Slots
     const dateMap = new Map<string, any>();
@@ -7338,15 +7556,15 @@ export class AppointmentsService {
         : null,
       addressDetail: addressData
         ? {
-            id: addressData.id || '',
-            address: addressData.address || '',
-            ward: addressData.ward || '',
-            wardName: addressData.ward_name || '',
-            district: addressData.district || '',
-            districtName: addressData.district_name || '',
-            province: addressData.province || '',
-            provinceName: addressData.province_name || '',
-          }
+          id: addressData.id || '',
+          address: addressData.address || '',
+          ward: addressData.ward || '',
+          wardName: addressData.ward_name || '',
+          district: addressData.district || '',
+          districtName: addressData.district_name || '',
+          province: addressData.province || '',
+          provinceName: addressData.province_name || '',
+        }
         : undefined,
     };
 
@@ -7435,14 +7653,14 @@ export class AppointmentsService {
       address:
         appointment.patient?.address
           ? {
-              address: appointment.patient.address.address || '',
-              ward: appointment.patient.address.ward || '',
-              wardName: appointment.patient.address.wardName || '',
-              district: appointment.patient.address.district || '',
-              districtName: appointment.patient.address.districtName || '',
-              province: appointment.patient.address.province || '',
-              provinceName: appointment.patient.address.provinceName || '',
-            }
+            address: appointment.patient.address.address || '',
+            ward: appointment.patient.address.ward || '',
+            wardName: appointment.patient.address.wardName || '',
+            district: appointment.patient.address.district || '',
+            districtName: appointment.patient.address.districtName || '',
+            province: appointment.patient.address.province || '',
+            provinceName: appointment.patient.address.provinceName || '',
+          }
           : undefined,
     };
 
@@ -7472,7 +7690,7 @@ export class AppointmentsService {
     // Step 6: Build shift hour info with limit and shiftType
     const shiftHourData = appointment.clinicShiftHour;
     const shift_hour: AppointmentShiftHourInfoDto = {
-      doctor_shift_hour_id: shiftHourData?._id || null,
+      clinic_shift_hour_id: shiftHourData?._id || null,
       shift_date:
         appointment.appointmentDate instanceof Date
           ? appointment.appointmentDate.toISOString().split('T')[0]

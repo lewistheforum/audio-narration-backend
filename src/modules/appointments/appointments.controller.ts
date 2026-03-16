@@ -138,7 +138,7 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for staff's clinic
@@ -911,7 +911,7 @@ export class AppointmentsController {
           format: 'date-time',
           example: '2026-02-25T10:30:00Z',
         },
-              ermsSummary: {
+        ermsSummary: {
           type: 'array',
           items: {
             type: 'object',
@@ -2866,9 +2866,56 @@ export class AppointmentsController {
     return result.message
       ? result
       : {
-          message: 'Appointment booked successfully',
-          data: result,
-        };
+        message: 'Đặt lịch hẹn thành công',
+        data: result,
+      };
+  }
+
+  @Post('patients/appointments/:sessionId/payment-qr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.PATIENT)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Lấy mã QR thanh toán từ Redis session (Patient)',
+    description:
+      'Tạo mã QR Seepay từ thông tin booking session đang lưu trên Redis. ' +
+      'Chỉ dùng cho phương thức thanh toán ONLINE. ' +
+      'sessionId phải thuộc về bệnh nhân đang đăng nhập. ' +
+      'Dữ liệu appointment chỉ được ghi vào DB sau khi Seepay callback xác nhận thanh toán thành công.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'Session ID nhận được từ bước tạo booking session (step 4/updateBookingSession)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mã QR được tạo thành công',
+    schema: {
+      example: {
+        message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
+        data: {
+          qr_code_url: 'https://qr.sepay.vn/img?acc=...&bank=...&amount=270000&des=sessionId',
+          qr_payload: '{"acc":"...","bank":"...","amount":270000,"des":"sessionId"}',
+          session_id: '123e4567-e89b-12d3-a456-426614174000',
+          amount: 270000,
+          currency: 'VND',
+          expires_at: '2026-03-10T14:45:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Session không phải thanh toán online hoặc đã hết hạn' })
+  @ApiResponse({ status: 403, description: 'Session không thuộc về bệnh nhân này' })
+  @ApiResponse({ status: 404, description: 'Session không tồn tại' })
+  async getOnlinePaymentQr(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Request() req: any,
+  ): Promise<any> {
+    const patientId = req.user._id;
+    return this.appointmentsService.getOnlinePaymentQr(sessionId, patientId);
   }
 
   // ========================================================================

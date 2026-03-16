@@ -8,7 +8,7 @@ export class TransactionDetailDto {
   id: string;
 
   @ApiProperty({ required: false })
-  prescriptionId?: string;
+  appointmentId?: string;
 
   @ApiProperty()
   amount: number;
