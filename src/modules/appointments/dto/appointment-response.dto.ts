@@ -127,8 +127,8 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Patient profile image URL', required: false })
   patientProfileImage?: string | null;
 
-  @ApiProperty({ description: 'Patient addresses', type: [AddressDto], required: false })
-  patientAddresses?: AddressDto[];
+  @ApiProperty({ description: 'Patient address', type: AddressDto, required: false })
+  patientAddress?: AddressDto;
 
   @ApiProperty({ description: 'Clinic ID' })
   clinicId: string;
