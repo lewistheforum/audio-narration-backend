@@ -89,17 +89,19 @@ export class PatientResponseDto {
       this.profilePicture = account.generalAccount.profilePicture;
     }
 
-    if (account.addresses) {
-      this.addresses = account.addresses.map((addr) => ({
-        _id: addr._id,
-        address: addr.address,
-        ward: addr.ward,
-        district: addr.district,
-        province: addr.province,
-        wardName: addr.wardName,
-        districtName: addr.districtName,
-        provinceName: addr.provinceName,
-      }));
+    if (account.address) {
+      this.addresses = [
+        {
+          _id: account.address._id,
+          address: account.address.address,
+          ward: account.address.ward,
+          district: account.address.district,
+          province: account.address.province,
+          wardName: account.address.wardName,
+          districtName: account.address.districtName,
+          provinceName: account.address.provinceName,
+        },
+      ];
     }
   }
 }

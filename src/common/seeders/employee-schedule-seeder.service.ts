@@ -141,8 +141,14 @@ export class EmployeeScheduleSeederService {
       const weekDay = this.getWeekDay(workDate);
 
       // CRITICAL FIX: Always create schedules for the first 7 days to ensure API returns data
-      // After day 7, use random probability (70%) for realistic scheduling
-      // First 7 days: -2, -1, 0, 1, 2, 3, 4
+      // After day 7, introduce "Free Day" logic to intentionally leave some doctors without shifts
+      // This is REQUIRED for testing "Out-of-Hours" (Option 4) booking flow
+      // Free Day: 25% chance a doctor has no shifts that day
+      const isFreeDay = dayOffset > 4 && Math.random() < 0.35;
+      if (isFreeDay) {
+        continue; // Skip creating schedule - doctor has no shifts on this day (Out-of-Hours test data)
+      }
+
       const shouldCreate = dayOffset <= 4 || this.shouldAssignSchedule();
 
       if (shouldCreate) {
