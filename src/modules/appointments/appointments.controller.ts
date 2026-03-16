@@ -1009,48 +1009,38 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Add additional service to appointment (ERM Flow - Additional Service)',
+      'Add additional services to appointment (ERM Flow - Additional Services)',
     description:
-      'Add new service during examination (e.g., X-ray, Lab tests). ' +
+      'Add new services during examination (e.g., X-ray, Lab tests). ' +
       'Only allowed when appointment is IN_PROGRESS. ' +
-      'Creates new AppointmentPackage and ServiceAppointment. ' +
-      'Service will require payment processing by clinic staff after examination.',
+      'Creates one new AppointmentPackage for all added services and multiple ServiceAppointments. ' +
+      'Calculates total amount and updates the appointment total. ' +
+      'Services will require payment processing by clinic staff after examination.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Service added successfully',
+    description: 'Services added successfully',
     schema: {
       type: 'object',
       properties: {
         appointmentPackageId: { type: 'string', example: 'pkg-uuid' },
-        serviceAppointmentId: { type: 'string', example: 'sa-uuid' },
         appointmentId: { type: 'string', example: 'appt-uuid' },
-        clinicServiceId: { type: 'string', example: 'service-uuid' },
-        serviceName: { type: 'string', example: 'X-ray Chest' },
-        serviceType: {
-          type: 'string',
-          enum: [
-            'CONSULTATION',
-            'XRAY',
-            'ULTRASOUND',
-            'LAB',
-            'BONE_DENSITY',
-            'PROCEDURE',
-          ],
-          example: 'XRAY',
+        services: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              serviceAppointmentId: { type: 'string', example: 'sa-uuid' },
+              clinicServiceId: { type: 'string', example: 'service-uuid' },
+              serviceName: { type: 'string', example: 'X-ray Chest' },
+              serviceType: { type: 'string', example: 'XRAY' },
+              price: { type: 'number', example: 200000 },
+              discount: { type: 'number', example: 10 },
+              amount: { type: 'number', example: 180000 },
+            },
+          },
         },
-        price: { type: 'number', example: 200000 },
-        discount: {
-          type: 'number',
-          example: 10,
-          description: 'Discount percentage (%)',
-        },
-        amount: {
-          type: 'number',
-          example: 180000,
-          description: 'Final amount after discount',
-        },
-        addedDuringExamination: { type: 'boolean', example: true },
+        packageTotalAmount: { type: 'number', example: 360000 },
         addedBy: { type: 'string', example: 'doctor-uuid' },
         createdAt: {
           type: 'string',
@@ -1063,7 +1053,7 @@ export class AppointmentsController {
   @ApiResponse({
     status: 400,
     description:
-      'Bad Request - Invalid status, service already exists, or validation failed',
+      'Bad Request - Invalid status, services already exist, or validation failed',
   })
   @ApiResponse({
     status: 401,
@@ -1085,12 +1075,15 @@ export class AppointmentsController {
   })
   @ApiBody({
     type: AddServiceDto,
-    description: 'Service to add',
+    description: 'Services to add',
     examples: {
-      xray: {
-        summary: 'Add X-ray service',
+      xray_and_lab: {
+        summary: 'Add X-ray and Lab services',
         value: {
-          clinicServiceId: '550e8400-e29b-41d4-a716-446655440000',
+          clinicServiceIds: [
+            '550e8400-e29b-41d4-a716-446655440000',
+            '660e8400-e29b-41d4-a716-446655440001',
+          ],
         },
       },
     },
@@ -1099,12 +1092,12 @@ export class AppointmentsController {
     @Request() req: any,
     @Param('id', ParseUUIDPipe) appointmentId: string,
     @Body() addServiceDto: AddServiceDto,
-  ): Promise<AddServiceResponseDto> {
+  ): Promise<any> {
     const doctorId = req.user._id;
     return this.appointmentsService.addServiceToAppointment(
       appointmentId,
       doctorId,
-      addServiceDto.clinicServiceId,
+      addServiceDto.clinicServiceIds,
     );
   }
 
