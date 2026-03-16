@@ -118,7 +118,7 @@ export class AppointmentsService {
     private readonly accountRepository: AccountRepository,
     private readonly bookingSessionService: BookingSessionService,
     private readonly mailerService: MailerService,
-  ) {}
+  ) { }
 
   /**
    * Get all appointments for a clinic (Staff access)
@@ -362,217 +362,217 @@ export class AppointmentsService {
 
     // Execute transaction to create appointment + package + services
     return await this.dataSource.transaction(async (manager) => {
-        const activeStatuses = [
-          AppointmentStatus.PENDING,
-          AppointmentStatus.PENDING_DOCTOR,
-          AppointmentStatus.CONFIRMED,
-          AppointmentStatus.CHECKED_IN,
-          AppointmentStatus.IN_PROGRESS,
-          AppointmentStatus.NEED_FINAL_PAYMENT,
-        ];
+      const activeStatuses = [
+        AppointmentStatus.PENDING,
+        AppointmentStatus.PENDING_DOCTOR,
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.CHECKED_IN,
+        AppointmentStatus.IN_PROGRESS,
+        AppointmentStatus.NEED_FINAL_PAYMENT,
+      ];
 
-        // Prevent duplicate active bookings for same patient in same shift/date.
-        const duplicatedAppointment = await manager
-          .createQueryBuilder(Appointment, 'appointment')
-          .where('appointment.patient_id = :patientId', {
-            patientId: createDto.patientId,
-          })
-          .andWhere('appointment.clinic_shift_hour_id = :clinicShiftHourId', {
-            clinicShiftHourId: createDto.clinicShiftHourId,
-          })
-          .andWhere('appointment.appointment_date = :appointmentDate', {
-            appointmentDate,
-          })
-          .andWhere('appointment.deleted_at IS NULL')
-          .andWhere('appointment.status IN (:...activeStatuses)', {
-            activeStatuses,
-          })
-          .getOne();
-
-        if (duplicatedAppointment) {
-          throw new ConflictException(
-            'Patient already has an active appointment in this shift on the selected date.',
-          );
-        }
-
-        // Query service prices and discounts from clinic_service_config
-        const serviceIds = createDto.services.map((s) => s.clinicServiceId);
-        const serviceConfigs = await manager
-          .createQueryBuilder()
-          .select('config._id', 'id')
-          .addSelect('config.price', 'price')
-          .addSelect('config.discount', 'discount')
-          .from('clinic_service_config', 'config')
-          .where('config._id IN (:...serviceIds)', { serviceIds })
-          .andWhere('config.clinic_id = :clinicId', { clinicId })
-          .andWhere('config.is_active = :isActive', { isActive: true })
-          .andWhere('config.deleted_at IS NULL')
-          .getRawMany();
-
-        // Validate all services exist and are active
-        if (serviceConfigs.length !== serviceIds.length) {
-          throw new BadRequestException(
-            `One or more services not found or inactive for this clinic. Expected ${serviceIds.length} services, found ${serviceConfigs.length}`,
-          );
-        }
-
-        // Create Map: clinicServiceId -> { price, discount }
-        const serviceConfigMap = new Map(
-          serviceConfigs.map((config) => [
-            config.id,
-            {
-              price: parseFloat(config.price),
-              discount: parseFloat(config.discount || 0),
-            },
-          ]),
-        );
-
-        // Calculate package amount from services (price - discount)
-        const packageAmount = serviceConfigs.reduce((sum, config) => {
-          const price = parseFloat(config.price);
-          const discount = parseFloat(config.discount || 0);
-          const finalPrice = (price * (100 - discount)) / 100;
-          return sum + finalPrice;
-        }, 0);
-
-        // 1. Create appointment (total will be calculated from all packages)
-        // In this API, there's only one package, so total = packageAmount
-        const appointment = manager.create(Appointment, {
+      // Prevent duplicate active bookings for same patient in same shift/date.
+      const duplicatedAppointment = await manager
+        .createQueryBuilder(Appointment, 'appointment')
+        .where('appointment.patient_id = :patientId', {
           patientId: createDto.patientId,
-          clinicId: clinicId,
-          doctorId: createDto.doctorId || null,
+        })
+        .andWhere('appointment.clinic_shift_hour_id = :clinicShiftHourId', {
           clinicShiftHourId: createDto.clinicShiftHourId,
-          appointmentDate: appointmentDate,
-          appointmentHour: appointmentHour,
-          extraHour: extraHour,
-          total: packageAmount,
-          patientNote: createDto.patientNote || null,
-          status: AppointmentStatus.PENDING,
-          rejectReason: null,
-        });
+        })
+        .andWhere('appointment.appointment_date = :appointmentDate', {
+          appointmentDate,
+        })
+        .andWhere('appointment.deleted_at IS NULL')
+        .andWhere('appointment.status IN (:...activeStatuses)', {
+          activeStatuses,
+        })
+        .getOne();
 
-        const savedAppointment = await manager.save(Appointment, appointment);
-
-        // 2. Create appointment package with calculated amount
-        // paymentStatus defaults to PENDING_PAYMENT and paymentType to COD
-        const appointmentPackage = manager.create(AppointmentPackage, {
-          appointmentId: savedAppointment._id,
-          transactionId: null, // Will be updated when payment is processed
-          amount: packageAmount,
-          status: AppointmentPackageStatus.PENDING_PAYMENT,
-          paymentType: PaymentType.COD,
-        });
-
-        const savedPackage = await manager.save(
-          AppointmentPackage,
-          appointmentPackage,
+      if (duplicatedAppointment) {
+        throw new ConflictException(
+          'Patient already has an active appointment in this shift on the selected date.',
         );
+      }
 
-        // 3. Create service appointments with price and discount snapshots
-        const serviceAppointments = createDto.services.map((service) => {
-          const config = serviceConfigMap.get(service.clinicServiceId);
-          return manager.create(ServiceAppointment, {
-            clinicServiceId: service.clinicServiceId,
-            appointmentPackageId: savedPackage._id,
-            price: config?.price || 0,
-            discount: config?.discount || 0,
-          });
+      // Query service prices and discounts from clinic_service_config
+      const serviceIds = createDto.services.map((s) => s.clinicServiceId);
+      const serviceConfigs = await manager
+        .createQueryBuilder()
+        .select('config._id', 'id')
+        .addSelect('config.price', 'price')
+        .addSelect('config.discount', 'discount')
+        .from('clinic_service_config', 'config')
+        .where('config._id IN (:...serviceIds)', { serviceIds })
+        .andWhere('config.clinic_id = :clinicId', { clinicId })
+        .andWhere('config.is_active = :isActive', { isActive: true })
+        .andWhere('config.deleted_at IS NULL')
+        .getRawMany();
+
+      // Validate all services exist and are active
+      if (serviceConfigs.length !== serviceIds.length) {
+        throw new BadRequestException(
+          `One or more services not found or inactive for this clinic. Expected ${serviceIds.length} services, found ${serviceConfigs.length}`,
+        );
+      }
+
+      // Create Map: clinicServiceId -> { price, discount }
+      const serviceConfigMap = new Map(
+        serviceConfigs.map((config) => [
+          config.id,
+          {
+            price: parseFloat(config.price),
+            discount: parseFloat(config.discount || 0),
+          },
+        ]),
+      );
+
+      // Calculate package amount from services (price - discount)
+      const packageAmount = serviceConfigs.reduce((sum, config) => {
+        const price = parseFloat(config.price);
+        const discount = parseFloat(config.discount || 0);
+        const finalPrice = (price * (100 - discount)) / 100;
+        return sum + finalPrice;
+      }, 0);
+
+      // 1. Create appointment (total will be calculated from all packages)
+      // In this API, there's only one package, so total = packageAmount
+      const appointment = manager.create(Appointment, {
+        patientId: createDto.patientId,
+        clinicId: clinicId,
+        doctorId: createDto.doctorId || null,
+        clinicShiftHourId: createDto.clinicShiftHourId,
+        appointmentDate: appointmentDate,
+        appointmentHour: appointmentHour,
+        extraHour: extraHour,
+        total: packageAmount,
+        patientNote: createDto.patientNote || null,
+        status: AppointmentStatus.PENDING,
+        rejectReason: null,
+      });
+
+      const savedAppointment = await manager.save(Appointment, appointment);
+
+      // 2. Create appointment package with calculated amount
+      // paymentStatus defaults to PENDING_PAYMENT and paymentType to COD
+      const appointmentPackage = manager.create(AppointmentPackage, {
+        appointmentId: savedAppointment._id,
+        transactionId: null, // Will be updated when payment is processed
+        amount: packageAmount,
+        status: AppointmentPackageStatus.PENDING_PAYMENT,
+        paymentType: PaymentType.COD,
+      });
+
+      const savedPackage = await manager.save(
+        AppointmentPackage,
+        appointmentPackage,
+      );
+
+      // 3. Create service appointments with price and discount snapshots
+      const serviceAppointments = createDto.services.map((service) => {
+        const config = serviceConfigMap.get(service.clinicServiceId);
+        return manager.create(ServiceAppointment, {
+          clinicServiceId: service.clinicServiceId,
+          appointmentPackageId: savedPackage._id,
+          price: config?.price || 0,
+          discount: config?.discount || 0,
         });
+      });
 
-        await manager.save(ServiceAppointment, serviceAppointments);
+      await manager.save(ServiceAppointment, serviceAppointments);
 
-        // Fetch complete appointment with relations for response
-        const appointmentWithRelations = await manager.findOne(Appointment, {
-          where: { _id: savedAppointment._id },
-          relations: [
-            'patient',
-            'patient.generalAccount',
-            'patient.addresses',
-            'clinic',
-            'clinic.clinicManagerInformation',
-            'doctor',
-            'doctor.doctorInformation',
-          ],
-        });
+      // Fetch complete appointment with relations for response
+      const appointmentWithRelations = await manager.findOne(Appointment, {
+        where: { _id: savedAppointment._id },
+        relations: [
+          'patient',
+          'patient.generalAccount',
+          'patient.addresses',
+          'clinic',
+          'clinic.clinicManagerInformation',
+          'doctor',
+          'doctor.doctorInformation',
+        ],
+      });
 
-        // Fetch services for the created appointment (use manager to ensure transaction visibility)
-        const servicesRaw = await manager
+      // Fetch services for the created appointment (use manager to ensure transaction visibility)
+      const servicesRaw = await manager
+        .createQueryBuilder()
+        .select([
+          'clinicService._id AS id',
+          'clinicService.service_name AS serviceName',
+          'clinicService.description AS description',
+          'serviceAppointment.price AS price',
+          'serviceAppointment.discount AS discount',
+        ])
+        .from('service_appointments', 'serviceAppointment')
+        .innerJoin(
+          'clinic_service_config',
+          'clinicServiceConfig',
+          'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+        )
+        .innerJoin(
+          'clinic_services',
+          'clinicService',
+          'clinicService._id = clinicServiceConfig.service_id',
+        )
+        .where('serviceAppointment.appointment_package_id = :packageId', {
+          packageId: savedPackage._id,
+        })
+        .andWhere('serviceAppointment.deleted_at IS NULL')
+        .getRawMany();
+
+      const services = servicesRaw.map((row) => ({
+        id: row.id,
+        serviceName: row.servicename,
+        description: row.description,
+        price: parseFloat(row.price),
+        discount: row.discount ? parseFloat(row.discount) : 0,
+      }));
+
+      // Fetch clinic rooms if doctor shift is assigned
+      let clinicRooms = [];
+
+      if (savedAppointment.clinicShiftHourId && savedAppointment.doctorId) {
+        // Query clinic rooms directly without needing appointment_id
+        const roomsResult = await manager
           .createQueryBuilder()
-          .select([
-            'clinicService._id AS id',
-            'clinicService.service_name AS serviceName',
-            'clinicService.description AS description',
-            'serviceAppointment.price AS price',
-            'serviceAppointment.discount AS discount',
-          ])
-          .from('service_appointments', 'serviceAppointment')
+          .select('cr._id', 'roomId')
+          .addSelect('cr.room_name', 'roomName')
+          .from('clinic_shift_hour', 'csh')
+          .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+          .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
           .innerJoin(
-            'clinic_service_config',
-            'clinicServiceConfig',
-            'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+            'clinic_room_employee_schedule',
+            'cres',
+            'cres.employee_schedule_id = es._id',
           )
-          .innerJoin(
-            'clinic_services',
-            'clinicService',
-            'clinicService._id = clinicServiceConfig.service_id',
-          )
-          .where('serviceAppointment.appointment_package_id = :packageId', {
-            packageId: savedPackage._id,
+          .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+          .where('csh._id = :clinicShiftHourId', {
+            clinicShiftHourId: savedAppointment.clinicShiftHourId,
           })
-          .andWhere('serviceAppointment.deleted_at IS NULL')
+          .andWhere('es.employee_id = :doctorId', {
+            doctorId: savedAppointment.doctorId,
+          })
+          .andWhere('es.work_date = :appointmentDate', {
+            appointmentDate: savedAppointment.appointmentDate,
+          })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('cr.deleted_at IS NULL')
           .getRawMany();
 
-        const services = servicesRaw.map((row) => ({
-          id: row.id,
-          serviceName: row.servicename,
-          description: row.description,
-          price: parseFloat(row.price),
-          discount: row.discount ? parseFloat(row.discount) : 0,
+        clinicRooms = roomsResult.map((row) => ({
+          id: row.roomId,
+          roomName: row.roomName,
         }));
+      }
 
-        // Fetch clinic rooms if doctor shift is assigned
-        let clinicRooms = [];
-
-        if (savedAppointment.clinicShiftHourId && savedAppointment.doctorId) {
-          // Query clinic rooms directly without needing appointment_id
-          const roomsResult = await manager
-            .createQueryBuilder()
-            .select('cr._id', 'roomId')
-            .addSelect('cr.room_name', 'roomName')
-            .from('clinic_shift_hour', 'csh')
-            .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
-            .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
-            .innerJoin(
-              'clinic_room_employee_schedule',
-              'cres',
-              'cres.employee_schedule_id = es._id',
-            )
-            .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-            .where('csh._id = :clinicShiftHourId', {
-              clinicShiftHourId: savedAppointment.clinicShiftHourId,
-            })
-            .andWhere('es.employee_id = :doctorId', {
-              doctorId: savedAppointment.doctorId,
-            })
-            .andWhere('es.work_date = :appointmentDate', {
-              appointmentDate: savedAppointment.appointmentDate,
-            })
-            .andWhere('es.deleted_at IS NULL')
-            .andWhere('cr.deleted_at IS NULL')
-            .getRawMany();
-
-          clinicRooms = roomsResult.map((row) => ({
-            id: row.roomId,
-            roomName: row.roomName,
-          }));
-        }
-
-        return this.transformToResponseDto(
-          appointmentWithRelations!,
-          services,
-          clinicRooms,
-        );
-      });
+      return this.transformToResponseDto(
+        appointmentWithRelations!,
+        services,
+        clinicRooms,
+      );
+    });
   }
 
   /**
@@ -1272,9 +1272,9 @@ export class AppointmentsService {
     // Check for conflicts if date or shift changed
     const dateChanged =
       newAppointmentDate.getTime() !==
-        new Date(appointment.appointmentDate).getTime() ||
+      new Date(appointment.appointmentDate).getTime() ||
       newAppointmentHour.getTime() !==
-        new Date(appointment.appointmentHour).getTime();
+      new Date(appointment.appointmentHour).getTime();
     const shiftChanged = newClinicShiftHourId !== appointment.clinicShiftHourId;
 
     if (dateChanged || shiftChanged) {
@@ -2260,8 +2260,9 @@ export class AppointmentsService {
    *
    * Business Rules:
    * - Only show appointments assigned to this doctor (doctor_id matches)
+   * - Exclude appointments with extra_hour (those are handled by a separate endpoint)
    * - Filter by date and status if provided
-   * - Show CHECKED_IN and IN_PROGRESS appointments by default
+   * - Show CHECKED_IN, IN_PROGRESS and COMPLETED appointments by default
    * - Include patient details, addresses, profile images
    * - Include doctor details and profile image
    * - Include services and clinic rooms
@@ -2281,7 +2282,8 @@ export class AppointmentsService {
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicManagerInfo')
       .where('appointment.doctor_id = :doctorId', { doctorId })
-      .andWhere('appointment.deleted_at IS NULL');
+      .andWhere('appointment.deleted_at IS NULL')
+      .andWhere('appointment.extra_hour IS NULL');
 
     // Filter by date if provided
     if (queryDto.date) {
@@ -2290,14 +2292,18 @@ export class AppointmentsService {
       });
     }
 
-    // Filter by status if provided, otherwise default to CHECKED_IN and IN_PROGRESS
+    // Filter by status if provided, otherwise default to CHECKED_IN, IN_PROGRESS and COMPLETED
     if (queryDto.status) {
       queryBuilder.andWhere('appointment.status = :status', {
         status: queryDto.status,
       });
     } else {
       queryBuilder.andWhere('appointment.status IN (:...statuses)', {
-        statuses: [AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS],
+        statuses: [
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.COMPLETED,
+        ],
       });
     }
 
@@ -2349,19 +2355,19 @@ export class AppointmentsService {
   }
 
   /**
-   * Get appointments with extra hour pending doctor confirmation
+   * Get appointments with extra hour
    *
    * Retrieves list of appointments that:
    * - Have extra_hour (not null)
-   * - Are in PENDING_DOCTOR or CONFIRMED status
+   * - Are in PENDING_DOCTOR, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED or CANCELLED status
    * - Belong to the authenticated doctor
    *
    * @param doctorId - ID of the authenticated doctor
-   * @returns List of appointments with extra hour in pending or confirmed status
+   * @returns List of appointments with extra hour across all relevant statuses
    *
    * Business Rules:
    * - Only show appointments with extra_hour set
-   * - Show both PENDING_DOCTOR and CONFIRMED statuses
+   * - Show all relevant statuses: PENDING_DOCTOR, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED
    * - Include patient details, services, and clinic rooms
    * - Order by appointment date and hour
    */
@@ -2384,6 +2390,10 @@ export class AppointmentsService {
         statuses: [
           AppointmentStatus.PENDING_DOCTOR,
           AppointmentStatus.CONFIRMED,
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.COMPLETED,
+          AppointmentStatus.CANCELLED,
         ],
       })
       .andWhere('appointment.deleted_at IS NULL')
@@ -3120,8 +3130,8 @@ export class AppointmentsService {
     const servicesMap =
       appointmentIds.length > 0
         ? await this.appointmentPackageRepository.findServicesByAppointmentIds(
-            appointmentIds,
-          )
+          appointmentIds,
+        )
         : new Map();
 
     // Fetch clinic rooms for all appointments
@@ -3135,8 +3145,8 @@ export class AppointmentsService {
     const clinicRoomsMap =
       appointmentIds.length > 0
         ? await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
-            appointmentData,
-          )
+          appointmentData,
+        )
         : new Map();
 
     // Transform to response DTOs
@@ -3211,8 +3221,8 @@ export class AppointmentsService {
       // - REQUIRED: extraHour (ISO datetime string)
       // - NOT REQUIRED: clinicShiftHourId
       // ============================================================
-      if (!session.serviceIds || session.serviceIds.length === 0 || !session.clinicId || 
-          !session.doctorId || !session.paymentMethod || !session.extraHour) {
+      if (!session.serviceIds || session.serviceIds.length === 0 || !session.clinicId ||
+        !session.doctorId || !session.paymentMethod || !session.extraHour) {
         throw new BadRequestException(
           'Incomplete out-of-hours booking session. Required: serviceIds, clinicId, doctorId, paymentMethod, extraHour.',
         );
@@ -3407,36 +3417,36 @@ export class AppointmentsService {
           );
         }
 
-      // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
-      // Query ALL service_ids from clinic_service_config in ONE batch query
-      const serviceIds: string[] = session.serviceIds;
-      // Deduplicate serviceIds to handle duplicate UUIDs in the array
-      const uniqueServiceIds = Array.from(new Set(serviceIds));
+        // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
+        // Query ALL service_ids from clinic_service_config in ONE batch query
+        const serviceIds: string[] = session.serviceIds;
+        // Deduplicate serviceIds to handle duplicate UUIDs in the array
+        const uniqueServiceIds = Array.from(new Set(serviceIds));
 
-      // Guard clause: Check for empty array
-      if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
-        throw new BadRequestException('Service IDs array cannot be empty');
-      }
+        // Guard clause: Check for empty array
+        if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+          throw new BadRequestException('Service IDs array cannot be empty');
+        }
 
-      const serviceConfigs = await manager
-        .createQueryBuilder(ClinicServiceConfig, 'csc')
-        .leftJoinAndSelect('csc.service', 'service')
-        .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
-        .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
-        .andWhere('csc.is_active = :isActive', { isActive: true })
-        .andWhere('csc.deleted_at IS NULL')
-        .andWhere('service.deleted_at IS NULL')
-        .andWhere('service.is_active = :serviceActive', { serviceActive: true })
-        .getMany();
+        const serviceConfigs = await manager
+          .createQueryBuilder(ClinicServiceConfig, 'csc')
+          .leftJoinAndSelect('csc.service', 'service')
+          .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+          .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
+          .andWhere('csc.is_active = :isActive', { isActive: true })
+          .andWhere('csc.deleted_at IS NULL')
+          .andWhere('service.deleted_at IS NULL')
+          .andWhere('service.is_active = :serviceActive', { serviceActive: true })
+          .getMany();
 
-      // Verify ALL requested services exist and are active
-      if (serviceConfigs.length !== uniqueServiceIds.length) {
-        const foundIds = serviceConfigs.map((s) => s._id);
-        const missingIds = uniqueServiceIds.filter((id) => !foundIds.includes(id));
-        throw new BadRequestException(
-          `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ') || 'Unknown'}`,
-        );
-      }
+        // Verify ALL requested services exist and are active
+        if (serviceConfigs.length !== uniqueServiceIds.length) {
+          const foundIds = serviceConfigs.map((s) => s._id);
+          const missingIds = uniqueServiceIds.filter((id) => !foundIds.includes(id));
+          throw new BadRequestException(
+            `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ') || 'Unknown'}`,
+          );
+        }
 
         // === STEP 3: Validate Doctor Schedule ===
         // Get all valid clinic IDs (clinic itself + all branches)
@@ -3519,86 +3529,86 @@ export class AppointmentsService {
           .where('_id = :id', { id: session.clinicShiftHourId })
           .execute();
 
-      // === TIER 1: Create Appointment (with placeholder total = 0) ===
-      // NOTE: total will be updated after Tier 3 calculates the real sum
-      const appointmentDateForDB = new Date(dateString + 'T00:00:00');
-      
-      // appointmentRepo already declared above (for duplicate check - reused here)
-      const appointment = appointmentRepo.create({
-        patientId,
-        clinicId: session.clinicId,
-        doctorId: session.doctorId,
-        clinicShiftHourId: session.clinicShiftHourId,
-        appointmentDate: appointmentDateForDB,
-        appointmentHour,
-        total: 0, // Placeholder - updated after Tier 3 calculation
-        status: AppointmentStatus.PENDING,
-        patientNote: session.patientNote || null,
-      });
+        // === TIER 1: Create Appointment (with placeholder total = 0) ===
+        // NOTE: total will be updated after Tier 3 calculates the real sum
+        const appointmentDateForDB = new Date(dateString + 'T00:00:00');
+
+        // appointmentRepo already declared above (for duplicate check - reused here)
+        const appointment = appointmentRepo.create({
+          patientId,
+          clinicId: session.clinicId,
+          doctorId: session.doctorId,
+          clinicShiftHourId: session.clinicShiftHourId,
+          appointmentDate: appointmentDateForDB,
+          appointmentHour,
+          total: 0, // Placeholder - updated after Tier 3 calculation
+          status: AppointmentStatus.PENDING,
+          patientNote: session.patientNote || null,
+        });
 
         const savedAppointment = await appointmentRepo.save(appointment);
 
-      // === TIER 3: Create ServiceAppointment Records (Price Snapshot) ===
-      // Iterate over all fetched service configs and create a ServiceAppointment
-      // for each one, capturing the real-time price & discount as a financial snapshot.
-      const serviceAppointmentRepo = manager.getRepository('service_appointments');
-      const packageRepo = manager.getRepository('appointment_package');
+        // === TIER 3: Create ServiceAppointment Records (Price Snapshot) ===
+        // Iterate over all fetched service configs and create a ServiceAppointment
+        // for each one, capturing the real-time price & discount as a financial snapshot.
+        const serviceAppointmentRepo = manager.getRepository('service_appointments');
+        const packageRepo = manager.getRepository('appointment_package');
 
-      // Tier 3 needs the package first (ServiceAppointment links via appointmentPackageId)
-      // But per the blueprint the TIER ORDER is 1→3→2, so we create a "pre-package"
-      // placeholder, then refine. Actually: ServiceAppointment links to AppointmentPackage.
-      // We MUST create the package first so foreign key is satisfied, then update amount after.
-      // Create AppointmentPackage with amount = 0 placeholder first (Tier 2 step A)
-      const appointmentPackagePlaceholder = packageRepo.create({
-        appointmentId: savedAppointment._id,
-        transactionId: null,
-        amount: 0, // Will be updated after snapshots are computed
-        status: AppointmentPackageStatus.PENDING_PAYMENT,
-        paymentType: PaymentType.COD,
-      });
-      const savedPackage = await packageRepo.save(appointmentPackagePlaceholder);
-
-      // Now create ServiceAppointment records for every service (Tier 3)
-      let grandTotal = 0;
-      const serviceAppointmentsToSave: any[] = [];
-
-      for (const config of serviceConfigs) {
-        const snapshotPrice = parseFloat(config.price.toString());
-        const snapshotDiscount = config.discount ? parseFloat(config.discount.toString()) : 0;
-        const serviceFinalPrice = snapshotPrice - (snapshotPrice * snapshotDiscount / 100);
-        grandTotal += serviceFinalPrice;
-
-        const sa = serviceAppointmentRepo.create({
-          clinicServiceId: config._id,
-          appointmentPackageId: savedPackage._id, // Links to package entity
-          price: snapshotPrice,     // Financial snapshot from clinic_service_config
-          discount: snapshotDiscount, // Financial snapshot from clinic_service_config
+        // Tier 3 needs the package first (ServiceAppointment links via appointmentPackageId)
+        // But per the blueprint the TIER ORDER is 1→3→2, so we create a "pre-package"
+        // placeholder, then refine. Actually: ServiceAppointment links to AppointmentPackage.
+        // We MUST create the package first so foreign key is satisfied, then update amount after.
+        // Create AppointmentPackage with amount = 0 placeholder first (Tier 2 step A)
+        const appointmentPackagePlaceholder = packageRepo.create({
+          appointmentId: savedAppointment._id,
+          transactionId: null,
+          amount: 0, // Will be updated after snapshots are computed
+          status: AppointmentPackageStatus.PENDING_PAYMENT,
+          paymentType: PaymentType.COD,
         });
-        serviceAppointmentsToSave.push(sa);
-      }
+        const savedPackage = await packageRepo.save(appointmentPackagePlaceholder);
 
-      await serviceAppointmentRepo.save(serviceAppointmentsToSave);
+        // Now create ServiceAppointment records for every service (Tier 3)
+        let grandTotal = 0;
+        const serviceAppointmentsToSave: any[] = [];
 
-      // === TIER 2 (Finalize): Update Package amount + Appointment total ===
-      // Grand total = SUM(price - price * discount / 100) across all service_appointments
-      const roundedTotal = Math.round(grandTotal);
+        for (const config of serviceConfigs) {
+          const snapshotPrice = parseFloat(config.price.toString());
+          const snapshotDiscount = config.discount ? parseFloat(config.discount.toString()) : 0;
+          const serviceFinalPrice = snapshotPrice - (snapshotPrice * snapshotDiscount / 100);
+          grandTotal += serviceFinalPrice;
 
-      // Update AppointmentPackage with real amount
-      await packageRepo.update({ _id: savedPackage._id }, { amount: roundedTotal });
+          const sa = serviceAppointmentRepo.create({
+            clinicServiceId: config._id,
+            appointmentPackageId: savedPackage._id, // Links to package entity
+            price: snapshotPrice,     // Financial snapshot from clinic_service_config
+            discount: snapshotDiscount, // Financial snapshot from clinic_service_config
+          });
+          serviceAppointmentsToSave.push(sa);
+        }
 
-      // Update Appointment.total with the aggregated amount
-      await appointmentRepo.update({ _id: savedAppointment._id }, { total: grandTotal });
+        await serviceAppointmentRepo.save(serviceAppointmentsToSave);
 
-      // Refresh savedAppointment.total for the response
-      savedAppointment.total = grandTotal;
+        // === TIER 2 (Finalize): Update Package amount + Appointment total ===
+        // Grand total = SUM(price - price * discount / 100) across all service_appointments
+        const roundedTotal = Math.round(grandTotal);
 
-      // Return data for response
-      return {
-        appointment: savedAppointment,
-        serviceConfigs, // Array of all fetched service configs
-        shiftHour,
-      };
-    });
+        // Update AppointmentPackage with real amount
+        await packageRepo.update({ _id: savedPackage._id }, { amount: roundedTotal });
+
+        // Update Appointment.total with the aggregated amount
+        await appointmentRepo.update({ _id: savedAppointment._id }, { total: grandTotal });
+
+        // Refresh savedAppointment.total for the response
+        savedAppointment.total = grandTotal;
+
+        // Return data for response
+        return {
+          appointment: savedAppointment,
+          serviceConfigs, // Array of all fetched service configs
+          shiftHour,
+        };
+      });
 
     // === STEP 10: Delete Redis Session (Cleanup) ===
     // V4.0: COD flow deletes session immediately after successful creation
@@ -3774,7 +3784,7 @@ export class AppointmentsService {
 
     // Execute transaction with SERIALIZABLE isolation level
     const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
-      
+
       // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
       // Query clinic_service_config for ALL serviceIds in one batch
       const serviceIds: string[] = session.serviceIds;
@@ -3806,43 +3816,43 @@ export class AppointmentsService {
         );
       }
 
-        // === STEP 3: Validate Doctor Schedule ===
-        // Doctor must have a schedule on this date (even for out-of-hours)
-        // Get all valid clinic IDs (clinic itself + all branches)
-        const branches = await manager
-          .createQueryBuilder()
-          .select('_id')
-          .from('accounts', 'acc')
-          .where('acc.parent_id = :clinicId', { clinicId: session.clinicId })
-          .andWhere('acc.role = :role', { role: 'CLINIC_MANAGER' })
-          .andWhere('acc.status = :status', { status: 'ACTIVE' })
-          .andWhere('acc.deleted_at IS NULL')
-          .getRawMany();
+      // === STEP 3: Validate Doctor Schedule ===
+      // Doctor must have a schedule on this date (even for out-of-hours)
+      // Get all valid clinic IDs (clinic itself + all branches)
+      const branches = await manager
+        .createQueryBuilder()
+        .select('_id')
+        .from('accounts', 'acc')
+        .where('acc.parent_id = :clinicId', { clinicId: session.clinicId })
+        .andWhere('acc.role = :role', { role: 'CLINIC_MANAGER' })
+        .andWhere('acc.status = :status', { status: 'ACTIVE' })
+        .andWhere('acc.deleted_at IS NULL')
+        .getRawMany();
 
-        const validClinicIds = branches.map((b) => b._id);
-        validClinicIds.push(session.clinicId);
+      const validClinicIds = branches.map((b) => b._id);
+      validClinicIds.push(session.clinicId);
 
-        // Check if doctor has schedule on this date
-        const doctorSchedule = await manager.query(
-          `SELECT * FROM employee_schedule 
+      // Check if doctor has schedule on this date
+      const doctorSchedule = await manager.query(
+        `SELECT * FROM employee_schedule 
          WHERE employee_id = $1 
          AND clinic_id = ANY($2::uuid[])
          AND TO_CHAR(work_date AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') = $3
          AND deleted_at IS NULL 
          LIMIT 1`,
-          [session.doctorId, validClinicIds, dateString],
-        );
+        [session.doctorId, validClinicIds, dateString],
+      );
 
-        if (!doctorSchedule || doctorSchedule.length === 0) {
-          throw new BadRequestException(
-            'Doctor is not available on this date at this clinic',
-          );
-        }
+      if (!doctorSchedule || doctorSchedule.length === 0) {
+        throw new BadRequestException(
+          'Doctor is not available on this date at this clinic',
+        );
+      }
 
       // === STEP 4: PREVENT DOUBLE BOOKING ===
       // CRITICAL: Check if doctor already has an appointment at this extraHour
       // Query both appointment_hour AND extra_hour columns to prevent conflicts
-      
+
       const existingAppointment = await manager
         .createQueryBuilder()
         .select('a')
@@ -3856,11 +3866,11 @@ export class AppointmentsService {
         .andWhere('a.deleted_at IS NULL')
         .getOne();
 
-        if (existingAppointment) {
-          throw new ConflictException(
-            'Doctor already has an appointment at this time. Please select a different time.',
-          );
-        }
+      if (existingAppointment) {
+        throw new ConflictException(
+          'Doctor already has an appointment at this time. Please select a different time.',
+        );
+      }
 
       // === TIER 1: Create Appointment with placeholder total ===
       const apptRepo = manager.getRepository(Appointment);
@@ -4903,10 +4913,10 @@ export class AppointmentsService {
       },
       doctor: apt.doctor_id
         ? {
-            _id: apt.doctor_id,
-            name: apt.doctor_name,
-            profilePicture: apt.doctor_profile_picture,
-          }
+          _id: apt.doctor_id,
+          name: apt.doctor_name,
+          profilePicture: apt.doctor_profile_picture,
+        }
         : null,
       appointment_date: apt.appointment_date,
       appointment_hour: apt.appointment_hour || apt.extra_hour,
@@ -5053,7 +5063,7 @@ export class AppointmentsService {
     if (!appointmentRaw) {
       throw new NotFoundException(
         MESSAGES.failMessage.appointmentNotFound ||
-          'Appointment not found or access denied',
+        'Appointment not found or access denied',
       );
     }
 
@@ -5575,8 +5585,8 @@ export class AppointmentsService {
         'cai.description AS description', // Admin description
         'cmi.clinic_branch_name AS branch_name', // Branch name only
         "CASE WHEN cmi.clinic_branch_name IS NOT NULL AND cmi.clinic_branch_name != '' " +
-          "THEN CONCAT(cai.clinic_name, ' - ', cmi.clinic_branch_name) " +
-          'ELSE cai.clinic_name END AS full_branch_name', // Full branch name for display
+        "THEN CONCAT(cai.clinic_name, ' - ', cmi.clinic_branch_name) " +
+        'ELSE cai.clinic_name END AS full_branch_name', // Full branch name for display
         "COALESCE(addr.address, '') AS clinic_address",
         'addr.district AS district',
       ])
@@ -6896,8 +6906,8 @@ export class AppointmentsService {
     if (search && search.trim()) {
       queryBuilder.andWhere(
         '(generalAccount.fullName ILIKE :search OR ' +
-          'patient.phone LIKE :searchExact OR ' +
-          'patient.email ILIKE :searchExact)',
+        'patient.phone LIKE :searchExact OR ' +
+        'patient.email ILIKE :searchExact)',
         { search: `%${search}%`, searchExact: `%${search}%` },
       );
     }
@@ -7225,8 +7235,8 @@ export class AppointmentsService {
     const servicesMap =
       appointmentIds.length > 0
         ? await this.appointmentPackageRepository.findServicesByAppointmentIds(
-            appointmentIds,
-          )
+          appointmentIds,
+        )
         : new Map();
 
     // Fetch clinic rooms for all appointments
@@ -7240,8 +7250,8 @@ export class AppointmentsService {
     const clinicRoomsMap =
       appointmentIds.length > 0
         ? await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
-            appointmentData,
-          )
+          appointmentData,
+        )
         : new Map();
 
     // Transform appointments to AppointmentResponseDto
@@ -7648,7 +7658,7 @@ export class AppointmentsService {
     if (!appointment) {
       throw new NotFoundException(
         MESSAGES.failMessage.appointmentNotFound ||
-          'Appointment not found or access denied',
+        'Appointment not found or access denied',
       );
     }
 
@@ -7718,36 +7728,36 @@ export class AppointmentsService {
       created_at: e.created_at,
       special_erm: e.ec_id
         ? {
-            id: e.ec_id,
-            service_code: e.ec_service_code,
-            created_at: e.ec_created_at,
-          }
+          id: e.ec_id,
+          service_code: e.ec_service_code,
+          created_at: e.ec_created_at,
+        }
         : e.ex_id
           ? { id: e.ex_id, region: e.ex_region, created_at: e.ex_created_at }
           : e.el_id
             ? {
-                id: e.el_id,
-                panel_name: e.el_panel_name,
-                created_at: e.el_created_at,
-              }
+              id: e.el_id,
+              panel_name: e.el_panel_name,
+              created_at: e.el_created_at,
+            }
             : e.eu_id
               ? {
-                  id: e.eu_id,
-                  service_code: e.eu_service_code,
-                  created_at: e.eu_created_at,
-                }
+                id: e.eu_id,
+                service_code: e.eu_service_code,
+                created_at: e.eu_created_at,
+              }
               : e.erd_id
                 ? {
-                    id: e.erd_id,
-                    procedure_code: e.erd_procedure_code,
-                    created_at: e.erd_created_at,
-                  }
+                  id: e.erd_id,
+                  procedure_code: e.erd_procedure_code,
+                  created_at: e.erd_created_at,
+                }
                 : e.ebd_id
                   ? {
-                      id: e.ebd_id,
-                      site: e.ebd_site,
-                      created_at: e.ebd_created_at,
-                    }
+                    id: e.ebd_id,
+                    site: e.ebd_site,
+                    created_at: e.ebd_created_at,
+                  }
                   : null,
     }));
   }
@@ -7771,7 +7781,7 @@ export class AppointmentsService {
     if (!appointment) {
       throw new NotFoundException(
         MESSAGES.failMessage.appointmentNotFound ||
-          'Appointment not found or access denied',
+        'Appointment not found or access denied',
       );
     }
 
