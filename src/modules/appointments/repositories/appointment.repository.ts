@@ -117,6 +117,7 @@ export class AppointmentRepository {
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
       .leftJoinAndSelect('appointment.doctor', 'doctor')
       .leftJoinAndSelect('doctor.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment.clinicId = :clinicId', { clinicId })
       .andWhere('appointment.deletedAt IS NULL')
       .andWhere('appointment.extraHour IS NOT NULL');
@@ -156,7 +157,7 @@ export class AppointmentRepository {
   async findByIdWithRelations(id: string): Promise<Appointment | null> {
     return this.repository.findOne({
       where: { _id: id },
-      relations: ['patient', 'clinic', 'doctor'],
+      relations: ['patient', 'clinic', 'doctor', 'extraRoom'],
     });
   }
 
@@ -185,6 +186,7 @@ export class AppointmentRepository {
       .leftJoinAndSelect('clinic.address', 'clinicAddress')
       .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
       .leftJoinAndSelect('shiftHour.shift', 'shift')
+      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment._id = :id', { id })
       .andWhere('appointment.deletedAt IS NULL')
       .getOne();

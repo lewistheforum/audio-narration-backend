@@ -148,6 +148,9 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Clinic rooms', type: [ClinicRoomDto], required: false })
   clinicRooms?: ClinicRoomDto[];
 
+  @ApiProperty({ description: 'Extra room for out-of-hours appointments', type: ClinicRoomDto, required: false })
+  extraRoom?: ClinicRoomDto | null;
+
   @ApiProperty({ description: 'Services', type: [ServiceDetailDto], required: false })
   services?: ServiceDetailDto[];
 
