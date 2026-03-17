@@ -4,7 +4,7 @@ import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../../modules/contracts/enums/salary-payment-method.enum';
-import { ContractStatus } from '../../modules/accounts/enums/contract-status.enum';
+import { ContractStatus } from '../../modules/contracts/enums/contract-status.enum';
 import { ClinicContractInformation } from '../../modules/contracts/entities/clinic-contract-information.entity';
 import { ClinicContractInformationRepository } from '../../modules/contracts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';
@@ -21,6 +21,7 @@ import {
   SALARY_PAYMENT_CYCLES,
   PARTY_A_SIGNERS,
   PARTY_B_SIGNERS,
+  REJECTION_REASONS,
 } from '../constants/medical-terms';
 import { PROVINCES } from '../constants/locations';
 import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
@@ -57,9 +58,10 @@ export class ClinicContractInformationSeederService {
   private readonly SALARY_PAYMENT_CYCLES = SALARY_PAYMENT_CYCLES;
   private readonly PARTY_A_SIGNERS = PARTY_A_SIGNERS;
   private readonly PARTY_B_SIGNERS = PARTY_B_SIGNERS;
+  private readonly REJECTION_REASONS = REJECTION_REASONS;
 
   constructor(
-    private readonly clinicContractInformationRepository: ClinicContractInformationRepository,
+    private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
   ) { }
@@ -134,7 +136,7 @@ export class ClinicContractInformationSeederService {
 
         // Check if clinic contract information already exists for this contract
         const existing =
-          await this.clinicContractInformationRepository.existsByContractId(
+          await this.clinicContractInfoRepository.existsByContractId(
             contractPackage._id,
           );
 
@@ -144,7 +146,8 @@ export class ClinicContractInformationSeederService {
         }
 
         // Create clinic contract information with realistic orthopedics clinic data
-        const contractInfo = this.clinicContractInformationRepository.create({
+        const status = this.getRandomContractStatus();
+        const contractInfo = this.clinicContractInfoRepository.create({
           contractId: contractPackage._id,
           doctorSpecialty: this.getRandomDoctorSpecialty(),
           nationality: this.getRandomNationality(),
@@ -167,10 +170,11 @@ export class ClinicContractInformationSeederService {
           partyASignerName: this.getRandomPartyASignerName(),
           partyBSignerName: this.getRandomPartyBSignerName(),
           contractFile: this.getRandomContractFile(),
-          contractStatus: this.getRandomContractStatus(),
+          contractStatus: status,
+          rejectionReason: status === ContractStatus.REJECTED ? this.getRandomRejectionReason() : null,
         });
 
-        await this.clinicContractInformationRepository.save(contractInfo);
+        await this.clinicContractInfoRepository.save(contractInfo);
         createdCount++;
       }
 
@@ -395,7 +399,22 @@ export class ClinicContractInformationSeederService {
    * Get random contract status
    */
   private getRandomContractStatus(): ContractStatus {
-    const statuses = [ContractStatus.CURRENT, ContractStatus.OLD];
+    const statuses = [
+      ContractStatus.CURRENT,
+      ContractStatus.OLD,
+      ContractStatus.DRAFT,
+      ContractStatus.REJECTED,
+      ContractStatus.PENDING_SIGNATURE,
+    ];
     return statuses[Math.floor(Math.random() * statuses.length)];
+  }
+
+  /**
+   * Get random rejection reason
+   */
+  private getRandomRejectionReason(): string {
+    return this.REJECTION_REASONS[
+      Math.floor(Math.random() * this.REJECTION_REASONS.length)
+    ];
   }
 }

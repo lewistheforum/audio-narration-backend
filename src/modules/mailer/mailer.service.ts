@@ -1163,7 +1163,7 @@ export class MailerService {
             </p>
             
             <div style="margin: 30px 0;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/contracts/${contractId}" 
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}" 
                  style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
                 Review & Sign Now
               </a>
@@ -1171,12 +1171,6 @@ export class MailerService {
             
             <p style="color: #6B7280; font-size: 14px; margin: 0;">
               Please review and countersign to finalize the agreement.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1199,7 +1193,6 @@ export class MailerService {
     email: string,
     managerName: string,
     contractId: string,
-    fileUrl: string,
   ): Promise<void> {
     const transporter = this.mailTransport();
     const contractCode = contractId.substring(0, 8).toUpperCase();
@@ -1227,21 +1220,8 @@ export class MailerService {
               Your contract <strong>#${contractCode}</strong> has been signed by <strong>${managerName}</strong> and is now <strong>ACTIVE</strong>.
             </p>
             
-            <div style="margin: 30px 0;">
-              <a href="${fileUrl}" 
-                 style="background: #166534; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                Download Signed Contract
-              </a>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 0;">
-              A copy of the signed document is available at the link above.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              You can now view your finalized contract details on the dashboard.
             </p>
           </div>
         </div>
@@ -1255,6 +1235,48 @@ export class MailerService {
       console.error('❌ Failed to send employee notification:', error);
     }
   }
+
+
+    async sendContractRejectNotification(
+        email: string,
+        signerName: string,
+        contractId: string,
+        reason: string
+    ) {
+        const transporter = this.mailTransport();
+        const contractCode = contractId.substring(0, 8).toUpperCase();
+        const subject = `[Medicare] Hợp đồng #${contractCode} đã bị từ chối`;
+        
+        const mailOptions = {
+            from: {
+                name: 'Bonix',
+                address: this.configService.get<string>('EMAIL_USER'),
+            },
+            to: email,
+            subject,
+            html: `
+                <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
+                    <h2 style="color: #ef4444;">Thông Báo Từ Chối Ký Hợp Đồng</h2>
+                    <p>Chào bạn,</p>
+                    <p>Chúng tôi xin thông báo rằng hợp đồng mã số <strong>${contractCode}</strong> đã bị từ chối bởi <strong>${signerName}</strong>.</p>
+                    <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
+                        <p style="margin: 0; font-weight: bold;">Lý do từ chối:</p>
+                        <p style="margin: 5px 0 0 0;">${reason}</p>
+                    </div>
+                    <p>Vui lòng đăng nhập vào hệ thống để kiểm tra thông tin chi tiết và thực hiện các bước tiếp theo.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 12px; color: #666;">Đây là email tự động, vui lòng không trả lời email này.</p>
+                </div>
+            `,
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            console.log(`✅ Contract rejection email sent to ${email}`);
+        } catch (error) {
+            console.error('❌ Failed to send contract rejection email:', error);
+        }
+    }
 
   /**
    * Sends generated credentials to Clinic Manager

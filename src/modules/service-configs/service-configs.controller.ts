@@ -269,6 +269,66 @@ export class ManagerServiceConfigsController {
   }
 }
 
+@ApiTags('Service Configs (Public)')
+@Controller('public/clinic-services')
+export class PublicServiceConfigsController {
+  constructor(
+    private readonly serviceConfigsService: ServiceConfigsService,
+  ) { }
+
+  @Get(':clinicId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get clinic services (Public)',
+    description: 'Retrieves list of active services for a specific clinic',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Services retrieved successfully',
+    type: ClinicServicesResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Clinic not found',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by service name (fuzzy search)',
+    example: 'Khám',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 50, max: 100)',
+    example: 50,
+  })
+  async getPublicClinicServices(
+    @Param('clinicId') clinicId: string,
+    @Query() query: GetClinicServicesQueryDto,
+  ): Promise<{ data: ClinicServicesResponseDto; message: string }> {
+    const publicQuery = { ...query, isActive: true };
+    const data = await this.serviceConfigsService.getClinicServices(
+      clinicId,
+      publicQuery,
+    );
+
+    return {
+      data,
+      message: 'Services retrieved successfully',
+    };
+  }
+}
+
 /**
  * Service Configs Controller for Doctor
  *

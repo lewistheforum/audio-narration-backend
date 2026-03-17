@@ -48,7 +48,12 @@ export interface BookingSession {
   clinicShiftHourId?: string | null; // Nullable for out-of-hours
   extraHour?: string | null; // ISO 8601 with timezone for out-of-hours (Option 4)
   paymentMethod?: 'cod' | 'online'; // NEW in v4.0 - Required before finalizing
+  paymentAmount?: number;
+  paymentProvider?: string;
+  paymentReferenceId?: string;
   patientNote?: string;
+  appointmentHour?: string;
+  workHistoryId?: string;
   
   // Metadata
   bookingOption: BookingOption;
@@ -203,11 +208,18 @@ export class BookingSessionService {
         }
         
         // MERGE: Explicitly preserve all existing fields
-        Object.assign(session, {
+        const updateFields: any = {
           clinicShiftHourId: data.clinic_shift_hour_id,
           doctorId: data.doctor_id,
           currentStep: 3,
-        });
+        };
+        
+        // ADDED VERSION 4.0: Save appointment hour
+        if (data.appointment_hour) {
+          updateFields.appointmentHour = data.appointment_hour;
+        }
+        
+        Object.assign(session, updateFields);
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
         
@@ -261,11 +273,19 @@ export class BookingSessionService {
         }
         
         // MERGE: Explicitly preserve all existing fields
-        Object.assign(session, {
+        const updateFields: any = {
           appointmentDate: data.appointment_date,
           clinicShiftHourId: data.clinic_shift_hour_id,
           currentStep: 2,
-        });
+        };
+        
+        // ADDED VERSION 4.0: Save appointment hour
+        if (data.appointment_hour) {
+          updateFields.appointmentHour = data.appointment_hour;
+        }
+        
+        // MISSING Object.assign FIXXED:
+        Object.assign(session, updateFields);
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
         
@@ -329,6 +349,11 @@ export class BookingSessionService {
           clinicShiftHourId: data.clinic_shift_hour_id,
           currentStep: 2,
         };
+        
+        // ADDED VERSION 4.0: Save appointment hour
+        if (data.appointment_hour) {
+          updateFields.appointmentHour = data.appointment_hour;
+        }
         
         // For service-first flow (Option 1): doctor_id is provided
         if (data.doctor_id) {
@@ -515,6 +540,11 @@ export class BookingSessionService {
     if (option === BookingOption.SERVICE) {
       const serviceData = data as ServiceInitialDataDto;
       
+      // Verify service_ids is a valid array (prevent TypeError: parameterValue.value is not iterable)
+      if (!serviceData.service_ids || !Array.isArray(serviceData.service_ids) || serviceData.service_ids.length === 0) {
+        throw new BadRequestException('service_ids must be a non-empty array');
+      }
+
       // Verify all clinic service configs exist and are active (V5.0 - Multi-Service)
       const serviceConfigs = await this.dataSource.getRepository(ClinicServiceConfig).find({
         where: { 

@@ -170,6 +170,15 @@ export class UpdateSessionStep2Dto {
   doctor_id?: string;
 
   @ApiProperty({
+    description: 'Appointment hour (ISO 8601 format) (Option 1 & 2)',
+    example: '2026-03-09T08:00:00.000Z',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString({}, { message: 'Invalid datetime format for appointment_hour' })
+  appointment_hour?: string;
+
+  @ApiProperty({
     description: 'Clinic ID (Option 3 only - date-first flow)',
     example: '123e4567-e89b-12d3-a456-426614174001',
     required: false,
@@ -240,6 +249,15 @@ export class UpdateSessionStep3Dto {
   @IsOptional()
   @IsUUID('4', { message: 'Invalid doctor ID format' })
   doctor_id?: string;
+
+  @ApiProperty({
+    description: 'Appointment hour (ISO 8601 format) (Option 3 only - V4.6)',
+    example: '2026-03-09T08:00:00.000Z',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString({}, { message: 'Invalid datetime format for appointment_hour' })
+  appointment_hour?: string;
 }
 
 /**

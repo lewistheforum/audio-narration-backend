@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -205,6 +206,28 @@ export class ClinicLegalDocumentsController {
   // ============================================
   // Generic Endpoints
   // ============================================
+
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_MANAGER)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get current manager clinic legal documents' })
+  @ApiResponseData({
+    type: ClinicsLegalDocuments,
+    status: HttpStatus.OK,
+    message: 'Lấy hồ sơ pháp lý thành công',
+  })
+  async getMyLegalDocuments(@Req() req: any) {
+    const accountId = req.user._id;
+    const doc = await this.clinicLegalDocumentsService.findDocumentByAccountId(accountId);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Lấy hồ sơ pháp lý thành công',
+      data: doc,
+    };
+  }
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
