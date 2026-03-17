@@ -26,6 +26,7 @@ export * from './complete-examination.dto';
 export * from './complete-examination-response.dto';
 export * from './add-service.dto';
 export * from './add-service-response.dto';
+export * from './remove-added-service-response.dto';
 export * from './work-history-query.dto';
 export * from './doctor-booking.dto';
 export * from './clinic-booking.dto';

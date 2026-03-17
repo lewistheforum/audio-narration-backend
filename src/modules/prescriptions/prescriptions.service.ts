@@ -24,6 +24,7 @@ import { MedicineRepository } from './repositories';
 import { CreateMedicineDto } from './dto/create-medicine.dto';
 import { UpdateMedicineDto } from './dto/update-medicine.dto';
 import { CreatePrescriptionDto, PrescriptionResponseDto, PrescriptionMedicineDetailDto } from './dto';
+import { PaginatedMedicinesResponseDto } from './dto/paginated-medicines-response.dto';
 import { PatientEPrescriptionDetailResponseDto } from './dto/patient-e-prescription-response.dto';
 import { getCurrentVietnamTime, getStartOfDay, getEndOfDay } from 'src/common/utils/date.util';
 import {
@@ -86,10 +87,23 @@ export class PrescriptionsService {
   }
 
   /**
-   * Find all medicines (with soft-deleted excluded by default)
+   * Find medicines with pagination (with soft-deleted excluded by default)
    */
-  async findAll(): Promise<Medicine[]> {
-    return await this.medicineRepository.findAllMedicines();
+  async findAll(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const skip = (page - 1) * limit;
+    const [data, total] =
+      await this.medicineRepository.findMedicinesWithPagination(skip, limit);
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   /**
@@ -102,8 +116,26 @@ export class PrescriptionsService {
   /**
    * Search medicines by name (partial match)
    */
-  async searchByName(name: string): Promise<Medicine[]> {
-    return await this.medicineRepository.searchMedicinesByName(name);
+  async searchByName(
+    name: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const skip = (page - 1) * limit;
+    const [data, total] =
+      await this.medicineRepository.searchMedicinesByNameWithPagination(
+        name,
+        skip,
+        limit,
+      );
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   /**
