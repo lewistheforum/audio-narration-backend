@@ -1214,12 +1214,7 @@ export class AppointmentsService {
       const targetShiftHourId =
         rescheduleDto.clinicShiftHourId || appointment.clinicShiftHourId;
 
-      // Ensure we have a valid shift hour ID to work with
-      if (!targetShiftHourId) {
-        throw new BadRequestException(
-          'Appointment does not have a shift hour and none was provided',
-        );
-      }
+      
 
       let targetDate: Date;
       if (rescheduleDto.appointmentDate) {
@@ -3367,32 +3362,105 @@ export class AppointmentsService {
 
     const now = getCurrentVietnamTime();
 
-    await this.dataSource.getRepository(ServiceAppointment).update(
-      serviceAppointment._id,
-      {
-        deletedAt: now,
-      },
+    const servicePrice = parseFloat(serviceAppointment.price?.toString() || '0');
+    const serviceDiscount = parseFloat(
+      (serviceAppointment.discount || 0).toString(),
+    );
+    const removedAmount = Math.round((servicePrice * (100 - serviceDiscount)) / 100);
+    const previousPackageAmount = Number(
+      serviceAppointment.appointmentPackage.amount || 0,
     );
 
-    const remainingServicesCount = await this.dataSource
-      .getRepository(ServiceAppointment)
-      .createQueryBuilder('sa')
-      .where('sa.appointment_package_id = :packageId', {
-        packageId: serviceAppointment.appointmentPackageId,
-      })
-      .andWhere('sa.deleted_at IS NULL')
-      .getCount();
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
     let packageRemoved = false;
 
-    if (remainingServicesCount === 0) {
-      await this.dataSource.getRepository(AppointmentPackage).update(
-        serviceAppointment.appointmentPackageId,
+    try {
+      const deleteResult = await queryRunner.manager
+        .getRepository(ServiceAppointment)
+        .createQueryBuilder()
+        .update(ServiceAppointment)
+        .set({ deletedAt: now })
+        .where('_id = :serviceAppointmentId', {
+          serviceAppointmentId: serviceAppointment._id,
+        })
+        .andWhere('appointment_package_id = :packageId', {
+          packageId: serviceAppointment.appointmentPackageId,
+        })
+        .andWhere('clinic_service_id = :clinicServiceId', {
+          clinicServiceId: serviceAppointment.clinicServiceId,
+        })
+        .andWhere('deleted_at IS NULL')
+        .execute();
+
+      if (!deleteResult.affected) {
+        throw new NotFoundException(
+          'Service appointment not found in this appointment',
+        );
+      }
+
+      const remainingServices = await queryRunner.manager
+        .getRepository(ServiceAppointment)
+        .createQueryBuilder('sa')
+        .where('sa.appointment_package_id = :packageId', {
+          packageId: serviceAppointment.appointmentPackageId,
+        })
+        .andWhere('sa.deleted_at IS NULL')
+        .getMany();
+
+      const remainingServicesCount = remainingServices.length;
+
+      if (remainingServicesCount === 0) {
+        await queryRunner.manager.getRepository(AppointmentPackage).update(
+          serviceAppointment.appointmentPackageId,
+          {
+            deletedAt: now,
+          },
+        );
+        packageRemoved = true;
+      } else {
+        const updatedPackageAmount = remainingServices.reduce((sum, sa) => {
+          const price = parseFloat(sa.price?.toString() || '0');
+          const discount = parseFloat((sa.discount || 0).toString());
+          const amount = Math.round((price * (100 - discount)) / 100);
+          return sum + amount;
+        }, 0);
+
+        await queryRunner.manager.getRepository(AppointmentPackage).update(
+          serviceAppointment.appointmentPackageId,
+          {
+            amount: updatedPackageAmount,
+          },
+        );
+      }
+
+      const activePackages = await queryRunner.manager
+        .getRepository(AppointmentPackage)
+        .createQueryBuilder('pkg')
+        .where('pkg.appointment_id = :appointmentId', { appointmentId })
+        .andWhere('pkg.deleted_at IS NULL')
+        .getMany();
+
+      const updatedAppointmentTotal = activePackages.reduce(
+        (sum, pkg) => sum + Number(pkg.amount || 0),
+        0,
+      );
+
+      await queryRunner.manager.getRepository(Appointment).update(
+        appointment._id,
         {
-          deletedAt: now,
+          total: updatedAppointmentTotal,
         },
       );
-      packageRemoved = true;
+
+      await queryRunner.commitTransaction();
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
     }
 
     return {
@@ -3403,7 +3471,7 @@ export class AppointmentsService {
       serviceName:
         serviceAppointment.clinicService?.service?.serviceName ||
         'Unknown Service',
-      amount: Number(serviceAppointment.appointmentPackage.amount || 0),
+      amount: previousPackageAmount,
       packageRemoved,
       removedBy: doctorId,
       removedAt: now,
