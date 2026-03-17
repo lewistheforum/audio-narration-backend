@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { generateRSAKeyPair } from '../utils/util';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import {
   AccountRole,
@@ -85,8 +84,6 @@ export class AccountSeederService {
     private readonly addressRepository: AddressRepository,
     private readonly googleIframeRepository: GoogleIframeRepository,
   ) {}
-
-
 
   async seedBaseAccounts(): Promise<void> {
     try {
@@ -208,16 +205,12 @@ export class AccountSeederService {
         username: `clinic_admin_${i}`,
         email,
         password: hashedPassword,
-        phone: this.randomVietnamPhone(),
+        phone: `+84${this.randomPhoneDigits()}`,
         role: AccountRole.CLINIC_ADMIN,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,
         isOAuthUser: false,
       });
-
-      const keyPair = generateRSAKeyPair();
-      account.publicKey = keyPair.publicKey;
-      account.encryptedPrivateKey = keyPair.privateKey;
 
       const saved = await this.accountRepository.saveAccount(account);
       clinicAdmins.push(saved);
@@ -269,17 +262,13 @@ export class AccountSeederService {
           }_${i}`,
           email,
           password: hashedPassword,
-          phone: this.randomVietnamPhone(),
+          phone: `+84${this.randomPhoneDigits()}`,
           parentId: clinicAdmin._id,
           role: AccountRole.CLINIC_MANAGER,
           status: AccountStatus.ACTIVE,
           isEmailVerified: true,
           isOAuthUser: false,
         });
-
-        const keyPair = generateRSAKeyPair();
-        account.publicKey = keyPair.publicKey;
-        account.encryptedPrivateKey = keyPair.privateKey;
 
         const saved = await this.accountRepository.saveAccount(account);
         clinicManagers.push(saved);
@@ -323,17 +312,13 @@ export class AccountSeederService {
           }_${i}`,
           email,
           password: hashedPassword,
-          phone: this.randomVietnamPhone(),
+          phone: `+84${this.randomPhoneDigits()}`,
           parentId: clinicManager._id,
           role: AccountRole.CLINIC_STAFF,
           status: AccountStatus.ACTIVE,
           isEmailVerified: true,
           isOAuthUser: false,
         });
-
-        const keyPair = generateRSAKeyPair();
-        account.publicKey = keyPair.publicKey;
-        account.encryptedPrivateKey = keyPair.privateKey;
 
         await this.accountRepository.saveAccount(account);
         createdCount++;
@@ -372,17 +357,13 @@ export class AccountSeederService {
           username: `doctor_${clinicManagers.indexOf(clinicManager) + 1}_${i}`,
           email,
           password: hashedPassword,
-          phone: this.randomVietnamPhone(),
+          phone: `+84${this.randomPhoneDigits()}`,
           parentId: clinicManager._id,
           role: AccountRole.DOCTOR,
           status: AccountStatus.ACTIVE,
           isEmailVerified: true,
           isOAuthUser: false,
         });
-
-        const keyPair = generateRSAKeyPair();
-        account.publicKey = keyPair.publicKey;
-        account.encryptedPrivateKey = keyPair.privateKey;
 
         await this.accountRepository.saveAccount(account);
         createdCount++;
@@ -430,7 +411,7 @@ export class AccountSeederService {
         username: `patient_${i}`,
         email,
         password: hashedPassword,
-        phone: this.randomVietnamPhone(),
+        phone: `+84${this.randomPhoneDigits()}`,
         role: AccountRole.PATIENT,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,
@@ -602,18 +583,11 @@ export class AccountSeederService {
   }
 
   /**
-   * Generate random Vietnamese local phone number
+   * Generate random 9-digit phone number
    */
-  private randomVietnamPhone(): string {
-    return `0${this.randomDigits(9)}`;
-  }
-
-  /**
-   * Generate random digits string
-   */
-  private randomDigits(length: number): string {
+  private randomPhoneDigits(): string {
     let digits = '';
-    for (let i = 0; i < length; i++) {
+    for (let i = 0; i < 9; i++) {
       digits += Math.floor(Math.random() * 10);
     }
     return digits;

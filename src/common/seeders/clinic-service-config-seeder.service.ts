@@ -2,14 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ClinicServiceConfig } from '../../modules/service-configs/entities/clinic-service-config.entity';
 import { ClinicServiceConfigRepository } from '../../modules/service-configs/repositories/clinic-service-config.repository';
 import { ClinicServiceRepository } from '../../modules/clinic-services/repositories/clinic-service.repository';
-import { ClinicServiceCategoryRepository } from '../../modules/clinic-services/repositories/clinic-service-category.repository';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
-import { ServiceCategoryType } from '../../modules/clinic-services/enums';
 import { SERVICE_NOTES } from '../constants/medical-terms';
-
-const TARGET_CLINIC_MANAGER_EMAIL = 'clinic_manager_1_1@bonix.test';
 
 /**
  * ClinicServiceConfig Seeder Service
@@ -31,7 +27,6 @@ export class ClinicServiceConfigSeederService {
   constructor(
     private readonly clinicServiceConfigRepository: ClinicServiceConfigRepository,
     private readonly clinicServiceRepository: ClinicServiceRepository,
-    private readonly clinicServiceCategoryRepository: ClinicServiceCategoryRepository,
     private readonly accountRepository: AccountRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
   ) {}
@@ -70,13 +65,6 @@ export class ClinicServiceConfigSeederService {
         return;
       }
 
-      // Get all categories for mapping
-      const categories = await this.clinicServiceCategoryRepository.findAll();
-      const categoryMap = new Map<string, string>();
-      for (const cat of categories) {
-        categoryMap.set(cat.type, cat._id);
-      }
-
       this.logger.log(
         `Found ${clinicManagers.length} clinics and ${services.length} services`,
       );
@@ -86,50 +74,43 @@ export class ClinicServiceConfigSeederService {
       // For each clinic manager, create configs for a subset of services
       for (const clinic of clinicManagers) {
         const clinicId = clinic._id;
-        const isTargetClinic = clinic.email === TARGET_CLINIC_MANAGER_EMAIL;
 
-        if (isTargetClinic) {
-          // Special handling for target clinic: ensure ALL categories are covered
-          configsCreated += await this.seedTargetClinic(
-            clinicId,
-            services,
-            categoryMap,
-          );
-        } else {
-          // Standard random seeding for other clinics
-          const servicesForClinic = services.slice(0, 8);
+        // Select a subset of services for this clinic (e.g., first 8 services)
+        const servicesForClinic = services.slice(0, 8);
 
-          for (const service of servicesForClinic) {
-            const serviceId = service._id;
+        for (const service of servicesForClinic) {
+          const serviceId = service._id;
 
-            const existingConfig =
-              await this.clinicServiceConfigRepository.findByClinicAndService(
-                clinicId,
-                serviceId,
-              );
-
-            if (existingConfig) {
-              continue;
-            }
-
-            const price = this.generatePrice(service.serviceCode);
-            const discount = this.generateDiscount();
-            const durationMin = this.generateDuration(service.serviceCode);
-            const noteForPatient = this.generateNote(service.serviceCode);
-
-            const config = this.clinicServiceConfigRepository.create({
-              serviceId,
+          // Check if config already exists
+          const existingConfig =
+            await this.clinicServiceConfigRepository.findByClinicAndService(
               clinicId,
-              price,
-              discount,
-              durationMin,
-              noteForPatient,
-              isActive: true,
-            });
+              serviceId,
+            );
 
-            await this.clinicServiceConfigRepository.save(config);
-            configsCreated++;
+          if (existingConfig) {
+            continue; // Skip existing config
           }
+
+          // Generate realistic values
+          const price = this.generatePrice(service.serviceCode);
+          const discount = this.generateDiscount();
+          const durationMin = this.generateDuration(service.serviceCode);
+          const noteForPatient = this.generateNote(service.serviceCode);
+
+          // Create config
+          const config = this.clinicServiceConfigRepository.create({
+            serviceId,
+            clinicId,
+            price,
+            discount,
+            durationMin,
+            noteForPatient,
+            isActive: true,
+          });
+
+          await this.clinicServiceConfigRepository.save(config);
+          configsCreated++;
         }
       }
 
@@ -141,90 +122,10 @@ export class ClinicServiceConfigSeederService {
   }
 
   /**
-   * Seed target clinic with comprehensive coverage of all ERM categories
-   */
-  private async seedTargetClinic(
-    clinicId: string,
-    services: any[],
-    categoryMap: Map<string, string>,
-  ): Promise<number> {
-    this.logger.log(
-      `Seeding target clinic ${TARGET_CLINIC_MANAGER_EMAIL} with full category coverage`,
-    );
-
-    let created = 0;
-    const allCategoryTypes = Object.values(ServiceCategoryType);
-    const servicesByCategory = new Map<string, any[]>();
-
-    for (const catType of allCategoryTypes) {
-      const categoryId = categoryMap.get(catType);
-      if (categoryId) {
-        const catServices = services.filter(
-          (s) => (s as any).categoryId === categoryId,
-        );
-        servicesByCategory.set(catType, catServices);
-      }
-    }
-
-    const discountVariations = [0, 5, 10, 15, 20];
-    let discountIndex = 0;
-
-    for (const categoryType of allCategoryTypes) {
-      const catServices = servicesByCategory.get(categoryType);
-      if (!catServices || catServices.length === 0) {
-        this.logger.warn(`No services found for category ${categoryType}`);
-        continue;
-      }
-
-      const service = catServices[0];
-      const serviceId = service._id;
-
-      const existingConfig =
-        await this.clinicServiceConfigRepository.findByClinicAndService(
-          clinicId,
-          serviceId,
-        );
-
-      if (existingConfig) {
-        this.logger.log(
-          `Config already exists for ${categoryType}, skipping`,
-        );
-        continue;
-      }
-
-      const discount = discountVariations[discountIndex % discountVariations.length];
-      discountIndex++;
-
-      const price = this.generatePrice(service.serviceCode);
-      const durationMin = this.generateDuration(service.serviceCode);
-      const noteForPatient = this.generateNote(service.serviceCode);
-
-      const config = this.clinicServiceConfigRepository.create({
-        serviceId,
-        clinicId,
-        price,
-        discount,
-        durationMin,
-        noteForPatient,
-        isActive: true,
-      });
-
-      await this.clinicServiceConfigRepository.save(config);
-      created++;
-
-      this.logger.log(
-        `✅ Created ${categoryType} service: ${service.serviceName} (discount: ${discount}%)`,
-      );
-    }
-
-    return created;
-  }
-
-  /**
    * Generate price based on service code
    */
   private generatePrice(serviceCode: string): number {
-    const basePrice = 1000;
+    const basePrice = 100000;
     const multiplier = (serviceCode.length % 5) + 1; // 1-5
     return basePrice * multiplier;
   }

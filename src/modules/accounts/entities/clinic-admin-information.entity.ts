@@ -153,18 +153,6 @@ export class ClinicAdminInformation {
   sepayVa?: string;
 
   /**
-   * SePay API Key
-   *
-   * SePay API key for payment processing integration
-   */
-  @Column({
-    name: 'sepay_key',
-    type: 'text',
-    nullable: true
-  })
-  sepayKey?: string;
-
-  /**
    * Verification Status
    *
    * Indicates whether the clinic administrator is verified

@@ -1,6 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Save ERM Response DTO
@@ -14,7 +12,6 @@ export class SaveErmResponseDto {
   status: string;
 
   @ApiProperty({ example: '2026-02-24T10:30:00.000Z' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   @ApiProperty({ example: 'Đã lưu thông tin ERM thành công' })

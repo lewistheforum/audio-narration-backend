@@ -9,12 +9,12 @@ module.exports = {
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/src/$1',
   },
-  moduleDirectories: ['node_modules', '<rootDir>/test/__mocks__'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid)/)',
+  ],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.spec.ts',
     '!src/**/*.test.ts',
   ],
-  // Setup timezone before running tests to ensure consistency
-  setupFilesAfterEnv: ['<rootDir>/test/jest-setup.ts'],
 };

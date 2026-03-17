@@ -8,19 +8,8 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Account } from './entities/accounts.entity';
-import {
-  AccountRole,
-  AccountStatus,
-  VerificationType,
-  ClinicRole,
-} from './enums';
-import { generateRSAKeyPair } from 'src/common/utils/util';
+import { AccountRole, AccountStatus, VerificationType, ClinicRole } from './enums';
 import * as crypto from 'crypto';
-import {
-  getCurrentVietnamTime,
-  addToVietnamTime,
-  getVietnamTimestamp,
-} from 'src/common/utils/date.util';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
 import { ClinicManagerInformation } from './entities/clinic_manager_information.entity';
@@ -82,7 +71,6 @@ import { UsernameEmailListDto } from './dto/username-email-list.dto';
 import { GetEmployeesByClinicDto } from './dto/get-employees-by-clinic.dto';
 
 import { generateVerificationCode } from 'src/common/utils/util';
-import { ZaloWebhookService } from './zalo-webhook.service';
 import { MailerService } from '../mailer/mailer.service';
 import {
   ClinicSubscriptionRepository,
@@ -171,15 +159,31 @@ export class AccountsService {
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
-    private readonly zaloWebhookService: ZaloWebhookService,
-  ) {}
+  ) { }
 
+  private generateKeyPair(): {
+    publicKey: string;
+    encryptedPrivateKey: string;
+  } {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    });
 
+    return { publicKey, encryptedPrivateKey: privateKey };
+  }
 
   async generateUserKeys(
     userId: string,
   ): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
-    const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+    const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
     const account = await this.findAccountEntityById(userId);
     account.publicKey = publicKey;
     account.encryptedPrivateKey = encryptedPrivateKey;
@@ -317,8 +321,6 @@ export class AccountsService {
     query: SearchPatientQueryDto,
   ): Promise<PatientSearchResponseDto> {
     const { phone, email, fullName } = query;
-    const invalidRoleMessage =
-      'This account can not book appointment, Please enter different information';
 
     // Validate at least one search parameter is provided
     if (!phone && !email && !fullName) {
@@ -332,23 +334,11 @@ export class AccountsService {
     // Priority 1: Search by phone (primary key, exact match)
     if (phone) {
       account = await this.accountRepository.findByPhone(phone);
-      if (account && account.role !== AccountRole.PATIENT) {
-        return {
-          found: false,
-          message: invalidRoleMessage,
-        };
-      }
     }
 
     // Priority 2: Search by email (exact match) if phone search failed
     if (!account && email) {
       account = await this.accountRepository.findByEmail(email);
-      if (account && account.role !== AccountRole.PATIENT) {
-        return {
-          found: false,
-          message: invalidRoleMessage,
-        };
-      }
     }
 
     // Priority 3: Search by full name (fuzzy search) if both phone and email failed
@@ -359,12 +349,6 @@ export class AccountsService {
         account = await this.accountRepository.findAccountById(
           generalAccount.accountId,
         );
-        if (account && account.role !== AccountRole.PATIENT) {
-          return {
-            found: false,
-            message: invalidRoleMessage,
-          };
-        }
       }
     }
 
@@ -598,9 +582,6 @@ export class AccountsService {
 
     const savedAccount = await this.accountRepository.saveAccount(account);
 
-    // Call Zalo webhook to send friend request
-    await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Patient Registration');
-
     // Step 4: Create and save GeneralAccount entity with the Account ID
     let generalAccount: GeneralAccount | null = null;
     if (
@@ -696,9 +677,6 @@ export class AccountsService {
 
     const savedAccount = await this.accountRepository.saveAccount(account);
 
-    // Call Zalo webhook to send friend request
-    await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'OAuth Registration');
-
     // Step 4: Create GeneralAccount with fullName and profilePicture if provided
     let generalAccount: GeneralAccount | null = null;
     if (dto.fullName || dto.profilePicture) {
@@ -764,7 +742,7 @@ export class AccountsService {
    * ```typescript
    * const result = await accountsService.update(id, {
    *   email: 'newemail@example.com',
-   *   phone: '0987654321'
+   *   phone: '+84987654321'
    * });
    * if (result.emailChanged) {
    *   // Send verification email to new address
@@ -778,7 +756,6 @@ export class AccountsService {
     const account = await this.findAccountEntityById(id);
 
     let emailChanged = false;
-    const oldPhone = account.phone;
 
     // Validate email change permission - only PATIENT can change their own email
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
@@ -917,15 +894,8 @@ export class AccountsService {
     await this.updateAddressAndGoogleIframe(id, updateAccountDto);
 
     // Retrieve updated information for response
-    const updatedUser = await this.getAccountInformationByRole(id);
-
-    // If phone number changed, call Zalo webhook
-    if (updateAccountDto.phone && updateAccountDto.phone !== oldPhone) {
-      await this.zaloWebhookService.sendFriendRequest(updateAccountDto.phone, 'Profile Update (Phone Change)');
-    }
-
     return {
-      user: updatedUser,
+      user: await this.getAccountInformationByRole(id),
       emailChanged,
     };
   }
@@ -1659,29 +1629,19 @@ export class AccountsService {
   async deleteEmployee(id: string, requestorId: string): Promise<void> {
     const employee = await this.findAccountEntityById(id);
 
-    if (
-      employee.role !== AccountRole.DOCTOR &&
-      employee.role !== AccountRole.CLINIC_STAFF
-    ) {
-      throw new ForbiddenException(
-        'Only doctors and clinic staff can be removed by clinic management',
-      );
+    if (employee.role !== AccountRole.DOCTOR && employee.role !== AccountRole.CLINIC_STAFF) {
+      throw new ForbiddenException('Only doctors and clinic staff can be removed by clinic management');
     }
 
     const requestor = await this.accountRepository.findAccountById(requestorId);
-    if (!requestor)
-      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+    if (!requestor) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
     // Simplified Security Check: employee's parentId must strictly match the requestor's ID
     if (employee.parentId !== requestorId) {
       console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
       console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-      console.log(
-        `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
-      );
-      console.log(
-        `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
-      );
+      console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
+      console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
       console.log(`[RESULT] Access Denied because IDs do NOT match!`);
       console.log('-------------------------------------\n');
 
@@ -1692,12 +1652,8 @@ export class AccountsService {
 
     console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
     console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-    console.log(
-      `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
-    );
-    console.log(
-      `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
-    );
+    console.log(`[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`);
+    console.log(`[CHECK] Do they match? -> ${employee.parentId === requestorId}`);
     console.log(`[RESULT] Approved! Executing soft delete...`);
     console.log('-------------------------------------\n');
 
@@ -1957,11 +1913,11 @@ export class AccountsService {
 
   /**
    * Validate Manager Status for Operations
-   *
+   * 
    * Checks if a CLINIC_MANAGER account is in a valid state to allow:
    * - Creating Staff/Doctor accounts
    * - Being enabled/disabled by Admin
-   *
+   * 
    * @param managerId - UUID of CLINIC_MANAGER account
    * @param operation - Type of operation being performed
    * @throws {NotFoundException} If manager not found
@@ -1971,10 +1927,10 @@ export class AccountsService {
    */
   private async validateManagerStatus(
     managerId: string,
-    operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE',
+    operation: 'CREATE_STAFF' | 'ENABLE' | 'DISABLE'
   ): Promise<Account> {
     const manager = await this.accountRepository.findAccountById(managerId);
-
+    
     if (!manager) {
       throw new NotFoundException('Manager account not found');
     }
@@ -1988,35 +1944,32 @@ export class AccountsService {
       if (manager.status === AccountStatus.PENDING_APPROVAL) {
         throw new ForbiddenException(
           'Cannot create staff. Manager legal documents pending approval. ' +
-            'Please complete document verification first.',
+          'Please complete document verification first.'
         );
       }
       if (manager.status === AccountStatus.MANAGER_DISABLED) {
         throw new ForbiddenException(
           'Cannot create staff. Manager account is disabled. ' +
-            'Please contact your clinic administrator.',
+          'Please contact your clinic administrator.'
         );
       }
       if (manager.status !== AccountStatus.ACTIVE) {
         throw new ForbiddenException(
-          'Manager account must be ACTIVE to create staff members.',
+          'Manager account must be ACTIVE to create staff members.'
         );
       }
     }
 
     // Validate enable/disable operations
-    if (
-      operation === 'ENABLE' &&
-      manager.status !== AccountStatus.MANAGER_DISABLED
-    ) {
+    if (operation === 'ENABLE' && manager.status !== AccountStatus.MANAGER_DISABLED) {
       throw new BadRequestException(
-        'Can only enable managers with MANAGER_DISABLED status',
+        'Can only enable managers with MANAGER_DISABLED status'
       );
     }
-
+    
     if (operation === 'DISABLE' && manager.status !== AccountStatus.ACTIVE) {
       throw new BadRequestException(
-        'Can only disable managers with ACTIVE status',
+        'Can only disable managers with ACTIVE status'
       );
     }
 
@@ -2025,10 +1978,10 @@ export class AccountsService {
 
   /**
    * Validate Parent Manager Status for Login
-   *
+   * 
    * Ensures Staff/Doctor cannot login if their parent Manager is disabled.
    * Implements cascading access control based on account hierarchy.
-   *
+   * 
    * @param account - Account attempting to login
    * @throws {ForbiddenException} If parent manager is disabled or pending approval
    */
@@ -2044,18 +1997,18 @@ export class AccountsService {
     // Verify parentId exists
     if (!account.parentId) {
       throw new ForbiddenException(
-        'Account hierarchy error. No parent manager found.',
+        'Account hierarchy error. No parent manager found.'
       );
     }
 
     // Fetch parent Manager account
     const parentManager = await this.accountRepository.findAccountById(
-      account.parentId,
+      account.parentId
     );
 
     if (!parentManager) {
       throw new ForbiddenException(
-        'Parent manager not found. Please contact support.',
+        'Parent manager not found. Please contact support.'
       );
     }
 
@@ -2063,7 +2016,7 @@ export class AccountsService {
     if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
       throw new ForbiddenException(
         'Your clinic branch has been temporarily disabled. ' +
-          'Please contact your clinic administrator for assistance.',
+        'Please contact your clinic administrator for assistance.'
       );
     }
 
@@ -2071,7 +2024,7 @@ export class AccountsService {
     if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
       throw new ForbiddenException(
         'Your clinic branch is pending legal document approval. ' +
-          'You will be able to login once verification is complete.',
+        'You will be able to login once verification is complete.'
       );
     }
 
@@ -2200,7 +2153,7 @@ export class AccountsService {
       if (
         !legalDocs ||
         legalDocs.verificationStatus !==
-          LegalDocumentVerificationStatus.APPROVED
+        LegalDocumentVerificationStatus.APPROVED
       ) {
         throw new ForbiddenException(
           'Account is not ready or clinic is not active',
@@ -2351,7 +2304,7 @@ export class AccountsService {
     }
 
     // Check if code has expired
-    if (getCurrentVietnamTime() > storedCode.expiredAt) {
+    if (new Date() > storedCode.expiredAt) {
       throw new UnauthorizedException(
         MESSAGES.failMessage.verificationCodeExpired,
       );
@@ -2432,7 +2385,8 @@ export class AccountsService {
     const code = generateVerificationCode();
 
     // Store code in database with expiration (10 minutes)
-    const expiredAt = addToVietnamTime(10, 'minute');
+    const expiredAt = new Date();
+    expiredAt.setMinutes(expiredAt.getMinutes() + 10);
 
     const verification = this.codeVerificationRepository.create({
       accountId: account._id,
@@ -2512,7 +2466,8 @@ export class AccountsService {
     const code = generateVerificationCode();
 
     // Store code in database with expiration (15 minutes for password reset)
-    const expiredAt = addToVietnamTime(15, 'minute');
+    const expiredAt = new Date();
+    expiredAt.setMinutes(expiredAt.getMinutes() + 15);
 
     const verification = this.codeVerificationRepository.create({
       accountId: account._id,
@@ -2599,7 +2554,7 @@ export class AccountsService {
     }
 
     // Check if code has expired
-    if (getCurrentVietnamTime() > storedCode.expiredAt) {
+    if (new Date() > storedCode.expiredAt) {
       throw new UnauthorizedException(MESSAGES.failMessage.resetCodeExpired);
     }
 
@@ -2637,7 +2592,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_MANAGER) {
       throw new BadRequestException(
         'Only accounts with CLINIC_MANAGER role can have clinic manager information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }
@@ -2771,14 +2726,12 @@ export class AccountsService {
 
       await queryRunner.commitTransaction();
 
-      // Call Zalo webhook to send friend request
-      await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Patient Registration (Manual)');
-
       // Generate new 6-digit code
       const code = generateVerificationCode();
 
       // Store code in database with expiration (15 minutes for password reset)
-      const expiredAt = addToVietnamTime(15, 'minute');
+      const expiredAt = new Date();
+      expiredAt.setMinutes(expiredAt.getMinutes() + 15);
 
       const verification = this.codeVerificationRepository.create({
         accountId: savedAccount._id,
@@ -2915,7 +2868,7 @@ export class AccountsService {
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
 
       // Step 4: Create Account entity with CLINIC_STAFF role
       // Following 2-step registration pattern: Create ACTIVE account first
@@ -3018,7 +2971,7 @@ export class AccountsService {
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
 
       // Step 4: Create Account entity with DOCTOR role
       // Following 2-step registration pattern: Create PENDING account first
@@ -3189,8 +3142,8 @@ export class AccountsService {
         province,
         specialty,
         RegistrationStatus.ACTIVE ||
-          RegistrationStatus.NON_RENEWING ||
-          RegistrationStatus.EXPIRED,
+        RegistrationStatus.NON_RENEWING ||
+        RegistrationStatus.EXPIRED,
       );
 
     const clinicItems: ClinicItemDto[] = [];
@@ -3450,6 +3403,7 @@ export class AccountsService {
    * @returns {Promise<Account[]>} List of employees
    */
 
+
   /**
    * Get Doctor by ID with Full Details
    *
@@ -3569,7 +3523,7 @@ export class AccountsService {
     if (account.role !== AccountRole.CLINIC_ADMIN) {
       throw new BadRequestException(
         'Only accounts with CLINIC_ADMIN role can have clinic admin information. ' +
-          `Current role: ${account.role}`,
+        `Current role: ${account.role}`,
       );
     }
   }
@@ -3881,31 +3835,19 @@ export class AccountsService {
       // Email exists but with different role - allow registration
     }
 
-    // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
-    if (dto.sepayVa) {
-      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(
-        dto.sepayVa,
-      );
-      if (existingSepay) {
-        throw new ConflictException(
-          'Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.',
-        );
-      }
-    }
-
-    // Step 3: Hash password for secure storage
+    // Step 2: Hash password for secure storage
     const hashedPassword = await bcrypt.hash(
       dto.password,
       this.BCRYPT_SALT_ROUNDS,
     );
 
-    // Step 4: Create all entities in a transaction
+    // Step 3: Create all entities in a transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, encryptedPrivateKey } = this.generateKeyPair();
 
       // Create Account entity with CLINIC_ADMIN role and PENDING status
       const account = this.accountRepository.createAccount({
@@ -3927,7 +3869,6 @@ export class AccountsService {
       const clinicAdminInfo = this.clinicAdminInfoRepository.create({
         accountId: savedAccount._id,
         clinicName: dto.clinicName,
-        clinicPhone: dto.phone,
         description: dto.description,
         specializedIn: dto.specializedIn,
         pros: dto.pros,
@@ -3939,7 +3880,6 @@ export class AccountsService {
         bankNumber: dto.bankNumber,
         bankBranch: dto.bankBranch,
         sepayVa: dto.sepayVa,
-        sepayKey: dto.sepayKey,
       });
 
       await queryRunner.manager.save(clinicAdminInfo);
@@ -3951,7 +3891,7 @@ export class AccountsService {
         clinicId: savedAccount._id,
         serviceId: dto.serviceId,
         subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
-        subscriptionDate: getCurrentVietnamTime(),
+        subscriptionDate: new Date(),
       });
 
       await queryRunner.manager.save(clinicSubscription);
@@ -4057,14 +3997,11 @@ export class AccountsService {
 
     try {
       // Generate default password for manager account
-      const defaultPassword = 'Manager' + getVietnamTimestamp();
+      const defaultPassword = 'Manager' + Date.now();
       const hashedPassword = await bcrypt.hash(
         defaultPassword,
         this.BCRYPT_SALT_ROUNDS,
       );
-
-      // Generate digital signature keys
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
 
       // Create Account entity with CLINIC_MANAGER role and ACTIVE status
       const managerAccount = this.accountRepository.createAccount({
@@ -4077,8 +4014,6 @@ export class AccountsService {
         status: AccountStatus.ACTIVE,
         isEmailVerified: false,
         isOAuthUser: false,
-        publicKey,
-        encryptedPrivateKey,
       });
 
       const savedManagerAccount =
@@ -4629,28 +4564,19 @@ export class AccountsService {
    * @param id Staff Account ID
    * @param managerId Manager Account ID
    */
-  async findStaffById(
-    id: string,
-    managerId: string,
-  ): Promise<AccountResponseDto> {
+  async findStaffById(id: string, managerId: string): Promise<AccountResponseDto> {
     const staff = await this.findAccountEntityById(id);
 
     const parent = await this.accountRepository.findAccountById(managerId);
-    if (!parent)
-      throw new ForbiddenException(MESSAGES.failMessage.userNotFound);
+    if (!parent) throw new ForbiddenException(MESSAGES.failMessage.userNotFound);
 
     const clinicId = parent.parentId;
-    const allManagers = await this.accountRepository.findByParentIdAndRole(
-      clinicId,
-      AccountRole.CLINIC_MANAGER,
-    );
-    const validParentIds = [clinicId, ...allManagers.map((m) => m._id)];
+    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
+    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
 
     // Security Check: Ensure staff belongs to the manager's clinic
     if (!validParentIds.includes(staff.parentId)) {
-      throw new ForbiddenException(
-        MESSAGES.failMessage.insufficientPermissions,
-      );
+      throw new ForbiddenException(MESSAGES.failMessage.insufficientPermissions);
     }
 
     return this.getAccountInformationByRole(id);
@@ -4682,22 +4608,18 @@ export class AccountsService {
     if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
     const clinicId = parent.parentId;
-    const allManagers = await this.accountRepository.findByParentIdAndRole(
-      clinicId,
-      AccountRole.CLINIC_MANAGER,
-    );
-    const validParentIds = [clinicId, ...allManagers.map((m) => m._id)];
+    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicId, AccountRole.CLINIC_MANAGER);
+    const validParentIds = [clinicId, ...allManagers.map(m => m._id)];
 
-    const [accounts, total] =
-      await this.accountRepository.findStaffByClinicWithFilters(
-        validParentIds,
-        (page - 1) * limit,
-        limit,
-        search,
-        role,
-        fromDate,
-        toDate,
-      );
+    const [accounts, total] = await this.accountRepository.findStaffByClinicWithFilters(
+      validParentIds,
+      (page - 1) * limit,
+      limit,
+      search,
+      role,
+      fromDate,
+      toDate,
+    );
 
     const staffItems: StaffItemDto[] = [];
     for (const account of accounts) {
@@ -4742,28 +4664,23 @@ export class AccountsService {
     if (!parent) throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
     const clinicAdminId = parent.parentId;
-    const allManagers = await this.accountRepository.findByParentIdAndRole(
-      clinicAdminId,
-      AccountRole.CLINIC_MANAGER,
+    const allManagers = await this.accountRepository.findByParentIdAndRole(clinicAdminId, AccountRole.CLINIC_MANAGER);
+    const validParentIds = [clinicAdminId, ...allManagers.map(m => m._id)];
+
+    const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(managerId);
+
+    const [accounts, total] = await this.accountRepository.findDoctorsWithFilters(
+      AccountRole.DOCTOR,
+      AccountStatus.ACTIVE,
+      (page - 1) * limit,
+      limit,
+      validParentIds,
+      undefined,
+      search,
+      academicDegree,
+      fromDate,
+      toDate,
     );
-    const validParentIds = [clinicAdminId, ...allManagers.map((m) => m._id)];
-
-    const clinicInfo =
-      await this.clinicManagerInfoRepository.findByAccountId(managerId);
-
-    const [accounts, total] =
-      await this.accountRepository.findDoctorsWithFilters(
-        AccountRole.DOCTOR,
-        AccountStatus.ACTIVE,
-        (page - 1) * limit,
-        limit,
-        validParentIds,
-        undefined,
-        search,
-        academicDegree,
-        fromDate,
-        toDate,
-      );
 
     const doctorItems: DoctorItemDto[] = [];
     for (const account of accounts) {

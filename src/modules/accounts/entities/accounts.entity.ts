@@ -107,14 +107,14 @@ export class Account {
   clinicStaffInformation?: ClinicStaffInformation;
 
   /**
-   * Address Relation
+   * Addresses Relation
    *
-   * One-to-one relation with addresses table
+   * One-to-many relation with addresses table
    */
-  @OneToOne(() => Address, (address) => address.account, {
+  @OneToMany(() => Address, (address) => address.account, {
     cascade: true,
   })
-  address?: Address;
+  addresses?: Address[];
 
   /**
    * Blogs Relation

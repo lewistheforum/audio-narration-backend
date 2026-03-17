@@ -8,7 +8,6 @@ import axios, { AxiosError } from 'axios';
 import { ChatMessageDto } from '../dto/chat-message.dto';
 import { AiModel } from '../enums/ai-model.enum';
 import { FeedbackRepository } from 'src/modules/reports/repositories';
-import { parseVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Gemini Service
@@ -130,8 +129,8 @@ export class GeminiService {
         clinicFeedbacks =
           await this.feedbackRepository.findFeedbacksByClinicIdAndDateRange(
             clinicId,
-            parseVietnamTime(startDate),
-            parseVietnamTime(endDate),
+            new Date(startDate),
+            new Date(endDate),
           );
       } else {
         clinicFeedbacks =

@@ -1,23 +1,14 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
-import { AppointmentsService } from '../appointments/appointments.service';
-import { AppointmentWebhookService } from '../appointments/appointment-webhook.service';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
 import { Repository, Like } from 'typeorm';
-import {
-  getCurrentVietnamTime,
-  addToVietnamTime,
-  formatToVietnamTime,
-} from 'src/common/utils/date.util';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
-import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
+import { PaymentDirection, PaymentStatus, TransactionType } from './entities';
 import { RegistrationStatus } from '../subscriptions/enums';
 import {
   CreateTransactionDto,
@@ -28,14 +19,10 @@ import {
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { AppointmentPackage } from '../appointments/entities/appointment-package.entity';
-import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from '../appointments/enums';
+import { AppointmentPackageStatus } from '../appointments/enums';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../subscriptions/subscription-services.service';
-import { Account } from '../accounts/entities/accounts.entity';
-import { BookingSessionService } from '../appointments/booking-session.service';
-import { ManagerRevenueReportDto, RevenuePeriod } from './dto/manager-revenue-report.dto';
-import * as XLSX from 'xlsx';
 
 /**
  * Transactions Service
@@ -63,14 +50,8 @@ export class TransactionsService {
     private readonly clinicSubscriptionRepo: Repository<ClinicSubscription>,
     @InjectRepository(SubscriptionService)
     private readonly subscriptionServiceRepo: Repository<SubscriptionService>,
-    @InjectRepository(Account)
-    private readonly accountRepository: Repository<Account>,
     private readonly configService: ConfigService,
     private readonly subscriptionServicesService: SubscriptionServicesService,
-    private readonly bookingSessionService: BookingSessionService,
-    @Inject(forwardRef(() => AppointmentsService))
-    private readonly appointmentsService: AppointmentsService,
-    private readonly appointmentWebhookService: AppointmentWebhookService,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
@@ -151,10 +132,7 @@ export class TransactionsService {
    * Renewal always uses 1 month duration by default
    * @param clinicId Clinic ID
    */
-  async createRenewalQr(
-    clinicId: string,
-    duration?: number,
-  ): Promise<PaymentResponseDto> {
+  async createRenewalQr(clinicId: string): Promise<PaymentResponseDto> {
     const subscription = await this.clinicSubscriptionRepo.findOne({
       where: { clinicId },
     });
@@ -163,12 +141,12 @@ export class TransactionsService {
       throw new NotFoundException('Subscription not found for this clinic');
     }
 
-    const now = getCurrentVietnamTime();
+    const now = new Date();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
       subscription.expirationDate &&
-      subscription.expirationDate > now;
+      new Date(subscription.expirationDate) > now;
 
     if (isActive && isNotExpired) {
       // throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
@@ -177,10 +155,7 @@ export class TransactionsService {
       );
     }
 
-    const transaction = await this.handleRenewalTransaction(
-      subscription,
-      duration,
-    );
+    const transaction = await this.handleRenewalTransaction(subscription);
     return this.generateQrResponse(subscription, transaction);
   }
 
@@ -210,19 +185,19 @@ export class TransactionsService {
         clinicId,
         serviceId, // Set initial service intent
         subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP, // Default status
-        subscriptionDate: getCurrentVietnamTime(),
-        expirationDate: getCurrentVietnamTime(), // Expired by default until paid
+        subscriptionDate: new Date(),
+        expirationDate: new Date(), // Expired by default until paid
       });
       subscription = await this.clinicSubscriptionRepo.save(subscription);
     }
 
     // Case B: Exist but Active & Valid (User mistake?)
-    const now = getCurrentVietnamTime();
+    const now = new Date();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
       subscription.expirationDate &&
-      subscription.expirationDate > now;
+      new Date(subscription.expirationDate) > now;
 
     if (isActive && isNotExpired) {
       throw new BadRequestException(
@@ -328,10 +303,8 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Target service not found');
 
-    // 2. Calculate Amount: price * duration (Apply discount)
-    const discount = service.discount ? parseFloat(service.discount.toString()) : 0;
-    const finalPrice = service.price - (service.price * discount) / 100;
-    const amount = finalPrice * duration;
+    // 2. Calculate Amount: price * duration (NO discount)
+    const amount = service.price * duration;
 
     // 3. Create Transaction Content (store targetServiceId AND duration for later processing)
     const content = JSON.stringify({ targetServiceId, duration });
@@ -352,7 +325,6 @@ export class TransactionsService {
    */
   async handleRenewalTransaction(
     subscription: ClinicSubscription,
-    duration?: number,
   ): Promise<any> {
     // 1. Get Current Service
     const service = await this.subscriptionServiceRepo.findOne({
@@ -360,32 +332,28 @@ export class TransactionsService {
     });
     if (!service) throw new NotFoundException('Current service not found');
 
-    // 3. Calculate/Set Duration
-    if (!duration) {
-      // If no duration provided, calculate from current subscription dates
-      const startDate = subscription.subscriptionDate;
-      const expirationDate = subscription.expirationDate;
+    // 3. Calculate Duration from current subscription dates
+    // If user bought 12 months, renew for 12 months.
+    const startDate = new Date(subscription.subscriptionDate);
+    const expirationDate = new Date(subscription.expirationDate);
 
-      // Calculate months difference
-      duration = (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
-      duration -= startDate.getMonth();
-      duration += expirationDate.getMonth();
+    // Calculate months difference
+    let duration =
+      (expirationDate.getFullYear() - startDate.getFullYear()) * 12;
+    duration -= startDate.getMonth();
+    duration += expirationDate.getMonth();
 
-      // Ensure duration is at least 1
-      duration = duration <= 0 ? 1 : duration;
+    // Round to handle edge cases (e.g. Feb 28 to Feb 28 next year)
+    // If days difference is significant, adjust. But simple month diff is usually enough for billing.
+    // Ensure duration is at least 1
+    duration = duration <= 0 ? 1 : duration;
 
-      console.log(
-        `[DEBUG] Calculated base renewal duration: ${duration} months (Start: ${formatToVietnamTime(startDate)}, End: ${formatToVietnamTime(expirationDate)})`,
-      );
-    } else {
-      duration = Math.max(1, duration);
-      console.log(`[DEBUG] Using provided renewal duration: ${duration} months`);
-    }
+    console.log(
+      `[DEBUG] Calculated renewal duration: ${duration} months (Start: ${startDate.toISOString()}, End: ${expirationDate.toISOString()})`,
+    );
 
-    // 2. Calculate Amount: price * duration (Apply discount)
-    const discount = service.discount ? parseFloat(service.discount.toString()) : 0;
-    const finalPrice = service.price - (service.price * discount) / 100;
-    const amount = finalPrice * duration;
+    // 2. Calculate Amount: price * duration (NO discount)
+    const amount = service.price * duration;
 
     // 3. Content
     const content = JSON.stringify({ duration });
@@ -427,10 +395,10 @@ export class TransactionsService {
 
     if (!transaction) {
       const transactionType = await this.transactionTypeRepo.findOne({
-        where: { code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
+        where: { name: Like('SUBSCRIPTION%') },
       });
       if (!transactionType) {
-        throw new NotFoundException('Transaction Type SUBSCRIPTION PAYMENT not found');
+        throw new NotFoundException('Transaction Type SUBSCRIPTION not found');
       }
 
       transaction = this.transactionRepository.create({
@@ -462,7 +430,7 @@ export class TransactionsService {
   ): Promise<PaymentResponseDto> {
     // Verify appointment and get real amount & clinic
     const appointment = await this.appointmentRepository.findOne({
-      where: { _id: dto.appointmentId },
+      where: { _id: dto.prescriptionId },
     });
 
     if (!appointment) {
@@ -471,18 +439,10 @@ export class TransactionsService {
 
     let clinicAdminId: string | undefined;
     if (appointment?.clinicId) {
-      // Find the CLINIC_MANAGER account
-      const managerAccount = await this.accountRepository.findOne({
-        where: { _id: appointment.clinicId },
+      const clinicAdmin = await this.clinicAdminRepo.findOne({
+        where: { accountId: appointment.clinicId },
       });
-
-      if (managerAccount && managerAccount.parentId) {
-        // Resolve CLINIC_ADMIN info using the parentId
-        const clinicAdmin = await this.clinicAdminRepo.findOne({
-          where: { accountId: managerAccount.parentId },
-        });
-        clinicAdminId = clinicAdmin?._id;
-      }
+      clinicAdminId = clinicAdmin?._id;
     }
 
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
@@ -490,7 +450,7 @@ export class TransactionsService {
     // Calculate sum of all pending packages for this appointment
     const pendingPackages = await this.packageRepo.find({
       where: {
-        appointmentId: dto.appointmentId,
+        appointmentId: dto.prescriptionId,
         status: AppointmentPackageStatus.PENDING_PAYMENT
       }
     });
@@ -503,10 +463,10 @@ export class TransactionsService {
     // Ignore dto.amount, use source of truth from DB packages
 
     const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
+    const qrCodeUrl = this.buildQrUrl(amount, dto.prescriptionId, acc, bank);
     const qrPayload = this.buildQrPayload(
       amount,
-      dto.appointmentId,
+      dto.prescriptionId,
       acc,
       bank,
     );
@@ -514,74 +474,6 @@ export class TransactionsService {
     return new PaymentResponseDto({
       id: null,
       amount: amount,
-      currency: 'VND',
-      status: PaymentStatus.PENDING,
-      qrCodeUrl,
-      qrPayload,
-      expiresAt,
-    });
-  }
-
-  /**
-   * Create a dynamic payment QR for a prescription
-   */
-  async createDynamicQrAtClinic(
-    dto: CreateTransactionDto,
-  ): Promise<PaymentResponseDto> {
-    // Verify appointment and get real amount & clinic
-    const appointment = await this.appointmentRepository.findOne({
-      where: { _id: dto.appointmentId },
-    });
-
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
-
-    let clinicAdminId: string | undefined;
-    if (appointment?.clinicId) {
-      // Find the CLINIC_MANAGER account
-      const managerAccount = await this.accountRepository.findOne({
-        where: { _id: appointment.clinicId },
-      });
-
-      if (managerAccount && managerAccount.parentId) {
-        // Resolve CLINIC_ADMIN info using the parentId
-        const clinicAdmin = await this.clinicAdminRepo.findOne({
-          where: { accountId: managerAccount.parentId },
-        });
-        clinicAdminId = clinicAdmin?._id;
-      }
-    }
-
-    const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
-
-    // Calculate sum of all pending packages for this appointment
-    const pendingFinalAppointments = await this.appointmentRepository.find({
-      where: {
-        _id: dto.appointmentId,
-        status: AppointmentStatus.NEED_FINAL_PAYMENT
-      }
-    });
-
-    if (pendingFinalAppointments.length === 0) {
-      throw new BadRequestException('No pending payments for this appointment');
-    }
-
-    // const amount = pendingFinalAppointments.reduce((sum, apt) => sum + Number(apt.amount), 0);
-    // Ignore dto.amount, use source of truth from DB packages
-
-    const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(dto.amount, dto.appointmentId, acc, bank);
-    const qrPayload = this.buildQrPayload(
-      dto.amount,
-      dto.appointmentId,
-      acc,
-      bank,
-    );
-
-    return new PaymentResponseDto({
-      id: null,
-      amount: dto.amount,
       currency: 'VND',
       status: PaymentStatus.PENDING,
       qrCodeUrl,
@@ -631,7 +523,7 @@ export class TransactionsService {
     // 3. Create Pending Transaction
     // Resolve Transaction Type (VERIFICATION)
     const transactionType = await this.transactionTypeRepo.findOne({
-      where: { code: TransactionTypeCode.VERIFICATION },
+      where: { name: Like('VERIFICATION%') },
     });
 
     if (!transactionType) {
@@ -678,13 +570,13 @@ export class TransactionsService {
   async handleCallback(
     payload: SeepayCallbackDto,
   ): Promise<PaymentResponseDto> {
-    const appointmentId =
-      payload.appointmentId ||
-      this.extractAppointmentIdFromContent(payload.content);
+    const prescriptionId =
+      payload.prescriptionId ||
+      this.extractPrescriptionIdFromContent(payload.content);
 
-    if (!appointmentId) {
+    if (!prescriptionId) {
       throw new BadRequestException(
-        'Unable to detect appointment ID in callback',
+        'Unable to detect prescription ID in callback',
       );
     }
 
@@ -693,7 +585,7 @@ export class TransactionsService {
 
     // A. Strategy 1: Look for existing Pending Transaction (Verification Flow)
     const existingTransaction = await this.transactionRepository.findOne({
-      where: { id: appointmentId },
+      where: { id: prescriptionId },
       relations: ['transactionType'],
     });
 
@@ -726,7 +618,9 @@ export class TransactionsService {
 
       const saved = await this.transactionRepository.save(existingTransaction);
 
-      const isVerification = existingTransaction.transactionType?.code === TransactionTypeCode.VERIFICATION;
+      const isVerification = existingTransaction.transactionType?.name
+        ?.toUpperCase()
+        .startsWith('VERIFICATION');
       console.log('handleCallback Debug - Is Verification:', isVerification);
 
       if (status === PaymentStatus.SUCCESS && isVerification) {
@@ -773,8 +667,9 @@ export class TransactionsService {
       // Logic for Subscription Status Update (Existing Transaction)
       if (
         status === PaymentStatus.SUCCESS &&
-        (existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
-          existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION)
+        existingTransaction.transactionType?.name
+          ?.toUpperCase()
+          .startsWith('SUBSCRIPTION')
       ) {
         if (existingTransaction.subscriptionId) {
           console.log(
@@ -805,33 +700,18 @@ export class TransactionsService {
         }
       }
 
-      // NEW: Update Appointment Packages and Status for Existing Transaction (Strategy A)
-      if (status === PaymentStatus.SUCCESS && appointmentId) {
+      // NEW: Update Appointment Packages for Existing Transaction (Strategy A)
+      if (status === PaymentStatus.SUCCESS && prescriptionId) {
         await this.packageRepo.update(
           {
-            appointmentId: appointmentId,
+            appointmentId: prescriptionId,
             status: AppointmentPackageStatus.PENDING_PAYMENT
           },
           {
             status: AppointmentPackageStatus.PAID,
-            transactionId: saved.id,
-            paymentType: PaymentType.ONLINE
+            transactionId: saved.id
           }
         );
-
-        // Advance Appointment Status if it was NEED_FINAL_PAYMENT
-        const appointment = await this.appointmentRepository.findOne({
-          where: { _id: appointmentId }
-        });
-        if (appointment && appointment.status === AppointmentStatus.NEED_FINAL_PAYMENT) {
-          // Note: Slot increment logic will be handled within AppointmentsService.updateStatus 
-          // but here we can call a dedicated method or update directly.
-          // For now, update directly and we'll ensure slot logic is central in AppointmentsService.
-          await this.appointmentsService.updateAppointmentStatusDirectly(
-            appointmentId,
-            AppointmentStatus.COMPLETED
-          );
-        }
       }
 
       return new PaymentResponseDto({
@@ -848,47 +728,17 @@ export class TransactionsService {
     // B. Strategy 2: Standard Appointment Flow (New Transaction)
     // Resolve sender (patient) and clinic from appointment
     const appointment = await this.appointmentRepository.findOne({
-      where: { _id: appointmentId },
+      where: { _id: prescriptionId },
     });
 
     if (!appointment) {
-      // C. Strategy 3: Online Booking Session (appointment chưa tồn tại trong DB)
-      // appointmentId ở đây chính là sessionId từ Redis
-      const session = await this.bookingSessionService.getSession(appointmentId);
-      if (session && session.paymentMethod === 'online') {
-        console.log(
-          'handleCallback Debug - Found Online Booking Session:',
-          appointmentId,
-        );
-
-        // Gọi AppointmentsService để tạo appointment thật từ session này
-        const appointmentResult = await this.appointmentsService.createAppointmentOnlineFromCallback(
-          appointmentId,
-          payload,
-        );
-
-        // Kích hoạt Webhook xác nhận lịch hẹn gửi thông tin sang n8n
-        if (appointmentResult && appointmentResult.appointment_id) {
-          await this.appointmentWebhookService.sendConfirmation(appointmentResult.appointment_id);
-        }
-
-        return new PaymentResponseDto({
-          id: appointmentResult.transaction_id,
-          amount: payload.transferAmount,
-          currency: 'VND',
-          status: PaymentStatus.SUCCESS,
-          qrCodeUrl: undefined,
-          qrPayload: undefined,
-          expiresAt: new Date(),
-        });
-      }
-
-      // STRICT MODE: If neither Transaction nor Appointment nor Session is found, REJECT the callback.
+      // STRICT MODE: If neither Transaction nor Appointment is found, REJECT the callback.
+      // We do not allow "blind" transactions based on amount/content guessing anymore.
       console.error(
-        `handleCallback Error - Reference ID ${appointmentId} not found in Transaction, Appointment, or Session tables.`,
+        `handleCallback Error - Reference ID ${prescriptionId} not found in Transaction or Appointment tables.`,
       );
       throw new NotFoundException(
-        'Transaction reference (Transaction ID, Appointment ID, or Session ID) not found',
+        'Transaction reference (Transaction ID or Appointment ID) not found',
       );
     }
 
@@ -900,15 +750,20 @@ export class TransactionsService {
       clinicAdminId = clinicAdmin?._id;
     }
 
+    // Resolve Transaction Type (ONLINE for appointments)
+    let typeName = 'ONLINE';
+
+    // Fallback logic for VERIFICATION based on amount/content is REMOVED.
+
     const transactionType = await this.transactionTypeRepo.findOne({
-      where: { code: TransactionTypeCode.ONLINE },
+      where: { name: Like(typeName + '%') },
     });
 
     // Note: If appointment not found, we still save transaction but with null sender/clinic
     // to match user preference of capturing every callback.
 
     const transaction = this.transactionRepository.create({
-      appointmentId,
+      prescriptionId,
       amount: payload.transferAmount,
       currency: 'VND',
       status,
@@ -933,13 +788,13 @@ export class TransactionsService {
 
     if (status === PaymentStatus.SUCCESS) {
       if (payload.transferAmount === 10_000) {
-        // Verification payment fallback: assume appointmentId received (if any) holds the account ID
+        // Verification payment fallback: assume prescriptionId received (if any) holds the account ID
         console.warn(
-          'handleCallback Debug - Verification fallback strategy reached. appointmentId received:',
-          appointmentId,
+          'handleCallback Debug - Verification fallback strategy reached. prescriptionId received:',
+          prescriptionId,
         );
         await this.clinicAdminRepo.update(
-          { accountId: appointmentId },
+          { accountId: prescriptionId },
           { isVerify: true },
         );
       }
@@ -958,10 +813,7 @@ export class TransactionsService {
         savedTransaction.subscriptionId,
       );
 
-      if (
-        transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
-        transactionType?.code === TransactionTypeCode.SUBSCRIPTION
-      ) {
+      if (transactionType?.name?.toUpperCase().startsWith('SUBSCRIPTION')) {
         if (savedTransaction.subscriptionId) {
           console.log(
             'handleCallback Debug - Updating Subscription Status for:',
@@ -1011,30 +863,18 @@ export class TransactionsService {
         }
       }
 
-      // NEW: Update Appointment Packages and Status for New Transaction (Strategy B)
-      if (status === PaymentStatus.SUCCESS && appointmentId) {
+      // NEW: Update Appointment Packages for New Transaction (Strategy B)
+      if (status === PaymentStatus.SUCCESS && prescriptionId) {
         await this.packageRepo.update(
           {
-            appointmentId: appointmentId,
+            appointmentId: prescriptionId,
             status: AppointmentPackageStatus.PENDING_PAYMENT
           },
           {
             status: AppointmentPackageStatus.PAID,
-            transactionId: savedTransaction.id,
-            paymentType: PaymentType.ONLINE
+            transactionId: savedTransaction.id
           }
         );
-
-        // Advance Appointment Status if it was NEED_FINAL_PAYMENT
-        const appointment = await this.appointmentRepository.findOne({
-          where: { _id: appointmentId }
-        });
-        if (appointment && appointment.status === AppointmentStatus.NEED_FINAL_PAYMENT) {
-          await this.appointmentsService.updateAppointmentStatusDirectly(
-            appointmentId,
-            AppointmentStatus.COMPLETED
-          );
-        }
       }
     }
 
@@ -1049,13 +889,13 @@ export class TransactionsService {
     });
   }
 
-  buildQrUrl(
+  private buildQrUrl(
     amount: number,
-    appointmentId: string,
+    prescriptionId: string,
     acc: string,
     bank: string,
   ): string {
-    const des = appointmentId;
+    const des = prescriptionId;
     const params = new URLSearchParams({
       acc,
       bank,
@@ -1068,11 +908,11 @@ export class TransactionsService {
 
   buildQrPayload(
     amount: number,
-    appointmentId: string,
+    prescriptionId: string,
     acc: string,
     bank: string,
   ): string {
-    const des = appointmentId;
+    const des = prescriptionId;
     return JSON.stringify({
       acc,
       bank,
@@ -1082,10 +922,12 @@ export class TransactionsService {
   }
 
   private computeExpireTime(): Date {
-    return addToVietnamTime(this.qrExpireMinutes, 'minute');
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + this.qrExpireMinutes);
+    return expiresAt;
   }
 
-  private extractAppointmentIdFromContent(
+  private extractPrescriptionIdFromContent(
     content?: string,
   ): string | undefined {
     if (!content) {
@@ -1109,7 +951,7 @@ export class TransactionsService {
     return undefined;
   }
 
-  async resolveSepayConfig(
+  private async resolveSepayConfig(
     clinicAdminId?: string,
   ): Promise<{ acc: string; bank: string }> {
     if (!clinicAdminId) {
@@ -1147,7 +989,7 @@ export class TransactionsService {
   ): Promise<{
     items: Array<{
       id: string;
-      appointmentId?: string;
+      prescriptionId?: string;
       amount: number;
       currency: string;
       status: string;
@@ -1173,7 +1015,7 @@ export class TransactionsService {
 
     const items = raw.map((row: any) => ({
       id: row._id,
-      appointmentId: row.appointment_id,
+      prescriptionId: row.prescription_id,
       amount: Number(row.amount),
       currency: row.currency,
       status: row.status,
@@ -1197,7 +1039,7 @@ export class TransactionsService {
     clinicId?: string,
   ): Promise<{
     id: string;
-    appointmentId?: string;
+    prescriptionId?: string;
     amount: number;
     currency: string;
     status: string;
@@ -1223,7 +1065,7 @@ export class TransactionsService {
 
     return {
       id: row._id,
-      appointmentId: row.appointment_id,
+      prescriptionId: row.prescription_id,
       amount: Number(row.amount),
       currency: row.currency,
       status: row.status,
@@ -1255,82 +1097,5 @@ export class TransactionsService {
       select: ['_id'],
     });
     return clinicAdmin ? clinicAdmin._id : null;
-  }
-
-  /**
-   * Get revenue statistics for a clinic manager's branch
-   */
-  async getManagerRevenueStats(
-    clinicId: string,
-    dto: ManagerRevenueReportDto,
-  ): Promise<any> {
-    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
-    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
-
-    // Default to day if not specified
-    const periodMap = {
-      [RevenuePeriod.DAILY]: 'day',
-      [RevenuePeriod.MONTHLY]: 'month',
-      [RevenuePeriod.YEARLY]: 'year',
-    };
-    const period = periodMap[dto.period || RevenuePeriod.DAILY];
-
-    const stats = await this.transactionRepository.getRevenueStats(
-      clinicId,
-      startDate,
-      endDate,
-      period,
-    );
-
-    const totalRevenue = stats.reduce(
-      (sum, s) => sum + Number(s.total_revenue),
-      0,
-    );
-    const totalTransactions = stats.reduce(
-      (sum, s) => sum + Number(s.transaction_count),
-      0,
-    );
-
-    return {
-      period: dto.period || RevenuePeriod.DAILY,
-      startDate,
-      endDate,
-      totalRevenue,
-      totalTransactions,
-      data: stats,
-    };
-  }
-
-  /**
-   * Export revenue report to Buffer (XLSX)
-   */
-  async exportManagerRevenueReport(
-    clinicId: string,
-    dto: ManagerRevenueReportDto,
-  ): Promise<Buffer> {
-    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
-    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
-
-    const transactions = await this.transactionRepository.getTransactionsForExport(
-      clinicId,
-      startDate,
-      endDate,
-    );
-
-    const worksheetData = transactions.map((t) => ({
-      'Ngày giao dịch': formatToVietnamTime(t.date),
-      'Mã giao dịch': t.transaction_id,
-      'Số tiền': Number(t.amount),
-      'Trạng thái': t.status,
-      'Cổng thanh toán': t.gateway || 'N/A',
-      'Mô tả': t.description || 'N/A',
-      'Bệnh nhân': t.patient_name || 'Hệ thống',
-    }));
-
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Doanh thu');
-
-    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 }

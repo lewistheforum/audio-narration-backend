@@ -8,8 +8,6 @@ import { ContractPackageRepository } from './repositories/contract-package.repos
 import { ClinicContractInformationRepository } from './repositories/clinic-contract-information.repository';
 import { AccountsModule } from '../accounts/accounts.module';
 import { MailerModule } from '../mailer/mailer.module';
-import { ContractsCronService } from './contracts-cron.service';
-
 
 @Module({
     imports: [
@@ -22,7 +20,6 @@ import { ContractsCronService } from './contracts-cron.service';
         ContractsService,
         ContractPackageRepository,
         ClinicContractInformationRepository,
-        ContractsCronService,
     ],
     exports: [
         ContractsService,

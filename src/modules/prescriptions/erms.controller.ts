@@ -19,15 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { ErmsService } from './erms.service';
 import { PrescriptionsService } from './prescriptions.service';
-import { 
-  InitializeErmDto, 
-  ErmResponseDto, 
-  SaveErmDataDto, 
-  SaveErmResponseDto, 
-  CreatePrescriptionDto, 
-  PrescriptionResponseDto,
-  DoctorERMDetailResponseDto,
-} from './dto';
+import { InitializeErmDto, ErmResponseDto, SaveErmDataDto, SaveErmResponseDto, CreatePrescriptionDto, PrescriptionResponseDto } from './dto';
 import { ConsultationFormTemplateDto } from './dto/consultation-form-template.dto';
 import { XrayFormTemplateDto } from './dto/xray-form-template.dto';
 import { UltrasoundFormTemplateDto } from './dto/ultrasound-form-template.dto';
@@ -422,54 +414,5 @@ export class ErmsController {
       createPrescriptionDto,
       doctorId,
     );
-  }
-
-  /**
-   * Get Doctor ERM Detail (Step 4 - Doctor Patient History)
-   *
-   * Returns detailed ERM data for doctor to view in patient history
-   *
-   * @param req - Request object containing authenticated doctor
-   * @param ermId - ERM UUID
-   * @returns Detailed ERM response based on record_type
-   */
-  @Get(':ermId/doctor/detail')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get Doctor ERM Detail (Step 4 - Doctor Patient History)',
-    description:
-      'Returns detailed ERM data for doctor to view patient medical records. ' +
-      'The response structure varies based on record_type (CONSULTATION, XRAY, ULTRASOUND, LAB, PROCEDURE, BONE_DENSITY). ' +
-      'Only accessible by the doctor who managed the appointment.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'ERM detail retrieved successfully',
-    type: DoctorERMDetailResponseDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - User is not a doctor or does not have access to this ERM',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Not Found - ERM not found',
-  })
-  @ApiParam({
-    name: 'ermId',
-    type: String,
-    description: 'ERM UUID',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  async getDoctorERMDetail(
-    @Request() req: any,
-    @Param('ermId') ermId: string,
-  ): Promise<DoctorERMDetailResponseDto> {
-    const doctorId = req.user._id;
-    return this.ermsService.getDoctorERMDetail(ermId, doctorId);
   }
 }

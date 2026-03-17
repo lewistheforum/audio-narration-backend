@@ -9,20 +9,13 @@ import { Appointment } from '../../../src/modules/appointments/entities/appointm
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CreateTransactionDto } from '../../../src/modules/transactions/dto/create-transaction.dto';
 import { PaymentDirection, PaymentStatus } from '../../../src/modules/transactions/entities/transaction.entity';
-import { TransactionTypeCode } from '../../../src/modules/transactions/entities/transaction-type.entity';
 import { SeepayCallbackDto } from '../../../src/modules/transactions/dto/seepay-callback.dto';
-import { PaymentType } from '../../../src/modules/appointments/enums';
 import { ClinicSubscription } from '../../../src/modules/subscriptions/entities/clinic-subscription.entity';
 import { SubscriptionService } from '../../../src/modules/subscriptions/entities/subscription-service.entity';
 import { SubscriptionServicesService } from '../../../src/modules/subscriptions/subscription-services.service';
 import { RegistrationStatus } from '../../../src/modules/subscriptions/enums/subscription-status.enum';
 import { AppointmentPackage } from '../../../src/modules/appointments/entities/appointment-package.entity';
 import { AppointmentPackageStatus } from '../../../src/modules/appointments/enums';
-import { Account } from '../../../src/modules/accounts/entities/accounts.entity';
-import { BookingSessionService } from '../../../src/modules/appointments/booking-session.service';
-import { AppointmentsService } from '../../../src/modules/appointments/appointments.service';
-import { RevenuePeriod } from '../../../src/modules/transactions/dto/manager-revenue-report.dto';
-import * as XLSX from 'xlsx';
 
 /**
  * Unit Tests for TransactionsService
@@ -41,9 +34,6 @@ describe('TransactionsService', () => {
     let packageRepo: any;
     let subscriptionServicesService: any;
     let configService: any;
-    let accountRepo: any;
-    let bookingSessionService: any;
-    let appointmentsService: any;
 
     // ========================================
     // SETUP
@@ -56,8 +46,6 @@ describe('TransactionsService', () => {
             findAllPaymentHistory: jest.fn(),
             countPaymentHistory: jest.fn(),
             findDetailById: jest.fn(),
-            getRevenueStats: jest.fn(),
-            getTransactionsForExport: jest.fn(),
         };
 
         clinicAdminRepo = {
@@ -92,21 +80,6 @@ describe('TransactionsService', () => {
             update: jest.fn(),
         };
 
-        accountRepo = {
-            findOne: jest.fn(),
-            save: jest.fn(),
-            update: jest.fn(),
-        };
-
-        bookingSessionService = {
-            getSession: jest.fn(),
-        };
-
-        appointmentsService = {
-            createAppointmentOnlineFromCallback: jest.fn(),
-            updateAppointmentStatusDirectly: jest.fn(),
-        };
-
         configService = {
             get: jest.fn((key) => {
                 if (key === 'SEEPAY_QR_BASE') return 'https://qr.seepay.vn';
@@ -127,10 +100,7 @@ describe('TransactionsService', () => {
                 { provide: getRepositoryToken(ClinicSubscription), useValue: clinicSubscriptionRepo },
                 { provide: getRepositoryToken(SubscriptionService), useValue: subscriptionServiceRepo },
                 { provide: getRepositoryToken(AppointmentPackage), useValue: packageRepo },
-                { provide: getRepositoryToken(Account), useValue: accountRepo },
                 { provide: SubscriptionServicesService, useValue: subscriptionServicesService },
-                { provide: BookingSessionService, useValue: bookingSessionService },
-                { provide: AppointmentsService, useValue: appointmentsService },
                 { provide: ConfigService, useValue: configService },
             ],
         }).compile();
@@ -148,7 +118,7 @@ describe('TransactionsService', () => {
     describe('BR 2.1: createDynamicQr (Prescription Payment)', () => {
         it('should use sum of pending AppointmentPackage as source of truth for amount', async () => {
             const dto: CreateTransactionDto = {
-                appointmentId: 'uuid-prescription',
+                prescriptionId: 'uuid-prescription',
                 amount: 9999999, // Client sent a different amount
             };
 
@@ -163,14 +133,9 @@ describe('TransactionsService', () => {
                 { _id: 'pkg-2', amount: 30000, status: AppointmentPackageStatus.PENDING_PAYMENT },
             ]);
 
-            accountRepo.findOne.mockResolvedValue({
-                _id: 'uuid-clinic-account',
-                parentId: 'uuid-clinic-parent',
-            });
-
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
-                accountId: 'uuid-clinic-parent',
+                accountId: 'uuid-clinic-account',
                 sepayVa: 'CLINIC_VA123',
                 bankName: 'TCB',
             });
@@ -193,19 +158,14 @@ describe('TransactionsService', () => {
                 { _id: 'pkg-1', amount: 50000, status: AppointmentPackageStatus.PENDING_PAYMENT },
             ]);
 
-            accountRepo.findOne.mockResolvedValue({
-                _id: 'uuid-clinic-account',
-                parentId: 'uuid-clinic-parent',
-            });
-
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
-                accountId: 'uuid-clinic-parent',
+                accountId: 'uuid-clinic-account',
                 sepayVa: 'CLINIC_VA123',
                 bankName: 'TCB',
             });
 
-            const result = await service.createDynamicQr({ appointmentId: 'uuid-prescription', amount: 50000 } as any);
+            const result = await service.createDynamicQr({ prescriptionId: 'uuid-prescription', amount: 50000 } as any);
 
             // QR should contain Clinic's account, NOT Company's
             expect(result.qrCodeUrl).toContain('CLINIC_VA123');
@@ -223,19 +183,13 @@ describe('TransactionsService', () => {
                 { _id: 'pkg-1', amount: 50000, status: AppointmentPackageStatus.PENDING_PAYMENT },
             ]);
 
-            accountRepo.findOne.mockResolvedValue({
-                _id: 'uuid-clinic-account',
-                parentId: 'uuid-clinic-parent',
-            });
-
             clinicAdminRepo.findOne.mockResolvedValue({
                 _id: 'uuid-clinic-admin',
-                accountId: 'uuid-clinic-parent',
                 sepayVa: 'CLINIC_VA123',
                 bankName: 'TCB',
             });
 
-            const result = await service.createDynamicQr({ appointmentId: 'uuid-prescription', amount: 50000 } as any);
+            const result = await service.createDynamicQr({ prescriptionId: 'uuid-prescription', amount: 50000 } as any);
 
             // Should return id: null
             expect(result.id).toBeNull();
@@ -245,7 +199,7 @@ describe('TransactionsService', () => {
         it('should throw NotFoundException if Appointment not found', async () => {
             appointmentRepo.findOne.mockResolvedValue(null);
 
-            await expect(service.createDynamicQr({ appointmentId: 'invalid', amount: 100 } as any))
+            await expect(service.createDynamicQr({ prescriptionId: 'invalid', amount: 100 } as any))
                 .rejects.toThrow(NotFoundException);
         });
     });
@@ -261,7 +215,7 @@ describe('TransactionsService', () => {
                 bankName: 'MB',
             });
 
-            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION });
+            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION' });
             (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-trans-id', amount: 10000 });
             (transactionRepository.save as jest.Mock).mockResolvedValue({
                 id: 'new-trans-id',
@@ -281,7 +235,7 @@ describe('TransactionsService', () => {
                 bankName: 'MB',
             });
 
-            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION });
+            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION' });
             (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-trans-id', amount: 10000 });
             (transactionRepository.save as jest.Mock).mockResolvedValue({
                 id: 'new-trans-id',
@@ -303,7 +257,7 @@ describe('TransactionsService', () => {
                 bankName: 'TCB',
             });
 
-            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION });
+            transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-verification', name: 'VERIFICATION' });
             (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-trans-id', amount: 10000 });
             (transactionRepository.save as jest.Mock).mockResolvedValue({
                 id: 'new-trans-id',
@@ -556,8 +510,7 @@ describe('TransactionsService', () => {
             transferAmount: 50000,
             accumulated: 100000,
             referenceCode: 'REF123',
-            prescriptionId: 'uuid-tx-id', // Deprecated but kept for old tests Compatibility
-            appointmentId: 'uuid-tx-id', // New field
+            prescriptionId: 'uuid-tx-id',
             currency: 'VND',
         } as any;
 
@@ -567,7 +520,7 @@ describe('TransactionsService', () => {
                     id: 'uuid-tx-id',
                     status: PaymentStatus.PENDING,
                     clinicId: 'uuid-clinic',
-                    transactionType: { name: 'ONLINE', code: TransactionTypeCode.ONLINE },
+                    transactionType: { name: 'ONLINE' },
                 };
 
                 (transactionRepository.findOne as jest.Mock).mockResolvedValue(existingTrans);
@@ -586,7 +539,7 @@ describe('TransactionsService', () => {
                     id: 'uuid-tx-id',
                     status: PaymentStatus.PENDING,
                     clinicId: 'uuid-clinic',
-                    transactionType: { name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION },
+                    transactionType: { name: 'VERIFICATION' },
                 };
 
                 (transactionRepository.findOne as jest.Mock).mockResolvedValue(existingTrans);
@@ -610,7 +563,7 @@ describe('TransactionsService', () => {
                     clinicId: 'uuid-clinic',
                     subscriptionId: 'sub-123',
                     content: JSON.stringify({ targetServiceId: 'service-new', duration: 2 }),
-                    transactionType: { name: 'SUBSCRIPTION', code: TransactionTypeCode.SUBSCRIPTION },
+                    transactionType: { name: 'SUBSCRIPTION' },
                 };
 
                 (transactionRepository.findOne as jest.Mock).mockResolvedValue(existingTrans);
@@ -640,20 +593,20 @@ describe('TransactionsService', () => {
                     patient: { _id: 'uuid-patient' },
                 });
 
-                transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-online', name: 'ONLINE', code: TransactionTypeCode.ONLINE });
+                transactionTypeRepo.findOne.mockResolvedValue({ _id: 'type-online', name: 'ONLINE' });
                 (transactionRepository.create as jest.Mock).mockReturnValue({ id: 'new-tx', amount: 50000 });
                 (transactionRepository.save as jest.Mock).mockResolvedValue({
                     id: 'new-tx',
                     status: PaymentStatus.SUCCESS,
                 });
 
-                const payload = { ...basePayload, prescriptionId: 'uuid-appointment', appointmentId: 'uuid-appointment' };
+                const payload = { ...basePayload, prescriptionId: 'uuid-appointment' };
                 const result = await service.handleCallback(payload);
 
                 expect(transactionRepository.create).toHaveBeenCalled();
                 expect(packageRepo.update).toHaveBeenCalledWith(
                     { appointmentId: 'uuid-appointment', status: AppointmentPackageStatus.PENDING_PAYMENT },
-                    { status: AppointmentPackageStatus.PAID, transactionId: 'new-tx', paymentType: PaymentType.ONLINE }
+                    { status: AppointmentPackageStatus.PAID, transactionId: 'new-tx' }
                 );
                 expect(result.status).toBe(PaymentStatus.SUCCESS);
             });
@@ -701,99 +654,6 @@ describe('TransactionsService', () => {
             it('should throw NotFoundException if not found', async () => {
                 (transactionRepository.findDetailById as jest.Mock).mockResolvedValue(null);
                 await expect(service.getTransactionDetail('invalid')).rejects.toThrow(NotFoundException);
-            });
-        });
-    });
-
-    // ========================================
-    // Manager Revenue Reports
-    // ========================================
-    describe('Manager Revenue Reports', () => {
-        const managerId = 'manager-1';
-        const clinicId = 'clinic-1';
-
-        describe('getManagerRevenueStats', () => {
-            it('should calculate total revenue and transaction count from repository results', async () => {
-                const mockStats = [
-                    { label: '2024-03-01', total_revenue: '100000', transaction_count: '2' },
-                    { label: '2024-03-02', total_revenue: '50000', transaction_count: '1' },
-                ];
-                (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue(mockStats);
-
-                const dto = { period: RevenuePeriod.DAILY };
-                const result = await service.getManagerRevenueStats(managerId, dto as any);
-
-                expect(result.totalRevenue).toBe(150000);
-                expect(result.totalTransactions).toBe(3);
-                expect(result.data).toHaveLength(2);
-                expect(result.data[0].total_revenue).toBe('100000');
-            });
-
-            it('should handle empty repository results', async () => {
-                (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue([]);
-
-                const dto = { period: RevenuePeriod.MONTHLY };
-                const result = await service.getManagerRevenueStats(managerId, dto as any);
-
-                expect(result.totalRevenue).toBe(0);
-                expect(result.totalTransactions).toBe(0);
-                expect(result.data).toEqual([]);
-            });
-
-            it('should use default period "day" if not provided', async () => {
-                (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue([]);
-                
-                await service.getManagerRevenueStats(managerId, {});
-                
-                expect(transactionRepository.getRevenueStats).toHaveBeenCalledWith(
-                    managerId,
-                    new Date(0),
-                    expect.any(Date),
-                    'day'
-                );
-            });
-        });
-
-        describe('exportManagerRevenueReport', () => {
-            it('should return a buffer containing XLSX data', async () => {
-                const mockTransactions = [
-                    {
-                        transactionDate: new Date('2024-03-11T10:00:00Z'),
-                        id: 'tx-123',
-                        amount: 50000,
-                        status: 'SUCCESS',
-                        gateway: 'SePay',
-                        description: 'Payment for service',
-                        patientName: 'Nguyen Van A',
-                    },
-                ];
-                (transactionRepository.getTransactionsForExport as jest.Mock).mockResolvedValue(mockTransactions);
-
-                const result = await service.exportManagerRevenueReport(managerId, {});
-
-                expect(result).toBeInstanceOf(Buffer);
-                expect(result.length).toBeGreaterThan(0);
-                expect(transactionRepository.getTransactionsForExport).toHaveBeenCalled();
-            });
-
-            it('should format data correctly for the worksheet', async () => {
-                const mockTransactions = [
-                    {
-                        transactionDate: new Date('2024-03-11T10:00:00Z'),
-                        id: 'tx-123',
-                        amount: 50000,
-                        status: 'SUCCESS',
-                        gateway: 'SePay',
-                        description: 'Test',
-                        patientName: 'John Doe',
-                    },
-                ];
-                (transactionRepository.getTransactionsForExport as jest.Mock).mockResolvedValue(mockTransactions);
-
-                // Spy on XLSX methods if possible, or just check the output buffer
-                // For unit test, we mostly care that it calls the repo and executes without error
-                const result = await service.exportManagerRevenueReport(managerId, {});
-                expect(result).toBeDefined();
             });
         });
     });

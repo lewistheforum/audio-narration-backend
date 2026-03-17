@@ -300,7 +300,7 @@ export class ConversationService {
       .leftJoin(
         'clinic_shift_hour',
         'csh',
-        'csh._id = appt.clinic_shift_hour_id',
+        'csh._id = appt.doctor_shift_hour_id',
       )
       .leftJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
       .leftJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
@@ -345,7 +345,7 @@ export class ConversationService {
       .innerJoin(
         'appointments',
         'appt',
-        '(appt.clinic_shift_hour_id = csh._id OR appt.doctor_id = account._id)',
+        '(appt.doctor_shift_hour_id = csh._id OR appt.doctor_id = account._id)',
       )
       .where('appt.patient_id = :patientId', { patientId })
       .getMany();

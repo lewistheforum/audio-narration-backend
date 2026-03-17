@@ -1,7 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { ERMRecordType } from '../../prescriptions/enums/erm-enums';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 export class AddServiceResponseDto {
   @ApiProperty({
@@ -48,18 +46,6 @@ export class AddServiceResponseDto {
   price: number;
 
   @ApiProperty({
-    description: 'Discount percentage of the service',
-    example: 10,
-  })
-  discount: number;
-
-  @ApiProperty({
-    description: 'Final amount after discount (price * (100 - discount%) / 100)',
-    example: 180000,
-  })
-  amount: number;
-
-  @ApiProperty({
     description: 'Flag indicating service was added during examination',
     example: true,
   })
@@ -75,6 +61,5 @@ export class AddServiceResponseDto {
     description: 'Timestamp when service was added',
     example: '2026-03-02T10:30:00Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 }

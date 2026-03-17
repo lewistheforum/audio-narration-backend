@@ -43,7 +43,7 @@ import { ApiResponseData } from '../../../common/decorators/api-response.decorat
  * Endpoints for CLINIC_ADMIN to manage CLINIC_MANAGER accounts.
  * All endpoints require JWT authentication and CLINIC_ADMIN role.
  */
-@Controller('clinic-admin/clinic-managers')
+@Controller('clinic-managers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiTags('Clinic Admin - Manager Management')
 @ApiBearerAuth('JWT-auth')
@@ -331,38 +331,5 @@ export class ClinicManagerController {
       clinicAdminId,
       managerId,
     );
-  }
-
-
-  /**
-   * FLOW 9: Generate Digital Signature Keys
-   * POST /api/clinic-managers/:managerId/keys/generate
-   */
-  @Post(':managerId/keys/generate')
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiOperation({ 
-    summary: 'Generate digital signature keys for a manager',
-    description: 'Generates new RSA 2048-bit keys. Overwrites existing keys if any.' 
-  })
-  @ApiParam({ name: 'managerId', description: 'Manager account UUID' })
-  @ApiResponseData({
-    type: Object,
-    status: 200,
-    message: 'Digital signature keys generated successfully',
-  })
-  async generateKeys(
-    @Req() req: any,
-    @Param('managerId', ParseUUIDPipe) managerId: string,
-  ) {
-    const clinicAdminId = req.user._id;
-    const data = await this.clinicManagerService.generateManagerKeys(
-      clinicAdminId,
-      managerId,
-    );
-    
-    return {
-      data,
-      message: 'Digital signature keys generated successfully',
-    };
   }
 }

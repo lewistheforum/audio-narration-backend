@@ -4,10 +4,6 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import {
-  getCurrentVietnamTime,
-  addToVietnamTime,
-} from 'src/common/utils/date.util';
 import { CreateMessageDto, UpdateMessageDto, MessageResponseDto } from './dto';
 import { Message } from './entities/message.entity';
 import { MessageType } from './enums';
@@ -46,9 +42,9 @@ export class MessagesService {
 
     const messageData = {
       ...createMessageDto,
-      validatedAt: addToVietnamTime(20, 'minute'), // 20 minutes from now
-      createdAt: getCurrentVietnamTime(),
-      updatedAt: getCurrentVietnamTime(),
+      validatedAt: new Date(Date.now() + 20 * 60 * 1000), // 20 minutes from now
+      createdAt: new Date(Date.now()),
+      updatedAt: new Date(Date.now()),
       messageType: createMessageDto.messageType || MessageType.TEXT,
       isRead: createMessageDto.isRead || false,
     };

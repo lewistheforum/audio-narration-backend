@@ -1,6 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Monthly Income Item DTO
@@ -124,7 +122,6 @@ export class ClinicTransactionLogDto {
   transactionId: string;
 
   @ApiProperty({ description: 'Transaction date' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   transactionDate: Date;
 
   @ApiProperty({ description: 'Transaction amount', example: 500000 })
@@ -146,11 +143,9 @@ export class ClinicTransactionLogDto {
   serviceName: string;
 
   @ApiProperty({ description: 'Subscription start date' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   subscriptionStart: Date;
 
   @ApiProperty({ description: 'Subscription end date' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   subscriptionEnd: Date;
 }
 

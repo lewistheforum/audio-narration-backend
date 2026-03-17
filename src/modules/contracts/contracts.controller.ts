@@ -6,7 +6,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { CreateContractPackageDto } from './dto/create-contract-package.dto';
 import { CreateContractInfoDto } from './dto/create-contract-info.dto';
-import { RejectContractDto } from './dto/reject-contract.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountRole } from '../accounts/enums/account-role.enum';
@@ -48,48 +47,6 @@ export class ContractsController {
     ) {
         const clinicManagerId = req.user._id;
         return this.contractsService.getPackagesByManager(clinicManagerId, employeeName, page, limit);
-    }
-
-    /**
-     * Get Contract Packages for Employee
-     *
-     * Retrieves a paginated list of contract packages for the logged-in employee.
-     * Supports filtering by clinic name.
-     */
-    @Get('employee/packages')
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Get all contract packages for the logged-in employee' })
-    @ApiQuery({ name: 'clinicName', required: false, description: 'Search by clinic name' })
-    @ApiQuery({ name: 'page', required: false, type: Number })
-    @ApiQuery({ name: 'limit', required: false, type: Number })
-    async getPackagesByEmployee(
-        @Req() req,
-        @Query('clinicName') clinicName?: string,
-        @Query('page') page: number = 1,
-        @Query('limit') limit: number = 10,
-    ) {
-        const employeeId = req.user._id;
-        return this.contractsService.getPackagesByEmployee(employeeId, clinicName, page, limit);
-    }
-
-    /**
-     * Get Contract Package by ID for Employee
-     *
-     * Retrieves contract package details specifically for the employee.
-     */
-    @Get('employee/packages/:id')
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Get contract package by ID for the logged-in employee' })
-    async getMyContractById(
-        @Req() req,
-        @Param('id') id: string
-    ) {
-        const employeeId = req.user._id;
-        return this.contractsService.getMyContract(employeeId, id);
     }
 
     /**
@@ -151,25 +108,6 @@ export class ContractsController {
     }
 
     /**
-     * Reject Contract
-     * 
-     * Rejects the contract with a reason.
-     */
-    @Post(':id/reject')
-    @UseGuards(JwtAuthGuard)
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Reject a contract with a reason' })
-    @ApiBody({ type: RejectContractDto })
-    @ApiResponse({ status: 200, description: 'Contract rejected successfully' })
-    async rejectContract(
-        @Param('id') id: string,
-        @Body() dto: RejectContractDto,
-        @Req() req
-    ) {
-        return this.contractsService.rejectContract(id, req.user._id, dto.reason);
-    }
-
-    /**
      * Verify Contract
      * 
      * Verifies the digital signatures and integrity of the contract file.
@@ -207,23 +145,5 @@ export class ContractsController {
         @UploadedFile() file: any
     ) {
         return this.contractsService.uploadContractFile(id, file);
-    }
-
-    /**
-     * Cancel/Delete Contract Package
-     * 
-     * Only allowed by Clinic Manager before contract is CURRENT.
-     */
-    @Post('packages/:id/cancel')
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER)
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Cancel/Delete a contract package' })
-    @ApiResponse({ status: 200, description: 'Contract package cancelled successfully' })
-    async cancelPackage(
-        @Param('id') id: string,
-        @Req() req
-    ) {
-        return this.contractsService.deletePackage(id, req.user._id);
     }
 }

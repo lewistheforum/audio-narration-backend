@@ -3,12 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClinicServiceConfig } from './entities';
 import { ClinicServiceConfigRepository } from './repositories';
 import { ServiceConfigsService } from './service-configs.service';
-import {
-  ServiceConfigsController,
-  ManagerServiceConfigsController,
-  PublicServiceConfigsController,
-  DoctorServiceConfigsController,
-} from './service-configs.controller';
+import { ServiceConfigsController } from './service-configs.controller';
 
 /**
  * Service Configs Module
@@ -17,13 +12,8 @@ import {
  */
 @Module({
   imports: [TypeOrmModule.forFeature([ClinicServiceConfig])],
-  controllers: [
-    ServiceConfigsController,
-    ManagerServiceConfigsController,
-    PublicServiceConfigsController,
-    DoctorServiceConfigsController,
-  ],
+  controllers: [ServiceConfigsController],
   providers: [ClinicServiceConfigRepository, ServiceConfigsService],
   exports: [TypeOrmModule, ClinicServiceConfigRepository, ServiceConfigsService],
 })
-export class ServiceConfigsModule { }
+export class ServiceConfigsModule {}

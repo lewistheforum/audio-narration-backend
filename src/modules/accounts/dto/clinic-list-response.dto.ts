@@ -1,8 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { AccountRole, AccountStatus } from '../enums';
 import { ClinicAdminInformation } from '../entities';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Clinic Info DTO
@@ -49,7 +47,6 @@ export class ClinicInfoDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 }
 
@@ -134,7 +131,7 @@ export class ClinicItemDto {
 
   @ApiProperty({
     description: 'Clinic phone number',
-    example: '0987654321',
+    example: '+84987654321',
     required: false,
     nullable: true,
   })

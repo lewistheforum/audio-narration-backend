@@ -1,8 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { AiProvider } from '../enums/ai-provider.enum';
 import { AiModel } from '../enums/ai-model.enum';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * AI Chat Response DTO
@@ -35,6 +33,5 @@ export class AiChatResponseDto {
     description: 'Timestamp when the response was generated',
     example: '2026-01-10T14:18:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   timestamp: Date;
 }

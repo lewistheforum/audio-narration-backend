@@ -1,9 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { Account } from '../entities/accounts.entity';
 import { GeneralAccount } from '../entities/general_accounts.entity';
 import { Gender, AccountRole, AccountStatus, ClinicRole } from '../enums';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 import {
   Address,
   ClinicAdminInformation,
@@ -58,7 +56,6 @@ export class AccountResponseDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({
@@ -138,14 +135,12 @@ export class AccountResponseDto {
     description: 'Account creation timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Last update timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   @ApiProperty({
@@ -154,7 +149,6 @@ export class AccountResponseDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   deletedAt?: Date;
 
   // ClinicStaffInformation specific fields

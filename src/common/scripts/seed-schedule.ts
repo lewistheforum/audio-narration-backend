@@ -7,7 +7,6 @@ import { ClinicRoom } from '../../modules/schedules/entities/clinic_room.entity'
 import { EmployeeSchedule } from '../../modules/schedules/entities/employee-schedule.entity';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { ShiftType, WeekDay } from '../../modules/schedules/enums';
-import { getCurrentVietnamTime, addToDate } from '../utils/date.util';
 
 const clinicId = '0011ea95-f343-43a8-ad13-c4c5128073e5';
 const employeeIds = [
@@ -73,9 +72,10 @@ async function seedSchedule() {
 
         // 3. Seed Employee Schedules
         console.log('Seeding Employee Schedules...');
-        const today = getCurrentVietnamTime();
+        const today = new Date();
         const next7Days = Array.from({ length: 7 }, (_, i) => {
-            const d = addToDate(today, i + 1, 'day'); // Start from tomorrow
+            const d = new Date(today);
+            d.setDate(today.getDate() + i + 1); // Start from tomorrow
             return d;
         });
 

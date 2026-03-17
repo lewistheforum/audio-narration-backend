@@ -10,7 +10,6 @@ import {
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ClinicShiftHour } from '../../schedules/entities/clinic-shift-hour.entity';
-import { ClinicRoom } from '../../schedules/entities/clinic_room.entity';
 import { AppointmentStatus } from '../enums';
 
 /**
@@ -51,39 +50,24 @@ export class Appointment {
   @JoinColumn({ name: 'doctor_id' })
   doctor?: Account | null;
 
-  @Column({ name: 'clinic_shift_hour_id', type: 'uuid', nullable: true })
-  clinicShiftHourId: string | null;
+  @Column({ name: 'doctor_shift_hour_id', type: 'uuid', nullable: true })
+  doctorShiftHourId: string | null;
 
   @ManyToOne(() => ClinicShiftHour, {
     onDelete: 'CASCADE',
     nullable: true,
   })
-  @JoinColumn({ name: 'clinic_shift_hour_id' })
-  clinicShiftHour?: ClinicShiftHour | null;
+  @JoinColumn({ name: 'doctor_shift_hour_id' })
+  doctorShiftHour?: ClinicShiftHour | null;
 
   @Column({ name: 'appointment_date', type: 'date' })
   appointmentDate: Date;
 
-  @Column({ name: 'appointment_hour', type: 'timestamptz', nullable: true })
-  appointmentHour: Date | null;
+  @Column({ name: 'appointment_hour', type: 'timestamptz' })
+  appointmentHour: Date;
 
   @Column({ name: 'extra_hour', type: 'timestamptz', nullable: true })
   extraHour?: Date | null;
-
-  /**
-   * Extra Room ID: For Out-of-Hours Appointments (Option 4)
-   * Manually assigned by Clinic Staff when patient arrives
-   * nullable: true - Only populated for out-of-hours bookings
-   */
-  @Column({ name: 'extra_room_id', type: 'uuid', nullable: true })
-  extraRoomId?: string | null;
-
-  @ManyToOne(() => ClinicRoom, {
-    onDelete: 'SET NULL',
-    nullable: true,
-  })
-  @JoinColumn({ name: 'extra_room_id' })
-  extraRoom?: ClinicRoom | null;
 
   @Column({ name: 'total', type: 'numeric', precision: 10, scale: 2 })
   total: number;

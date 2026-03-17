@@ -10,9 +10,7 @@ import {
   Post,
   Query,
   UseGuards,
-  Res,
 } from '@nestjs/common';
-import { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -24,7 +22,6 @@ import {
 import { TransactionsService } from './transactions.service';
 import {
   CreateTransactionDto,
-  CreateTransactionBodyDto,
   PaymentHistoryResponseDto,
   PaymentResponseDto,
   SeepayCallbackDto,
@@ -33,7 +30,6 @@ import {
   CreateNewSubscriptionDto,
   RenewSubscriptionDto,
   ChangePackageDto,
-  ManagerRevenueReportDto,
 } from './dto';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -59,11 +55,11 @@ export class TransactionsController {
   /**
    * Create payment QR for a specific prescription
    *
-   * @param appointmentId Appointment ID
+   * @param prescriptionId Prescription ID
    * @param body Transaction creation DTO
    * @returns Created payment response with QR payload (if applicable)
    */
-  @Post(':appointmentID/qr')
+  @Post(':prescriptionId/qr')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(
@@ -72,62 +68,19 @@ export class TransactionsController {
     AccountRole.CLINIC_MANAGER,
   )
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán cho cuộc hẹn' })
+  @ApiOperation({ summary: 'Tạo QR thanh toán cho đơn thuốc' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
     message: 'Payment QR created successfully',
   })
-  @ApiBody({
-    type: CreateTransactionBodyDto,
-    description: 'Transaction payload (appointmentId is provided from path)',
-  })
   async createQr(
-    @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
-    @Body() body: CreateTransactionBodyDto,
+    @Param('prescriptionId', ParseUUIDPipe) prescriptionId: string,
+    @Body() body: Omit<CreateTransactionDto, 'prescriptionId'>,
   ) {
     const payment = await this.transactionsService.createDynamicQr({
       ...body,
-      appointmentId,
-    });
-    return {
-      data: payment,
-      message: 'Payment QR created successfully',
-    };
-  }
-
-  /**
-   * Create payment QR for a specific prescription
-   *
-   * @param prescriptionId Prescription ID
-   * @param body Transaction creation DTO
-   * @returns Created payment response with QR payload (if applicable)
-   */
-  @Post(':appointmentID/qr/at-clinic')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiBearerAuth('JWT-auth')
-  @Roles(
-    AccountRole.CLINIC_STAFF,
-    AccountRole.CLINIC_MANAGER,
-  )
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán tại phòng khám' })
-  @ApiResponseData({
-    type: PaymentResponseDto,
-    status: HttpStatus.CREATED,
-    message: 'Payment QR created successfully',
-  })
-  @ApiBody({
-    type: CreateTransactionBodyDto,
-    description: 'Transaction payload (appointmentId is provided from path)',
-  })
-  async createStaffQrPayment(
-    @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
-    @Body() body: CreateTransactionBodyDto,
-  ) {
-    const payment = await this.transactionsService.createDynamicQrAtClinic({
-      ...body,
-      appointmentId,
+      prescriptionId,
     });
     return {
       data: payment,
@@ -165,11 +118,8 @@ export class TransactionsController {
       clinicId = user.parentId;
     }
 
-    // Legacy support: Map to Renewal Logic (strictly uses current subscription's service)
-    const payment = await this.transactionsService.createRenewalQr(
-      clinicId,
-      body.duration,
-    );
+    // Legacy support: Map to Renewal Logic (ignores body.serviceId if provided, strictly uses current subscription's service)
+    const payment = await this.transactionsService.createRenewalQr(clinicId);
     return {
       data: payment,
       message: 'Subscription QR created successfully',
@@ -396,7 +346,7 @@ export class TransactionsController {
       data: {
         items: items.map((item) => ({
           id: item.id,
-          appointmentId: item.appointmentId,
+          prescriptionId: item.prescriptionId,
           amount: item.amount,
           currency: item.currency,
           status: item.status,
@@ -462,52 +412,5 @@ export class TransactionsController {
       data,
       message: 'Transaction detail fetched successfully',
     };
-  }
-
-  @Get('manager/revenue-report')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_MANAGER)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Xem báo cáo doanh thu theo chi nhánh' })
-  async getManagerRevenueReport(
-    @User() user: Account,
-    @Query() dto: ManagerRevenueReportDto,
-  ) {
-    const stats = await this.transactionsService.getManagerRevenueStats(
-      user._id,
-      dto,
-    );
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Lấy báo cáo doanh thu thành công',
-      data: stats,
-    };
-  }
-
-  @Get('manager/revenue-report/export')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_MANAGER)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Xuất báo cáo doanh thu theo chi nhánh' })
-  async exportManagerRevenueReport(
-    @User() user: Account,
-    @Query() dto: ManagerRevenueReportDto,
-    @Res() res: Response,
-  ) {
-    const buffer = await this.transactionsService.exportManagerRevenueReport(
-      user._id,
-      dto,
-    );
-
-    const filename = `revenue_report_${user._id}_${new Date().getTime()}.xlsx`;
-
-    res.set({
-      'Content-Type':
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length': buffer.length,
-    });
-
-    res.end(buffer);
   }
 }

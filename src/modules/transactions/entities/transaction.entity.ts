@@ -48,8 +48,8 @@ export class Transaction {
   @JoinColumn({ name: 'sender_account_id' })
   senderAccount?: Account;
 
-  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
-  appointmentId?: string;
+  @Column({ name: 'prescription_id', type: 'uuid', nullable: true })
+  prescriptionId?: string;
 
   @Column({ name: 'subcription_id', type: 'uuid', nullable: true })
   subscriptionId?: string;

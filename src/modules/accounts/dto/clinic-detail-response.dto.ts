@@ -1,7 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { AccountRole, AccountStatus } from '../enums';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Clinic Manager Account DTO
@@ -29,7 +27,7 @@ export class ClinicManagerAccountDto {
 
   @ApiProperty({
     description: 'Clinic manager phone number',
-    example: '0987654321',
+    example: '+84987654321',
     required: false,
     nullable: true,
   })
@@ -41,7 +39,6 @@ export class ClinicManagerAccountDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({
@@ -125,7 +122,7 @@ export class ClinicAdminAccountDto {
 
   @ApiProperty({
     description: 'Clinic admin phone number',
-    example: '0987654321',
+    example: '+84987654321',
     required: false,
     nullable: true,
   })
@@ -137,7 +134,6 @@ export class ClinicAdminAccountDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({
@@ -172,14 +168,12 @@ export class ClinicAdminAccountDto {
     description: 'Account creation timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Last update timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   constructor(account: any) {
@@ -217,7 +211,7 @@ export class ClinicAdminInfoDetailDto {
 
   @ApiProperty({
     description: 'Clinic phone',
-    example: '0987654321',
+    example: '+84987654321',
     required: false,
     nullable: true,
   })
@@ -261,7 +255,6 @@ export class ClinicAdminInfoDetailDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({
@@ -339,7 +332,6 @@ export class ClinicInfoDetailDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 }
 
@@ -589,14 +581,12 @@ export class SubscriptionDto {
     description: 'Subscription date',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   subscriptionDate: Date;
 
   @ApiProperty({
     description: 'Expiration date',
     example: '2024-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   expirationDate: Date;
 
   constructor(clinicSubscription: any, subscriptionService: any) {
@@ -635,7 +625,7 @@ export class ClinicDetailResponseDto {
 
   @ApiProperty({
     description: 'Clinic phone number',
-    example: '0987654321',
+    example: '+84987654321',
     required: false,
     nullable: true,
   })
@@ -647,7 +637,6 @@ export class ClinicDetailResponseDto {
     required: false,
     nullable: true,
   })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({
@@ -682,14 +671,12 @@ export class ClinicDetailResponseDto {
     description: 'Account creation timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Last update timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   @ApiProperty({
@@ -721,8 +708,7 @@ export class ClinicDetailResponseDto {
   clinicAdminInformation?: ClinicAdminInfoDetailDto;
 
   @ApiProperty({
-    description:
-      'Final clinic name combining clinic admin name and branch name',
+    description: 'Final clinic name combining clinic admin name and branch name',
     example: 'City Medical Group Branch 1',
     required: false,
     nullable: true,
@@ -786,9 +772,7 @@ export class ClinicDetailResponseDto {
     }
 
     if (clinicAdminInfo) {
-      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(
-        clinicAdminInfo,
-      );
+      this.clinicAdminInformation = new ClinicAdminInfoDetailDto(clinicAdminInfo);
     }
 
     this.finalClinicName = finalClinicName;

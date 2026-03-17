@@ -1,8 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { RegistrationStatus } from '../../../subscriptions/enums';
 import { PaymentStatus } from '../../../transactions/entities/transaction.entity';
-import { formatToVietnamTime } from '../../../../common/utils/date.util';
 
 /**
  * ClinicAdminSubscriptionHistoryItemDto
@@ -20,18 +18,15 @@ export class ClinicAdminSubscriptionHistoryItemDto {
   serviceCode?: string;
 
   @ApiProperty({ required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   subscriptionDate?: Date;
 
   @ApiProperty({ required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   expirationDate?: Date;
 
   @ApiProperty({ enum: RegistrationStatus })
   subscriptionStatus: RegistrationStatus;
 
   @ApiProperty()
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 }
 
@@ -54,7 +49,6 @@ export class TransactionHistoryItemDto {
   status: PaymentStatus;
 
   @ApiProperty({ required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   transactionDate?: Date;
 
   @ApiProperty({ required: false })
@@ -73,6 +67,5 @@ export class TransactionHistoryItemDto {
   transactionTypeName?: string;
 
   @ApiProperty()
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 }

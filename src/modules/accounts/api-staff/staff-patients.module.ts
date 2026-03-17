@@ -27,10 +27,9 @@ import { AccountRepository, GeneralAccountRepository } from '../repositories';
   imports: [
     TypeOrmModule.forFeature([Account, GeneralAccount]),
     MailerModule,
-    AccountsModule,
   ],
   controllers: [StaffPatientsController],
-  providers: [StaffPatientsService],
+  providers: [StaffPatientsService, AccountRepository, GeneralAccountRepository],
   exports: [StaffPatientsService],
 })
 export class StaffPatientsModule {}

@@ -12,7 +12,6 @@ import { SubscriptionService } from '../../modules/subscriptions/entities/subscr
 import { RegistrationStatus } from '../../modules/subscriptions/enums';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
 import { SubscriptionServiceRepository } from '../../modules/subscriptions/repositories/subscription-service.repository';
-import { subtractFromVietnamTime, addToVietnamTime, getCurrentVietnamTime, addToDate } from '../utils/date.util';
 
 /**
  * Subscriptions Seeder Service
@@ -178,8 +177,9 @@ export class SubscriptionsSeederService {
       }
 
       // Calculate subscription and expiration dates
-      const subscriptionDate = getCurrentVietnamTime();
-      const expirationDate = addToDate(subscriptionDate, 1, 'year');
+      const subscriptionDate = new Date();
+      const expirationDate = new Date();
+      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
       // Create clinic subscription with aligned status
       const clinicSubscription = this.clinicSubscriptionRepository.create({
@@ -198,7 +198,8 @@ export class SubscriptionsSeederService {
       if (subscriptionStatus !== RegistrationStatus.ACTIVE) {
         // Generate a date 7-10 months in the past
         const staleMonthsAge = Math.floor(Math.random() * 4) + 7;
-        const staleDate = subtractFromVietnamTime(staleMonthsAge, 'month');
+        const staleDate = new Date();
+        staleDate.setMonth(staleDate.getMonth() - staleMonthsAge);
 
         // Use update() to bypass TypeORM's @CreateDateColumn behavior
         await this.clinicSubscriptionRepository.update(
@@ -277,9 +278,11 @@ export class SubscriptionsSeederService {
 
         // Calculate subscription and expiration dates (historical)
         const monthsAgo = this.getRandomInt(1, 12);
-        const subscriptionDate = subtractFromVietnamTime(monthsAgo, 'month');
+        const subscriptionDate = new Date();
+        subscriptionDate.setMonth(subscriptionDate.getMonth() - monthsAgo);
 
-        const expirationDate = addToVietnamTime(12, 'month');
+        const expirationDate = new Date(subscriptionDate);
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
         // Randomly select between EXPIRED and NON_RENEWING for historical records
         // NON_RENEWING: User explicitly cancelled (churn)
@@ -366,7 +369,8 @@ export class SubscriptionsSeederService {
 
       // Backdate created_at/updated_at: 6-12 months ago
       const monthsAgo = this.getRandomInt(6, 12);
-      const backdatedDate = subtractFromVietnamTime(monthsAgo, 'month');
+      const backdatedDate = new Date();
+      backdatedDate.setMonth(backdatedDate.getMonth() - monthsAgo);
 
       // subscription_date logic based on status progression:
       // - PENDING_SEPAY_SETUP, PENDING_MANAGER_SETUP: null (registration not complete)
@@ -377,7 +381,7 @@ export class SubscriptionsSeederService {
         subscriptionStatus === RegistrationStatus.PENDING_APPROVAL ||
         subscriptionStatus === RegistrationStatus.PENDING_PAYMENT
       ) {
-        subscriptionDate = backdatedDate;
+        subscriptionDate = new Date(backdatedDate);
       }
 
       // expirationDate: null for all pending statuses (not activated)
@@ -449,7 +453,8 @@ export class SubscriptionsSeederService {
 
         // Backdate further into the past: 12-24 months ago
         const monthsAgo = this.getRandomInt(12, 24);
-        const historicalDate = subtractFromVietnamTime(monthsAgo, 'month');
+        const historicalDate = new Date();
+        historicalDate.setMonth(historicalDate.getMonth() - monthsAgo);
 
         // subscription_date for historical records
         let subscriptionDate: Date | null = null;
@@ -457,13 +462,14 @@ export class SubscriptionsSeederService {
           status === RegistrationStatus.PENDING_LEGAL_SETUP ||
           status === RegistrationStatus.EXPIRED
         ) {
-          subscriptionDate = historicalDate;
+          subscriptionDate = new Date(historicalDate);
         }
 
         // expirationDate only for EXPIRED status
         let expirationDate: Date | null = null;
         if (status === RegistrationStatus.EXPIRED && subscriptionDate) {
-          expirationDate = addToDate(subscriptionDate, 1, 'year');
+          expirationDate = new Date(subscriptionDate);
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
         }
 
         // Create hanging history record

@@ -16,7 +16,6 @@ import {
   SubscriptionInfoDto,
 } from '../dto';
 import { LegalDocumentVerificationStatus } from 'src/modules/accounts/enums';
-import { getVietnamTimestamp } from '../../../common/utils/date.util';
 
 /**
  * Admin Registration Repository
@@ -51,12 +50,12 @@ export class AdminRegistrationRepository {
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.children', 'childAccounts')
-      .leftJoinAndSelect('account.address', 'adminAddress')
+      .leftJoinAndSelect('account.addresses', 'adminAddresses')
       .leftJoinAndSelect(
         'childAccounts.clinicManagerInformation',
         'clinicManagerInfo',
       )
-      .leftJoinAndSelect('childAccounts.address', 'managerAddress')
+      .leftJoinAndSelect('childAccounts.addresses', 'managerAddresses')
       .leftJoinAndSelect(
         'clinic_subcriptions',
         'subscription',
@@ -121,15 +120,15 @@ export class AdminRegistrationRepository {
       pros: account.clinicAdminInformation?.pros,
       paraclinical: account.clinicAdminInformation?.paraclinical,
       address:
-        account.address
+        account.addresses && account.addresses.length > 0
           ? {
-              address: account.address.address,
-              ward: account.address.ward,
-              wardName: account.address.wardName,
-              district: account.address.district,
-              districtName: account.address.districtName,
-              province: account.address.province,
-              provinceName: account.address.provinceName,
+              address: account.addresses[0].address,
+              ward: account.addresses[0].ward,
+              wardName: account.addresses[0].wardName,
+              district: account.addresses[0].district,
+              districtName: account.addresses[0].districtName,
+              province: account.addresses[0].province,
+              provinceName: account.addresses[0].provinceName,
             }
           : undefined,
     };
@@ -142,15 +141,16 @@ export class AdminRegistrationRepository {
       clinicBranchName:
         clinicManagerAccount.clinicManagerInformation?.clinicBranchName || '',
       address:
-        clinicManagerAccount.address
+        clinicManagerAccount.addresses &&
+        clinicManagerAccount.addresses.length > 0
           ? {
-              address: clinicManagerAccount.address.address,
-              ward: clinicManagerAccount.address.ward,
-              wardName: clinicManagerAccount.address.wardName,
-              district: clinicManagerAccount.address.district,
-              districtName: clinicManagerAccount.address.districtName,
-              province: clinicManagerAccount.address.province,
-              provinceName: clinicManagerAccount.address.provinceName,
+              address: clinicManagerAccount.addresses[0].address,
+              ward: clinicManagerAccount.addresses[0].ward,
+              wardName: clinicManagerAccount.addresses[0].wardName,
+              district: clinicManagerAccount.addresses[0].district,
+              districtName: clinicManagerAccount.addresses[0].districtName,
+              province: clinicManagerAccount.addresses[0].province,
+              provinceName: clinicManagerAccount.addresses[0].provinceName,
             }
           : undefined,
     };
@@ -431,7 +431,7 @@ export class AdminRegistrationRepository {
     const enrichedData = data.map((item) => ({
       ...item,
       daysSinceRegistration: Math.floor(
-        (getVietnamTimestamp() - new Date(item.registrationDate).getTime()) /
+        (Date.now() - new Date(item.registrationDate).getTime()) /
           (1000 * 60 * 60 * 24),
       ),
     }));

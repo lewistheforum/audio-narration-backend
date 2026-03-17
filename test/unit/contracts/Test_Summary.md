@@ -52,20 +52,9 @@ Kiểm thử Unit Test cho `ContractsService`, tập trung vào các chức năn
 | TC-18 | **Missing Public Key** | Nhân viên không có public key để verify -> `BadRequestException`. | **Passed** |
 | TC-19 | **Invalid Public Key** | Public key bị lỗi format -> `BadRequestException` (Code xử lý sanitize). | **Passed** |
 
-### 2.7 Cập Nhật Trạng Thái Tự Động (Cron Job)
-| ID | Tên Case | Mô Tả | Trạng Thái |
-| :--- | :--- | :--- | :--- |
-| TC-20 | **No Expired Contracts** | Không có hợp đồng nào hết hạn -> Cron job không gọi hàm update DB và trả về 0. | **Passed** |
-| TC-21 | **Update Expired Contracts** | Phát hiện hợp đồng hết hạn -> Cron job gửi danh sách ID xuống DB để bulk update trạng thái thành `OLD` và trả về số lượng thành công. | **Passed** |
-
-### 2.8 Các Trường Hợp Lỗi Ký - Manager (Manager Sign Error Cases)
-| ID | Tên Case | Mô Tả | Trạng Thái |
-| :--- | :--- | :--- | :--- |
-| TC-22 | **Manager Missing Keys** | Manager ký nhưng chưa tạo cặp khóa (encryptedPrivateKey = null) -> `BadRequestException`. | **Passed** |
-
 ## 3. Kết Quả Thực Thi (Execution Results)
-*(Cập nhật ngày 2026-03-09)*
+*(Cập nhật ngày 2026-02-11)*
 
--   **Tổng số test:** 22
--   **Pass:** 22
+-   **Tổng số test:** 19
+-   **Pass:** 19
 -   **Fail:** 0

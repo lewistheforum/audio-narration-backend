@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  ManyToOne,
   OneToOne,
   JoinColumn,
 } from 'typeorm';
@@ -21,10 +22,10 @@ export class Address {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'account_id', type: 'uuid', unique: false })
+  @Column({ name: 'account_id', type: 'uuid' })
   accountId: string;
 
-  @OneToOne(() => Account, {
+  @ManyToOne(() => Account, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'account_id' })

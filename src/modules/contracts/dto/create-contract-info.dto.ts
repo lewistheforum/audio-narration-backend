@@ -1,8 +1,8 @@
-import { IsNotEmpty, IsString, IsNumber, IsDateString, IsEnum, IsOptional, ValidateIf } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsDateString, IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ContractType } from '../enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
-import { ContractStatus } from '../enums/contract-status.enum';
+import { ContractStatus } from '../../accounts/enums/contract-status.enum';
 
 export class CreateContractInfoDto {
     @ApiProperty({ description: 'Specialty of the doctor/staff', example: 'Cardiology' })
@@ -30,10 +30,10 @@ export class CreateContractInfoDto {
     @IsDateString()
     contractStartDate: string;
 
-    @ApiProperty({ description: 'Contract end date', example: '2024-11-01T00:00:00.000Z', required: false })
-    @ValidateIf((o) => o.contractEndDate !== null && o.contractEndDate !== undefined)
+    @ApiProperty({ description: 'Contract end date', example: '2024-11-01T00:00:00.000Z' })
+    @IsNotEmpty()
     @IsDateString()
-    contractEndDate?: string;
+    contractEndDate: string;
 
     @ApiProperty({ description: 'Type of contract', enum: ContractType, example: ContractType.INDEFINITE })
     @IsNotEmpty()
@@ -41,7 +41,7 @@ export class CreateContractInfoDto {
     contractType: ContractType;
 
     @ApiProperty({ description: 'Job description text', example: 'Examine patients...' })
-    @IsOptional()
+    @IsNotEmpty()
     @IsString()
     jobDescription: string;
 
@@ -90,10 +90,10 @@ export class CreateContractInfoDto {
     @IsDateString()
     effectiveFrom: string;
 
-    @ApiProperty({ description: 'Effective to date', example: '2024-11-01T00:00:00.000Z', required: false })
-    @ValidateIf((o) => o.effectiveTo !== null && o.effectiveTo !== undefined)
+    @ApiProperty({ description: 'Effective to date', example: '2024-11-01T00:00:00.000Z' })
+    @IsNotEmpty()
     @IsDateString()
-    effectiveTo?: string;
+    effectiveTo: string;
 
     @ApiProperty({ description: 'Name of Party A signer (Clinic)', example: 'Dr. Nguyen Van A' })
     @IsNotEmpty()

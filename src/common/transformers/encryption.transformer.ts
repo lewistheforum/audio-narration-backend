@@ -1,6 +1,5 @@
 import { ValueTransformer } from 'typeorm';
 import { encrypt, decrypt } from '../utils/encryption.util';
-import { formatToVietnamTime, parseVietnamTime } from '../utils/date.util';
 
 /**
  * TypeORM Encryption Transformer for String Columns
@@ -92,7 +91,7 @@ export const dateEncryptionTransformer: ValueTransformer = {
     if (value === null || value === undefined) {
       return value;
     }
-    return encrypt(formatToVietnamTime(value));
+    return encrypt(value.toISOString());
   },
 
   /**
@@ -106,7 +105,7 @@ export const dateEncryptionTransformer: ValueTransformer = {
       return value;
     }
     const decrypted = decrypt(value);
-    return parseVietnamTime(decrypted);
+    return new Date(decrypted);
   },
 };
 

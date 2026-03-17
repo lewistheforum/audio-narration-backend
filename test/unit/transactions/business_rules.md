@@ -16,13 +16,13 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
 ### 2.1. Thanh Toán Đơn Thuốc (Dynamic QR)
 *Dành cho Bệnh nhân thanh toán đơn thuốc.*
 
-*   **Endpoint**: `POST /transactions/:appointmentID/qr`
+*   **Endpoint**: `POST /transactions/:prescriptionId/qr`
 *   **Logic**:
-    21. **Nguồn dữ liệu (Source of Truth)**: Entity `AppointmentPackage` (dựa trên `appointmentID`).
-22. **Số tiền**: Tính bằng **tổng (SUM) của tất cả các `AppointmentPackage`** đang ở trạng thái `PENDING_PAYMENT` liên kết với `appointmentID`. Bỏ qua số tiền gửi từ request body.
+    21. **Nguồn dữ liệu (Source of Truth)**: Entity `AppointmentPackage` (dựa trên `prescriptionId`).
+22. **Số tiền**: Tính bằng **tổng (SUM) của tất cả các `AppointmentPackage`** đang ở trạng thái `PENDING_PAYMENT` liên kết với `prescriptionId`. Bỏ qua số tiền gửi từ request body.
 23. **Thông tin Ngân hàng**: Truy vấn `ClinicAdmin` liên kết với phòng khám của lịch hẹn để lấy cấu hình SePay (`sepayVa`, `bankName`).
 24. **Bản ghi Giao dịch**: **KHÔNG** tạo bản ghi Transaction ngay lập tức trong DB.
-25. **Nội dung QR**: Sử dụng `appointmentID` (ID Đơn thuốc/Lịch hẹn) làm nội dung chuyển khoản.
+25. **Nội dung QR**: Sử dụng `prescriptionId` (ID Đơn thuốc/Lịch hẹn) làm nội dung chuyển khoản.
 26. **Phản hồi**: Trả về URL/Payload QR với `id: null` và `amount` đã tính toán.
 
 ### 2.2. Xác Minh Phòng Khám (Verification QR)

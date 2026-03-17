@@ -7,14 +7,6 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 
-export enum TransactionTypeCode {
-  SUBSCRIPTION = 'SUBSCRIPTION',
-  VERIFICATION = 'VERIFICATION',
-  ONLINE = 'ONLINE',
-  CASH = 'CASH',
-  SUBSCRIPTION_PAYMENT = 'Subscription Payment',
-}
-
 /**
  * TransactionType Entity
  *
@@ -28,13 +20,8 @@ export class TransactionType {
   @Column({ name: 'name', type: 'text' })
   name: string;
 
-  @Column({
-    name: 'code',
-    type: 'enum',
-    enum: TransactionTypeCode,
-    nullable: true
-  })
-  code?: TransactionTypeCode | null;
+ @Column({ name: 'code', type: 'text', nullable: true })
+code?: string | null;
 
 
   @CreateDateColumn({ name: 'create_at', type: 'timestamptz' })
