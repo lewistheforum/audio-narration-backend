@@ -24,6 +24,7 @@ import {
 import { TransactionsService } from './transactions.service';
 import {
   CreateTransactionDto,
+  CreateTransactionBodyDto,
   PaymentHistoryResponseDto,
   PaymentResponseDto,
   SeepayCallbackDto,
@@ -77,11 +78,54 @@ export class TransactionsController {
     status: HttpStatus.CREATED,
     message: 'Payment QR created successfully',
   })
+  @ApiBody({
+    type: CreateTransactionBodyDto,
+    description: 'Transaction payload (appointmentId is provided from path)',
+  })
   async createQr(
     @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
-    @Body() body: Omit<CreateTransactionDto, 'appointmentId'>,
+    @Body() body: CreateTransactionBodyDto,
   ) {
     const payment = await this.transactionsService.createDynamicQr({
+      ...body,
+      appointmentId,
+    });
+    return {
+      data: payment,
+      message: 'Payment QR created successfully',
+    };
+  }
+
+  /**
+   * Create payment QR for a specific prescription
+   *
+   * @param prescriptionId Prescription ID
+   * @param body Transaction creation DTO
+   * @returns Created payment response with QR payload (if applicable)
+   */
+  @Post(':appointmentID/qr/at-clinic')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(
+    AccountRole.CLINIC_STAFF,
+    AccountRole.CLINIC_MANAGER,
+  )
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tạo QR thanh toán tại phòng khám' })
+  @ApiResponseData({
+    type: PaymentResponseDto,
+    status: HttpStatus.CREATED,
+    message: 'Payment QR created successfully',
+  })
+  @ApiBody({
+    type: CreateTransactionBodyDto,
+    description: 'Transaction payload (appointmentId is provided from path)',
+  })
+  async createStaffQrPayment(
+    @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
+    @Body() body: CreateTransactionBodyDto,
+  ) {
+    const payment = await this.transactionsService.createDynamicQrAtClinic({
       ...body,
       appointmentId,
     });

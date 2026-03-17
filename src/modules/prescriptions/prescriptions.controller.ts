@@ -9,9 +9,9 @@ import {
   Query,
   HttpStatus,
   UseGuards,
-  Request,
-  ParseUUIDPipe,
-  Res,
+  ValidationPipe,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,18 +19,13 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
-  ApiParam,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiProduces,
 } from '@nestjs/swagger';
-import { Response } from 'express';
 import { PrescriptionsService } from './prescriptions.service';
 import {
   CreateMedicineDto,
   UpdateMedicineDto,
-  PatientEPrescriptionDetailResponseDto,
-  PatientERMDetailResponseDto,
+  PaginatedMedicinesResponseDto,
+  SearchMedicinesQueryDto,
 } from './dto';
 import { Medicine } from './entities/medicine.entity';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -47,7 +42,7 @@ import { AccountRole } from '../accounts/enums';
 @ApiTags('Medicines & Prescriptions')
 @Controller('medicines')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class PrescriptionsController {
   constructor(private readonly prescriptionsService: PrescriptionsService) {}
 
@@ -83,14 +78,37 @@ export class PrescriptionsController {
    */
   @Get()
   @ApiOperation({ summary: 'Get all medicines' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+    example: 20,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Medicines retrieved successfully',
-    type: [Medicine],
+    description: 'Medicines retrieved successfully (paginated)',
+    type: PaginatedMedicinesResponseDto,
   })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
-  async findAll(): Promise<Medicine[]> {
-    return await this.prescriptionsService.findAll();
+  async findAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const normalizedPage = page < 1 ? 1 : page;
+    const normalizedLimit = limit < 1 ? 20 : Math.min(limit, 100);
+
+    return await this.prescriptionsService.findAll(
+      normalizedPage,
+      normalizedLimit,
+    );
   }
 
   /**
@@ -104,14 +122,39 @@ export class PrescriptionsController {
     description: 'Medicine name to search (partial match)',
     example: 'para',
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+    example: 20,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Search results retrieved successfully',
-    type: [Medicine],
+    description: 'Search results retrieved successfully (paginated)',
+    type: PaginatedMedicinesResponseDto,
   })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
-  async search(@Query('name') name: string): Promise<Medicine[]> {
-    return await this.prescriptionsService.searchByName(name);
+  async search(
+    @Query(new ValidationPipe({ transform: true, whitelist: true }))
+    query: SearchMedicinesQueryDto,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const normalizedPage = query.page;
+    const normalizedLimit = query.limit;
+    const normalizedName = query.name.trim();
+
+    return await this.prescriptionsService.searchByName(
+      normalizedName,
+      normalizedPage,
+      normalizedLimit,
+    );
   }
 
   /**

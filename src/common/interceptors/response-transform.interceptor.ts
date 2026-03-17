@@ -12,6 +12,27 @@ import { formatToVietnamTime } from '../utils/date.util';
 @Injectable()
 export class ResponseTransformInterceptor<T> implements NestInterceptor {
   /**
+   * Keep backwards compatibility for endpoints returning { message, data },
+   * but do not drop metadata for richer payloads such as paginated objects.
+   */
+  private extractResponseData(payload: any): any {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return payload;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(payload, 'data')) {
+      return payload;
+    }
+
+    const keys = Object.keys(payload);
+    const isSimpleEnvelope = keys.every(
+      (key) => key === 'data' || key === 'message',
+    );
+
+    return isSimpleEnvelope ? payload.data : payload;
+  }
+
+  /**
    * Recursively format all Date objects in the data to Vietnam timezone (+07:00)
    * Handles nested objects, arrays, and prevents circular references
    * 
@@ -70,7 +91,7 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor {
     return next.handle().pipe(
       map((data) => {
         const message = data?.message || MESSAGES.successMessage.index;
-        const rawData = data?.data === undefined ? data : data.data;
+        const rawData = this.extractResponseData(data);
         
         // Format all dates in the response data
         const formattedData = this.formatDates(rawData);
