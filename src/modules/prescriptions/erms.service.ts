@@ -102,6 +102,7 @@ export class ErmsService {
       .createQueryBuilder('sa')
       .leftJoinAndSelect('sa.clinicService', 'clinicServiceConfig')
       .leftJoinAndSelect('clinicServiceConfig.service', 'clinicService')
+      .leftJoinAndSelect('clinicService.category', 'clinicServiceCategory')
       .leftJoinAndSelect('sa.appointmentPackage', 'appointmentPackage')
       .leftJoinAndSelect('sa.erm', 'erm')
       .where('sa._id = :serviceAppointmentId', { serviceAppointmentId })
@@ -126,18 +127,30 @@ export class ErmsService {
       );
     }
 
-    // Determine record type from service_functions
-    const serviceFunctions =
-      serviceAppointment.clinicService?.service?.serviceFunctions || [];
+    // Determine record type
     let recordType: ERMRecordType = ERMRecordType.CONSULTATION; // Default
 
-    // Try to match ERMRecordType from service_functions
-    if (serviceFunctions.length > 0) {
-      const matchedType = serviceFunctions.find((func) =>
-        Object.values(ERMRecordType).includes(func as ERMRecordType),
-      );
-      if (matchedType) {
-        recordType = matchedType as ERMRecordType;
+    const serviceCategoryType =
+      serviceAppointment.clinicService?.service?.category?.type;
+
+    if (
+      serviceCategoryType &&
+      Object.values(ERMRecordType).includes(
+        serviceCategoryType as unknown as ERMRecordType,
+      )
+    ) {
+      recordType = serviceCategoryType as unknown as ERMRecordType;
+    } else {
+      // Fallback to old behavior if category type isn't available
+      const serviceFunctions =
+        serviceAppointment.clinicService?.service?.serviceFunctions || [];
+      if (serviceFunctions.length > 0) {
+        const matchedType = serviceFunctions.find((func) =>
+          Object.values(ERMRecordType).includes(func as ERMRecordType),
+        );
+        if (matchedType) {
+          recordType = matchedType as ERMRecordType;
+        }
       }
     }
 

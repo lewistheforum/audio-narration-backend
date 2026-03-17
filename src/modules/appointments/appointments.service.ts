@@ -2077,6 +2077,10 @@ export class AppointmentsService {
       doctorProfileImage,
       clinicRooms: clinicRooms || [],
       services: services || [],
+      extraRoom: appointment.extraRoom ? {
+        id: appointment.extraRoom._id,
+        roomName: appointment.extraRoom.roomName,
+      } : null,
       appointmentDate: appointment.appointmentDate,
       appointmentHour: appointment.appointmentHour,
       extraHour: appointment.extraHour,
@@ -2278,6 +2282,10 @@ export class AppointmentsService {
         id: room.id,
         roomName: room.roomName,
       })),
+      extraRoom: appointment.extraRoom ? {
+        id: appointment.extraRoom._id,
+        roomName: appointment.extraRoom.roomName,
+      } : null,
       total: parseFloat(appointment.total),
       status: appointment.status,
       isReminder: appointment.isRemider || false,
@@ -2425,6 +2433,7 @@ export class AppointmentsService {
       .leftJoinAndSelect('doctor.doctorInformation', 'doctorInformation')
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment.doctor_id = :doctorId', { doctorId })
       .andWhere('appointment.extra_hour IS NOT NULL')
       .andWhere('appointment.status IN (:...statuses)', {
@@ -2520,6 +2529,7 @@ export class AppointmentsService {
       .leftJoinAndSelect('doctor.doctorInformation', 'doctorInformation')
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment._id = :appointmentId', { appointmentId })
       .andWhere('appointment.deleted_at IS NULL')
       .getOne();
@@ -7995,6 +8005,7 @@ export class AppointmentsService {
       .leftJoinAndSelect('doctor.doctorInformation', 'doctorInformation')
       .leftJoinAndSelect('appointment.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment.doctorId = :doctorId', { doctorId })
       .andWhere('appointment.patientId = :patientId', { patientId });
 
@@ -8136,6 +8147,7 @@ export class AppointmentsService {
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
       .leftJoinAndSelect('clinic.address', 'clinicAddress')
       .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
+      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment._id = :appointmentId', { appointmentId })
       .getOne();
 
@@ -8439,6 +8451,10 @@ export class AppointmentsService {
           : new Date(appointment.appointmentDate).toISOString().split('T')[0],
       appointment_hour: appointment.appointmentHour,
       extra_hour: appointment.extraHour || null,
+      extraRoom: appointment.extraRoom ? {
+        id: appointment.extraRoom._id,
+        roomName: appointment.extraRoom.roomName,
+      } : null,
       status: appointment.status,
       total_price: parseFloat(appointment.total.toString()),
       patient,

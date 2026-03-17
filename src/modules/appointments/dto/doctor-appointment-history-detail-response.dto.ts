@@ -595,6 +595,17 @@ export class DoctorAppointmentHistoryDetailResponseDto {
   clinicRooms?: { id: string; roomName: string }[];
 
   @ApiProperty({
+    description: 'Extra room for out-of-hours appointments',
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      roomName: { type: 'string' },
+    },
+    nullable: true,
+  })
+  extraRoom?: { id: string; roomName: string } | null;
+
+  @ApiProperty({
     description: 'Reminder sent status',
     example: false,
   })
