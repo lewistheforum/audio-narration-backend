@@ -11,7 +11,7 @@ import {
 import { ContractPackage } from './contract-package.entity';
 import { ContractType } from '../enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
-import { ContractStatus } from '../enums/contract-status.enum';
+import { ContractStatus } from '../../accounts/enums/contract-status.enum';
 
 @Entity('clinic_contract_information')
 export class ClinicContractInformation {
@@ -42,7 +42,7 @@ export class ClinicContractInformation {
   @Column({ name: 'contract_start_date', type: 'timestamptz' })
   contractStartDate: Date;
 
-  @Column({ name: 'contract_end_date', type: 'timestamptz', nullable: true })
+  @Column({ name: 'contract_end_date', type: 'timestamptz' })
   contractEndDate: Date;
 
   @Column({
@@ -91,7 +91,7 @@ export class ClinicContractInformation {
   @Column({ name: 'effective_from', type: 'timestamptz' })
   effectiveFrom: Date;
 
-  @Column({ name: 'effective_to', type: 'timestamptz', nullable: true })
+  @Column({ name: 'effective_to', type: 'timestamptz' })
   effectiveTo: Date;
 
   @Column({ name: 'party_a_signer_name', type: 'text' })
@@ -107,12 +107,9 @@ export class ClinicContractInformation {
     name: 'contract_status',
     type: 'enum',
     enum: ContractStatus,
-    default: ContractStatus.DRAFT,
+    default: ContractStatus.CURRENT,
   })
   contractStatus: ContractStatus;
-
-  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
-  rejectionReason?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

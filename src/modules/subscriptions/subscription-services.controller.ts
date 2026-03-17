@@ -69,7 +69,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 export class SubscriptionServicesController {
   constructor(
     private readonly subscriptionServicesService: SubscriptionServicesService,
-  ) { }
+  ) {}
 
   /**
    * Get All Subscription Services
@@ -338,45 +338,6 @@ export class SubscriptionServicesController {
     return {
       data: subscription,
       message: MESSAGES.successMessage.subscriptionFetchedSuccess,
-    };
-  }
-
-  /**
-   * Cancel Current Subscription (Clinic Admin Only)
-   *
-   * Cancels the active subscription for the logged-in clinic admin.
-   * Changes status to NON_RENEWING. The clinic remains active until expirationDate.
-   *
-   * @param {Account} user - Logged-in user from JWT token
-   * @returns {Promise<{message: string}>} Success message
-   * @throws {NotFoundException} If subscription not found
-   * @throws {BadRequestException} If subscription is not ACTIVE
-   *
-   * @swagger
-   * @security JWT-auth
-   * @response 200 - Successfully cancelled subscription
-   * @response 404 - No active subscription found
-   */
-  @Patch('clinic/me/cancel')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({
-    summary: 'Cancel current subscription (Clinic Admin only)',
-    description:
-      'Cancels the active subscription. Status becomes NON_RENEWING. Must be Clinic Admin.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Subscription cancelled successfully (Non-renewing)',
-  })
-  @ApiResponse({ status: 404, description: 'No active subscription found' })
-  async cancelCurrentSubscription(
-    @User() user: Account,
-  ): Promise<{ message: string }> {
-    await this.subscriptionServicesService.cancelCurrentSubscription(user._id);
-    return {
-      message: 'Hủy gia hạn gói dịch vụ thành công.',
     };
   }
 

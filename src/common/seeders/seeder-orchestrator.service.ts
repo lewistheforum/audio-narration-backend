@@ -238,14 +238,6 @@ export class SeederOrchestratorService implements OnModuleInit {
         this.logger.log(
           '✅ Knowledge Base seeding completed (Incremental update)',
         );
-
-        // // Ensure Schedules are seeded even if other data exists
-        // await this.clinicShiftSeeder.seed();
-        // await this.employeeScheduleSeeder.seed();
-        // await this.clinicRoomEmployeeScheduleSeeder.seed();
-        // this.logger.log(
-        //   '✅ Schedules seeding completed (Incremental update)',
-        // );
         return;
       }
 

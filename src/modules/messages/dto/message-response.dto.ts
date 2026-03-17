@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MessageType } from '../enums';
-import { getCurrentVietnamTime } from '../../../common/utils/date.util';
 
 export class MessageResponseDto {
   @ApiProperty({
@@ -90,9 +89,9 @@ export class MessageResponseDto {
     this.messageType = message.messageType || MessageType.TEXT;
     this.isRead = message.isRead ?? false;
     this.deletedBy = message.deletedBy || [];
-    this.validatedAt = message.validatedAt || getCurrentVietnamTime();
-    this.createdAt = message.createdAt || getCurrentVietnamTime();
-    this.updatedAt = message.updatedAt || getCurrentVietnamTime();
+    this.validatedAt = message.validatedAt || new Date();
+    this.createdAt = message.createdAt || new Date();
+    this.updatedAt = message.updatedAt || new Date();
     this.deletedAt = message.deletedAt || null;
   }
 }

@@ -1,8 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { FeedbackType } from '../../../reports/enums/feedback-type.enum';
 import { Feedback } from '../../../reports/entities/feedback.entity';
-import { formatToVietnamTime } from '../../../../common/utils/date.util';
 
 export class ClinicAdminFeedbackResponseDto {
   @ApiProperty()
@@ -21,7 +19,6 @@ export class ClinicAdminFeedbackResponseDto {
   type: FeedbackType;
 
   @ApiProperty()
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ required: false })
@@ -37,11 +34,9 @@ export class ClinicAdminFeedbackResponseDto {
   patientAvatar?: string;
 
   @ApiProperty({ required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   appointmentDate?: Date;
 
   @ApiProperty({ required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   appointmentHour?: Date;
 
   constructor(feedback: Feedback) {

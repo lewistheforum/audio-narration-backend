@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
@@ -6,7 +6,6 @@ import { GeminiService } from './services/gemini.service';
 import { ChatGptService } from './services/chatgpt.service';
 import { ReportsModule } from '../reports/reports.module';
 import { HttpModule } from '@nestjs/axios';
-import { AccountsModule } from '../accounts/accounts.module';
 
 /**
  * AI Module
@@ -28,12 +27,7 @@ import { AccountsModule } from '../accounts/accounts.module';
  * - POST /ai/chat - Generate AI chat completions
  */
 @Module({
-  imports: [
-    ConfigModule,
-    forwardRef(() => ReportsModule),
-    HttpModule,
-    forwardRef(() => AccountsModule),
-  ],
+  imports: [ConfigModule, ReportsModule, HttpModule],
   controllers: [AiController],
   providers: [AiService, GeminiService, ChatGptService],
   exports: [AiService],

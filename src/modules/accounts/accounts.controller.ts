@@ -1462,7 +1462,7 @@ export class AccountsController {
    * Returns patient details if found, or suggests creating new account
    *
    * Query Parameters:
-   * - phone: Patient phone number (10 digits, starts with 0) - PRIMARY KEY
+   * - phone: Patient phone number (10-11 digits, starts with 0) - PRIMARY KEY
    * - email: Patient email (optional)
    * - fullName: Patient full name for fuzzy search (optional)
    *
@@ -1498,7 +1498,7 @@ export class AccountsController {
     name: 'phone',
     required: false,
     type: String,
-    description: 'Patient phone number (10 digits, starts with 0)',
+    description: 'Patient phone number (10-11 digits, starts with 0)',
     example: '0912345678',
   })
   @ApiQuery({

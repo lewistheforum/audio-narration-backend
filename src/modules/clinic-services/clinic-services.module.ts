@@ -27,7 +27,6 @@ import { ServiceConfigsModule } from '../service-configs/service-configs.module'
     TypeOrmModule,
     ClinicServiceCategoryRepository,
     ClinicServiceRepository,
-    ClinicServicesService,
   ],
 })
 export class ClinicServicesModule {}

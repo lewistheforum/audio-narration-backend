@@ -63,16 +63,11 @@ export class SeepayCallbackDto {
   signature?: string;
 
   @ApiProperty({
-    description: 'Appointment ID (UUID format)',
+    description: 'Prescription ID (UUID format)',
     example: 'f91af8b4-391e-4a41-a8c9-1f08b4b6a690',
     required: false,
   })
   @IsOptional()
   @IsString()
-  appointmentId?: string;
-
-  @ApiProperty({ description: 'SePay API Key (Multi-key support)', required: false })
-  @IsOptional()
-  @IsString()
-  apiKey?: string;
+  prescriptionId?: string;
 }

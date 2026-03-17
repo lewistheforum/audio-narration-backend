@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as dayjs from 'dayjs';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
 import { SalaryPaymentMethod } from '../../modules/contracts/enums/salary-payment-method.enum';
-import { ContractStatus } from '../../modules/contracts/enums/contract-status.enum';
+import { ContractStatus } from '../../modules/accounts/enums/contract-status.enum';
 import { ClinicContractInformation } from '../../modules/contracts/entities/clinic-contract-information.entity';
 import { ClinicContractInformationRepository } from '../../modules/contracts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';
@@ -21,10 +20,8 @@ import {
   SALARY_PAYMENT_CYCLES,
   PARTY_A_SIGNERS,
   PARTY_B_SIGNERS,
-  REJECTION_REASONS,
 } from '../constants/medical-terms';
 import { PROVINCES } from '../constants/locations';
-import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
  * ClinicContractInformation Seeder Service
@@ -58,10 +55,9 @@ export class ClinicContractInformationSeederService {
   private readonly SALARY_PAYMENT_CYCLES = SALARY_PAYMENT_CYCLES;
   private readonly PARTY_A_SIGNERS = PARTY_A_SIGNERS;
   private readonly PARTY_B_SIGNERS = PARTY_B_SIGNERS;
-  private readonly REJECTION_REASONS = REJECTION_REASONS;
 
   constructor(
-    private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
+    private readonly clinicContractInformationRepository: ClinicContractInformationRepository,
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
   ) { }
@@ -136,7 +132,7 @@ export class ClinicContractInformationSeederService {
 
         // Check if clinic contract information already exists for this contract
         const existing =
-          await this.clinicContractInfoRepository.existsByContractId(
+          await this.clinicContractInformationRepository.existsByContractId(
             contractPackage._id,
           );
 
@@ -146,8 +142,7 @@ export class ClinicContractInformationSeederService {
         }
 
         // Create clinic contract information with realistic orthopedics clinic data
-        const status = this.getRandomContractStatus();
-        const contractInfo = this.clinicContractInfoRepository.create({
+        const contractInfo = this.clinicContractInformationRepository.create({
           contractId: contractPackage._id,
           doctorSpecialty: this.getRandomDoctorSpecialty(),
           nationality: this.getRandomNationality(),
@@ -170,11 +165,10 @@ export class ClinicContractInformationSeederService {
           partyASignerName: this.getRandomPartyASignerName(),
           partyBSignerName: this.getRandomPartyBSignerName(),
           contractFile: this.getRandomContractFile(),
-          contractStatus: status,
-          rejectionReason: status === ContractStatus.REJECTED ? this.getRandomRejectionReason() : null,
+          contractStatus: this.getRandomContractStatus(),
         });
 
-        await this.clinicContractInfoRepository.save(contractInfo);
+        await this.clinicContractInformationRepository.save(contractInfo);
         createdCount++;
       }
 
@@ -230,12 +224,16 @@ export class ClinicContractInformationSeederService {
    * Get random contract start date (within last 6 months)
    */
   private getRandomContractStartDate(): Date {
-    const now = getCurrentVietnamTime();
-    const sixMonthsAgo = dayjs(now).tz(VIETNAM_TIMEZONE).subtract(6, 'month').toDate();
+    const now = new Date();
+    const sixMonthsAgo = new Date(
+      now.getFullYear(),
+      now.getMonth() - 6,
+      now.getDate(),
+    );
     const randomTime =
       sixMonthsAgo.getTime() +
       Math.random() * (now.getTime() - sixMonthsAgo.getTime());
-    return dayjs(randomTime).tz(VIETNAM_TIMEZONE).toDate();
+    return new Date(randomTime);
   }
 
   /**
@@ -244,7 +242,11 @@ export class ClinicContractInformationSeederService {
   private getRandomContractEndDate(): Date {
     const startDate = this.getRandomContractStartDate();
     const monthsToAdd = 12 + Math.floor(Math.random() * 12); // 12-24 months
-    const endDate = dayjs(startDate).tz(VIETNAM_TIMEZONE).add(monthsToAdd, 'month').toDate();
+    const endDate = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth() + monthsToAdd,
+      startDate.getDate(),
+    );
     return endDate;
   }
 
@@ -271,7 +273,7 @@ export class ClinicContractInformationSeederService {
   private getRandomWorkingTime(): Date {
     const hour = 8 + Math.floor(Math.random() * 9); // 8-16 hours
     const minute = Math.floor(Math.random() * 60);
-    const date = getCurrentVietnamTime();
+    const date = new Date();
     date.setHours(hour, minute, 0, 0);
     return date;
   }
@@ -399,22 +401,7 @@ export class ClinicContractInformationSeederService {
    * Get random contract status
    */
   private getRandomContractStatus(): ContractStatus {
-    const statuses = [
-      ContractStatus.CURRENT,
-      ContractStatus.OLD,
-      ContractStatus.DRAFT,
-      ContractStatus.REJECTED,
-      ContractStatus.PENDING_SIGNATURE,
-    ];
+    const statuses = [ContractStatus.CURRENT, ContractStatus.OLD];
     return statuses[Math.floor(Math.random() * statuses.length)];
-  }
-
-  /**
-   * Get random rejection reason
-   */
-  private getRandomRejectionReason(): string {
-    return this.REJECTION_REASONS[
-      Math.floor(Math.random() * this.REJECTION_REASONS.length)
-    ];
   }
 }

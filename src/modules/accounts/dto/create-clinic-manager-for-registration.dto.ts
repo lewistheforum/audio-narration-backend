@@ -6,7 +6,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsDateString,
-  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -51,8 +50,7 @@ export class CreateClinicManagerForRegistrationDto {
   email: string;
 
   @ApiProperty({
-    description:
-      'Clinic manager password (min 6 characters, must contain letter and number)',
+    description: 'Clinic manager password (min 6 characters, must contain letter and number)',
     example: 'ManagerPass123',
     minLength: 6,
     maxLength: 50,
@@ -65,13 +63,11 @@ export class CreateClinicManagerForRegistrationDto {
 
   @ApiProperty({
     description: 'Clinic manager phone number',
-    example: '0899798602',
+    example: '+84123456789',
   })
   @IsNotEmpty({ message: 'Phone number is required' })
   @IsString({ message: 'Phone number must be a string' })
-  @Matches(/^0\d{9}$/, {
-    message: 'Phone number must be exactly 10 digits and start with 0',
-  })
+  @MaxLength(20, { message: 'Phone number must not exceed 20 characters' })
   phone: string;
 
   // ClinicManagerInformation fields
@@ -81,9 +77,7 @@ export class CreateClinicManagerForRegistrationDto {
   })
   @IsNotEmpty({ message: 'Clinic branch name is required' })
   @IsString({ message: 'Clinic branch name must be a string' })
-  @MaxLength(255, {
-    message: 'Clinic branch name must not exceed 255 characters',
-  })
+  @MaxLength(255, { message: 'Clinic branch name must not exceed 255 characters' })
   @Transform(({ value }) => value?.trim())
   clinicBranchName: string;
 

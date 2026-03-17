@@ -50,12 +50,12 @@ describe('TransactionsController', () => {
 
     describe('createQr', () => {
         it('should call service.createDynamicQr', async () => {
-            const dto: Omit<CreateTransactionDto, 'appointmentId'> = { amount: 50000 };
-            const appointmentId = 'uuid';
+            const dto: Omit<CreateTransactionDto, 'prescriptionId'> = { amount: 50000 };
+            const prescriptionId = 'uuid';
             service.createDynamicQr.mockResolvedValue({ id: 'res' });
 
-            const result = await controller.createQr(appointmentId, dto);
-            expect(service.createDynamicQr).toHaveBeenCalledWith({ ...dto, appointmentId });
+            const result = await controller.createQr(prescriptionId, dto);
+            expect(service.createDynamicQr).toHaveBeenCalledWith({ ...dto, prescriptionId });
             expect(result.data).toBeDefined();
         });
     });

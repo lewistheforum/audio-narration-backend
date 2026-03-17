@@ -17,6 +17,7 @@ export enum ERMStatus {
   DRAFT = 'DRAFT',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
+  SIGNED = 'SIGNED',
   CANCELLED = 'CANCELLED',
 }
 

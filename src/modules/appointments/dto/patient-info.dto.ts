@@ -8,7 +8,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class PatientAddressDto {
   @ApiProperty({
     description: 'Full address',
-    example: '123 Main Street',
+    example: '123 Đường ABC',
   })
   address: string;
 
@@ -20,7 +20,7 @@ export class PatientAddressDto {
 
   @ApiProperty({
     description: 'Ward name',
-    example: 'Ben Nghe Ward',
+    example: 'Phường Bến Nghé',
   })
   wardName: string;
 
@@ -32,7 +32,7 @@ export class PatientAddressDto {
 
   @ApiProperty({
     description: 'District name',
-    example: 'District 1',
+    example: 'Quận 1',
   })
   districtName: string;
 
@@ -44,7 +44,7 @@ export class PatientAddressDto {
 
   @ApiProperty({
     description: 'Province name',
-    example: 'Ho Chi Minh City',
+    example: 'Thành phố Hồ Chí Minh',
   })
   provinceName: string;
 }
@@ -63,7 +63,7 @@ export class PatientInfoDto {
 
   @ApiProperty({
     description: 'Patient full name',
-    example: 'John Doe',
+    example: 'Nguyễn Văn A',
   })
   fullName: string;
 

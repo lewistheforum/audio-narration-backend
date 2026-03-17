@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as dayjs from 'dayjs';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractRole } from '../../modules/contracts/enums/contract-role.enum';
@@ -9,7 +8,6 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
 import { CLINIC_REPRESENTATIVES } from '../constants/names';
 import { CLINIC_POSITIONS } from '../constants/medical-terms';
 import { HEADER_ADDRESSES } from '../constants/locations';
-import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
  * ContractPackage Seeder Service
@@ -146,12 +144,16 @@ export class ContractPackageSeederService {
    * Get random header date (within last 6 months)
    */
   private getRandomHeaderDate(): Date {
-    const now = getCurrentVietnamTime();
-    const sixMonthsAgo = dayjs(now).tz(VIETNAM_TIMEZONE).subtract(6, 'month').toDate();
+    const now = new Date();
+    const sixMonthsAgo = new Date(
+      now.getFullYear(),
+      now.getMonth() - 6,
+      now.getDate(),
+    );
     const randomTime =
       sixMonthsAgo.getTime() +
       Math.random() * (now.getTime() - sixMonthsAgo.getTime());
-    return dayjs(randomTime).tz(VIETNAM_TIMEZONE).toDate();
+    return new Date(randomTime);
   }
 
   /**

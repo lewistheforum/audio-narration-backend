@@ -1,38 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { AppointmentStatus } from '../enums';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
-
-/**
- * Address DTO for Patient Information
- *
- * Contains address details
- */
-export class AddressDto {
-  @ApiProperty({ description: 'Address ID' })
-  id: string;
-
-  @ApiProperty({ description: 'Full address text' })
-  address: string;
-
-  @ApiProperty({ description: 'Ward code' })
-  ward: string;
-
-  @ApiProperty({ description: 'Ward name' })
-  wardName: string;
-
-  @ApiProperty({ description: 'District code' })
-  district: string;
-
-  @ApiProperty({ description: 'District name' })
-  districtName: string;
-
-  @ApiProperty({ description: 'Province code' })
-  province: string;
-
-  @ApiProperty({ description: 'Province name' })
-  provinceName: string;
-}
 
 /**
  * Service Detail DTO for Appointment Response
@@ -40,12 +7,6 @@ export class AddressDto {
  * Contains service information for an appointment
  */
 export class ServiceDetailDto {
-  @ApiProperty({
-    description: 'Service appointment ID',
-    required: false,
-  })
-  serviceAppointmentId?: string;
-
   @ApiProperty({ description: 'Service ID' })
   id: string;
 
@@ -57,37 +18,6 @@ export class ServiceDetailDto {
 
   @ApiProperty({ description: 'Service price', example: 200000 })
   price: number;
-
-  @ApiProperty({ description: 'Service discount', example: 10000, required: false })
-  discount?: number;
-}
-
-/**
- * Feedback Synopsis DTO for Appointment Response
- *
- * Contains basic feedback information given for this appointment
- */
-export class FeedbackSynopsisDto {
-  @ApiProperty({ description: 'Feedback ID' })
-  id: string;
-
-  @ApiProperty({ description: 'Rating (1-5)' })
-  rating: number;
-
-  @ApiProperty({ description: 'Feedback description', required: false })
-  description?: string;
-
-  @ApiProperty({ description: 'Description labels (JSON)', required: false })
-  descriptionLabel?: any;
-
-  @ApiProperty({ description: 'Feedback images (JSON)', required: false })
-  feedbackImages?: any;
-
-  @ApiProperty({ description: 'Feedback type (DOCTOR or CLINIC)' })
-  type: string;
-
-  @ApiProperty({ description: 'Creation date' })
-  createdAt: Date;
 }
 
 /**
@@ -124,12 +54,6 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Patient phone', required: false })
   patientPhone?: string;
 
-  @ApiProperty({ description: 'Patient profile image URL', required: false })
-  patientProfileImage?: string | null;
-
-  @ApiProperty({ description: 'Patient address', type: AddressDto, required: false })
-  patientAddress?: AddressDto;
-
   @ApiProperty({ description: 'Clinic ID' })
   clinicId: string;
 
@@ -142,31 +66,19 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Doctor full name', required: false })
   doctorFullName?: string | null;
 
-  @ApiProperty({ description: 'Doctor profile image URL', required: false })
-  doctorProfileImage?: string | null;
-
   @ApiProperty({ description: 'Clinic rooms', type: [ClinicRoomDto], required: false })
   clinicRooms?: ClinicRoomDto[];
-
-  @ApiProperty({ description: 'Extra room for out-of-hours appointments', type: ClinicRoomDto, required: false })
-  extraRoom?: ClinicRoomDto | null;
 
   @ApiProperty({ description: 'Services', type: [ServiceDetailDto], required: false })
   services?: ServiceDetailDto[];
 
-  @ApiProperty({ description: 'Feedbacks associated with this appointment', type: [FeedbackSynopsisDto], required: false })
-  feedbacks?: FeedbackSynopsisDto[];
-
   @ApiProperty({ description: 'Appointment date' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   appointmentDate: Date;
 
   @ApiProperty({ description: 'Appointment hour' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   appointmentHour: Date;
 
   @ApiProperty({ description: 'Extra hour if applicable', required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   extraHour?: Date | null;
 
   @ApiProperty({ description: 'Total amount', example: 500000 })
@@ -182,11 +94,9 @@ export class AppointmentResponseDto {
   rejectReason?: string | null;
 
   @ApiProperty({ description: 'Creation timestamp' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ description: 'Last update timestamp' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 }
 

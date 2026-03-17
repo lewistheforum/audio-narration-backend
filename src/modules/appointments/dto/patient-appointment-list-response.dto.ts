@@ -1,7 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../enums';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
+import { AppointmentStatus } from '../enums';
 
 /**
  * Clinic Summary DTO for Patient Appointment List
@@ -10,10 +8,10 @@ export class ClinicSummaryDto {
   @ApiProperty({ description: 'Clinic ID' })
   _id: string;
 
-  @ApiProperty({ description: 'Clinic business name', example: 'ABC Clinic' })
+  @ApiProperty({ description: 'Clinic business name', example: 'Phòng khám ABC' })
   name: string;
 
-  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Main Street, District 1, Ho Chi Minh City' })
+  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Đường ABC, Quận 1, TP.HCM' })
   address?: string;
 }
 
@@ -24,7 +22,7 @@ export class DoctorSummaryDto {
   @ApiProperty({ description: 'Doctor ID' })
   _id: string;
 
-  @ApiProperty({ description: 'Doctor full name', example: 'Dr. John Smith' })
+  @ApiProperty({ description: 'Doctor full name', example: 'BS. Nguyễn Văn A' })
   name: string;
 
   @ApiPropertyOptional({ description: 'Doctor profile picture URL' })
@@ -38,17 +36,11 @@ export class PatientServiceDto {
   @ApiProperty({ description: 'Service ID' })
   service_id: string;
 
-  @ApiProperty({ description: 'Service name', example: 'General Checkup' })
+  @ApiProperty({ description: 'Service name', example: 'Khám Xương Khớp' })
   service_name: string;
 
-  @ApiProperty({ description: 'Original service price', example: 200000 })
+  @ApiProperty({ description: 'Service price', example: 270000 })
   price: number;
-
-  @ApiProperty({ description: 'Discount percentage', example: 10 })
-  discount: number;
-
-  @ApiProperty({ description: 'Final price after discount', example: 180000 })
-  final_price: number;
 }
 
 /**
@@ -67,40 +59,16 @@ export class PatientAppointmentListItemDto {
   doctor?: DoctorSummaryDto;
 
   @ApiProperty({ description: 'Appointment date', example: '2026-03-15' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_date: Date;
 
   @ApiProperty({ description: 'Appointment hour (ISO timestamp)', example: '2026-03-15T08:00:00.000Z' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_hour: Date;
-
-  @ApiPropertyOptional({ description: 'Extra hour for out-of-hours bookings (ISO timestamp)', example: '2026-03-15T19:00:00.000Z', nullable: true })
-  extra_hour?: Date | null;
-
-  @ApiPropertyOptional({ description: 'Clinic shift hour ID (null for out-of-hours bookings)', nullable: true })
-  clinic_shift_hour_id?: string | null;
-
-  @ApiPropertyOptional({ description: 'Shift start hour (null for out-of-hours bookings)', example: '08:00:00', nullable: true })
-  start_hour?: string | null;
-
-  @ApiPropertyOptional({ description: 'Shift end hour (null for out-of-hours bookings)', example: '09:00:00', nullable: true })
-  end_hour?: string | null;
 
   @ApiProperty({ description: 'Appointment status', enum: AppointmentStatus, example: AppointmentStatus.PENDING })
   status: AppointmentStatus;
 
   @ApiProperty({ description: 'Total amount for the appointment', example: 270000 })
   total: number;
-
-  @ApiPropertyOptional({ description: 'Payment method', enum: PaymentType, example: PaymentType.COD })
-  payment_type?: PaymentType;
-
-  @ApiPropertyOptional({ 
-    description: 'Payment status from appointment package', 
-    enum: AppointmentPackageStatus, 
-    example: AppointmentPackageStatus.PENDING_PAYMENT 
-  })
-  payment_status?: AppointmentPackageStatus;
 
   @ApiProperty({ description: 'List of services in this appointment', type: [PatientServiceDto] })
   services: PatientServiceDto[];

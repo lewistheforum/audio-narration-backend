@@ -54,73 +54,33 @@ export class AppointmentRepository {
     const queryBuilder = this.repository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('patient.generalAccount', 'patientGeneral')
-      .leftJoinAndSelect('patient.address', 'patientAddress')
+      .leftJoin(
+        'general_accounts',
+        'patientProfile',
+        'patientProfile.account_id = patient._id',
+      )
       .leftJoinAndSelect('appointment.clinic', 'clinic')
-      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoin(
+        'clinic_manager_information',
+        'clinicProfile',
+        'clinicProfile.account_id = clinic._id',
+      )
       .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoinAndSelect('doctor.doctorInformation', 'doctorInfo')
+      .leftJoin(
+        'doctor_information',
+        'doctorProfile',
+        'doctorProfile.account_id = doctor._id',
+      )
+      .addSelect([
+        'patientProfile._id',
+        'patientProfile.full_name',
+        'clinicProfile._id',
+        'clinicProfile.clinic_branch_name',
+        'doctorProfile._id',
+        'doctorProfile.full_name',
+      ])
       .where('appointment.clinicId = :clinicId', { clinicId })
-      .andWhere('appointment.deletedAt IS NULL')
-      .andWhere('appointment.extraHour IS NULL');
-
-    // Apply status filter if provided
-    if (filters?.status) {
-      queryBuilder.andWhere('appointment.status = :status', {
-        status: filters.status,
-      });
-    }
-
-    // Apply date filter if provided
-    if (filters?.appointmentDate) {
-      queryBuilder.andWhere('appointment.appointmentDate = :appointmentDate', {
-        appointmentDate: filters.appointmentDate,
-      });
-    }
-
-    // Apply pagination
-    const skip = (page - 1) * limit;
-    queryBuilder.skip(skip).take(limit);
-
-    // Order by appointment date and hour (newest first)
-    queryBuilder
-      .orderBy('appointment.appointmentDate', 'DESC')
-      .addOrderBy('appointment.appointmentHour', 'DESC');
-
-    return queryBuilder.getManyAndCount();
-  }
-
-  /**
-   * Find appointments with extra_hour by clinic ID with filters and pagination
-   *
-   * @param clinicId - Clinic UUID
-   * @param filters - Optional filters (status, date)
-   * @param page - Page number (default: 1)
-   * @param limit - Items per page (default: 10)
-   * @returns Paginated appointments with extra_hour and relations
-   */
-  async findByClinicWithExtraHourPagination(
-    clinicId: string,
-    filters?: {
-      status?: AppointmentStatus;
-      appointmentDate?: string;
-    },
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<[Appointment[], number]> {
-    const queryBuilder = this.repository
-      .createQueryBuilder('appointment')
-      .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('patient.generalAccount', 'patientGeneral')
-      .leftJoinAndSelect('patient.address', 'patientAddress')
-      .leftJoinAndSelect('appointment.clinic', 'clinic')
-      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
-      .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoinAndSelect('doctor.doctorInformation', 'doctorInfo')
-      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
-      .where('appointment.clinicId = :clinicId', { clinicId })
-      .andWhere('appointment.deletedAt IS NULL')
-      .andWhere('appointment.extraHour IS NOT NULL');
+      .andWhere('appointment.deletedAt IS NULL');
 
     // Apply status filter if provided
     if (filters?.status) {
@@ -157,7 +117,7 @@ export class AppointmentRepository {
   async findByIdWithRelations(id: string): Promise<Appointment | null> {
     return this.repository.findOne({
       where: { _id: id },
-      relations: ['patient', 'clinic', 'doctor', 'extraRoom'],
+      relations: ['patient', 'clinic', 'doctor'],
     });
   }
 
@@ -177,16 +137,35 @@ export class AppointmentRepository {
     return this.repository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('patient.address', 'patientAddresses')
-      .leftJoinAndSelect('patient.generalAccount', 'patientProfile')
+      .leftJoin(
+        'general_accounts',
+        'patientProfile',
+        'patientProfile.account_id = patient._id',
+      )
       .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoinAndSelect('doctor.doctorInformation', 'doctorProfile')
+      .leftJoin(
+        'doctor_information',
+        'doctorProfile',
+        'doctorProfile.account_id = doctor._id',
+      )
       .leftJoinAndSelect('appointment.clinic', 'clinic')
-      .leftJoinAndSelect('clinic.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('clinic.address', 'clinicAddress')
-      .leftJoinAndSelect('appointment.clinicShiftHour', 'shiftHour')
+      .leftJoinAndSelect('appointment.doctorShiftHour', 'shiftHour')
       .leftJoinAndSelect('shiftHour.shift', 'shift')
-      .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
+      .addSelect([
+        'patientProfile._id',
+        'patientProfile.full_name',
+        'patientProfile.gender',
+        'patientProfile.dob',
+        'patientProfile.profile_picture',
+        'doctorProfile._id',
+        'doctorProfile.full_name',
+        'doctorProfile.gender',
+        'doctorProfile.dob',
+        'doctorProfile.profile_picture',
+        'doctorProfile.academic_degree',
+        'doctorProfile.experience',
+        'doctorProfile.position',
+      ])
       .where('appointment._id = :id', { id })
       .andWhere('appointment.deletedAt IS NULL')
       .getOne();

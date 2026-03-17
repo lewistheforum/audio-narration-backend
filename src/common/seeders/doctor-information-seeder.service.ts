@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as dayjs from 'dayjs';
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
@@ -16,7 +15,6 @@ import {
   NATIONALITIES,
   WORK_SPECIALTIES,
 } from '../constants/medical-terms';
-import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
  * DoctorInformation Seeder Service
@@ -192,10 +190,10 @@ export class DoctorInformationSeederService {
    */
   private generateDob(index: number): Date {
     const age = 30 + (index % 31); // 30-60 years old
-    const year = getCurrentVietnamTime().getFullYear() - age;
+    const year = new Date().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return new Date(year, month, day);
   }
 
   /**
@@ -308,7 +306,7 @@ export class DoctorInformationSeederService {
       licenseNumber: `PL-${20200000 + index}`,
       issuedBy: 'Ministry of Health',
       issuedDate: this.generateIdentityDate(index),
-      expiryDate: dayjs.tz(`${2030 + (index % 10)}-01-01`, VIETNAM_TIMEZONE).toDate(),
+      expiryDate: new Date(2030 + (index % 10), 0, 1),
     };
   }
 
@@ -333,7 +331,7 @@ export class DoctorInformationSeederService {
       specialization: MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length],
       issuedBy: 'Ministry of Health',
       issuedDate: this.generateIdentityDate(index),
-      validUntil: dayjs.tz(`${2035 + (index % 10)}-01-01`, VIETNAM_TIMEZONE).toDate(),
+      validUntil: new Date(2035 + (index % 10), 0, 1),
     };
   }
 
@@ -359,7 +357,7 @@ export class DoctorInformationSeederService {
     const year = 2015 + (index % 10);
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return new Date(year, month, day);
   }
 
   /**

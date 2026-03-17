@@ -52,7 +52,7 @@ export class BlogsService {
     private readonly accountRepository: Repository<Account>,
     private readonly accountsService: AccountsService,
     private readonly socketGatewayService: SocketGatewayService,
-  ) { }
+  ) {}
 
   /**
    * Find All Blogs

@@ -47,7 +47,7 @@ export class AddressSeederService {
     try {
       this.logger.log('Starting to seed addresses...');
 
-      // Get all CLINIC_MANAGER accounts only
+      // Get all CLINIC_MANAGER accounts
       const clinicManagers = await this.accountRepository
         .findAllAccounts()
         .then((accounts) =>
@@ -63,15 +63,15 @@ export class AddressSeederService {
       let skippedCount = 0;
 
       for (const manager of clinicManagers) {
-        // Check if address already exists for this manager (idempotency)
-        const existingAddress = await this.addressRepository.findByAccountId(
+        // Check if address already exists for this manager
+        const existingAddresses = await this.addressRepository.findByAccountId(
           manager._id,
         );
 
-        if (existingAddress) {
-          skippedCount++;
-          continue;
-        }
+        // if (existingAddresses.length > 0) {
+        //   skippedCount++;
+        //   continue;
+        // }
 
         // Create address with realistic Vietnamese clinic address
         const location = this.getRandomLocation();

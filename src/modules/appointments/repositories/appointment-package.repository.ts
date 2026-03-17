@@ -54,24 +54,24 @@ export class AppointmentPackageRepository {
       .innerJoin(
         'service_appointments',
         'serviceAppointment',
-        'serviceAppointment.appointment_package_id = package._id AND serviceAppointment.deleted_at IS NULL',
+        'serviceAppointment.appointment_package_id = package._id',
       )
       .innerJoin(
         'clinic_service_config',
         'clinicServiceConfig',
-        'clinicServiceConfig._id = serviceAppointment.clinic_service_id AND clinicServiceConfig.deleted_at IS NULL',
+        'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
       )
       .innerJoin(
         'clinic_services',
         'clinicService',
-        'clinicService._id = clinicServiceConfig.service_id AND clinicService.deleted_at IS NULL',
+        'clinicService._id = clinicServiceConfig.service_id',
       )
       .where('package._id = :packageId', { packageId: packageData.package_id })
-      .select('serviceAppointment._id', 'serviceAppointment_id')
-      .addSelect('serviceAppointment.price', 'serviceAppointment_price')
-      .addSelect('serviceAppointment.discount', 'serviceAppointment_discount')
+      .andWhere('serviceAppointment.deleted_at IS NULL')
+      .andWhere('clinicServiceConfig.deleted_at IS NULL')
+      .andWhere('clinicService.deleted_at IS NULL')
       .addSelect('clinicServiceConfig._id', 'clinicServiceConfig_id')
-      .addSelect('clinicServiceConfig.duration_min', 'clinicServiceConfig_duration')
+      .addSelect('clinicServiceConfig.price', 'clinicServiceConfig_price')
       .addSelect('clinicService._id', 'clinicService_id')
       .addSelect('clinicService.service_name', 'clinicService_serviceName')
       .addSelect('clinicService.description', 'clinicService_description')
@@ -91,12 +91,10 @@ export class AppointmentPackageRepository {
         _id: packageData.transaction_id_val,
       } : null,
       services: services.map(s => ({
-        serviceAppointmentId: s.serviceAppointment_id,
-        clinicServiceId: s.clinicServiceConfig_id,
-        price: s.serviceAppointment_price ? parseFloat(s.serviceAppointment_price) : 0,
-        discount: s.serviceAppointment_discount ? parseFloat(s.serviceAppointment_discount) : undefined,
+        clinicServiceId: s.clinicServiceConfig__id,
+        price: parseFloat(s.clinicServiceConfig_price),
         duration: s.clinicServiceConfig_duration,
-        serviceName: s.clinicService_serviceName,
+        serviceName: s.clinicService_service_name,
         description: s.clinicService_description,
       })),
     };
@@ -139,12 +137,10 @@ export class AppointmentPackageRepository {
       .andWhere('serviceAppointment.deleted_at IS NULL')
       .select([
         'package.appointment_id',
-        'serviceAppointment._id',
         'clinicService._id',
         'clinicService.service_name',
         'clinicService.description',
-        'serviceAppointment.price',
-        'serviceAppointment.discount',
+        'clinicServiceConfig.price',
       ])
       .getRawMany();
 
@@ -153,12 +149,10 @@ export class AppointmentPackageRepository {
     result.forEach((row) => {
       const appointmentId = row.appointment_id; // Fixed: was package_appointment_id
       const service = {
-        serviceAppointmentId: row.serviceAppointment__id,
         id: row.clinicService__id,
         serviceName: row.service_name, // Fixed: was clinicService_service_name
         description: row.clinicService_description,
-        price: parseFloat(row.serviceAppointment_price),
-        discount: row.serviceAppointment_discount ? parseFloat(row.serviceAppointment_discount) : undefined,
+        price: parseFloat(row.clinicServiceConfig_price),
       };
 
       if (!servicesMap.has(appointmentId)) {
@@ -208,8 +202,7 @@ export class AppointmentPackageRepository {
           'sa._id AS service_appointment_id',
           'csc._id AS clinic_service_id',
           'cs.service_name AS service_name',
-          'sa.price AS service_price',
-          'sa.discount AS service_discount',
+          'csc.price AS service_price',
         ])
         .where('pkg._id = :packageId', { packageId: pkg.package_id })
         .andWhere('sa.deleted_at IS NULL')

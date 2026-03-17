@@ -1,8 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { LegalDocumentVerificationStatus } from '../../accounts/enums/legal-document-verification-status.enum';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Address Info DTO
@@ -60,7 +58,6 @@ export class ClinicAdminInfoDto {
   specializedIn?: string[];
 
   @ApiProperty({ description: 'Date of birth', required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({ description: 'Profile picture URL', required: false })
@@ -166,11 +163,9 @@ export class SubscriptionInfoDto {
   subscriptionStatus: RegistrationStatus;
 
   @ApiProperty({ description: 'Subscription date', required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   subscriptionDate?: Date;
 
   @ApiProperty({ description: 'Expiration date', required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   expirationDate?: Date;
 }
 

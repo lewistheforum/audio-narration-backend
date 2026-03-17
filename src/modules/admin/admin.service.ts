@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { subtractFromVietnamTime } from 'src/common/utils/date.util';
 import { AdminRegistrationRepository } from './repositories/admin-registration.repository';
 import { ClinicsLegalDocumentsRepository } from '../accounts/repositories/clinics-legal-documents.repository';
 import { ClinicSubscriptionRepository } from '../subscriptions/repositories/clinic-subscription.repository';
@@ -518,7 +517,8 @@ export class AdminService {
     }>;
   }> {
     // Calculate the date 6 months ago
-    const sixMonthsAgo = subtractFromVietnamTime(6, 'month');
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     const pendingStatuses = [
       RegistrationStatus.PENDING_SEPAY_SETUP,

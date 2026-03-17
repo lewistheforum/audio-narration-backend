@@ -1,7 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { RegistrationStatus } from '../enums';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Subscription History Item DTO
@@ -76,14 +74,12 @@ export class SubscriptionHistoryItemDto {
     description: 'Subscription start date',
     example: '2023-01-01T00:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   subscriptionDate: Date;
 
   @ApiProperty({
     description: 'Subscription expiration date',
     example: '2024-01-01T00:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   expirationDate: Date;
 
   @ApiProperty({
@@ -97,7 +93,6 @@ export class SubscriptionHistoryItemDto {
     description: 'Record creation timestamp',
     example: '2023-01-01T00:00:00.000Z',
   })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 }
 

@@ -3,7 +3,6 @@ import { MessageResponseDto } from 'src/modules/messages/dto/message-response.dt
 import { AccountResponseDto } from 'src/modules/accounts/dto';
 import { AccountsService } from 'src/modules/accounts/accounts.service';
 import { MessagesService } from 'src/modules/messages/messages.service';
-import { getCurrentVietnamTime } from '../../../common/utils/date.util';
 
 export class ConversationResponseDto {
   @ApiProperty({
@@ -107,8 +106,8 @@ export class ConversationResponseDto {
         : (conversation.participants as AccountResponseDto[]) || [];
     this.lastMessage = conversation.lastMessage || null;
     this.deletedBy = conversation.deletedBy || [];
-    this.createdAt = conversation.createdAt || getCurrentVietnamTime();
-    this.updatedAt = conversation.updatedAt || getCurrentVietnamTime();
+    this.createdAt = conversation.createdAt || new Date();
+    this.updatedAt = conversation.updatedAt || new Date();
   }
 
   // Static method to create with populated participants and last message

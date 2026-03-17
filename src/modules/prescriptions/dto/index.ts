@@ -21,16 +21,3 @@ export { ERMConsultationDto } from './erm-consultation.dto';
 export { ERMUltrasoundDto } from './erm-ultrasound.dto';
 export { ERMBoneDensityDto } from './erm-bone-density.dto';
 export { ERMProcedureDto } from './erm-procedure.dto';
-export { 
-  DoctorERMDetailResponseDto,
-  ConsultationDataDto,
-  XrayDataDto,
-  UltrasoundDataDto,
-  LabDataDto,
-  ProcedureDataDto,
-  BoneDensityDataDto,
-  VitalSignsDto,
-  ImageUrlDto,
-} from './doctor-erm-detail-response.dto';
-export { PaginatedMedicinesResponseDto } from './paginated-medicines-response.dto';
-export { SearchMedicinesQueryDto } from './search-medicines-query.dto';

@@ -10,7 +10,6 @@ import { ERMBoneDensity } from '../../modules/prescriptions/entities/erm-bone-de
 import { ERMProcedure } from '../../modules/prescriptions/entities/erm-procedure.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
-import { getCurrentVietnamTime, subtractFromVietnamTime, addToDate } from '../utils/date.util';
 import {
   ERMStatus,
   ERMRecordType,
@@ -31,7 +30,6 @@ import {
   ERM_RECORD_TYPES,
   getRandomInt,
   getRandomItem,
-  getSequentialItem,
   getRandomERMDescription,
   SERVICE_CODES,
   XRAY_REGIONS,
@@ -76,7 +74,7 @@ import {
  * Creates 1-3 ERMs per appointment (one per service appointment) and 1-5 detail records per ERM.
  *
  * Seeding Rules:
- * - ERM status is varied (DRAFT, IN_PROGRESS, COMPLETED, CANCELLED)
+ * - ERM status must be COMPLETED or SIGNED (never DRAFT/IN_PROGRESS/CANCELLED)
  * - Links to valid service_appointments and appointments
  * - Generates detail records based on record_type:
  *   - CONSULTATION -> erm_consultations
@@ -209,7 +207,7 @@ export class ERMSeederService {
     // Pick random record type
     const recordType = getRandomItem(ERM_RECORD_TYPES);
 
-    // Pick random valid status
+    // Pick random valid status (COMPLETED or SIGNED)
     const status = getRandomItem(VALID_ERM_STATUSES);
 
     // Pick random service code
@@ -218,8 +216,8 @@ export class ERMSeederService {
     // Get a doctor ID from the appointment or use clinic ID as fallback
     const createdBy = appointment.doctorId || appointment.clinicId;
 
-    // Generate signed_at timestamp only if COMPLETED
-    const signedAt = status === ERMStatus.COMPLETED ? getCurrentVietnamTime() : null;
+    // Generate signed_at timestamp if status is SIGNED
+    const signedAt = status === ERMStatus.SIGNED ? new Date() : null;
 
     return this.ermRepository.create({
       serviceAppointmentsId: serviceAppointment._id,
@@ -240,42 +238,25 @@ export class ERMSeederService {
    * @returns Number of detail records created
    */
   private async createERMDetails(erm: ERM, appointment: Appointment): Promise<number> {
-    const detailCount = getRandomInt(1, 3); // Create 1-3 different types of details
+    const detailCount = getRandomInt(ERM_DETAILS_PER_ERM_MIN, ERM_DETAILS_PER_ERM_MAX);
     
-    // Always include the main recordType
-    const selectedTypes = new Set<ERMRecordType>([erm.recordType]);
-    
-    // Try to add more distinct types
-    let attempts = 0;
-    while (selectedTypes.size < detailCount && attempts < 10) {
-      selectedTypes.add(getRandomItem(ERM_RECORD_TYPES));
-      attempts++;
+    switch (erm.recordType) {
+      case ERMRecordType.CONSULTATION:
+        return await this.createConsultationDetails(erm, detailCount);
+      case ERMRecordType.XRAY:
+        return await this.createXrayDetails(erm, detailCount);
+      case ERMRecordType.ULTRASOUND:
+        return await this.createUltrasoundDetails(erm, detailCount);
+      case ERMRecordType.LAB:
+        return await this.createLabDetails(erm, detailCount);
+      case ERMRecordType.BONE_DENSITY:
+        return await this.createBoneDensityDetails(erm, detailCount);
+      case ERMRecordType.PROCEDURE:
+        return await this.createProcedureDetails(erm, detailCount);
+      default:
+        this.logger.warn(`Unknown record type: ${erm.recordType}`);
+        return 0;
     }
-    
-    let totalCreated = 0;
-    for (const recordType of selectedTypes) {
-      switch (recordType) {
-        case ERMRecordType.CONSULTATION:
-          totalCreated += await this.createConsultationDetails(erm, 1);
-          break;
-        case ERMRecordType.XRAY:
-          totalCreated += await this.createXrayDetails(erm, 1);
-          break;
-        case ERMRecordType.ULTRASOUND:
-          totalCreated += await this.createUltrasoundDetails(erm, 1);
-          break;
-        case ERMRecordType.LAB:
-          totalCreated += await this.createLabDetails(erm, 1);
-          break;
-        case ERMRecordType.BONE_DENSITY:
-          totalCreated += await this.createBoneDensityDetails(erm, 1);
-          break;
-        case ERMRecordType.PROCEDURE:
-          totalCreated += await this.createProcedureDetails(erm, 1);
-          break;
-      }
-    }
-    return totalCreated;
   }
 
   /**
@@ -285,7 +266,7 @@ export class ERMSeederService {
     for (let i = 0; i < count; i++) {
       const consultation = this.ermConsultationRepository.create({
         ermId: erm._id,
-        visitType: getSequentialItem(VISIT_TYPES, 'visitType') as VisitType,
+        visitType: getRandomItem(VISIT_TYPES) as VisitType,
         mainServiceCode: getRandomItem(SERVICE_CODES),
         chiefComplaint: getRandomItem(CHIEF_COMPLAINTS),
         onsetDuration: `${getRandomInt(1, 24)} ${getRandomItem(['weeks', 'months', 'years'])} ago`,
@@ -340,7 +321,7 @@ export class ERMSeederService {
             icd10_code: 'M25.5',
           },
         ]),
-        severity: getSequentialItem(SEVERITIES, 'severity') as Severity,
+        severity: getRandomItem(SEVERITIES) as Severity,
         comorbidImpact: 'Mild functional impairment affecting daily activities',
         riskFactors: 'Age, obesity, previous injury',
         physiotherapyPlan: JSON.stringify({
@@ -351,7 +332,6 @@ export class ERMSeederService {
         educationAdvice: getRandomItem(EDUCATION_ADVICE),
         followUpDate: `${getRandomInt(2, 6)} weeks`,
         followUpCondition: 'Return sooner if symptoms worsen or new neurological symptoms develop',
-        createdAt: erm.createdAt,
       });
 
       await this.ermConsultationRepository.save(consultation);
@@ -383,7 +363,6 @@ export class ERMSeederService {
           `https://example.com/xray/${erm._id}_view1.jpg`,
           `https://example.com/xray/${erm._id}_view2.jpg`,
         ]),
-        createdAt: erm.createdAt,
       });
 
       await this.ermXrayRepository.save(xray);
@@ -401,7 +380,7 @@ export class ERMSeederService {
         serviceCode: getRandomItem(SERVICE_CODES),
         indication: getRandomItem(['Tendon pathology evaluation', 'Soft tissue mass assessment', 'Joint effusion evaluation', 'Guidance for injection']),
         bodySite: getRandomItem(ULTRASOUND_BODY_SITES),
-        side: getSequentialItem(BODY_SIDES, 'bodySideUltrasound') as BodySide,
+        side: getRandomItem(BODY_SIDES) as BodySide,
         technique: 'High-frequency linear array transducer utilized. Multiple planes of imaging obtained.',
         findings: getRandomItem(ULTRASOUND_FINDINGS),
         measurements: JSON.stringify({
@@ -419,7 +398,6 @@ export class ERMSeederService {
           `https://example.com/ultrasound/${erm._id}_longitudinal.jpg`,
           `https://example.com/ultrasound/${erm._id}_transverse.jpg`,
         ]),
-        createdAt: erm.createdAt,
       });
 
       await this.ermUltrasoundRepository.save(ultrasound);
@@ -432,13 +410,12 @@ export class ERMSeederService {
    */
   private async createLabDetails(erm: ERM, count: number): Promise<number> {
     for (let i = 0; i < count; i++) {
-      // Base calculation logically from the parent erm.createdAt
-      const baseTime = erm.createdAt.getTime();
-      const collectedAt = new Date(baseTime - getRandomInt(1, 3) * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const collectedAt = new Date(now.getTime() - getRandomInt(1, 3) * 24 * 60 * 60 * 1000);
       const receivedAt = new Date(collectedAt.getTime() + getRandomInt(30, 120) * 60 * 1000);
       const reportedAt = new Date(receivedAt.getTime() + getRandomInt(2, 8) * 60 * 60 * 1000);
 
-      const panelName = getSequentialItem(LAB_PANEL_NAMES, 'panelName') as PanelName;
+      const panelName = getRandomItem(LAB_PANEL_NAMES) as PanelName;
       const abnormalSummary = Math.random() > 0.6; // 40% chance of normal results
 
       let results: any;
@@ -514,7 +491,6 @@ export class ERMSeederService {
         abnormalSummary,
         conclusion: getRandomItem(LAB_CONCLUSIONS),
         recommendations: getRandomItem(LAB_RECOMMENDATIONS),
-        createdAt: erm.createdAt,
       });
 
       await this.ermLabRepository.save(lab);
@@ -541,7 +517,7 @@ export class ERMSeederService {
 
       const boneDensity = this.ermBoneDensityRepository.create({
         ermId: erm._id,
-        site: getSequentialItem(BONE_DENSITY_SITES, 'boneSite') as BoneSite,
+        site: getRandomItem(BONE_DENSITY_SITES) as BoneSite,
         bmdValue: (Math.random() * 0.3 + 0.7).toFixed(3),
         bmdUnit: 'g/cm²',
         tScore: parseFloat(tScore),
@@ -549,7 +525,6 @@ export class ERMSeederService {
         whoCategory,
         fractureRiskComment: getRandomItem(FRACTURE_RISK_COMMENTS),
         recommendations: getRandomItem(BONE_DENSITY_RECOMMENDATIONS),
-        createdAt: erm.createdAt,
       });
 
       await this.ermBoneDensityRepository.save(boneDensity);
@@ -562,8 +537,8 @@ export class ERMSeederService {
    */
   private async createProcedureDetails(erm: ERM, count: number): Promise<number> {
     for (let i = 0; i < count; i++) {
-      const baseTime = erm.createdAt.getTime();
-      const performedStart = new Date(baseTime - getRandomInt(1, 48) * 60 * 60 * 1000);
+      const now = new Date();
+      const performedStart = new Date(now.getTime() - getRandomInt(1, 48) * 60 * 60 * 1000);
       const performedEnd = new Date(performedStart.getTime() + getRandomInt(15, 45) * 60 * 1000);
 
       const procedure = this.ermProcedureRepository.create({
@@ -571,7 +546,7 @@ export class ERMSeederService {
         procedureCode: `PROC-${getRandomInt(100, 999)}`,
         indication: getRandomItem(['Therapeutic injection', 'Diagnostic aspiration', 'Pain management', 'Joint evaluation']),
         bodySite: getRandomItem(PROCEDURE_BODY_SITES),
-        side: getSequentialItem(BODY_SIDES, 'bodySideProcedure') as BodySide,
+        side: getRandomItem(BODY_SIDES) as BodySide,
         anesthesiaType: getRandomItem(ANESTHESIA_TYPES),
         performedStart,
         performedEnd,
@@ -591,7 +566,7 @@ export class ERMSeederService {
         description: getRandomItem(PROCEDURE_DESCRIPTIONS),
         painScoreBefore: getRandomInt(6, 9),
         painScoreAfter: getRandomInt(2, 5),
-        immediateOutcome: getSequentialItem(IMMEDIATE_OUTCOMES, 'immediateOutcome') as ImmediateOutcome,
+        immediateOutcome: getRandomItem(IMMEDIATE_OUTCOMES) as ImmediateOutcome,
         complications: JSON.stringify({
           bleeding: false,
           infection: false,
@@ -600,7 +575,6 @@ export class ERMSeederService {
         }),
         postCareInstructions: getRandomItem(POST_CARE_INSTRUCTIONS),
         followUpPlan: getRandomItem(FOLLOW_UP_PLANS),
-        createdAt: erm.createdAt,
       });
 
       await this.ermProcedureRepository.save(procedure);
@@ -622,7 +596,7 @@ export class ERMSeederService {
    * Validate ERM data integrity
    *
    * Checks:
-   * - All ERMs have valid status (COMPLETED)
+   * - All ERMs have valid status (COMPLETED or SIGNED)
    * - All ERMs reference valid appointments
    * - All ERMs reference valid service appointments
    * - Each ERM has corresponding detail records
@@ -637,7 +611,7 @@ export class ERMSeederService {
       // Check status
       if (!VALID_ERM_STATUSES.includes(erm.status as ERMStatus)) {
         errors.push(
-          `ERM ${erm._id} has invalid status: ${erm.status}. Must be COMPLETED.`,
+          `ERM ${erm._id} has invalid status: ${erm.status}. Must be COMPLETED or SIGNED.`,
         );
       }
 

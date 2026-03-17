@@ -1,12 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
-import {
-  getCurrentVietnamTime,
-  addToVietnamTime,
-  getDateString,
-  getVietnamTimestamp,
-} from 'src/common/utils/date.util';
 import { ClinicSubscriptionRepository } from './repositories/clinic-subscription.repository';
 import { ClinicSubscriptionRenewalQueueRepository } from './repositories/clinic-subscription-renewal-queue.repository';
 import { MailerService } from '../mailer/mailer.service';
@@ -36,21 +30,19 @@ export class SubscriptionCronService {
 
   /**
    * Main Cron Entry Point
-   * Executes daily at midnight (00:00:00 Vietnam time)
+   * Executes daily at midnight (00:00:00)
    *
    * Orchestrates:
    * 1. Phase 1: Notification engine (read-only)
    * 2. Phase 2: State transition engine (transactional)
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-    timeZone: 'Asia/Ho_Chi_Minh',
-  })
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailySweeper(): Promise<{
     phase1: { emailsSent: number; emailsFailed: number };
     phase2: { renewalsApplied: number; subscriptionsExpired: number; errors: number };
   }> {
     this.logger.log('🔄 Starting Daily Subscription Sweeper...');
-    const startTime = getVietnamTimestamp();
+    const startTime = Date.now();
 
     try {
       // Phase 1: Send expiration reminders (7-day and 1-day warnings)
@@ -65,7 +57,7 @@ export class SubscriptionCronService {
         `✅ Phase 2 Complete: ${phase2Stats.renewalsApplied} renewals, ${phase2Stats.subscriptionsExpired} expired, ${phase2Stats.errors} errors`,
       );
 
-      const duration = getVietnamTimestamp() - startTime;
+      const duration = Date.now() - startTime;
       this.logger.log(`✅ Daily Subscription Sweeper completed in ${duration}ms`);
 
       return {
@@ -247,8 +239,7 @@ export class SubscriptionCronService {
         status: RegistrationStatus.ACTIVE,
       })
       .andWhere(
-        `DATE(subscription.expiration_date) = :targetDate`,
-        { targetDate: getDateString(addToVietnamTime(days, 'day')) }
+        `DATE(subscription.expiration_date) = DATE(NOW() + INTERVAL '${days} days')`,
       );
 
     return query.getMany();
@@ -272,7 +263,7 @@ export class SubscriptionCronService {
       .where('subscription.subscriptionStatus IN (:...statuses)', {
         statuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
       })
-      .andWhere('subscription.expiration_date < :now', { now: getCurrentVietnamTime() });
+      .andWhere('subscription.expiration_date < NOW()');
 
     return query.getMany();
   }

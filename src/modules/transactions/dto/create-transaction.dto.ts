@@ -11,14 +11,14 @@ export class CreateTransactionDto {
   clinicId?: string;
 
   @ApiProperty({
-    description: 'Appointment identifier the payment belongs to',
+    description: 'Prescription identifier the payment belongs to',
     example: 'f91af8b4-391e-4a41-a8c9-1f08b4b6a690',
   })
   @IsUUID()
-  appointmentId: string;
+  prescriptionId: string;
 
   @ApiProperty({
-    description: 'Amount that should be collected for the appointment (VND)',
+    description: 'Amount that should be collected for the prescription (VND)',
     example: 2277000,
   })
   @IsNumber()

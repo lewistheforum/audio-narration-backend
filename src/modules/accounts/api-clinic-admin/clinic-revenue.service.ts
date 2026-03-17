@@ -16,7 +16,6 @@ import {
   OverallRevenueReportResponseDto,
   BranchRevenueReportResponseDto,
 } from './dto';
-import { formatToVietnamTime, parseVietnamTime } from 'src/common/utils/date.util';
 
 /**
  * Clinic Revenue Service
@@ -36,7 +35,7 @@ export class ClinicRevenueService {
   /**
    * Get Overall Revenue Report
    *
-   * Aggregates revenue data across ALL branches under the CLINIC_ADMIN
+   * Aggregates revenue data across all branches under the CLINIC_ADMIN
    * Provides comprehensive financial overview with multiple breakdowns
    */
   async getOverallRevenueReport(
@@ -49,8 +48,8 @@ export class ClinicRevenueService {
     // Validate date range
     this.validateDateRange(filterDto.startDate, filterDto.endDate);
 
-    // Get ALL branch IDs under this admin (no filtering by specific manager)
-    const branchIds = await this.getAdminBranchIds(adminId);
+    // Get all branch IDs under this admin
+    const branchIds = await this.getAdminBranchIds(adminId, filterDto.managerId);
 
     if (branchIds.length === 0) {
       throw new NotFoundException('No branches found under this admin');
@@ -101,7 +100,7 @@ export class ClinicRevenueService {
         startDate: filterDto.startDate,
         endDate: filterDto.endDate,
         groupedBy: filterDto.groupBy || RevenueGroupBy.DAY,
-        generatedAt: formatToVietnamTime(),
+        generatedAt: new Date().toISOString(),
       },
       summary,
       paymentMethodBreakdown,
@@ -181,7 +180,7 @@ export class ClinicRevenueService {
         startDate: filterDto.startDate,
         endDate: filterDto.endDate,
         groupedBy: filterDto.groupBy || RevenueGroupBy.DAY,
-        generatedAt: formatToVietnamTime(),
+        generatedAt: new Date().toISOString(),
       },
       branchInfo,
       summary,
@@ -224,8 +223,8 @@ export class ClinicRevenueService {
    * Ensures startDate is before endDate and range does not exceed 365 days
    */
   private validateDateRange(startDate: string, endDate: string): void {
-    const start = parseVietnamTime(startDate);
-    const end = parseVietnamTime(endDate);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
     if (start >= end) {
       throw new BadRequestException('startDate must be before endDate');
@@ -241,15 +240,23 @@ export class ClinicRevenueService {
    * Get Admin Branch IDs
    *
    * Retrieves all CLINIC_MANAGER account IDs under this admin
+   * Optionally filters by specific managerId
    * CRITICAL: Does NOT filter by account status (historical data requirement)
    */
-  private async getAdminBranchIds(adminId: string): Promise<string[]> {
+  private async getAdminBranchIds(
+    adminId: string,
+    managerId?: string,
+  ): Promise<string[]> {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .select('account._id')
       .where('account.parent_id = :adminId', { adminId })
       .andWhere('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
       .andWhere('account.deleted_at IS NULL');
+
+    if (managerId) {
+      queryBuilder.andWhere('account._id = :managerId', { managerId });
+    }
 
     const branches = await queryBuilder.getMany();
     return branches.map((branch) => branch._id);
@@ -382,7 +389,7 @@ export class ClinicRevenueService {
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
-      .andWhere('ap.payment_type = :paymentType', { paymentType: 'cod' })
+      .andWhere('ap.payment_type = :paymentType', { paymentType: 'COD' })
       .andWhere('t.deleted_at IS NULL')
       .getRawOne();
 
@@ -442,7 +449,7 @@ export class ClinicRevenueService {
       )
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
       .leftJoin(
-        'clinic_service_category',
+        'clinic_service_categories',
         'csc',
         'csc._id = cs.category_id',
       )
@@ -525,8 +532,8 @@ export class ClinicRevenueService {
       period: item.period,
       revenue: parseInt(item.revenue || '0', 10),
       transactionCount: parseInt(item.transactionCount || '0', 10),
-      periodStart: formatToVietnamTime(item.periodStart),
-      periodEnd: formatToVietnamTime(item.periodEnd),
+      periodStart: new Date(item.periodStart).toISOString(),
+      periodEnd: new Date(item.periodEnd).toISOString(),
     }));
   }
 

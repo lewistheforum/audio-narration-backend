@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as dayjs from 'dayjs';
 import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
 import { AccountRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
@@ -13,7 +12,6 @@ import {
   BANK_BRANCHES,
   DESCRIPTIONS,
 } from '../constants/medical-terms';
-import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
  * ClinicAdminInformation Seeder Service
@@ -106,7 +104,7 @@ export class ClinicAdminInformationSeederService {
           _id: randomUUID(),
           accountId: account._id,
           clinicName: this.getRandomClinicName(),
-          clinicPhone: this.randomVietnamPhone(),
+          clinicPhone: `+84${this.randomPhoneDigits()}`,
           description: this.getRandomDescription(),
           specializedIn: this.getRandomSpecializations(),
           pros: this.getRandomPros(),
@@ -117,7 +115,6 @@ export class ClinicAdminInformationSeederService {
           bankNumber: this.randomBankNumber(),
           bankBranch: this.getRandomBankBranch(),
           sepayVa: this.randomSePayVa(),
-          sepayKey: this.randomSepayKey(),
           isVerify: true,
         });
 
@@ -211,17 +208,10 @@ export class ClinicAdminInformationSeederService {
   }
 
   /**
-   * Generate random SePay API key
+   * Generate random 9-digit phone number
    */
-  private randomSepayKey(): string {
-    return `sepay_test_key_${this.randomDigits(12)}`;
-  }
-
-  /**
-   * Generate random Vietnamese local phone number
-   */
-  private randomVietnamPhone(): string {
-    return `0${this.randomDigits(9)}`;
+  private randomPhoneDigits(): string {
+    return this.randomDigits(9);
   }
 
   /**
@@ -241,15 +231,10 @@ export class ClinicAdminInformationSeederService {
    */
   private generateDob(index: number): Date {
     const age = 35 + (index % 31); // 35-65 years old
-    const year = getCurrentVietnamTime().getFullYear() - age;
+    const year = new Date().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs
-      .tz(
-        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-        VIETNAM_TIMEZONE,
-      )
-      .toDate();
+    return new Date(year, month, day);
   }
 
   /**

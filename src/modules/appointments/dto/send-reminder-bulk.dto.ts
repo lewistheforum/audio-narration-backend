@@ -16,9 +16,9 @@ export class SendReminderBulkDto {
     maxItems: 100,
   })
   @IsArray()
-  @ArrayMinSize(1, { message: 'At least 1 appointment is required' })
-  @ArrayMaxSize(100, { message: 'Maximum 100 appointments per bulk send' })
-  @IsUUID('4', { each: true, message: 'Each appointment_id must be a valid UUID' })
+  @ArrayMinSize(1, { message: 'Phải có ít nhất 1 appointment' })
+  @ArrayMaxSize(100, { message: 'Tối đa 100 appointments mỗi lần gửi' })
+  @IsUUID('4', { each: true, message: 'Mỗi appointment_id phải là UUID hợp lệ' })
   appointment_ids: string[];
 }
 
@@ -58,7 +58,7 @@ export class SendReminderBulkResponseDto {
 
   @ApiProperty({
     description: 'Summary message',
-    example: 'Successfully sent 8 out of 10 reminder emails',
+    example: 'Đã gửi 8/10 email thành công',
   })
   message: string;
 }

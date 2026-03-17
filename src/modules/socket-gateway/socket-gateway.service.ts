@@ -11,7 +11,6 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 import { AccountsService } from '../accounts/accounts.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationService } from '../conversations/conversation.service';
@@ -84,11 +83,7 @@ export class SocketGatewayService
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract and validate authentication token
-      const token =
-        client.handshake.auth.token ||
-        client.handshake.auth.access_token ||
-        client.handshake.query.token ||
-        client.handshake.query.access_token;
+      const token = client.handshake.auth.token || client.handshake.query.token;
 
       if (!token) {
         client.emit('error', {
@@ -99,10 +94,7 @@ export class SocketGatewayService
         return;
       }
 
-      const decodedToken = verifyToken(token, this.jwtService);
-      const user = await this.AccountsService.findAccountEntityById(
-        decodedToken.sub,
-      );
+      const user = await this.AccountsService.findAccountEntityById(token);
 
       if (!user) {
         client.emit('error', {
@@ -145,10 +137,8 @@ export class SocketGatewayService
         username: user.username || user.email,
         status: 'online',
       });
-    } catch (error: any) {
-      if (error?.status !== 404 && error?.name !== 'NotFoundException') {
-        console.error('Connection error:', error.message || error);
-      }
+    } catch (error) {
+      console.error('Connection error:', error);
       client.emit('error', {
         message: 'Invalid authentication token',
         code: 'INVALID_AUTH_TOKEN',
@@ -245,7 +235,7 @@ export class SocketGatewayService
           messageId: data.messageId,
           conversationId: data.conversationId,
           readBy: client.data.user.userId,
-          readAt: getCurrentVietnamTime(),
+          readAt: new Date(),
         });
 
       console.log(
@@ -278,7 +268,7 @@ export class SocketGatewayService
           messageIds: data.messageIds,
           conversationId: data.conversationId,
           readBy: client.data.user.userId,
-          readAt: getCurrentVietnamTime(),
+          readAt: new Date(),
           count: updatedMessages.length,
         });
 
@@ -312,7 +302,7 @@ export class SocketGatewayService
         .emit('conversationRead', {
           conversationId: data.conversationId,
           readBy: client.data.user.userId,
-          readAt: getCurrentVietnamTime(),
+          readAt: new Date(),
           messageCount: affectedCount,
         });
 
@@ -465,7 +455,7 @@ export class SocketGatewayService
           messageType: message.messageType,
           createdAt: message.createdAt,
         },
-        updatedAt: getCurrentVietnamTime(),
+        updatedAt: new Date(),
       };
 
       // Broadcast to all participants in the conversation room
@@ -521,7 +511,7 @@ export class SocketGatewayService
           messageType: lastMessage.messageType,
           createdAt: lastMessage.createdAt,
         },
-        updatedAt: getCurrentVietnamTime(),
+        updatedAt: new Date(),
       };
 
       // Broadcast conversation update to all participants

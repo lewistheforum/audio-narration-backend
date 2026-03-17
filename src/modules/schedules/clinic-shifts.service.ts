@@ -25,12 +25,12 @@ export class ClinicShiftsService {
      */
     private async resolveClinicId(user: any): Promise<string> {
         if (user.role === AccountRole.CLINIC_MANAGER) {
-            return user._id; // Manager IS the clinic branch
+            return user.parentId || user._id;
         }
         if (user.role === AccountRole.CLINIC_STAFF || user.role === AccountRole.DOCTOR) {
-            // Doctor/Staff's parentId = CLINIC_MANAGER._id (the branch they belong to)
             if (user.parentId) {
-                return user.parentId;
+                const manager = await this.accountRepository.findOne({ where: { _id: user.parentId } });
+                return manager ? manager.parentId || manager._id : null;
             }
         }
         return user._id; // Fallback

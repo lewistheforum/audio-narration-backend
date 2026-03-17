@@ -1,8 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { AccountStatus } from '../enums/account-status.enum';
 import { Gender } from '../enums/gender.enum';
-import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Manager Staff/Doctor Item DTO
@@ -51,7 +49,6 @@ export class ManagerLegalDocumentsDto {
   rejectionReason?: string;
 
   @ApiPropertyOptional({ description: 'Last updated timestamp' })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   updatedAt?: Date;
 }
 
@@ -108,7 +105,6 @@ export class ManagerDetailResponseDto {
   gender: Gender;
 
   @ApiPropertyOptional({ description: 'Date of birth' })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiPropertyOptional({ description: 'Profile picture URL' })
@@ -133,10 +129,8 @@ export class ManagerDetailResponseDto {
   personnel: ManagerPersonnelDto[];
 
   @ApiProperty({ description: 'Account creation date' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({ description: 'Last update date' })
-  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 }

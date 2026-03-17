@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsDateString, IsEnum } from 'class-validator';
+import { IsOptional, IsUUID, IsDateString, IsEnum } from 'class-validator';
 
 export enum RevenueGroupBy {
   DAY = 'day',
@@ -8,16 +8,24 @@ export enum RevenueGroupBy {
 }
 
 /**
- * Revenue Query Filter DTO
+ * Clinic Revenue Filter DTO
  *
- * Clean query parameters for filtering revenue data (date range and grouping)
- * Does NOT include managerId - that should be handled via path parameters
+ * Query parameters for filtering revenue data with optional branch filtering
  */
 export class ClinicRevenueFilterDto {
   @ApiProperty({
+    description:
+      'Filter by specific branch manager ID (optional, returns all branches if omitted)',
+    required: false,
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'managerId must be a valid UUID' })
+  managerId?: string;
+
+  @ApiProperty({
     description: 'Start date for revenue period (ISO 8601 format)',
     example: '2026-01-01',
-    required: true,
   })
   @IsDateString(
     {},
@@ -28,7 +36,6 @@ export class ClinicRevenueFilterDto {
   @ApiProperty({
     description: 'End date for revenue period (ISO 8601 format)',
     example: '2026-03-31',
-    required: true,
   })
   @IsDateString(
     {},
@@ -41,7 +48,6 @@ export class ClinicRevenueFilterDto {
     enum: RevenueGroupBy,
     default: RevenueGroupBy.DAY,
     required: false,
-    example: RevenueGroupBy.DAY,
   })
   @IsOptional()
   @IsEnum(RevenueGroupBy, { message: 'groupBy must be day, week, or month' })

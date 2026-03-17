@@ -1,15 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID, Length, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, Length } from 'class-validator';
 
 export class SignContractDto {
     @ApiProperty({
-        description: 'UUID of the user signing the contract (Optional, prioritized by Token)',
-        example: '123e4567-e89b-12d3-a456-426614174000',
-        required: false
+        description: 'UUID of the user signing the contract (Clinic Manager or Employee)',
+        example: '123e4567-e89b-12d3-a456-426614174000'
     })
-    @IsOptional()
+    @IsNotEmpty()
     @IsUUID()
-    userId?: string;
+    userId: string;
 
     @ApiProperty({
         description: '6-digit OTP code sent to email',

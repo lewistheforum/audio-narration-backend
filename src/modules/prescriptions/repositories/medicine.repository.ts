@@ -74,28 +74,6 @@ export class MedicineRepository {
   }
 
   /**
-   * Search medicines by name with pagination (case-insensitive partial match)
-   *
-   * @param {string} name - Medicine name to search
-   * @param {number} skip - Number of records to skip
-   * @param {number} take - Number of records to take
-   * @returns {Promise<[Medicine[], number]>} Paged medicines and total count
-   */
-  async searchMedicinesByNameWithPagination(
-    name: string,
-    skip: number,
-    take: number,
-  ): Promise<[Medicine[], number]> {
-    return this.medicineRepository
-      .createQueryBuilder('medicine')
-      .where('medicine.name ILIKE :name', { name: `%${name}%` })
-      .orderBy('medicine.name', 'ASC')
-      .skip(skip)
-      .take(take)
-      .getManyAndCount();
-  }
-
-  /**
    * Find medicines by therapeutic class
    *
    * @param {string} therapeuticClass - Therapeutic class to filter by

@@ -7,7 +7,6 @@ import { EmployeeSchedule } from '../../modules/schedules/entities/employee-sche
 import { ClinicShiftRepository } from '../../modules/schedules/repositories/clinic-shift.repository';
 import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
 import { ShiftType, WeekDay } from '../../modules/schedules/enums';
-import { getStartOfDay, addToDate } from '../utils/date.util';
 
 /**
  * Employee Schedule Seeder Service
@@ -30,7 +29,7 @@ import { getStartOfDay, addToDate } from '../utils/date.util';
 @Injectable()
 export class EmployeeScheduleSeederService {
   private readonly logger = new Logger(EmployeeScheduleSeederService.name);
-  private readonly DAYS_TO_GENERATE = 60; // Match with booking window (60 days)
+  private readonly DAYS_TO_GENERATE = 30;
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -60,33 +59,16 @@ export class EmployeeScheduleSeederService {
         return;
       }
 
-      this.logger.log(`Found ${employees.length} employees to seed schedules for...`);
-
       let totalSchedulesCreated = 0;
-      let employeesWithSchedules = 0;
-      let employeesWithoutSchedules = 0;
 
       for (const employee of employees) {
         const schedulesCreated = await this.seedSchedulesForEmployee(employee);
         totalSchedulesCreated += schedulesCreated;
-        
-        if (schedulesCreated > 0) {
-          employeesWithSchedules++;
-        } else {
-          employeesWithoutSchedules++;
-        }
       }
 
       this.logger.log(
-        `✅ Employee schedule seeding completed:`,
+        `✅ Employee schedule seeding completed. Created ${totalSchedulesCreated} schedules total.`,
       );
-      this.logger.log(`   - Total schedules created: ${totalSchedulesCreated}`);
-      this.logger.log(`   - Employees with schedules: ${employeesWithSchedules}`);
-      this.logger.log(`   - Employees without schedules: ${employeesWithoutSchedules}`);
-
-      if (totalSchedulesCreated === 0) {
-        this.logger.error(`⚠️  CRITICAL: No schedules were created! API working-days will return empty array.`);
-      }
     } catch (error) {
       this.logger.error('Failed to seed employee schedules', error.stack);
       throw error;
@@ -102,7 +84,7 @@ export class EmployeeScheduleSeederService {
   private async seedSchedulesForEmployee(
     employee: Account,
   ): Promise<number> {
-    // Derive clinic_id from employee's parent_id (CLINIC_MANAGER)
+    // Derive clinic_id from employee's parent_id
     if (!employee.parentId) {
       this.logger.warn(
         `Employee ${employee._id} has no parent_id. Skipping schedule seeding.`,
@@ -110,17 +92,14 @@ export class EmployeeScheduleSeederService {
       return 0;
     }
 
-    // Use CLINIC_MANAGER._id as clinic_id (each branch has its own schedules)
-    const clinicManagerId = employee.parentId;
-
-    // Get all shifts for this clinic branch
+    // Get all shifts for this clinic
     const shifts = await this.clinicShiftRepository.find({
-      where: { clinicId: clinicManagerId },
+      where: { clinicId: employee.parentId },
     });
 
     if (shifts.length === 0) {
       this.logger.warn(
-        `No shifts found for clinic branch ${clinicManagerId}. Skipping employee ${employee._id}.`,
+        `No shifts found for clinic ${employee.parentId}. Skipping employee ${employee._id}.`,
       );
       return 0;
     }
@@ -130,35 +109,20 @@ export class EmployeeScheduleSeederService {
     );
 
     let createdCount = 0;
-    const today = getStartOfDay();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Generate schedules starting from 2 days in the past through the next 60 days
-    // This ensures historical schedules appear in the application (for past appointments)
-    for (let dayOffset = -2; dayOffset <= this.DAYS_TO_GENERATE; dayOffset++) {
-      const workDate = addToDate(today, dayOffset, 'day');
+    // Generate schedules for the next 30 days
+    for (let dayOffset = 0; dayOffset < this.DAYS_TO_GENERATE; dayOffset++) {
+      const workDate = new Date(today);
+      workDate.setDate(today.getDate() + dayOffset);
 
       // Calculate week_day based on work_date
       const weekDay = this.getWeekDay(workDate);
 
-      // CRITICAL FIX: Always create schedules for the first 7 days to ensure API returns data
-      // After day 7, introduce "Free Day" logic to intentionally leave some doctors without shifts
-      // This is REQUIRED for testing "Out-of-Hours" (Option 4) booking flow
-      // Free Day: 25% chance a doctor has no shifts that day
-      const isFreeDay = dayOffset > 4 && Math.random() < 0.35;
-      if (isFreeDay) {
-        continue; // Skip creating schedule - doctor has no shifts on this day (Out-of-Hours test data)
-      }
-
-      const shouldCreate = dayOffset <= 4 || this.shouldAssignSchedule();
-
-      if (shouldCreate) {
-        // For first 7 days, rotate through all shifts evenly
-        // After day 7, randomly assign shifts
-        const shiftIndex = dayOffset <= 4 
-          ? ((dayOffset + 2) % shifts.length)  // Adjust index for -2 offset
-          : this.getRandomInt(0, shifts.length - 1);
-        
-        const selectedShift = shifts[shiftIndex];
+      // Randomly assign to a shift (not all employees work every day)
+      if (this.shouldAssignSchedule()) {
+        const randomShift = shifts[this.getRandomInt(0, shifts.length - 1)];
 
         // Check if schedule already exists for this employee, date, and shift
         const existingSchedule =
@@ -166,7 +130,7 @@ export class EmployeeScheduleSeederService {
             where: {
               employeeId: employee._id,
               workDate: workDate,
-              clinicShiftId: selectedShift._id,
+              clinicShiftId: randomShift._id,
             },
           });
 
@@ -176,8 +140,8 @@ export class EmployeeScheduleSeederService {
 
         const schedule = this.employeeScheduleRepository.create({
           employeeId: employee._id,
-          clinicId: clinicManagerId,
-          clinicShiftId: selectedShift._id,
+          clinicId: employee.parentId,
+          clinicShiftId: randomShift._id,
           workDate,
           weekDay,
         });
@@ -187,15 +151,9 @@ export class EmployeeScheduleSeederService {
       }
     }
 
-    if (createdCount === 0) {
-      this.logger.warn(
-        `⚠️  No schedules created for employee ${employee._id}. This may cause empty working-days API response!`,
-      );
-    } else {
-      this.logger.log(
-        `✅ Created ${createdCount} schedules for employee ${employee._id}`,
-      );
-    }
+    this.logger.log(
+      `✅ Created ${createdCount} schedules for employee ${employee._id}`,
+    );
 
     return createdCount;
   }
