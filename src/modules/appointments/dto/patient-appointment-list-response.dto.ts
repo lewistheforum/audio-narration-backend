@@ -74,11 +74,17 @@ export class PatientAppointmentListItemDto {
   @Transform(({ value }) => formatToVietnamTime(value))
   appointment_hour: Date;
 
-  @ApiPropertyOptional({ description: 'Shift start hour', example: '08:00:00' })
-  start_hour?: string;
+  @ApiPropertyOptional({ description: 'Extra hour for out-of-hours bookings (ISO timestamp)', example: '2026-03-15T19:00:00.000Z', nullable: true })
+  extra_hour?: Date | null;
 
-  @ApiPropertyOptional({ description: 'Shift end hour', example: '09:00:00' })
-  end_hour?: string;
+  @ApiPropertyOptional({ description: 'Clinic shift hour ID (null for out-of-hours bookings)', nullable: true })
+  clinic_shift_hour_id?: string | null;
+
+  @ApiPropertyOptional({ description: 'Shift start hour (null for out-of-hours bookings)', example: '08:00:00', nullable: true })
+  start_hour?: string | null;
+
+  @ApiPropertyOptional({ description: 'Shift end hour (null for out-of-hours bookings)', example: '09:00:00', nullable: true })
+  end_hour?: string | null;
 
   @ApiProperty({ description: 'Appointment status', enum: AppointmentStatus, example: AppointmentStatus.PENDING })
   status: AppointmentStatus;

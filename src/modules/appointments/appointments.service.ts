@@ -945,13 +945,20 @@ export class AppointmentsService {
 
     try {
       // Lock and verify new shift hour exists and has available slots
+      // FIX: Use INNER JOIN instead of LEFT JOIN for pessimistic locking compatibility
+      // PostgreSQL forbids FOR UPDATE on the nullable side of an outer join
       const newShiftHour = await queryRunner.manager
         .createQueryBuilder()
-        .select('csh')
+        .select('csh._id', '_id')
+        .addSelect('csh.start_hour', 'start_hour')
+        .addSelect('csh.end_hour', 'end_hour')
+        .addSelect('csh.limit', 'limit')
+        .addSelect('cs.clinic_id', 'clinic_id')
         .from('clinic_shift_hour', 'csh')
+        .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')  // FIX: INNER JOIN for pessimistic lock
         .where('csh._id = :id', { id: rescheduleDto.clinicShiftHourId })
         .setLock('pessimistic_write')
-        .getOne();
+        .getRawOne<{ _id: string; start_hour: string; end_hour: string; limit: number; clinic_id: string }>();
 
       if (!newShiftHour) {
         throw new NotFoundException('Clinic shift hour not found');
@@ -962,29 +969,24 @@ export class AppointmentsService {
       }
 
       // Verify new shift belongs to same clinic
-      if (newShiftHour.clinicId !== appointment.clinicId) {
+      // FIX: Use clinic_id from joined clinic_shift table
+      if (newShiftHour.clinic_id !== appointment.clinicId) {
         throw new BadRequestException('New time slot must belong to the same clinic');
       }
 
-      // Check for conflicts at new slot
-      const conflictQuery = `
-        SELECT a._id FROM appointments a
-        WHERE a.clinic_id = :clinicId
-        AND a.appointment_date = :appointmentDate
-        AND a.clinic_shift_hour_id = :shiftHourId
-        AND a.status NOT IN ('CANCELLED', 'ABSENT')
-        AND a.deleted_at IS NULL
-        AND a._id != :appointmentId
-      `;
+      // Check for conflicts at new slot using QueryBuilder
+      const conflict = await queryRunner.manager
+        .createQueryBuilder(Appointment, 'a')
+        .select('a._id')
+        .where('a.clinic_id = :clinicId', { clinicId: appointment.clinicId })
+        .andWhere('a.appointment_date = :appointmentDate', { appointmentDate: newAppointmentDate })
+        .andWhere('a.clinic_shift_hour_id = :shiftHourId', { shiftHourId: rescheduleDto.clinicShiftHourId })
+        .andWhere('a.status NOT IN (:...statuses)', { statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT] })
+        .andWhere('a.deleted_at IS NULL')
+        .andWhere('a._id != :appointmentId', { appointmentId: appointment._id })
+        .getRawOne();
 
-      const conflicts = await queryRunner.manager.query(conflictQuery, [
-        appointment.clinicId,
-        newAppointmentDate.toISOString().split('T')[0],
-        rescheduleDto.clinicShiftHourId,
-        appointment._id,
-      ]);
-
-      if (conflicts.length > 0) {
+      if (conflict) {
         throw new ConflictException('This time slot is already booked. Please choose another time.');
       }
 
@@ -1012,7 +1014,7 @@ export class AppointmentsService {
 
       // Calculate new appointment hour from shift
       const appointmentHour = new Date(newAppointmentDate);
-      const [hours, minutes] = newShiftHour.startHour.split(':').map(Number);
+      const [hours, minutes] = newShiftHour.start_hour.split(':').map(Number);
       appointmentHour.setHours(hours, minutes, 0, 0);
 
       // Update appointment
@@ -1073,25 +1075,19 @@ export class AppointmentsService {
       throw new BadRequestException('Extra hour must be outside business hours (before 7:00 AM or after 6:00 PM)');
     }
 
-    // Check for conflicts
-    const conflictQuery = `
-      SELECT a._id FROM appointments a
-      WHERE a.clinic_id = :clinicId
-      AND a.appointment_date = :appointmentDate
-      AND a.extra_hour = :extraHour
-      AND a.status NOT IN ('CANCELLED', 'ABSENT')
-      AND a.deleted_at IS NULL
-      AND a._id != :appointmentId
-    `;
+    // Check for conflicts using QueryBuilder (avoids raw SQL parameter issues)
+    const conflict = await this.dataSource
+      .createQueryBuilder(Appointment, 'a')
+      .select('a._id')
+      .where('a.clinic_id = :clinicId', { clinicId: appointment.clinicId })
+      .andWhere('a.appointment_date = :appointmentDate', { appointmentDate: newAppointmentDate })
+      .andWhere('a.extra_hour = :extraHour', { extraHour: newExtraHour })
+      .andWhere('a.status NOT IN (:...statuses)', { statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT] })
+      .andWhere('a.deleted_at IS NULL')
+      .andWhere('a._id != :appointmentId', { appointmentId: appointment._id })
+      .getRawOne();
 
-    const conflicts = await this.dataSource.query(conflictQuery, [
-      appointment.clinicId,
-      newAppointmentDate.toISOString().split('T')[0],
-      newExtraHour.toISOString(),
-      appointment._id,
-    ]);
-
-    if (conflicts.length > 0) {
+    if (conflict) {
       throw new ConflictException('This time slot is already booked. Please choose another time.');
     }
 
@@ -4958,6 +4954,7 @@ export class AppointmentsService {
         'a.appointment_date AS appointment_date',
         'a.appointment_hour AS appointment_hour',
         'a.extra_hour AS extra_hour',
+        'a.clinic_shift_hour_id AS clinic_shift_hour_id',
         'a.status AS status',
         'a.total AS total',
         'a.created_at AS created_at',
@@ -4969,7 +4966,7 @@ export class AppointmentsService {
         '"doctor"._id AS doctor_id',
         'COALESCE("di".full_name, "doctor".username) AS doctor_name',
         '"di".profile_picture AS doctor_profile_picture',
-        // Shift hour info (nullable)
+        // Shift hour info (nullable) - LEFT JOIN ensures out-of-hours appointments work
         '"csh".start_hour AS start_hour',
         '"csh".end_hour AS end_hour',
         // Payment info
@@ -5194,33 +5191,46 @@ export class AppointmentsService {
     }
 
     // Map to response DTO structure
-    const data = appointmentsRawUnique.map((apt) => ({
-      _id: apt.appointment_id,
-      clinic: {
-        _id: apt.clinic_id,
-        name: apt.clinic_name,
-        address: apt.clinic_address,
-      },
-      doctor: apt.doctor_id
-        ? {
-          _id: apt.doctor_id,
-          name: apt.doctor_name,
-          profilePicture: apt.doctor_profile_picture,
-        }
-        : null,
-      appointment_date: apt.appointment_date,
-      appointment_hour: apt.appointment_hour || apt.extra_hour,
-      start_hour: apt.start_hour,
-      end_hour: apt.end_hour,
-      clinic_room: apt.clinic_room || null,
-      status: apt.status,
-      total: parseFloat(apt.total || '0'),
-      payment_type: apt.payment_type,
-      payment_status: apt.payment_status,
-      services: servicesMap.get(apt.appointment_id) || [],
-      erms: ermsMap.get(apt.appointment_id) || [],
-      e_prescription_summary: ePrescriptionMap.get(apt.appointment_id) || null,
-    }));
+    // Time resolution logic:
+    // - If extra_hour exists (Out-of-Hours/Option 4): use extra_hour for appointment_hour, start_hour/end_hour = null
+    // - If no extra_hour (Standard Booking): use appointment_hour from shift, include start_hour/end_hour
+    const data = appointmentsRawUnique.map((apt) => {
+      const isOutOfHours = apt.extra_hour && !apt.clinic_shift_hour_id;
+
+      return {
+        _id: apt.appointment_id,
+        clinic: {
+          _id: apt.clinic_id,
+          name: apt.clinic_name,
+          address: apt.clinic_address,
+        },
+        doctor: apt.doctor_id
+          ? {
+              _id: apt.doctor_id,
+              name: apt.doctor_name,
+              profilePicture: apt.doctor_profile_picture,
+            }
+          : null,
+        appointment_date: apt.appointment_date,
+        // Time resolution: extra_hour takes priority for out-of-hours bookings
+        appointment_hour: apt.extra_hour || apt.appointment_hour,
+        // Include clinic_shift_hour_id to identify booking type
+        clinic_shift_hour_id: apt.clinic_shift_hour_id || null,
+        // extra_hour field for out-of-hours bookings
+        extra_hour: apt.extra_hour || null,
+        // Only include shift hours for standard bookings (not out-of-hours)
+        start_hour: !isOutOfHours ? apt.start_hour : null,
+        end_hour: !isOutOfHours ? apt.end_hour : null,
+        clinic_room: apt.clinic_room || null,
+        status: apt.status,
+        total: parseFloat(apt.total || '0'),
+        payment_type: apt.payment_type,
+        payment_status: apt.payment_status,
+        services: servicesMap.get(apt.appointment_id) || [],
+        erms: ermsMap.get(apt.appointment_id) || [],
+        e_prescription_summary: ePrescriptionMap.get(apt.appointment_id) || null,
+      };
+    });
 
     return {
       data,
@@ -5287,6 +5297,7 @@ export class AppointmentsService {
         'a.appointment_date AS appointment_date',
         'a.appointment_hour AS appointment_hour',
         'a.extra_hour AS extra_hour',
+        'a.clinic_shift_hour_id AS clinic_shift_hour_id',
         'a.status AS status',
         'a.total AS total',
         'a.patient_note AS patient_note',
@@ -5303,7 +5314,7 @@ export class AppointmentsService {
         '"doctor"._id AS doctor_id',
         'COALESCE("di".full_name, "doctor".username) AS doctor_name',
         '"di".profile_picture AS doctor_profile_picture',
-        // Shift hour info (nullable)
+        // Shift hour info (nullable) - LEFT JOIN ensures out-of-hours appointments work
         '"csh".start_hour AS start_hour',
         '"csh".end_hour AS end_hour',
         // Clinic room info (V4.5: COALESCE for out-of-hours support)
@@ -5566,6 +5577,11 @@ export class AppointmentsService {
     }
 
     // Map to response DTO structure
+    // Time resolution logic:
+    // - If extra_hour exists (Out-of-Hours/Option 4): use extra_hour for appointment_hour, start_hour/end_hour = null
+    // - If no extra_hour (Standard Booking): use appointment_hour from shift, include start_hour/end_hour
+    const isOutOfHoursDetail = appointmentRaw.extra_hour && !appointmentRaw.clinic_shift_hour_id;
+
     return {
       _id: appointmentRaw.appointment_id,
       clinic: {
@@ -5577,10 +5593,15 @@ export class AppointmentsService {
       },
       doctor: doctorInfo,
       appointment_date: appointmentRaw.appointment_date,
-      appointment_hour:
-        appointmentRaw.appointment_hour || appointmentRaw.extra_hour,
-      start_hour: appointmentRaw.start_hour,
-      end_hour: appointmentRaw.end_hour,
+      // Time resolution: extra_hour takes priority for out-of-hours bookings
+      appointment_hour: appointmentRaw.extra_hour || appointmentRaw.appointment_hour,
+      // Include clinic_shift_hour_id to help frontend identify booking type
+      clinic_shift_hour_id: appointmentRaw.clinic_shift_hour_id || null,
+      // extra_hour field for out-of-hours bookings
+      extra_hour: appointmentRaw.extra_hour || null,
+      // Only include shift hours for standard bookings (not out-of-hours)
+      start_hour: !isOutOfHoursDetail ? appointmentRaw.start_hour : null,
+      end_hour: !isOutOfHoursDetail ? appointmentRaw.end_hour : null,
       clinic_room: appointmentRaw.clinic_room || null,
       status: appointmentRaw.status,
       total: parseFloat(appointmentRaw.total || '0'),
