@@ -6,6 +6,7 @@ import {
   TFontDictionary,
 } from 'pdfmake/interfaces';
 import { PatientEPrescriptionDetailResponseDto } from '../dto';
+import { getCurrentVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * PDF Generator Service
@@ -371,7 +372,7 @@ export class PdfGeneratorService {
    * Build Signature Section
    */
   private buildSignatureSection(data: any, createdAt: Date): Content[] {
-    const formattedDate = new Date(createdAt).toLocaleDateString('vi-VN', {
+    const formattedDate = createdAt.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -440,7 +441,7 @@ export class PdfGeneratorService {
         margin: [0, 30, 0, 0],
       },
       {
-        text: `Tài liệu được tạo tự động bởi hệ thống Bonix - ${new Date().toLocaleDateString('vi-VN')}`,
+        text: `Tài liệu được tạo tự động bởi hệ thống Bonix - ${getCurrentVietnamTime().toLocaleDateString('vi-VN')}`,
         style: 'footer',
         margin: [0, 10, 0, 0],
       },

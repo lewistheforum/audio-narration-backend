@@ -61,6 +61,24 @@ export interface PlanChangeContext {
   endDate: string; // Formatted date string
 }
 
+/**
+ * Context for appointment reminder email
+ */
+export interface AppointmentReminderContext {
+  patientName: string;
+  clinicName: string;
+  clinicAddress: string;
+  clinicPhone: string;
+  appointmentDate: string; // Formatted date
+  appointmentHour: string; // Formatted time
+  doctorName: string;
+  doctorSpecialization?: string;
+  services: Array<{
+    serviceName: string;
+    serviceType: string;
+  }>;
+}
+
 @Injectable()
 export class MailerService {
   constructor(private readonly configService: ConfigService) {}
@@ -1145,7 +1163,7 @@ export class MailerService {
             </p>
             
             <div style="margin: 30px 0;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/contracts/${contractId}" 
+              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}" 
                  style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
                 Review & Sign Now
               </a>
@@ -1153,12 +1171,6 @@ export class MailerService {
             
             <p style="color: #6B7280; font-size: 14px; margin: 0;">
               Please review and countersign to finalize the agreement.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
             </p>
           </div>
         </div>
@@ -1181,7 +1193,6 @@ export class MailerService {
     email: string,
     managerName: string,
     contractId: string,
-    fileUrl: string,
   ): Promise<void> {
     const transporter = this.mailTransport();
     const contractCode = contractId.substring(0, 8).toUpperCase();
@@ -1209,21 +1220,8 @@ export class MailerService {
               Your contract <strong>#${contractCode}</strong> has been signed by <strong>${managerName}</strong> and is now <strong>ACTIVE</strong>.
             </p>
             
-            <div style="margin: 30px 0;">
-              <a href="${fileUrl}" 
-                 style="background: #166534; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                Download Signed Contract
-              </a>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 0;">
-              A copy of the signed document is available at the link above.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
+              You can now view your finalized contract details on the dashboard.
             </p>
           </div>
         </div>
@@ -1237,6 +1235,48 @@ export class MailerService {
       console.error('❌ Failed to send employee notification:', error);
     }
   }
+
+
+    async sendContractRejectNotification(
+        email: string,
+        signerName: string,
+        contractId: string,
+        reason: string
+    ) {
+        const transporter = this.mailTransport();
+        const contractCode = contractId.substring(0, 8).toUpperCase();
+        const subject = `[Medicare] Hợp đồng #${contractCode} đã bị từ chối`;
+        
+        const mailOptions = {
+            from: {
+                name: 'Bonix',
+                address: this.configService.get<string>('EMAIL_USER'),
+            },
+            to: email,
+            subject,
+            html: `
+                <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
+                    <h2 style="color: #ef4444;">Thông Báo Từ Chối Ký Hợp Đồng</h2>
+                    <p>Chào bạn,</p>
+                    <p>Chúng tôi xin thông báo rằng hợp đồng mã số <strong>${contractCode}</strong> đã bị từ chối bởi <strong>${signerName}</strong>.</p>
+                    <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
+                        <p style="margin: 0; font-weight: bold;">Lý do từ chối:</p>
+                        <p style="margin: 5px 0 0 0;">${reason}</p>
+                    </div>
+                    <p>Vui lòng đăng nhập vào hệ thống để kiểm tra thông tin chi tiết và thực hiện các bước tiếp theo.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 12px; color: #666;">Đây là email tự động, vui lòng không trả lời email này.</p>
+                </div>
+            `,
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            console.log(`✅ Contract rejection email sent to ${email}`);
+        } catch (error) {
+            console.error('❌ Failed to send contract rejection email:', error);
+        }
+    }
 
   /**
    * Sends generated credentials to Clinic Manager
@@ -2283,6 +2323,315 @@ export class MailerService {
     } catch (error) {
       console.error('❌ Failed to send report response email:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Send Welcome Email with Password (for Walk-in Patients)
+   * 
+   * Sends welcome email to patients created by clinic staff containing:
+   * - Login credentials (username/email + temporary password)
+   * - Instructions to change password on first login
+   * - Reminder to update profile information
+   * 
+   * @param email - Patient email address
+   * @param fullName - Patient full name
+   * @param username - Username (usually email)
+   * @param temporaryPassword - Auto-generated password
+   */
+  async sendWelcomeEmailWithPassword(
+    email: string,
+    fullName: string,
+    username: string,
+    temporaryPassword: string,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+
+    const mailOptions = {
+      from: {
+        name: 'Bonix',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: 'Chào mừng bạn đến với Bonix - Thông tin đăng nhập',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Bonix Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F0F9FF; border-radius: 10px; padding: 30px; border: 1px solid #BAE6FD;">
+            <h1 style="color: #0369A1; margin: 0 0 20px 0;">Chào mừng bạn đến với Bonix!</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Kính chào <strong>${fullName}</strong>,
+            </p>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Cảm ơn bạn đã chọn Bonix để chăm sóc sức khỏe. Tài khoản của bạn đã được tạo thành công!
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
+              <h2 style="color: #111827; margin: 0 0 15px 0; font-size: 18px;">Thông tin đăng nhập:</h2>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #6B7280; font-size: 14px;">Email/Tài khoản:</span>
+                <p style="margin: 5px 0 0 0; color: #111827; font-weight: 600; font-size: 16px;">${username}</p>
+              </div>
+              <div>
+                <span style="color: #6B7280; font-size: 14px;">Mật khẩu tạm thời:</span>
+                <p style="margin: 5px 0 0 0; color: #0369A1; font-weight: 600; font-size: 18px; letter-spacing: 1px;">${temporaryPassword}</p>
+              </div>
+            </div>
+
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #92400E; font-size: 14px; font-weight: 600;">⚠️ LƯU Ý QUAN TRỌNG:</p>
+              <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #92400E; font-size: 14px;">
+                <li>Vui lòng đổi mật khẩu ngay sau khi đăng nhập lần đầu</li>
+                <li>Không chia sẻ mật khẩu cho bất kỳ ai</li>
+                <li>Bạn có thể cập nhật thông tin cá nhân (ngày sinh, giới tính, địa chỉ...) trong phần "Hồ sơ của tôi"</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${frontendUrl}/login" 
+                 style="background: #0369A1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+                Đăng nhập ngay
+              </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0; text-align: center;">
+              Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua email hoặc hotline được cung cấp tại phòng khám.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2026 Bonix. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Welcome email with password sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send welcome email with password:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Appointment Reminder Email
+   */
+  async sendAppointmentReminderEmail(
+    email: string,
+    context: AppointmentReminderContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+
+    const servicesListHtml = context.services
+      .map(
+        (service) =>
+          `<li style="margin: 8px 0; color: #374151; line-height: 1.5;">${service.serviceName}</li>`,
+      )
+      .join('');
+
+    const mailOptions = {
+      from: {
+        name: 'Bonix',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: `[${context.clinicName}] - Nhắc nhở lịch hẹn ngày ${context.appointmentDate}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+          <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+            
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; padding: 30px 20px;">
+              <img 
+                src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png" 
+                alt="${context.clinicName}" 
+                style="max-width: 180px; height: auto; margin-bottom: 15px;"
+              />
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">NHẮC NHỞ LỊCH HẸN</h1>
+            </div>
+
+            <!-- Content -->
+            <div style="padding: 30px 25px;">
+              <p style="margin: 0 0 20px 0; font-size: 15px;">Kính gửi <strong>${context.patientName}</strong>,</p>
+              
+              <p style="margin: 0 0 20px 0; font-size: 15px;">Đây là email nhắc nhở về lịch hẹn của bạn tại <strong>${context.clinicName}</strong>:</p>
+              
+              <!-- Appointment Details -->
+              <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0;">
+                <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px; font-weight: 600;">THÔNG TIN LỊCH HẸN</h3>
+                <p style="margin: 10px 0; color: #475569; font-size: 14px;"><strong>Ngày giờ:</strong> ${context.appointmentHour}, ${context.appointmentDate}</p>
+                <p style="margin: 10px 0; color: #475569; font-size: 14px;"><strong>Bác sĩ:</strong> ${context.doctorName}${context.doctorSpecialization ? ` - ${context.doctorSpecialization}` : ''}</p>
+                <p style="margin: 10px 0 5px 0; color: #475569; font-size: 14px;"><strong>Dịch vụ:</strong></p>
+                <ul style="margin: 0; padding-left: 25px;">
+                  ${servicesListHtml}
+                </ul>
+              </div>
+
+              <!-- Clinic Info -->
+              <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 25px 0;">
+                <h3 style="margin: 0 0 15px 0; color: #92400e; font-size: 16px; font-weight: 600;">ĐỊA CHỈ PHÒNG KHÁM</h3>
+                <p style="margin: 10px 0; color: #78350f; font-size: 14px;"><strong>Địa chỉ:</strong> ${context.clinicAddress}</p>
+                <p style="margin: 10px 0; color: #78350f; font-size: 14px;"><strong>Hotline:</strong> ${context.clinicPhone}</p>
+              </div>
+
+              <!-- Preparation Guide -->
+              <div style="margin: 25px 0;">
+                <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px; font-weight: 600;">HƯỚNG DẪN CHUẨN BỊ</h3>
+                <ul style="margin: 0; padding-left: 25px; color: #475569; font-size: 14px;">
+                  <li style="margin: 8px 0; line-height: 1.6;">Vui lòng có mặt trước 15 phút để làm thủ tục</li>
+                  <li style="margin: 8px 0; line-height: 1.6;">Mang theo giấy tờ tùy thân (CMND/CCCD)</li>
+                  <li style="margin: 8px 0; line-height: 1.6;">Mang theo kết quả xét nghiệm cũ (nếu có)</li>
+                </ul>
+              </div>
+
+              <p style="margin: 25px 0 0 0; font-size: 14px; color: #64748b;">Nếu bạn cần thay đổi hoặc hủy lịch hẹn, vui lòng liên hệ với chúng tôi sớm nhất có thể.</p>
+            </div>
+
+            <!-- Footer -->
+            <div style="background-color: #f8fafc; padding: 25px; text-align: center; font-size: 13px; color: #64748b;">
+              <p style="margin: 0 0 8px 0; font-weight: 600; color: #475569;">${context.clinicName}</p>
+              <p style="margin: 0 0 5px 0;">Hotline: ${context.clinicPhone}</p>
+              <p style="margin: 0 0 15px 0;">${context.clinicAddress}</p>
+              <p style="margin: 0; color: #94a3b8; font-size: 12px;">© 2026 Bonix. All rights reserved.</p>
+            </div>
+
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Appointment reminder email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Failed to send appointment reminder email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send New Account Notification with full details
+   */
+  async sendAccountNotification(data: {
+    email: string;
+    fullName: string;
+    username: string;
+    password: string;
+    phone?: string;
+    dob?: string;
+  }): Promise<void> {
+    const transporter = this.mailTransport();
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+
+    const mailOptions = {
+      from: {
+        name: 'Bonix',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: data.email,
+      subject: '✨ Thông báo tạo tài khoản thành công - Bonix',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <img 
+              alt="Bonix Logo" 
+              style="width: 150px; height: auto;"
+              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
+            />
+          </div>
+          
+          <div style="background: #F0F9FF; border-radius: 10px; padding: 30px; border: 1px solid #BAE6FD;">
+            <h1 style="color: #0369A1; margin: 0 0 20px 0;">Tài khoản Bonix của bạn đã sẵn sàng!</h1>
+            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
+              Chào mừng <strong>${data.fullName}</strong> đến với Bonix.
+            </p>
+            
+            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
+              <h2 style="color: #111827; margin: 0 0 15px 0; font-size: 18px;">Thông tin chi tiết:</h2>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div>
+                  <span style="color: #6B7280; font-size: 12px; display: block;">Họ và tên:</span>
+                  <span style="color: #111827; font-weight: 600;">${data.fullName}</span>
+                </div>
+                ${data.phone ? `
+                <div>
+                  <span style="color: #6B7280; font-size: 12px; display: block;">Số điện thoại:</span>
+                  <span style="color: #111827; font-weight: 600;">${data.phone}</span>
+                </div>
+                ` : ''}
+              </div>
+
+              ${data.dob ? `
+              <div style="margin-bottom: 15px;">
+                <span style="color: #6B7280; font-size: 12px; display: block;">Ngày sinh:</span>
+                <span style="color: #111827; font-weight: 600;">${data.dob}</span>
+              </div>
+              ` : ''}
+
+              <div style="border-top: 1px dashed #E5E7EB; padding-top: 15px; margin-top: 15px;">
+                <div style="margin-bottom: 10px;">
+                  <span style="color: #6B7280; font-size: 12px;">Tên đăng nhập:</span>
+                  <p style="margin: 2px 0 0 0; color: #111827; font-weight: 600; font-size: 16px;">${data.username}</p>
+                </div>
+                <div>
+                  <span style="color: #6B7280; font-size: 12px;">Mật khẩu tạm thời:</span>
+                  <p style="margin: 2px 0 0 0; color: #0369A1; font-weight: 600; font-size: 18px; letter-spacing: 1px;">${data.password}</p>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: #FDF2F2; border-left: 4px solid #EF4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #991B1B; font-size: 14px; font-weight: 600;">⚠️ Bảo mật:</p>
+              <p style="margin: 5px 0 0 0; color: #991B1B; font-size: 13px;">
+                Đây là mật khẩu tạm thời. Để bảo mật, vui lòng thay đổi mật khẩu ngay sau lần đăng nhập đầu tiên.
+              </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${frontendUrl}" 
+                 style="background: #0369A1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                Bắt đầu ngay
+              </a>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
+              © 2025 Bonix. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Account notification email sent to ${data.email}`);
+    } catch (error) {
+      console.error('❌ Failed to send account notification email:', error);
+      throw new Error('Failed to send account notification email');
     }
   }
 }

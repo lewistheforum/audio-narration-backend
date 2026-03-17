@@ -12,6 +12,8 @@ import { HttpService } from '@nestjs/axios';
 import * as FormData from 'form-data';
 import { firstValueFrom } from 'rxjs';
 import { API } from '../../common/utils/ai-api';
+import { getCurrentVietnamTime } from '../../common/utils/date.util';
+import { AccountRepository } from '../accounts/repositories/account.repository';
 
 /**
  * AI Service
@@ -34,6 +36,7 @@ export class AiService {
     private readonly geminiService: GeminiService,
     private readonly chatGptService: ChatGptService,
     private readonly httpService: HttpService,
+    private readonly accountRepository: AccountRepository,
   ) {}
 
   /**
@@ -94,7 +97,7 @@ export class AiService {
       content,
       provider: dto.provider,
       model,
-      timestamp: new Date(),
+      timestamp: getCurrentVietnamTime(),
     };
   }
 
@@ -135,7 +138,7 @@ export class AiService {
       content: formatJson,
       provider: AiProvider.CHATGPT,
       model,
-      timestamp: new Date(),
+      timestamp: getCurrentVietnamTime(),
     };
   }
 
@@ -164,7 +167,26 @@ export class AiService {
   ): Promise<any> {
     try {
       const url = API.AI.RECOMMENDATION_RECOMMEND_FROM_APPOINTMENT;
-      const response = await firstValueFrom(this.httpService.post(url, dto));
+
+      // The clinicIds in dto are clinic manager IDs. We need to find their parent IDs (clinic admin ids)
+      // and skip any duplicates.
+      const clinicManagers = await this.accountRepository.findAccountsByIds(
+        dto.clinicIds,
+      );
+
+      const adminIds = new Set<string>();
+      for (const account of clinicManagers) {
+        if (account.parentId) {
+          adminIds.add(account.parentId);
+        }
+      }
+
+      const payload = {
+        ...dto,
+        clinicIds: Array.from(adminIds),
+      };
+
+      const response = await firstValueFrom(this.httpService.post(url, payload));
       return response.data;
     } catch (error) {
       throw new BadRequestException(

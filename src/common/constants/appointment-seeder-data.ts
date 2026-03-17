@@ -7,6 +7,8 @@
 
 import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../../modules/appointments/enums';
 import { ERMRecordType, ERMStatus } from '../../modules/prescriptions/enums';
+import { subtractFromVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
+import * as dayjs from 'dayjs';
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -74,12 +76,14 @@ export const VALID_APPOINTMENT_STATUSES: AppointmentStatus[] = [
 ];
 
 /**
- * Valid ERM statuses for completed appointments
- * Only COMPLETED or SIGNED are allowed (not DRAFT/IN_PROGRESS/CANCELLED)
+ * Valid ERM statuses
+ * Includes all valid statuses except SIGNED
  */
 export const VALID_ERM_STATUSES: ERMStatus[] = [
+  ERMStatus.DRAFT,
+  ERMStatus.IN_PROGRESS,
   ERMStatus.COMPLETED,
-  ERMStatus.SIGNED,
+  ERMStatus.CANCELLED,
 ];
 
 /**
@@ -243,11 +247,21 @@ export const PAYMENT_TYPES: PaymentType[] = [
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Get a random item from an array
- */
 export function getRandomItem<T>(array: T[]): T {
   return array[Math.floor(Math.random() * array.length)];
+}
+
+const enumCounters: Record<string, number> = {};
+/**
+ * Get an item sequentially from an array to guarantee 100% coverage
+ */
+export function getSequentialItem<T>(array: T[], key: string): T {
+  if (enumCounters[key] === undefined) {
+    enumCounters[key] = 0;
+  }
+  const item = array[enumCounters[key] % array.length];
+  enumCounters[key]++;
+  return item;
 }
 
 /**
@@ -273,9 +287,7 @@ export function getRandomERMDescription(recordType: ERMRecordType): string {
  */
 export function getRandomPastDate(minDays: number, maxDays: number): Date {
   const daysAgo = getRandomInt(minDays, maxDays);
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date;
+  return subtractFromVietnamTime(daysAgo, 'day');
 }
 
 /**
@@ -284,9 +296,13 @@ export function getRandomPastDate(minDays: number, maxDays: number): Date {
 export function getRandomAppointmentHour(date: Date): Date {
   const hour = getRandomInt(8, 16); // 8 AM to 4 PM (allow time for appointment)
   const minute = getRandomInt(0, 3) * 15; // 0, 15, 30, or 45 minutes
-  const appointmentHour = new Date(date);
-  appointmentHour.setHours(hour, minute, 0, 0);
-  return appointmentHour;
+  return dayjs(date)
+    .tz(VIETNAM_TIMEZONE)
+    .hour(hour)
+    .minute(minute)
+    .second(0)
+    .millisecond(0)
+    .toDate();
 }
 
 /**
@@ -681,7 +697,7 @@ export const EDUCATION_ADVICE = [
 /**
  * Visit types
  */
-export const VISIT_TYPES = ['FIRST_VISIT', 'FOLLOW_UP', 'POST_PROCEDURE', 'ROUTINE'];
+export const VISIT_TYPES = ['FIRST_VISIT', 'FOLLOW_UP', 'POST_PROCEDURE', 'ROUTINE', 'ONLINE', 'EMERGENCY'];
 
 /**
  * Severity levels

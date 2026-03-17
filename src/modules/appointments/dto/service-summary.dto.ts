@@ -21,7 +21,7 @@ export class ServiceSummaryDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tư vấn',
+    example: 'Consultation',
   })
   serviceName: string;
 

@@ -11,11 +11,11 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
   /**
    * Find Schedules with Filters
-   * 
+   *
    * Retrieves a list of schedules based on clinic and additional filters.
    * Performs joins to include Employee, Shift, and Rooms data.
    * Manually maps DoctorInformation to the employee object.
-   * 
+   *
    * @param clinicId - ID of the clinic to search within
    * @param options - Filter options:
    *   - date: specific work date
@@ -32,6 +32,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       employeeId?: string;
       roomId?: string;
       shiftId?: string;
+      role?: string;
     },
   ): Promise<EmployeeSchedule[]> {
     const queryBuilder = this.createQueryBuilder('schedule')
@@ -47,8 +48,14 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       )
       .where('schedule.clinicId = :clinicId', { clinicId });
 
+    if (options.role) {
+      queryBuilder.andWhere('employee.role = :role', { role: options.role });
+    }
+
     if (options.date) {
-      queryBuilder.andWhere('schedule.workDate = :date', { date: options.date });
+      queryBuilder.andWhere('schedule.workDate = :date', {
+        date: options.date,
+      });
     }
 
     if (options.from && options.to) {
@@ -69,7 +76,9 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     }
 
     if (options.shiftId) {
-      queryBuilder.andWhere('schedule.clinicShiftId = :shiftId', { shiftId: options.shiftId });
+      queryBuilder.andWhere('schedule.clinicShiftId = :shiftId', {
+        shiftId: options.shiftId,
+      });
     }
 
     return queryBuilder
@@ -79,11 +88,124 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
   }
 
   /**
+   * Find Schedules Hours with Filters
+   *
+   * Retrieves a list of schedules based on clinic and additional filters.
+   * Performs joins to include Employee, Shift, and Rooms data.
+   * Manually maps DoctorInformation to the employee object.
+   *
+   * @param clinicId - ID of the clinic to search within
+   * @param options - Filter options:
+   *   - date: specific work date
+   *   - from/to: date range
+   *   - employeeId: specific employee
+   * @returns List of EmployeeSchedule entities with relations
+   */
+  async findScheduleHours(
+    clinicId: string,
+    options: {
+      date?: string;
+      from?: string;
+      to?: string;
+      employeeId?: string;
+      roomId?: string;
+      shiftId?: string;
+      role?: string;
+    },
+  ): Promise<any[]> {
+    const queryBuilder = this.createQueryBuilder('schedule')
+      .leftJoinAndSelect('schedule.employee', 'employee')
+      .leftJoinAndSelect('schedule.clinicShift', 'clinicShift')
+      .leftJoinAndSelect('clinicShift.hours', 'clinicShiftHour')
+      .leftJoinAndSelect('schedule.rooms', 'rooms')
+      // Map doctor information manually
+      .leftJoinAndMapOne(
+        'employee.doctorInformation',
+        'DoctorInformation',
+        'doctorInfo',
+        'doctorInfo.accountId = employee._id',
+      )
+      // Join appointments to count bookings per hour slot
+      .leftJoin(
+        'appointments',
+        'appointment',
+        'appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != \'CANCELLED\'',
+      )
+      .addSelect('COUNT(appointment._id)', 'bookedCount')
+      .where('schedule.clinicId = :clinicId', { clinicId })
+      .groupBy('schedule._id')
+      .addGroupBy('employee._id')
+      .addGroupBy('clinicShift._id')
+      .addGroupBy('clinicShiftHour._id')
+      .addGroupBy('rooms._id')
+      .addGroupBy('doctorInfo._id');
+
+    if (options.role) {
+      queryBuilder.andWhere('employee.role = :role', { role: options.role });
+    }
+
+    if (options.date) {
+      queryBuilder.andWhere('schedule.workDate = :date', {
+        date: options.date,
+      });
+    }
+
+    if (options.from && options.to) {
+      queryBuilder.andWhere('schedule.workDate BETWEEN :from AND :to', {
+        from: options.from,
+        to: options.to,
+      });
+    }
+
+    if (options.employeeId) {
+      queryBuilder.andWhere('schedule.employeeId = :employeeId', {
+        employeeId: options.employeeId,
+      });
+    }
+
+    if (options.roomId) {
+      queryBuilder.andWhere('rooms._id = :roomId', { roomId: options.roomId });
+    }
+
+    if (options.shiftId) {
+      queryBuilder.andWhere('schedule.clinicShiftId = :shiftId', {
+        shiftId: options.shiftId,
+      });
+    }
+
+    // Since we used aggregation, we should use getRawAndEntities to retrieve raw counts properly
+    // However, it's cleaner to execute as raw when we introduce complex aggregations.
+    return queryBuilder
+      .orderBy('schedule.workDate', 'ASC')
+      .addOrderBy('clinicShift.createdAt', 'ASC')
+      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      .getRawAndEntities()
+      .then(({ raw, entities }) => {
+        // Map raw bookedCount back into the entities
+        return entities.map(entity => {
+          // Find matching raw rows to attach bookedCount to the corresponding hours
+          if (entity.clinicShift && entity.clinicShift.hours) {
+            entity.clinicShift.hours = entity.clinicShift.hours.map(hour => {
+              const rawRow = raw.find(
+                r => r.schedule__id === entity._id && r.clinicShiftHour__id === hour._id
+              );
+              return {
+                ...hour,
+                bookedCount: rawRow ? parseInt(rawRow.bookedCount, 10) : 0
+              };
+            });
+          }
+          return entity;
+        });
+      });
+  }
+
+  /**
    * Find Schedule Conflict
-   * 
+   *
    * Checks if a schedule already exists for a specific employee on a specific date and shift.
    * Used to prevent overlapping schedules during creation or update.
-   * 
+   *
    * @param employeeId - ID of the employee
    * @param workDate - Date of work
    * @param clinicShiftId - ID of the shift
@@ -136,17 +258,17 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
   /**
    * Find clinic rooms for multiple appointments
-   * 
-   * Uses doctor_shift_hour_id to find rooms via the chain:
+   *
+   * Uses clinic_shift_hour_id to find rooms via the chain:
    * appointment → clinic_shift_hour → clinic_shift → employee_schedule → clinic_room_employee_schedule → clinic_rooms
-   * 
-   * @param appointmentData - Array of {appointmentId, doctorShiftHourId, doctorId, appointmentDate}
+   *
+   * @param appointmentData - Array of {appointmentId, clinicShiftHourId, doctorId, appointmentDate}
    * @returns Map of appointmentId to clinic rooms array
    */
   async findClinicRoomsForMultipleAppointments(
     appointmentData: Array<{
       appointmentId: string;
-      doctorShiftHourId: string | null;
+      clinicShiftHourId: string | null;
       doctorId: string | null;
       appointmentDate: Date;
     }>,
@@ -155,8 +277,10 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       return new Map();
     }
 
-    // Filter only appointments with doctor_shift_hour_id
-    const validAppointments = appointmentData.filter(a => a.doctorShiftHourId && a.doctorId);
+    // Filter only appointments with clinic_shift_hour_id
+    const validAppointments = appointmentData.filter(
+      (a) => a.clinicShiftHourId && a.doctorId,
+    );
 
     if (validAppointments.length === 0) {
       return new Map();
@@ -165,8 +289,9 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     // Build OR conditions for each appointment
     // Filter by work_date to get the correct room for that specific day
     const conditions = validAppointments
-      .map((_, index) =>
-        `(a._id = :aptId${index} AND a.doctor_shift_hour_id = :shiftHourId${index} AND es.employee_id = :doctorId${index} AND es.work_date = a.appointment_date)`
+      .map(
+        (_, index) =>
+          `(a._id = :aptId${index} AND a.clinic_shift_hour_id = :shiftHourId${index} AND es.employee_id = :doctorId${index} AND es.work_date = a.appointment_date)`,
       )
       .join(' OR ');
 
@@ -174,7 +299,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     const parameters: any = {};
     validAppointments.forEach((apt, index) => {
       parameters[`aptId${index}`] = apt.appointmentId;
-      parameters[`shiftHourId${index}`] = apt.doctorShiftHourId;
+      parameters[`shiftHourId${index}`] = apt.clinicShiftHourId;
       parameters[`doctorId${index}`] = apt.doctorId;
     });
 
@@ -186,10 +311,14 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .addSelect('cr._id', 'roomId')
       .addSelect('cr.room_name', 'roomName')
       .from('appointments', 'a')
-      .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.doctor_shift_hour_id')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh._id = a.clinic_shift_hour_id')
       .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
       .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
-      .innerJoin('clinic_room_employee_schedule', 'cres', 'cres.employee_schedule_id = es._id')
+      .innerJoin(
+        'clinic_room_employee_schedule',
+        'cres',
+        'cres.employee_schedule_id = es._id',
+      )
       .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
       .where(conditions, parameters)
       .andWhere('a.deleted_at IS NULL')
@@ -214,5 +343,35 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     });
 
     return roomsMap;
+  }
+  /**
+   * Find Room Conflict
+   *
+   * Checks if a room is already assigned to any doctor on a specific date and shift.
+   *
+   * @param roomId - ID of the room
+   * @param workDate - Date of work
+   * @param clinicShiftId - ID of the shift
+   * @param excludeId - (Optional) ID of a schedule to exclude
+   * @returns Matching EmployeeSchedule or null
+   */
+  async findRoomConflict(
+    roomId: string,
+    workDate: Date,
+    clinicShiftId: string,
+    excludeId?: string,
+  ): Promise<EmployeeSchedule | null> {
+    const queryBuilder = this.createQueryBuilder('schedule')
+      .innerJoin('schedule.rooms', 'room')
+      .where('room._id = :roomId', { roomId })
+      .andWhere('schedule.workDate = :workDate', { workDate })
+      .andWhere('schedule.clinicShiftId = :clinicShiftId', { clinicShiftId })
+      .andWhere('schedule.deletedAt IS NULL');
+
+    if (excludeId) {
+      queryBuilder.andWhere('schedule._id != :excludeId', { excludeId });
+    }
+
+    return queryBuilder.getOne();
   }
 }

@@ -11,12 +11,15 @@ import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { ClinicRevenueService } from './clinic-revenue.service';
 import {
   ClinicRevenueFilterDto,
   OverallRevenueReportResponseDto,
   BranchRevenueReportResponseDto,
+  RevenueGroupBy,
 } from './dto';
 import { ApiResponseData } from '../../../common/decorators/api-response.decorator';
 import { JwtAuthGuard } from '../../auth/jwt.strategy';
@@ -43,20 +46,42 @@ export class ClinicRevenueController {
   /**
    * Get Overall Revenue Report
    *
-   * Aggregates revenue data across all branches under the CLINIC_ADMIN
+   * Aggregates revenue data across ALL branches under the CLINIC_ADMIN
    * Provides comprehensive financial overview with multiple breakdowns
    *
    * @param user Authenticated CLINIC_ADMIN user
-   * @param filterDto Query parameters for filtering revenue data
-   * @returns Overall revenue report with aggregated statistics
+   * @param filterDto Query parameters for filtering revenue data (date range and grouping only)
+   * @returns Overall revenue report with aggregated statistics across all branches
    */
   @Get('overview')
   @ApiOperation({
-    summary: 'Get overall revenue report across all branches',
+    summary: 'Get overall revenue report across ALL branches',
     description:
-      'Retrieves aggregated revenue data for all branches under the CLINIC_ADMIN. ' +
+      'Retrieves aggregated revenue data for ALL branches under the CLINIC_ADMIN. ' +
       'Includes total revenue, transaction counts, payment method breakdown, ' +
-      'service category analysis, and revenue trends over time.',
+      'service category analysis, and revenue trends over time. ' +
+      'This endpoint does NOT filter by specific branch - use /branches/:managerId for that.',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    type: String,
+    required: true,
+    description: 'Start date for revenue period (ISO 8601 format)',
+    example: '2026-01-01',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    type: String,
+    required: true,
+    description: 'End date for revenue period (ISO 8601 format)',
+    example: '2026-03-31',
+  })
+  @ApiQuery({
+    name: 'groupBy',
+    enum: RevenueGroupBy,
+    required: false,
+    description: 'Group revenue trends by time period (day, week, or month)',
+    example: RevenueGroupBy.DAY,
   })
   @ApiResponseData({
     type: OverallRevenueReportResponseDto,
@@ -80,21 +105,50 @@ export class ClinicRevenueController {
   /**
    * Get Branch Revenue Report
    *
-   * Retrieves detailed revenue report for a specific branch (CLINIC_MANAGER)
+   * Retrieves detailed revenue report for a SPECIFIC branch (CLINIC_MANAGER)
    * Provides granular financial insights for individual branch analysis
    *
    * @param user Authenticated CLINIC_ADMIN user
-   * @param managerId ID of the branch manager (CLINIC_MANAGER)
-   * @param filterDto Query parameters for filtering revenue data
+   * @param managerId ID of the branch manager (CLINIC_MANAGER) - from path parameter
+   * @param filterDto Query parameters for filtering revenue data (date range and grouping only)
    * @returns Branch-specific revenue report with detailed statistics
    */
   @Get('branches/:managerId')
   @ApiOperation({
-    summary: 'Get revenue report for a specific branch',
+    summary: 'Get revenue report for a SPECIFIC branch',
     description:
-      'Retrieves detailed revenue data for a specific branch identified by manager ID. ' +
+      'Retrieves detailed revenue data for a SPECIFIC branch identified by manager ID (path parameter). ' +
       'Includes branch-specific revenue summary, payment method breakdown, ' +
-      'service category analysis, top services, and revenue trends.',
+      'service category analysis, top services, and revenue trends. ' +
+      'The managerId is ONLY accepted as a path parameter, NOT as a query parameter.',
+  })
+  @ApiParam({
+    name: 'managerId',
+    type: String,
+    required: true,
+    description: 'UUID of the branch manager (CLINIC_MANAGER)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    type: String,
+    required: true,
+    description: 'Start date for revenue period (ISO 8601 format)',
+    example: '2026-01-01',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    type: String,
+    required: true,
+    description: 'End date for revenue period (ISO 8601 format)',
+    example: '2026-03-31',
+  })
+  @ApiQuery({
+    name: 'groupBy',
+    enum: RevenueGroupBy,
+    required: false,
+    description: 'Group revenue trends by time period (day, week, or month)',
+    example: RevenueGroupBy.DAY,
   })
   @ApiResponseData({
     type: BranchRevenueReportResponseDto,

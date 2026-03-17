@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
 import { ContractPackageRepository } from './repositories/contract-package.repository';
 import { ClinicContractInformationRepository } from './repositories/clinic-contract-information.repository';
 import { AccountsService } from '../accounts/accounts.service';
@@ -9,6 +9,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { CodeVerificationRepository } from '../accounts/repositories/code-verification.repository';
 import { VerificationType } from '../accounts/enums';
 import { generateVerificationCode } from 'src/common/utils/util';
+import { getStartOfDay, getCurrentTime, addToVietnamTime } from 'src/common/utils/date.util';
 import axios from 'axios';
 import { CreateContractPackageDto } from './dto/create-contract-package.dto';
 import { CreateContractInfoDto } from './dto/create-contract-info.dto';
@@ -16,7 +17,7 @@ import { ContractPackage } from './entities/contract-package.entity';
 import { ClinicContractInformation } from './entities/clinic-contract-information.entity';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { ContractRole } from './enums/contract-role.enum';
-import { ContractStatus } from '../accounts/enums/contract-status.enum';
+import { ContractStatus } from './enums/contract-status.enum';
 
 /**
  * Contracts Service
@@ -26,6 +27,7 @@ import { ContractStatus } from '../accounts/enums/contract-status.enum';
  */
 @Injectable()
 export class ContractsService {
+
     constructor(
         private readonly contractPackageRepository: ContractPackageRepository,
         private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
@@ -62,7 +64,7 @@ export class ContractsService {
         }
 
         // 2. Auto-populate optional fields
-        const headerDate = dto.headerDate || new Date().toISOString();
+        const headerDate = dto.headerDate || getCurrentTime();
         const headerAddress = dto.headerAddress || 'Vietnam';
         const clinicRepresentative = dto.clinicRepresentative || 'Clinic Representative';
         const position = dto.position || 'Manager';
@@ -130,8 +132,7 @@ export class ContractsService {
 
         // Generate OTP
         const code = generateVerificationCode();
-        const expirationTime = new Date();
-        expirationTime.setMinutes(expirationTime.getMinutes() + 15); // 15 mins expiry
+        const expirationTime = addToVietnamTime(15, 'minute'); // 15 mins expiry
 
         // Save OTP
         const verification = this.codeVerificationRepository.create({
@@ -173,26 +174,23 @@ export class ContractsService {
         let contractInfo = await this.clinicContractInfoRepository.findByContractId(packageId);
 
         if (contractInfo) {
-            // Check status to enforce locking
-            if (contractInfo.contractStatus === ContractStatus.PENDING_MANAGER_SIGNATURE ||
-                contractInfo.contractStatus === ContractStatus.CURRENT) {
-                throw new BadRequestException('Cannot edit contract information after employee has signed.');
+            // Absolute Lock: Only allow editing if status is DRAFT
+            if (contractInfo.contractStatus !== ContractStatus.DRAFT) {
+                throw new BadRequestException(`Cannot edit contract information when status is ${contractInfo.contractStatus}. Please cancel this package and create a new one if you need to make changes.`);
             }
 
-            // If file was uploaded but not signed, reset to DRAFT to force re-upload with new terms
-            if (contractInfo.contractStatus === ContractStatus.PENDING_SIGNATURE) {
-                contractInfo.contractStatus = ContractStatus.DRAFT;
-                contractInfo.contractFile = null; // Clear file as terms changed
-            }
-
-            // Update existing
-            Object.assign(contractInfo, dto);
+            // Update existing - EXCLUDE contractStatus from DTO to avoid premature state transition
+            // Status should only change from DRAFT to PENDING_SIGNATURE AFTER file upload
+            const { contractStatus, ...updateData } = dto;
+            Object.assign(contractInfo, updateData);
             return this.clinicContractInfoRepository.save(contractInfo);
         } else {
-            // Create new
+            // Create new - EXCLUDE contractStatus from DTO to ensure it stays DRAFT
+            const { contractStatus, ...createData } = dto;
             contractInfo = this.clinicContractInfoRepository.create({
-                ...dto,
+                ...createData,
                 contractId: packageId,
+                contractStatus: ContractStatus.DRAFT, // Always start as DRAFT
             });
             return this.clinicContractInfoRepository.save(contractInfo);
         }
@@ -289,20 +287,11 @@ export class ContractsService {
         let privateKey: string;
 
         if (contractPackage.clinicManagerId === userId) {
-            // If Manager is signing, use the Parent's (Clinic Admin) Private Key
-            if (userAccount.parentId) {
-                const parentAccount = await this.accountsService.findAccountEntityById(userAccount.parentId);
-                if (!parentAccount || !parentAccount.encryptedPrivateKey) {
-                    throw new BadRequestException('Clinic Admin (Parent) does not have digital keys generated');
-                }
-                privateKey = parentAccount.encryptedPrivateKey;
-            } else {
-                // Fallback for Admin signing directly (if clinicId = Admin ID)
-                if (!userAccount.encryptedPrivateKey) {
-                    throw new BadRequestException('Clinic Admin does not have digital keys generated');
-                }
-                privateKey = userAccount.encryptedPrivateKey;
+            // If Manager is signing, use their own Private Key
+            if (!userAccount.encryptedPrivateKey) {
+                throw new BadRequestException('Clinic Manager does not have digital keys generated');
             }
+            privateKey = userAccount.encryptedPrivateKey;
         } else {
             // If Employee is signing, use their own Private Key
             if (!userAccount.encryptedPrivateKey) {
@@ -384,8 +373,7 @@ export class ContractsService {
                 await this.mailerService.sendContractCompletedNotificationToEmployee(
                     employeeAccount.email,
                     userAccount.username || 'Manager',
-                    contractId,
-                    contractInfo.contractFile
+                    contractId
                 );
             }
         } else {
@@ -459,6 +447,11 @@ export class ContractsService {
         const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
         if (!contractInfo) throw new NotFoundException('Contract info not found');
 
+        // Absolute Lock: Only allow upload if status is DRAFT
+        if (contractInfo.contractStatus !== ContractStatus.DRAFT) {
+            throw new BadRequestException(`Cannot upload file when contract status is ${contractInfo.contractStatus}. Only DRAFT contracts can have files uploaded.`);
+        }
+
         // Cloudinary Upload Logic
         try {
             // Convert buffer to data URI for upload
@@ -522,5 +515,154 @@ export class ContractsService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+    }
+
+    async getPackagesByEmployee(
+        employeeId: string,
+        clinicName?: string,
+        page: number = 1,
+        limit: number = 10,
+    ) {
+        const [packages, total] = await this.contractPackageRepository.findPackagesByEmployeeWithFilters(
+            employeeId,
+            clinicName,
+            page,
+            limit,
+        );
+
+        return {
+            data: packages,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    async getMyContract(employeeId: string, packageId: string): Promise<ContractPackage> {
+        const contractPackage = await this.contractPackageRepository.findById(packageId);
+
+        if (!contractPackage) {
+            throw new NotFoundException('Contract package not found');
+        }
+
+        if (contractPackage.employeeId !== employeeId) {
+            throw new UnauthorizedException('You do not have access to this contract');
+        }
+
+        if (contractPackage.clinicContractInformation?.contractStatus === ContractStatus.DRAFT) {
+            throw new UnauthorizedException('You do not have access to this contract yet');
+        }
+
+        return contractPackage;
+    }
+
+    /**
+     * Automatic Cron Job method to mark expired contracts as OLD 
+     * Uses Asia/Ho_Chi_Minh timezone
+     */
+    async updateExpiredContractsToOld(): Promise<number> {
+        // Get start of today in Vietnam timezone
+        const today = getStartOfDay();
+
+        // Find expired DB records
+        const expiredContracts = await this.clinicContractInfoRepository.findExpiredCurrentContracts(today);
+
+        if (expiredContracts.length === 0) {
+            return 0; // Nothing to update
+        }
+
+        const ids = expiredContracts.map((info: any) => info._id);
+
+        // Update DB
+        return await this.clinicContractInfoRepository.updateStatusBulk(ids, ContractStatus.OLD);
+    }
+
+    /**
+     * Reject Contract
+     * 
+     * Allows a party (Employee or Manager) to reject the contract with a reason.
+     * 
+     * @param contractId - UUID of contract
+     * @param userId - UUID of person rejecting
+     * @param reason - Rejection reason
+     */
+    async rejectContract(contractId: string, userId: string, reason: string): Promise<void> {
+        const contractPackage = await this.contractPackageRepository.findById(contractId);
+        if (!contractPackage) throw new NotFoundException('Contract package not found');
+
+        // Verify user is part of the contract
+        if (contractPackage.clinicManagerId !== userId && contractPackage.employeeId !== userId) {
+            throw new UnauthorizedException('User is not a party in this contract');
+        }
+
+        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
+        if (!contractInfo) throw new NotFoundException('Contract information not found');
+
+        // Validate Rejection Logic
+        if (contractPackage.employeeId === userId) {
+            // Employee can reject if it's PENDING_SIGNATURE
+            if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
+                throw new BadRequestException('Cannot reject at this stage');
+            }
+        } else if (contractPackage.clinicManagerId === userId) {
+            // Manager can reject if it's PENDING_MANAGER_SIGNATURE
+            if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
+                throw new BadRequestException('Cannot reject at this stage');
+            }
+        }
+
+        // Update Status and Reason
+        contractInfo.contractStatus = ContractStatus.REJECTED;
+        contractInfo.rejectionReason = reason;
+        await this.clinicContractInfoRepository.save(contractInfo);
+
+        // Notify other party
+        const otherUserId = contractPackage.employeeId === userId ? contractPackage.clinicManagerId : contractPackage.employeeId;
+        const otherUser = await this.accountsService.findAccountEntityById(otherUserId);
+        const currentUser = await this.accountsService.findAccountEntityById(userId);
+
+        if (otherUser && otherUser.email) {
+            await this.mailerService.sendContractRejectNotification(
+                otherUser.email,
+                currentUser.username || 'User',
+                contractId,
+                reason
+            );
+        }
+    }
+
+    /**
+     * Delete Contract Package (Cancel)
+     * 
+     * Soft deletes the contract package and related info.
+     * Only allowed before the contract becomes CURRENT.
+     * 
+     * @param id - UUID of contract package
+     * @param userId - ID of manager requesting deletion
+     */
+    async deletePackage(id: string, userId: string): Promise<void> {
+        const contractPackage = await this.contractPackageRepository.findById(id);
+        if (!contractPackage) throw new NotFoundException('Contract package not found');
+
+        // Only Manager can cancel/delete
+        if (contractPackage.clinicManagerId !== userId) {
+            throw new UnauthorizedException('Only clinic manager can cancel this contract');
+        }
+
+        const contractInfo = await this.clinicContractInfoRepository.findByContractId(id);
+        
+        // Cannot delete if already CURRENT
+        if (contractInfo && contractInfo.contractStatus === ContractStatus.CURRENT) {
+            throw new BadRequestException('Cannot cancel a contract that is already in effect');
+        }
+
+        // Soft delete 
+        if (contractInfo) {
+            await this.clinicContractInfoRepository.softDelete(contractInfo._id);
+        }
+        await this.contractPackageRepository.softDelete(id);
     }
 }

@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { Blog } from '../entities/blog.entity';
 import { BlogType } from '../enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Clinic Info DTO
@@ -28,7 +30,7 @@ export class ClinicInfoDto {
 
   @ApiProperty({
     description: 'Clinic phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -115,12 +117,14 @@ export class BlogResponseDto {
     description: 'Blog creation timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
     description: 'Blog last update timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
   constructor(blog: Blog) {
@@ -141,7 +145,8 @@ export class BlogResponseDto {
         email: blog.clinic.email,
         phone: blog.clinic.phone,
         profilePicture: blog.clinic.clinicManagerInformation?.profilePicture,
-        clinicBranchName: blog.clinic.clinicManagerInformation?.clinicBranchName,
+        clinicBranchName:
+          blog.clinic.clinicManagerInformation?.clinicBranchName,
         fullName: blog.clinic.clinicManagerInformation?.fullName,
       };
     }

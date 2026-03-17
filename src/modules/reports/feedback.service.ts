@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import axios from 'axios';
+import { DataSource } from 'typeorm';
 import { FeedbackRepository } from './repositories';
 import { FeedbackType } from './enums';
 import { Feedback } from './entities/feedback.entity';
@@ -13,8 +14,16 @@ import { AccountRole } from '../accounts/enums';
 import { CreateFeedbackClinicDto } from './dto/create-feedback-clinic.dto';
 import { CreateFeedbackDoctorDto } from './dto/create-feedback-doctor.dto';
 import { UpdateFeedbackDto } from './dto/update-feedback.dto';
+import { DoctorFeedbacksQueryDto } from './dto/doctor-feedbacks-query.dto';
+import { 
+  DoctorFeedbacksResponseDto,
+  DoctorFeedbackItemDto,
+  FeedbackPatientInfoDto,
+  FeedbackAppointmentInfoDto,
+} from './dto/doctor-feedbacks-response.dto';
 import { API } from '../../common/utils/ai-api';
 import { MESSAGES } from '../../common/message';
+import { getVietnamTimestamp } from '../../common/utils/date.util';
 
 /**
  * Feedback Service
@@ -30,6 +39,7 @@ export class FeedbackService {
   constructor(
     private readonly feedbackRepository: FeedbackRepository,
     private readonly accountRepository: AccountRepository,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -154,7 +164,7 @@ export class FeedbackService {
 
     // Check 3-day time limit
     const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
-    const timeDiff = Date.now() - feedback.createdAt.getTime();
+    const timeDiff = getVietnamTimestamp() - feedback.createdAt.getTime();
 
     if (timeDiff > threeDaysInMillis) {
       throw new ForbiddenException(
@@ -469,5 +479,168 @@ export class FeedbackService {
     );
 
     return result;
+  }
+
+  /**
+   * Get Doctor Feedbacks
+   *
+   * Retrieves paginated feedbacks for a specific doctor with patient and appointment info
+   *
+   * @param doctorId - Doctor UUID
+   * @param query - Query parameters (pagination, sorting, filtering)
+   * @returns Paginated feedbacks response
+   *
+   * Business Rules:
+   * - Only return feedbacks where type = DOCTOR and doctor_id = doctorId
+   * - Include patient information (name, image, gender)
+   * - Include appointment information (date, clinic name)
+   * - Support pagination, sorting by created_at or rating
+   * - Support filtering by minimum rating
+   * - Support search in description
+   * - Calculate average rating and rating distribution
+   */
+  async getDoctorFeedbacks(
+    doctorId: string,
+    query: DoctorFeedbacksQueryDto,
+  ): Promise<DoctorFeedbacksResponseDto> {
+    const {
+      page = 1,
+      limit = 20,
+      sort_by = 'created_at',
+      order = 'DESC',
+      min_rating,
+      search,
+    } = query;
+
+    const skip = (page - 1) * limit;
+
+    // Build WHERE conditions
+    let whereConditions = `
+      f.doctor_id = $1
+      AND f.type = 'DOCTOR'
+      AND f.deleted_at IS NULL
+    `;
+    const queryParams: any[] = [doctorId];
+    let paramIndex = 2;
+
+    if (min_rating) {
+      whereConditions += ` AND f.rating >= $${paramIndex}`;
+      queryParams.push(min_rating);
+      paramIndex++;
+    }
+
+    if (search) {
+      whereConditions += ` AND f.description ILIKE $${paramIndex}`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Build ORDER BY clause
+    const orderByClause = sort_by === 'rating' ? 'f.rating' : 'f.created_at';
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM feedbacks f
+      WHERE ${whereConditions}
+    `;
+    const countResult = await this.dataSource.query(countQuery, queryParams);
+    const total = parseInt(countResult[0]?.total || '0', 10);
+
+    // Get feedbacks with patient and appointment info
+    const feedbacksQuery = `
+      SELECT 
+        f._id as feedback_id,
+        f.rating,
+        f.description,
+        f.description_label,
+        f.feedback_images,
+        f.feedback_images_label,
+        f.created_at,
+        
+        -- Patient info
+        acc._id as patient_id,
+        ga.full_name as patient_name,
+        ga.profile_picture as patient_image,
+        ga.gender as patient_gender,
+        
+        -- Appointment info
+        f.appointment_id,
+        apt.appointment_date,
+        clinic_ga.full_name as clinic_name
+        
+      FROM feedbacks f
+      LEFT JOIN appointments apt ON apt._id = f.appointment_id
+      LEFT JOIN accounts acc ON acc._id = apt.patient_id
+      LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+      LEFT JOIN accounts clinic_acc ON clinic_acc._id = f.clinic_id
+      LEFT JOIN general_accounts clinic_ga ON clinic_ga.account_id = clinic_acc._id
+      
+      WHERE ${whereConditions}
+      ORDER BY ${orderByClause} ${order}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(limit, skip);
+    const feedbacksData = await this.dataSource.query(feedbacksQuery, queryParams);
+
+    // Calculate statistics (average rating and distribution)
+    const statsQuery = `
+      SELECT 
+        AVG(f.rating)::NUMERIC(3,2) as avg_rating,
+        COUNT(CASE WHEN f.rating = 5 THEN 1 END) as rating_5,
+        COUNT(CASE WHEN f.rating = 4 THEN 1 END) as rating_4,
+        COUNT(CASE WHEN f.rating = 3 THEN 1 END) as rating_3,
+        COUNT(CASE WHEN f.rating = 2 THEN 1 END) as rating_2,
+        COUNT(CASE WHEN f.rating = 1 THEN 1 END) as rating_1
+      FROM feedbacks f
+      WHERE f.doctor_id = $1
+        AND f.type = 'DOCTOR'
+        AND f.deleted_at IS NULL
+    `;
+    const statsResult = await this.dataSource.query(statsQuery, [doctorId]);
+    const stats = statsResult[0];
+
+    // Map to DTOs
+    const feedbacks: DoctorFeedbackItemDto[] = feedbacksData.map((fb: any) => ({
+      feedback_id: fb.feedback_id,
+      rating: fb.rating,
+      description: fb.description || null,
+      description_label: fb.description_label || null,
+      feedback_images: fb.feedback_images || null,
+      feedback_images_label: fb.feedback_images_label || null,
+      patient: {
+        patient_id: fb.patient_id,
+        full_name: fb.patient_name,
+        profile_image_url: fb.patient_image || null,
+        gender: fb.patient_gender || null,
+      } as FeedbackPatientInfoDto,
+      appointment: {
+        appointment_id: fb.appointment_id,
+        appointment_date: fb.appointment_date instanceof Date
+          ? fb.appointment_date.toISOString().split('T')[0]
+          : new Date(fb.appointment_date).toISOString().split('T')[0],
+        clinic_name: fb.clinic_name,
+      } as FeedbackAppointmentInfoDto,
+      created_at: fb.created_at,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      total,
+      page,
+      limit,
+      total_pages: totalPages,
+      average_rating: parseFloat(stats.avg_rating || '0'),
+      rating_distribution: {
+        '5': parseInt(stats.rating_5 || '0', 10),
+        '4': parseInt(stats.rating_4 || '0', 10),
+        '3': parseInt(stats.rating_3 || '0', 10),
+        '2': parseInt(stats.rating_2 || '0', 10),
+        '1': parseInt(stats.rating_1 || '0', 10),
+      },
+      feedbacks,
+    };
   }
 }

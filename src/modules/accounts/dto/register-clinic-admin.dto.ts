@@ -50,16 +50,19 @@ export class RegisterClinicAdminDto {
 
   @ApiProperty({
     description: 'Clinic admin phone number',
-    example: '+84123456789',
+    example: '0899798602',
     required: false,
   })
   @IsOptional()
   @IsString({ message: 'Phone must be a string' })
-  @MaxLength(20, { message: 'Phone must not exceed 20 characters' })
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone must be exactly 10 digits and start with 0',
+  })
   phone?: string;
 
   @ApiProperty({
-    description: 'Clinic admin password (min 6 characters, must contain letter and number)',
+    description:
+      'Clinic admin password (min 6 characters, must contain letter and number)',
     example: 'AdminPass123',
     minLength: 6,
     maxLength: 50,
@@ -89,7 +92,8 @@ export class RegisterClinicAdminDto {
 
   @ApiProperty({
     description: 'Description of clinic',
-    example: 'A modern healthcare facility providing comprehensive medical services',
+    example:
+      'A modern healthcare facility providing comprehensive medical services',
     required: false,
   })
   @IsOptional()
@@ -127,7 +131,10 @@ export class RegisterClinicAdminDto {
   })
   @IsOptional()
   @IsArray({ message: 'Paraclinical must be an array' })
-  @IsString({ each: true, message: 'Each paraclinical service must be a string' })
+  @IsString({
+    each: true,
+    message: 'Each paraclinical service must be a string',
+  })
   paraclinical?: string[];
 
   @ApiProperty({
@@ -207,4 +214,16 @@ export class RegisterClinicAdminDto {
   @MaxLength(50, { message: 'SePay VA must not exceed 50 characters' })
   @Transform(({ value }) => value?.trim())
   sepayVa: string;
+
+  @ApiProperty({
+    description: 'SePay API key for payment processing',
+    example: 'sepay_test_key_1234567890',
+    required: false,
+    maxLength: 255,
+  })
+  @IsOptional()
+  @IsString({ message: 'SePay key must be a string' })
+  @MaxLength(255, { message: 'SePay key must not exceed 255 characters' })
+  @Transform(({ value }) => value?.trim())
+  sepayKey?: string;
 }

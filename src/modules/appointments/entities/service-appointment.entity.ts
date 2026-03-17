@@ -41,6 +41,20 @@ export class ServiceAppointment {
   @JoinColumn({ name: 'appointment_package_id' })
   appointmentPackage?: AppointmentPackage;
 
+  /**
+   * Snapshot Price: Price at the time of booking
+   * Source: clinic_service_config.price
+   */
+  @Column({ name: 'price', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  price: number;
+
+  /**
+   * Snapshot Discount: Discount at the time of booking
+   * Source: clinic_service_config.discount
+   */
+  @Column({ name: 'discount', type: 'numeric', precision: 5, scale: 2, default: 0 })
+  discount: number;
+
   @OneToOne(() => ERM, (erm) => erm.serviceAppointment, {
     nullable: true,
   })

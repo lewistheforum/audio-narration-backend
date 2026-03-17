@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ContractPackage } from '../entities/contract-package.entity';
+import { ContractStatus } from '../enums/contract-status.enum';
 
 /**
  * ContractPackage Repository
@@ -171,6 +172,47 @@ export class ContractPackageRepository {
     // Optional Filter: Employee Name search
     if (employeeName) {
       queryBuilder.andWhere('generalAccount.fullName ILIKE :name', { name: `%${employeeName}%` });
+    }
+
+    // Pagination
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    // Order by created date (Newest first)
+    queryBuilder.orderBy('contractPackage.createdAt', 'DESC');
+
+    return queryBuilder.getManyAndCount();
+  }
+
+  /**
+   * Find Contract Packages by Employee ID with Filters and Pagination
+   *
+   * @param employeeId - Filter by Employee ID
+   * @param clinicName - Search by Clinic Name (Optional)
+   * @param page - Page number (Default 1)
+   * @param limit - Limit per page (Default 10)
+   */
+  async findPackagesByEmployeeWithFilters(
+    employeeId: string,
+    clinicName?: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<[ContractPackage[], number]> {
+    const queryBuilder = this.repository.createQueryBuilder('contractPackage');
+
+    // Join relations
+    queryBuilder
+      .leftJoinAndSelect('contractPackage.clinicAccount', 'clinic')
+      .leftJoinAndSelect('contractPackage.employeeAccount', 'employee')
+      .leftJoinAndSelect('contractPackage.clinicContractInformation', 'info')
+      .leftJoinAndSelect('clinic.generalAccount', 'clinicGeneralAccount'); // Assuming name is in generalAccount
+
+    // Filter by Employee ID and exclude DRAFT status
+    queryBuilder.where('contractPackage.employeeId = :employeeId', { employeeId })
+      .andWhere('info.contractStatus != :draftStatus', { draftStatus: ContractStatus.DRAFT });
+
+    // Optional Filter: Clinic Name search
+    if (clinicName) {
+      queryBuilder.andWhere('clinicGeneralAccount.fullName ILIKE :name', { name: `%${clinicName}%` });
     }
 
     // Pagination

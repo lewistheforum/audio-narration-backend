@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppointmentPackage } from '../entities/appointment-package.entity';
+import { AppointmentPackageStatus } from '../enums';
 
 /**
  * AppointmentPackage Repository
@@ -53,24 +54,24 @@ export class AppointmentPackageRepository {
       .innerJoin(
         'service_appointments',
         'serviceAppointment',
-        'serviceAppointment.appointment_package_id = package._id',
+        'serviceAppointment.appointment_package_id = package._id AND serviceAppointment.deleted_at IS NULL',
       )
       .innerJoin(
         'clinic_service_config',
         'clinicServiceConfig',
-        'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+        'clinicServiceConfig._id = serviceAppointment.clinic_service_id AND clinicServiceConfig.deleted_at IS NULL',
       )
       .innerJoin(
         'clinic_services',
         'clinicService',
-        'clinicService._id = clinicServiceConfig.service_id',
+        'clinicService._id = clinicServiceConfig.service_id AND clinicService.deleted_at IS NULL',
       )
       .where('package._id = :packageId', { packageId: packageData.package_id })
-      .andWhere('serviceAppointment.deleted_at IS NULL')
-      .andWhere('clinicServiceConfig.deleted_at IS NULL')
-      .andWhere('clinicService.deleted_at IS NULL')
+      .select('serviceAppointment._id', 'serviceAppointment_id')
+      .addSelect('serviceAppointment.price', 'serviceAppointment_price')
+      .addSelect('serviceAppointment.discount', 'serviceAppointment_discount')
       .addSelect('clinicServiceConfig._id', 'clinicServiceConfig_id')
-      .addSelect('clinicServiceConfig.price', 'clinicServiceConfig_price')
+      .addSelect('clinicServiceConfig.duration_min', 'clinicServiceConfig_duration')
       .addSelect('clinicService._id', 'clinicService_id')
       .addSelect('clinicService.service_name', 'clinicService_serviceName')
       .addSelect('clinicService.description', 'clinicService_description')
@@ -90,10 +91,12 @@ export class AppointmentPackageRepository {
         _id: packageData.transaction_id_val,
       } : null,
       services: services.map(s => ({
-        clinicServiceId: s.clinicServiceConfig__id,
-        price: parseFloat(s.clinicServiceConfig_price),
+        serviceAppointmentId: s.serviceAppointment_id,
+        clinicServiceId: s.clinicServiceConfig_id,
+        price: s.serviceAppointment_price ? parseFloat(s.serviceAppointment_price) : 0,
+        discount: s.serviceAppointment_discount ? parseFloat(s.serviceAppointment_discount) : undefined,
         duration: s.clinicServiceConfig_duration,
-        serviceName: s.clinicService_service_name,
+        serviceName: s.clinicService_serviceName,
         description: s.clinicService_description,
       })),
     };
@@ -136,10 +139,12 @@ export class AppointmentPackageRepository {
       .andWhere('serviceAppointment.deleted_at IS NULL')
       .select([
         'package.appointment_id',
+        'serviceAppointment._id',
         'clinicService._id',
         'clinicService.service_name',
         'clinicService.description',
-        'clinicServiceConfig.price',
+        'serviceAppointment.price',
+        'serviceAppointment.discount',
       ])
       .getRawMany();
 
@@ -148,10 +153,12 @@ export class AppointmentPackageRepository {
     result.forEach((row) => {
       const appointmentId = row.appointment_id; // Fixed: was package_appointment_id
       const service = {
+        serviceAppointmentId: row.serviceAppointment__id,
         id: row.clinicService__id,
         serviceName: row.service_name, // Fixed: was clinicService_service_name
         description: row.clinicService_description,
-        price: parseFloat(row.clinicServiceConfig_price),
+        price: parseFloat(row.serviceAppointment_price),
+        discount: row.serviceAppointment_discount ? parseFloat(row.serviceAppointment_discount) : undefined,
       };
 
       if (!servicesMap.has(appointmentId)) {
@@ -161,5 +168,111 @@ export class AppointmentPackageRepository {
     });
 
     return servicesMap;
+  }
+
+  /**
+   * Find all packages by appointment ID with services (raw data)
+   * 
+   * Returns raw query results to avoid loading entities with circular dependencies.
+   * Used for payment confirmation flow.
+   * 
+   * @param appointmentId - Appointment UUID
+   * @returns Array of raw package data with services
+   */
+  async findAllByAppointmentIdWithServices(appointmentId: string): Promise<any[]> {
+    // Get all packages with their basic info
+    const packages = await this.repository
+      .createQueryBuilder('pkg')
+      .select([
+        'pkg._id AS package_id',
+        'pkg.appointment_id AS appointment_id',
+        'pkg.transaction_id AS transaction_id',
+        'pkg.amount AS amount',
+        'pkg.status AS status',
+        'pkg.payment_type AS payment_type',
+        'pkg.created_at AS created_at',
+        'pkg.updated_at AS updated_at',
+      ])
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('pkg.deleted_at IS NULL')
+      .getRawMany();
+
+    // For each package, get its services
+    for (const pkg of packages) {
+      const services = await this.repository
+        .createQueryBuilder('pkg')
+        .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = pkg._id')
+        .innerJoin('clinic_service_config', 'csc', 'csc._id = sa.clinic_service_id')
+        .innerJoin('clinic_services', 'cs', 'cs._id = csc.service_id')
+        .select([
+          'sa._id AS service_appointment_id',
+          'csc._id AS clinic_service_id',
+          'cs.service_name AS service_name',
+          'sa.price AS service_price',
+          'sa.discount AS service_discount',
+        ])
+        .where('pkg._id = :packageId', { packageId: pkg.package_id })
+        .andWhere('sa.deleted_at IS NULL')
+        .andWhere('csc.deleted_at IS NULL')
+        .andWhere('cs.deleted_at IS NULL')
+        .getRawMany();
+
+      pkg.services = services;
+    }
+
+    return packages;
+  }
+
+  /**
+   * Find package by ID (for update)
+   * 
+   * Returns entity for update operations
+   * 
+   * @param packageId - Package UUID
+   * @returns AppointmentPackage entity or null
+   */
+  async findByIdForUpdate(packageId: string): Promise<AppointmentPackage | null> {
+    return this.repository.findOne({
+      where: { _id: packageId },
+    });
+  }
+
+  /**
+   * Update package
+   * 
+   * @param packageId - Package UUID
+   * @param data - Data to update
+   * @returns Updated package entity
+   */
+  async updatePackage(
+    packageId: string,
+    data: Partial<AppointmentPackage>,
+  ): Promise<AppointmentPackage> {
+    await this.repository.update({ _id: packageId }, data);
+    
+    const updated = await this.repository.findOne({
+      where: { _id: packageId },
+    });
+
+    if (!updated) {
+      throw new Error('Package not found after update');
+    }
+
+    return updated;
+  }
+
+  /**
+   * Count pending packages for an appointment
+   * 
+   * @param appointmentId - Appointment UUID
+   * @returns Number of packages with PENDING_PAYMENT status
+   */
+  async countPendingPackages(appointmentId: string): Promise<number> {
+    return this.repository
+      .createQueryBuilder('pkg')
+      .where('pkg.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('pkg.status = :status', { status: AppointmentPackageStatus.PENDING_PAYMENT })
+      .andWhere('pkg.deleted_at IS NULL')
+      .getCount();
   }
 }

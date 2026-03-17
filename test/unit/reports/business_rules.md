@@ -222,15 +222,65 @@ sequenceDiagram
 
 ---
 
-## ✅ Checklist Kiểm Tra
+## 📋 Chức năng: Báo cáo chi nhánh (Branch Reports) - Dành cho Manager
 
-Trước khi deploy, đảm bảo:
+### A. Phân Quyền (Authorization)
 
-- [ ] Guards `JwtAuthGuard` và `RolesGuard` được apply đúng
-- [ ] Decorator `@Roles(AccountRole.PATIENT)` được thiết lập
-- [ ] DTO validation hoạt động (class-validator)
-- [ ] `accountId` được lấy từ `user.id`, không từ body
-- [ ] Default values (`isResponse`, `responseDescription`) được set đúng
-- [ ] Repository methods hoạt động đúng
-- [ ] Unit tests cover đầy đủ các cases
-- [ ] Swagger documentation đầy đủ
+**Vai trò được phép:**
+- ✅ `CLINIC_MANAGER` - Chỉ quản lý chi nhánh mới có quyền xem báo cáo của chi nhánh mình.
+
+**Cài đặt Guards:**
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(AccountRole.CLINIC_MANAGER)
+```
+
+---
+
+### B. Logic Lọc Dữ Liệu (Data Filtering Rules)
+
+1. **🔒 Tự động lọc theo chi nhánh:**
+   - Manager **không cần** gửi `clinicId` trong request.
+   - Hệ thống tự động lấy `managerId` từ JWT token (`request.user.id`).
+   - Dữ liệu luôn được lọc theo `clinic_id` của chi nhánh mà Manager đó quản lý.
+
+2. **📅 Phân loại báo cáo theo thời gian (Period):**
+   - Hỗ trợ 3 mức: `DAY` (Ngày), `MONTH` (Tháng), `YEAR` (Năm).
+   - Mặc định nếu không gửi là `DAY`.
+
+3. **🚫 Loại bỏ dữ liệu không hợp lệ:**
+   - Các cuộc hẹn có trạng thái `CANCELLED` (Đã hủy) hoặc `ABSENT` (Vắng mặt) sẽ bị loại khỏi các thống kê số lượng và doanh thu.
+
+---
+
+### C. Chi tiết các loại báo cáo
+
+#### 1. Thống kê khách hàng (Customer Statistics)
+- **Mục tiêu:** Đếm số lượng bệnh nhân khác nhau đã đến khám.
+- **Logic:** Sử dụng `COUNT(DISTINCT patient_id)` để tránh đếm lặp một người khám nhiều lần trong cùng kỳ.
+
+#### 2. Thống kê phản hồi bác sĩ (Doctor Feedback & Working)
+- **Mục tiêu:** Đánh giá chất lượng phục vụ của từng bác sĩ trong ngày.
+- **Tham số bắt buộc:** `date` (YYYY-MM-DD).
+- **Quy trình:**
+    1. Lấy danh sách bác sĩ có lịch khám trong ngày tại chi nhánh.
+    2. Tính điểm trung bình (`avgRating`) từ bảng `feedbacks`.
+    3. Đếm tổng số lượt feedback.
+    4. Trích xuất 5 feedback gần nhất để xem nội dung chi tiết.
+
+#### 3. Thống kê dịch vụ (Service Statistics)
+- **Mục tiêu:** Xem dịch vụ nào được sử dụng nhiều nhất và doanh thu từng loại.
+- **Logic:**
+    - `registrationCount`: Đếm số lượt đăng ký dịch vụ.
+    - `totalRevenue`: Tổng số tiền thu được (tính từ giá trong cấu hình dịch vụ của chi nhánh).
+- **Ràng buộc:** Phải `JOIN` đúng bảng `clinic_services` để lấy tên dịch vụ chính xác.
+
+---
+
+### D. Checklist Kiểm Tra
+
+- [ ] Manager chỉ xem được dữ liệu của đúng chi nhánh mình quản lý.
+- [ ] Tham số `date` cho báo cáo bác sĩ là bắt buộc (HTTP 400 nếu thiếu).
+- [ ] Các cuộc hẹn `CANCELLED/ABSENT` không được tính vào thống kê.
+- [ ] Tên dịch vụ hiển thị đúng, không bị lỗi alias SQL.
+- [ ] Unit tests cho `BranchReportService` đạt coverage cao.

@@ -24,7 +24,9 @@ import { MedicineRepository } from './repositories';
 import { CreateMedicineDto } from './dto/create-medicine.dto';
 import { UpdateMedicineDto } from './dto/update-medicine.dto';
 import { CreatePrescriptionDto, PrescriptionResponseDto, PrescriptionMedicineDetailDto } from './dto';
+import { PaginatedMedicinesResponseDto } from './dto/paginated-medicines-response.dto';
 import { PatientEPrescriptionDetailResponseDto } from './dto/patient-e-prescription-response.dto';
+import { getCurrentVietnamTime, getStartOfDay, getEndOfDay } from 'src/common/utils/date.util';
 import {
   PatientERMDetailResponseDto,
   ERMXrayDto,
@@ -85,10 +87,23 @@ export class PrescriptionsService {
   }
 
   /**
-   * Find all medicines (with soft-deleted excluded by default)
+   * Find medicines with pagination (with soft-deleted excluded by default)
    */
-  async findAll(): Promise<Medicine[]> {
-    return await this.medicineRepository.findAllMedicines();
+  async findAll(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const skip = (page - 1) * limit;
+    const [data, total] =
+      await this.medicineRepository.findMedicinesWithPagination(skip, limit);
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   /**
@@ -101,8 +116,26 @@ export class PrescriptionsService {
   /**
    * Search medicines by name (partial match)
    */
-  async searchByName(name: string): Promise<Medicine[]> {
-    return await this.medicineRepository.searchMedicinesByName(name);
+  async searchByName(
+    name: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const skip = (page - 1) * limit;
+    const [data, total] =
+      await this.medicineRepository.searchMedicinesByNameWithPagination(
+        name,
+        skip,
+        limit,
+      );
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   /**
@@ -158,15 +191,15 @@ export class PrescriptionsService {
    * @private
    */
   private async generateReferenceId(): Promise<string> {
-    const today = new Date();
+    const today = getCurrentVietnamTime();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const datePrefix = `EP${year}${month}${day}`;
 
     // Count prescriptions created today
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    const startOfDay = getStartOfDay();
+    const endOfDay = getEndOfDay();
 
     const count = await this.dataSource
       .getRepository(EPrescription)
@@ -485,19 +518,19 @@ export class PrescriptionsService {
       .select([
         // Clinic info
         'clinic._id AS clinic_id',
-        'clinic.business_name AS clinic_name',
-        'clinic.address AS clinic_address',
+        'clinic_info.clinic_name AS clinic_name',
+        'clinic_addr.address AS clinic_address',
         'clinic.phone AS clinic_phone',
-        'clinic.profile_picture AS clinic_logo',
+        'clinic_info.profile_picture AS clinic_logo',
         // Doctor info
         'doctor._id AS doctor_id',
-        'doctor.full_name AS doctor_name',
+        'doctor_info.full_name AS doctor_name',
         'doctor_info.academic_degree AS doctor_degree',
         'doctor_info.position AS doctor_position',
         // Patient info
-        'patient.full_name AS patient_name',
-        'patient.dob AS patient_dob',
-        'patient.gender AS patient_gender',
+        'patient_info.full_name AS patient_name',
+        'patient_info.dob AS patient_dob',
+        'patient_info.gender AS patient_gender',
         'patient.phone AS patient_phone',
         // Appointment info
         'a.appointment_date AS appointment_date',
@@ -505,13 +538,12 @@ export class PrescriptionsService {
       ])
       .from('appointments', 'a')
       .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
+      .leftJoin('clinic_information', 'clinic_info', 'clinic_info.account_id = clinic._id')
+      .leftJoin('addresses', 'clinic_addr', 'clinic_addr.account_id = clinic._id')
       .innerJoin('accounts', 'doctor', 'doctor._id = a.doctor_id')
+      .leftJoin('doctor_information', 'doctor_info', 'doctor_info.account_id = doctor._id')
       .innerJoin('accounts', 'patient', 'patient._id = a.patient_id')
-      .leftJoin(
-        'doctor_information',
-        'doctor_info',
-        'doctor_info.account_id = doctor._id',
-      )
+      .leftJoin('general_accounts', 'patient_info', 'patient_info.account_id = patient._id')
       .where('a._id = :appointmentId', { appointmentId })
       .getRawOne();
 

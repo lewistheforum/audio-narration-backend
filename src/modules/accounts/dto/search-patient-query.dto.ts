@@ -21,14 +21,14 @@ import { Transform } from 'class-transformer';
  */
 export class SearchPatientQueryDto {
   @ApiProperty({
-    description: 'Patient phone number (10-11 digits, starts with 0)',
+    description: 'Patient phone number (10 digits, starts with 0)',
     example: '0912345678',
     required: false,
   })
   @IsOptional()
   @IsString({ message: 'Phone must be a string' })
-  @Matches(/^0\d{9,10}$/, {
-    message: 'Phone must be 10-11 digits and start with 0',
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone must be exactly 10 digits and start with 0',
   })
   @Transform(({ value }) => value?.trim())
   phone?: string;

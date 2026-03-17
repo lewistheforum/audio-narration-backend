@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
 import { AppointmentsController } from './appointments.controller';
@@ -12,6 +12,13 @@ import { EmployeeScheduleRepository } from '../schedules/repositories/employee-s
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
 import { RedisModule } from '../../config/redis.config';
+import { MailerModule } from '../mailer/mailer.module';
+import { TransactionsModule } from '../transactions/transactions.module';
+import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
+import { HttpModule } from '@nestjs/axios';
+import { AppointmentWebhookService } from './appointment-webhook.service';
+import { AppointmentCronService } from './appointment-cron.service';
+import { AppointmentCronController } from './appointment-cron.controller';
 
 /**
  * Appointments Module
@@ -42,17 +49,23 @@ import { RedisModule } from '../../config/redis.config';
       ClinicShiftHour,
     ]),
     RedisModule,
+    MailerModule,
+    forwardRef(() => TransactionsModule),
+    PrescriptionsModule,
+    HttpModule,
   ],
-  controllers: [AppointmentsController],
+  controllers: [AppointmentsController, AppointmentCronController],
   providers: [
     AppointmentsService,
     BookingSessionService,
+    AppointmentWebhookService,
+    AppointmentCronService,
     AppointmentRepository,
     AppointmentPackageRepository,
     ClinicStaffInformationRepository,
     EmployeeScheduleRepository,
     AccountRepository,
   ],
-  exports: [TypeOrmModule, AppointmentsService, BookingSessionService],
+  exports: [TypeOrmModule, AppointmentsService, BookingSessionService, AppointmentWebhookService],
 })
-export class AppointmentsModule {}
+export class AppointmentsModule { }
