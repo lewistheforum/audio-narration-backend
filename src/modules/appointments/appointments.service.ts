@@ -2626,6 +2626,7 @@ export class AppointmentsService {
       .innerJoin('sa.appointmentPackage', 'pkg')
       .leftJoinAndSelect('sa.clinicService', 'clinicServiceConfig')
       .leftJoinAndSelect('clinicServiceConfig.service', 'clinicService')
+      .leftJoinAndSelect('clinicService.category', 'serviceCategory')
       .leftJoinAndSelect('sa.erm', 'erm')
       .where('pkg.appointment_id = :appointmentId', { appointmentId })
       .andWhere('pkg.deleted_at IS NULL')
@@ -2637,18 +2638,21 @@ export class AppointmentsService {
     const inProgressServices: PendingServiceItemDto[] = [];
 
     for (const sa of serviceAppointments) {
-      // Determine service type from service_functions
-      const serviceFunctions =
-        sa.clinicService?.service?.serviceFunctions || [];
-      let serviceType: ERMRecordType = ERMRecordType.CONSULTATION; // Default
+      // First, prioritize getting service type directly from category
+      let serviceType: ERMRecordType = sa.clinicService?.service?.category?.type as unknown as ERMRecordType;
 
-      // Try to match ERMRecordType from service_functions
-      if (serviceFunctions.length > 0) {
-        const matchedType = serviceFunctions.find((func) =>
-          Object.values(ERMRecordType).includes(func as ERMRecordType),
-        );
-        if (matchedType) {
-          serviceType = matchedType as ERMRecordType;
+      // If category type is missing, try from service_functions or default to CONSULTATION
+      if (!serviceType) {
+        serviceType = ERMRecordType.CONSULTATION; // Default fallback
+        const serviceFunctions = sa.clinicService?.service?.serviceFunctions || [];
+        
+        if (serviceFunctions.length > 0) {
+          const matchedType = serviceFunctions.find((func) =>
+            Object.values(ERMRecordType).includes(func as ERMRecordType),
+          );
+          if (matchedType) {
+            serviceType = matchedType as ERMRecordType;
+          }
         }
       }
 
