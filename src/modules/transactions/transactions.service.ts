@@ -867,9 +867,17 @@ export class TransactionsService {
           payload,
         );
 
+        if (!appointmentResult) {
+          throw new BadRequestException(
+            'Failed to create appointment from online session',
+          );
+        }
+
         // Kích hoạt Webhook xác nhận lịch hẹn gửi thông tin sang n8n
-        if (appointmentResult && appointmentResult.appointment_id) {
-          await this.appointmentWebhookService.sendConfirmation(appointmentResult.appointment_id);
+        if (appointmentResult.appointment_id) {
+          await this.appointmentWebhookService.sendConfirmation(
+            appointmentResult.appointment_id,
+          );
         }
 
         return new PaymentResponseDto({

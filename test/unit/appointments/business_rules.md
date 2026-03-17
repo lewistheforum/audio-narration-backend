@@ -1,13 +1,13 @@
-# Quy Tắc Nghiệp Vụ - Appointments Module (Version 5.0 - COD + Online)
+# Quy Tắc Nghiệp Vụ - Appointments Module (Version 6.0 - Reminders Included)
 
 ## Tổng Quan
 
-Tài liệu này mô tả **các quy tắc nghiệp vụ đã được triển khai và validate 100%** cho module Appointments trong hệ thống Medicare. Quy trình đặt lịch sử dụng quản lý phiên Redis để tránh dữ liệu rác, áp dụng Pessimistic Locking để ngăn race conditions, và hỗ trợ thanh toán COD (Cash on Delivery) lẫn Online (Seepay QR).
+Tài liệu này mô tả **các quy tắc nghiệp vụ đã được triển khai và validate 100%** cho module Appointments trong hệ thống Medicare. Quy trình đặt lịch sử dụng quản lý phiên Redis để tránh dữ liệu rác, áp dụng Pessimistic Locking để ngăn race conditions, và hỗ trợ thanh toán COD, Online lẫn hệ thống nhắc lịch tự động (Cron Job).
 
-**Document Version**: 5.0 (COD + Online)  
-**Last Updated**: 10/03/2026  
-**Status**: ✅ Production Ready (COD + Online)  
-**Test Coverage**: **82/82 tests passing (100%)** ✓✓✓
+**Document Version**: 6.0 (Reminders Included)  
+**Last Updated**: 17/03/2026  
+**Status**: ✅ Production Ready  
+**Test Coverage**: **85/85 tests passing (100%)** ✓✓✓
 
 ---
 
@@ -377,7 +377,10 @@ if (!['cod', 'online'].includes(session.paymentMethod)) {
 5. Cleanup Redis Session
    └─ DELETE booking:session:{sessionId}
 
-6. Return Response
+6. Send Confirmation Webhook (Async)
+   └─ Trigger `AppointmentWebhookService.sendConfirmation(appointmentId)` to notify n8n.
+
+7. Return Response
    └─ { appointment_id, transaction_id, message: 'Đặt lịch thành công' }
 ```
 
@@ -683,6 +686,31 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 
 ---
 
+## ⏰ Hệ Thống Nhắc Lịch Hẹn (Appointment Reminders)
+
+**Trạng Thái:** **✅ PRODUCTION READY** (V6.0)
+
+**Luồng Xử Lý:**
+
+1. **Cron Job (Tự động):**
+   - **Tần suất:** Chạy mỗi 12 giờ (`CronExpression.EVERY_12_HOURS`).
+   - **Múi giờ:** 'Asia/Ho_Chi_Minh' (Việt Nam).
+
+2. **Truy vấn dữ liệu (SQL):**
+   - **Trình trạng lịch:** Chỉ nhắc các lịch có status = `CONFIRMED`.
+   - **Khoảng thời gian:** Lịch hẹn bắt đầu từ thời điểm hiện tại (`NOW()`) đến 24 giờ tới.
+   - **Trạng thái nhắc:** Hiện tại hệ thống KHÔNG cập nhật `is_remider = true` sau khi gửi (theo yêu cầu nghiệp vụ).
+   - **Dữ liệu bổ trợ:** Tự động JOIN để lấy tên bác sĩ, danh sách dịch vụ (STRING_AGG) và địa chỉ phòng khám chuẩn xác.
+
+3. **Gửi Email (MailerService):**
+   - **Xử lý đồng loạt:** Sử dụng `Promise.allSettled` để tối ưu hiệu năng.
+   - **Mapping bảo thủ:** Xử lý triệt để các trường hợp dữ liệu bị `null` hoặc chuỗi `"null"`. Hiển thị giá trị mặc định chuyên nghiệp nếu dữ liệu bị thiếu.
+
+4. **Kích hoạt thủ công:**
+   - **Endpoint:** `POST /api/appointments/reminders/trigger` (Manual Test).
+
+---
+
 ## 📚 References
 
 ### Related Documents
@@ -705,7 +733,7 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 
 ---
 
-**Document Version:** 5.0 (COD + Online)  
-**Last Updated:** March 10, 2026  
-**Status:** ✅ 100% Complete - Production Ready (COD + Online)  
-**Test Coverage:** **82/82 tests passing (100%)** ✓✓✓
+**Document Version:** 6.0 (Reminders Included)  
+**Last Updated:** March 17, 2026  
+**Status:** ✅ 100% Complete - Production Ready  
+**Test Coverage:** **85/85 tests passing (100%)** ✓✓✓
