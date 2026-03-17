@@ -25,5 +25,3 @@ export * from './add-service-response.dto';
 export * from './work-history-query.dto';
 export * from './doctor-booking.dto';
 export * from './clinic-booking.dto';
-export * from './send-reminder.dto';
-export * from './send-reminder-bulk.dto';

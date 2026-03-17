@@ -125,12 +125,14 @@ export class ClinicManagerService {
       throw new ForbiddenException('You do not have access to this manager');
     }
 
-    // Get address and iframe from loaded relations
-    const address = manager.account.addresses?.[0];
-    const iframe = address?.googleIframe;
+    // Fetch address and iframe
+    const address = await this.addressRepository.findByAccountId(manager.account._id);
+    const iframe = address 
+      ? await this.googleIframeRepository.findByAddressId(address._id)
+      : null;
 
-    // Get legal documents from loaded relations (decrypted automatically by transformer)
-    const legalDocs = manager.account.legalDocuments;
+    // Fetch legal documents (decrypted automatically by transformer)
+    const legalDocs = await this.legalDocsRepository.findByAccountId(manager.account._id);
 
     // Build personnel list (empty if PENDING_APPROVAL)
     let personnel = [];
@@ -155,7 +157,7 @@ export class ClinicManagerService {
     }
 
     return {
-      managerId: manager.account._id,
+      managerId: manager._id,
       clinicAdminId: manager.account.parentId,
       fullName: manager.fullName,
       clinicBranchName: manager.clinicBranchName,

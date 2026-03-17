@@ -133,20 +133,6 @@ export class ClinicInfoDto {
     example: 'Phòng khám Đa khoa ABC',
   })
   clinicName: string;
-
-  @ApiProperty({
-    description: 'Clinic address',
-    example: '123 Nguyễn Văn Linh, Q.7, TP.HCM',
-    required: false,
-  })
-  address?: string;
-
-  @ApiProperty({
-    description: 'Clinic phone number',
-    example: '0281234567',
-    required: false,
-  })
-  phone?: string;
 }
 
 /**

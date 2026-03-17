@@ -498,10 +498,6 @@ describe('ClinicManagerService', () => {
     });
 
     it('should return manager detail with all information', async () => {
-      const mockAddress = createMockAddress();
-      const mockGoogleIframe = createMockGoogleIframe();
-      const mockLegalDocs = createMockLegalDocs();
-
       const mockManager = createMockManagerInfo({
         _id: 'manager-info-123',
         fullName: 'Manager Name',
@@ -509,27 +505,26 @@ describe('ClinicManagerService', () => {
         gender: Gender.MALE,
         dob: new Date('1990-01-01'),
         profilePicture: 'https://example.com/pic.jpg',
-        account: {
-          ...createMockManager({
-            _id: managerId,
-            parentId: adminId,
-            email: 'manager@clinic.com',
-            status: AccountStatus.ACTIVE,
-            createdAt: new Date('2026-01-01'),
-            updatedAt: new Date('2026-01-15'),
-            children: [createMockStaff(), createMockDoctor()],
-          }),
-          addresses: [{ ...mockAddress, googleIframe: mockGoogleIframe }],
-          legalDocuments: mockLegalDocs,
-        },
+        account: createMockManager({
+          _id: managerId,
+          parentId: adminId,
+          email: 'manager@clinic.com',
+          status: AccountStatus.ACTIVE,
+          createdAt: new Date('2026-01-01'),
+          updatedAt: new Date('2026-01-15'),
+          children: [createMockStaff(), createMockDoctor()],
+        }),
       });
 
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
+      addressRepository.findByAccountId.mockResolvedValue(createMockAddress());
+      googleIframeRepository.findByAddressId.mockResolvedValue(createMockGoogleIframe());
+      legalDocsRepository.findByAccountId.mockResolvedValue(createMockLegalDocs());
 
       const result = await service.getManagerDetail(adminId, managerId);
 
       expect(result).toMatchObject({
-        managerId: managerId,
+        managerId: 'manager-info-123',
         clinicAdminId: adminId,
         fullName: 'Manager Name',
         clinicBranchName: 'Main Branch',

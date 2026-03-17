@@ -29,7 +29,6 @@ import { Account } from './modules/accounts/entities/accounts.entity';
 import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/clinic-admins.module';
 import { ClinicManagersModule } from './modules/accounts/api-clinic-admin/clinic-managers.module';
 import { ManagedAccountsModule } from './modules/accounts/api-clinic-manager/managed-accounts.module';
-import { StaffPatientsModule } from './modules/accounts/api-staff/staff-patients.module';
 
 @Module({
   imports: [
@@ -78,7 +77,6 @@ import { StaffPatientsModule } from './modules/accounts/api-staff/staff-patients
     ClinicAdminsModule,
     ClinicManagersModule,
     ManagedAccountsModule,
-    StaffPatientsModule,
   ],
   controllers: [],
   providers: [],

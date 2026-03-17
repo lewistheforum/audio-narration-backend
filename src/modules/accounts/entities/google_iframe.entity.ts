@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  OneToOne,
+  ManyToOne,
   JoinColumn,
 } from 'typeorm';
 import { Address } from './addresses.entity';
@@ -14,17 +14,16 @@ import { Address } from './addresses.entity';
  * GoogleIframe Entity
  *
  * Stores Google Map iframe information for addresses
- * One-to-One relationship: Each address has exactly one Google Maps iframe
  */
 @Entity('google_iframe')
 export class GoogleIframe {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
 
-  @Column({ name: 'address_id', type: 'uuid', unique: true })
+  @Column({ name: 'address_id', type: 'uuid' })
   addressId: string;
 
-  @OneToOne(() => Address, {
+  @ManyToOne(() => Address, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'address_id' })

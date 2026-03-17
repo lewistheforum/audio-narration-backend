@@ -135,24 +135,22 @@ export class ServiceConfigsController {
     @Query() query: GetClinicServicesQueryDto,
   ): Promise<{ data: ClinicServicesResponseDto; message: string }> {
     // Get clinic ID from staff JWT token
-    // Get staff's clinic ID from accounts.parent_id
+    // Assuming staff info is attached to req.user by JWT strategy
     const staffAccountId = req.user._id;
     
-    // Get staff's clinic ID from accounts table (parent_id)
-    const staffAccount = await this.serviceConfigsService['dataSource']
+    // Get staff's clinic ID from clinic_staff_information table
+    const staffInfo = await this.serviceConfigsService['dataSource']
       .createQueryBuilder()
-      .select('a.parent_id')
-      .from('accounts', 'a')
-      .where('a._id = :staffAccountId', { staffAccountId })
-      .andWhere('a.role = :role', { role: 'CLINIC_STAFF' })
-      .andWhere('a.deleted_at IS NULL')
+      .select('csi.clinic_id')
+      .from('clinic_staff_information', 'csi')
+      .where('csi.account_id = :staffAccountId', { staffAccountId })
       .getRawOne();
 
-    if (!staffAccount || !staffAccount.parent_id) {
+    if (!staffInfo || !staffInfo.clinic_id) {
       throw new Error('Staff is not associated with any clinic');
     }
 
-    const clinicId = staffAccount.parent_id;
+    const clinicId = staffInfo.clinic_id;
 
     const data = await this.serviceConfigsService.getClinicServices(
       clinicId,

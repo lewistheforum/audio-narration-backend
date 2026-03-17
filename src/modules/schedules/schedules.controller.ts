@@ -14,7 +14,7 @@ import {
     Request,
     ForbiddenException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SchedulesService } from './schedules.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { GetSchedulesDto } from './dto/get-schedules.dto';
@@ -24,12 +24,6 @@ import { CopyScheduleDto } from './dto/copy-schedule.dto';
 import { CreateClinicRoomDto } from './dto/create-clinic-room.dto';
 import { UpdateClinicRoomDto } from './dto/update-clinic-room.dto';
 import { ClinicRoomQueryDto } from './dto/clinic-room-query.dto';
-import {
-    GetDoctorSchedulesQueryDto,
-    DoctorSchedulesResponseDto,
-    GetDoctorSchedulesByDateQueryDto,
-    DoctorSchedulesByDateResponseDto,
-} from './dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -243,163 +237,5 @@ export class SchedulesController {
     @ApiOperation({ summary: 'Delete a clinic room' })
     deleteRoom(@Request() req, @Param('id') id: string) {
         return this.schedulesService.deleteClinicRoom(id, req.user);
-    }
-
-    /**
-     * Get Doctor Schedules (Staff Only)
-     *
-     * Retrieves list of doctors with their available schedules for appointment booking
-     * Automatically detects clinic from staff JWT token
-     * Returns doctors with time slots, rooms, and availability
-     *
-     * Query Parameters:
-     * - serviceConfigId: Filter doctors who can perform this service
-     * - shiftType: Filter by shift (morning, afternoon, evening)
-     *
-     * Response includes:
-     * - List of doctors with their schedules
-     * - Time slots with availability
-     * - Room assignments
-     * - Clinic information
-     * - Date range (today + 60 days)
-     *
-     * Use Cases:
-     * - Appointment booking flow - Step 3
-     * - Staff selecting doctor and time slot
-     * - Viewing doctor availability
-     *
-     * Roles: CLINIC_STAFF
-     */
-    @Get('staff/doctors')
-    @Roles(AccountRole.CLINIC_STAFF)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({
-        summary: 'Get doctor schedules (Staff only)',
-        description: 'Retrieves list of doctors with available schedules for appointment booking',
-    })
-    @ApiResponse({
-        status: 200,
-        description: 'Schedules retrieved successfully',
-        type: DoctorSchedulesResponseDto,
-    })
-    @ApiResponse({
-        status: 401,
-        description: 'Unauthorized - Invalid or missing JWT token',
-    })
-    @ApiResponse({
-        status: 403,
-        description: 'Forbidden - User is not a clinic staff member',
-    })
-    @ApiResponse({
-        status: 404,
-        description: 'Not Found - Clinic not found or staff not associated with clinic',
-    })
-    @ApiQuery({
-        name: 'serviceConfigId',
-        required: false,
-        type: String,
-        description: 'Filter doctors who can perform this service',
-    })
-    @ApiQuery({
-        name: 'shiftType',
-        required: false,
-        enum: ['morning', 'afternoon', 'evening'],
-        description: 'Filter by shift type',
-    })
-    async getDoctorSchedules(
-        @Request() req: any,
-        @Query() query: GetDoctorSchedulesQueryDto,
-    ): Promise<{ data: DoctorSchedulesResponseDto; message: string }> {
-        // Get staff's clinic ID from accounts.parent_id
-        const staffAccountId = req.user._id;
-
-        const staffAccount = await this.schedulesService['dataSource']
-            .createQueryBuilder()
-            .select('a.parent_id')
-            .from('accounts', 'a')
-            .where('a._id = :staffAccountId', { staffAccountId })
-            .andWhere('a.role = :role', { role: 'CLINIC_STAFF' })
-            .andWhere('a.deleted_at IS NULL')
-            .getRawOne();
-
-        if (!staffAccount || !staffAccount.parent_id) {
-            throw new ForbiddenException('Staff is not associated with any clinic');
-        }
-
-        const clinicId = staffAccount.parent_id;
-
-        const data = await this.schedulesService.getDoctorSchedules(clinicId, {
-            serviceConfigId: query.serviceConfigId,
-            shiftType: query.shiftType,
-        });
-
-        return {
-            data,
-            message: 'Doctor schedules retrieved successfully',
-        };
-    }
-
-    /**
-     * Get doctor schedules by specific date
-     * Optimized for single date query with detailed slot information
-     */
-    @Get('staff/doctors/schedules/by-date')
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(AccountRole.CLINIC_STAFF)
-    @ApiBearerAuth()
-    @ApiOperation({
-        summary: 'Get doctor schedules by specific date (Staff)',
-        description: 'Get detailed doctor schedules for a specific date with available and booked time slots',
-    })
-    @ApiResponse({
-        status: 200,
-        description: 'Schedules retrieved successfully',
-        type: DoctorSchedulesByDateResponseDto,
-    })
-    @ApiResponse({
-        status: 400,
-        description: 'Invalid date format or date in past',
-    })
-    @ApiResponse({
-        status: 401,
-        description: 'Unauthorized - Invalid or missing JWT token',
-    })
-    @ApiResponse({
-        status: 403,
-        description: 'Forbidden - User is not a clinic staff',
-    })
-    async getDoctorSchedulesByDate(
-        @Request() req: any,
-        @Query() query: GetDoctorSchedulesByDateQueryDto,
-    ): Promise<{ data: DoctorSchedulesByDateResponseDto; message: string }> {
-        // Get staff's clinic ID from accounts.parent_id
-        const staffAccountId = req.user._id;
-
-        const staffAccount = await this.schedulesService['dataSource']
-            .createQueryBuilder()
-            .select('a.parent_id')
-            .from('accounts', 'a')
-            .where('a._id = :staffAccountId', { staffAccountId })
-            .andWhere('a.role = :role', { role: 'CLINIC_STAFF' })
-            .andWhere('a.deleted_at IS NULL')
-            .getRawOne();
-
-        if (!staffAccount || !staffAccount.parent_id) {
-            throw new ForbiddenException('Staff is not associated with any clinic');
-        }
-
-        const clinicId = staffAccount.parent_id;
-
-        const data = await this.schedulesService.getDoctorSchedulesByDate(clinicId, {
-            date: query.date,
-            doctorId: query.doctorId,
-            shiftType: query.shiftType,
-            serviceConfigId: query.serviceConfigId,
-        });
-
-        return {
-            data,
-            message: 'Schedules by date retrieved successfully',
-        };
     }
 }

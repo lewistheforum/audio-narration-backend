@@ -111,15 +111,15 @@ export class ServiceConfigsService {
       .createQueryBuilder()
       .select([
         'a._id AS "clinicId"',
-        'COALESCE(ga.full_name, a.email) AS "clinicName"',
-        'COALESCE(addr.address, \'\') AS "address"',
-        'COALESCE(a.phone, \'\') AS "phone"',
+        'cm.clinic_name AS "clinicName"',
       ])
       .from('accounts', 'a')
-      .leftJoin('general_accounts', 'ga', 'ga.account_id = a._id AND ga.deleted_at IS NULL')
-      .leftJoin('addresses', 'addr', 'addr.account_id = a._id AND addr.deleted_at IS NULL')
+      .innerJoin(
+        'clinic_manager_information',
+        'cm',
+        'cm.account_id = a._id',
+      )
       .where('a._id = :clinicId', { clinicId })
-      .andWhere('a.deleted_at IS NULL')
       .getRawOne();
 
     if (!clinicInfo) {
@@ -140,8 +140,6 @@ export class ServiceConfigsService {
       clinicInfo: {
         clinicId: clinicInfo.clinicId,
         clinicName: clinicInfo.clinicName,
-        address: clinicInfo.address || null,
-        phone: clinicInfo.phone || null,
       },
     };
   }
