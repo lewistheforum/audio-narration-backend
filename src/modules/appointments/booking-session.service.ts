@@ -465,6 +465,13 @@ export class BookingSessionService {
         if (!data.payment_method) {
           throw new BadRequestException('Payment method is required in step 4 for out-of-hours booking');
         }
+
+        // BUSINESS RULE: Out-of-hours appointments ONLY accept COD payment
+        if (data.payment_method !== 'cod') {
+          throw new BadRequestException(
+            'Out-of-hours appointments strictly require COD payment method. Online payment is not supported.',
+          );
+        }
         
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
