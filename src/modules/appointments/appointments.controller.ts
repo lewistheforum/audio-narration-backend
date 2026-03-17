@@ -13,6 +13,8 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Res,
+  HttpException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -2936,19 +2938,31 @@ export class AppointmentsController {
     @Body() createDto: CreateAppointmentFromSessionDto,
   ): Promise<any> {
     const patientId = req.user._id;
-    const result = await this.appointmentsService.createAppointmentFromSession(
-      createDto.session_id,
-      patientId,
-    );
+    let result: any;
+    try {
+      result = await this.appointmentsService.createAppointmentFromSession(
+        createDto.session_id,
+        patientId,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        error?.message || 'An unexpected error occurred while creating appointment',
+      );
+    }
 
-    // Return result directly - it's either appointment data (COD) or payment URL (ONLINE)
-    // The result already includes appropriate message from service layer
+    if (!result) {
+      throw new InternalServerErrorException('Failed to create appointment: No result returned');
+    }
+
     return result.message
       ? result
       : {
-        message: 'Đặt lịch hẹn thành công',
-        data: result,
-      };
+          message: 'Đặt lịch hẹn thành công',
+          data: result,
+        };
   }
 
   @Post('patients/appointments/:sessionId/payment-qr')
