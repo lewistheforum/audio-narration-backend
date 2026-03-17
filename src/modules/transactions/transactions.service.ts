@@ -523,6 +523,74 @@ export class TransactionsService {
   }
 
   /**
+   * Create a dynamic payment QR for a prescription
+   */
+  async createDynamicQrAtClinic(
+    dto: CreateTransactionDto,
+  ): Promise<PaymentResponseDto> {
+    // Verify appointment and get real amount & clinic
+    const appointment = await this.appointmentRepository.findOne({
+      where: { _id: dto.appointmentId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    let clinicAdminId: string | undefined;
+    if (appointment?.clinicId) {
+      // Find the CLINIC_MANAGER account
+      const managerAccount = await this.accountRepository.findOne({
+        where: { _id: appointment.clinicId },
+      });
+
+      if (managerAccount && managerAccount.parentId) {
+        // Resolve CLINIC_ADMIN info using the parentId
+        const clinicAdmin = await this.clinicAdminRepo.findOne({
+          where: { accountId: managerAccount.parentId },
+        });
+        clinicAdminId = clinicAdmin?._id;
+      }
+    }
+
+    const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
+
+    // Calculate sum of all pending packages for this appointment
+    const pendingFinalAppointments = await this.appointmentRepository.find({
+      where: {
+        _id: dto.appointmentId,
+        status: AppointmentStatus.NEED_FINAL_PAYMENT
+      }
+    });
+
+    if (pendingFinalAppointments.length === 0) {
+      throw new BadRequestException('No pending payments for this appointment');
+    }
+
+    // const amount = pendingFinalAppointments.reduce((sum, apt) => sum + Number(apt.amount), 0);
+    // Ignore dto.amount, use source of truth from DB packages
+
+    const expiresAt = this.computeExpireTime();
+    const qrCodeUrl = this.buildQrUrl(dto.amount, dto.appointmentId, acc, bank);
+    const qrPayload = this.buildQrPayload(
+      dto.amount,
+      dto.appointmentId,
+      acc,
+      bank,
+    );
+
+    return new PaymentResponseDto({
+      id: null,
+      amount: dto.amount,
+      currency: 'VND',
+      status: PaymentStatus.PENDING,
+      qrCodeUrl,
+      qrPayload,
+      expiresAt,
+    });
+  }
+
+  /**
    * Create a small verification QR (10k) to verify clinic bank account
    */
   async createVerificationQr(clinicId: string): Promise<PaymentResponseDto> {

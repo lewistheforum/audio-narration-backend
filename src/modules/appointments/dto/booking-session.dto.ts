@@ -223,7 +223,7 @@ export class UpdateSessionStep3Dto {
   service_ids?: string[];
 
   @ApiProperty({
-    description: 'Payment method - COD or ONLINE (Option 1 only)',
+    description: 'Payment method - COD or ONLINE. Note: Out-of-hours booking (Option 4) strictly requires COD only.',
     enum: ['cod', 'online'],
     example: 'cod',
     required: false,
@@ -270,7 +270,7 @@ export class UpdateSessionStep3Dto {
  */
 export class UpdateSessionStep4Dto {
   @ApiProperty({
-    description: 'Payment method (Option 2 & 4)',
+    description: 'Payment method (Option 2 & 4). Note: Out-of-hours booking (Option 4) strictly requires COD only.',
     enum: ['cod', 'online'],
     example: 'cod',
     required: false,
@@ -315,7 +315,7 @@ export class UpdateSessionStep4Dto {
  */
 export class UpdateSessionStep5Dto {
   @ApiProperty({
-    description: 'Payment method (for Option 3)',
+    description: 'Payment method (for Option 3). Note: Out-of-hours booking (Option 4) strictly requires COD only.',
     enum: ['cod', 'online'],
     example: 'cod',
     required: false,

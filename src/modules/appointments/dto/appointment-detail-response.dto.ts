@@ -221,6 +221,13 @@ export class AppointmentDetailResponseDto {
   })
   clinicRooms?: ClinicRoomDetailDto[];
 
+  @ApiProperty({
+    description: 'Extra room for out-of-hours appointments',
+    type: ClinicRoomDetailDto,
+    required: false,
+  })
+  extraRoom?: ClinicRoomDetailDto | null;
+
   @ApiProperty({ description: 'Total amount' })
   total: number;
 
