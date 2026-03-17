@@ -1,6 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SocketGatewayService } from './socket-gateway.service';
 import { AccountsModule } from '../accounts/accounts.module';
 import { MessagesModule } from '../messages/messages.module';
@@ -13,7 +13,7 @@ import { getJwtConfig } from '../../config/jwt.config';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: getJwtConfig,
-      inject: [],
+      inject: [ConfigService],
     }),
     AccountsModule,
     forwardRef(() => MessagesModule),

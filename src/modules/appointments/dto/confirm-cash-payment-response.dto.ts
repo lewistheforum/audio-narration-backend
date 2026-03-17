@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AppointmentPackageStatus, PaymentType, AppointmentStatus } from '../enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Package Details in Confirm Response DTO
@@ -44,6 +46,7 @@ export class ConfirmedPackageDetailsDto {
     description: 'Package updated timestamp',
     example: '2026-03-08T14:30:00Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 }
 
@@ -55,7 +58,7 @@ export class ConfirmedPackageDetailsDto {
 export class ConfirmCashPaymentResponseDto {
   @ApiProperty({
     description: 'Success message',
-    example: 'Xác nhận thanh toán tiền mặt thành công',
+    example: 'Cash payment confirmed successfully',
   })
   message: string;
 

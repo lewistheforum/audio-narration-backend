@@ -74,19 +74,19 @@ export class ClinicItemDto {
 
   @ApiProperty({
     description: 'Clinic name',
-    example: 'Phòng khám Đa khoa Bonix',
+    example: 'Bonix Multi-Choice Clinic',
   })
   clinic_name: string;
 
   @ApiProperty({
     description: 'Clinic address',
-    example: '123 Đường X, Quận 1, TP.HCM',
+    example: '123 Main Street, District 1, Ho Chi Minh City',
   })
   clinic_address: string;
 
   @ApiProperty({
     description: 'District',
-    example: 'Quận 1',
+    example: 'District 1',
     nullable: true,
   })
   district: string | null;
@@ -168,11 +168,11 @@ export class UpdateSessionOption3Step3Dto {
  */
 export class UpdateSessionOption3Step4Dto {
   @ApiProperty({
-    description: 'Doctor shift hour ID (time slot)',
+    description: 'Clinic shift hour ID (time slot)',
     example: '123e4567-e89b-12d3-a456-426614174003',
   })
   @IsString()
-  doctor_shift_hour_id: string;
+  clinic_shift_hour_id: string;
 
   @ApiProperty({
     description: 'Doctor ID',

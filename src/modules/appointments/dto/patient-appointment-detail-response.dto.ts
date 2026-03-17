@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AppointmentStatus } from '../enums';
+import { Transform } from 'class-transformer';
+import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../enums';
 import { ERMRecordType, ERMStatus } from '../../prescriptions/enums/erm-enums';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Enhanced Clinic Summary DTO for Patient Appointment Detail
@@ -9,10 +11,10 @@ export class ClinicDetailSummaryDto {
   @ApiProperty({ description: 'Clinic ID', example: 'c1a2b3c4-d5e6-7890-abcd-ef1234567890' })
   _id: string;
 
-  @ApiProperty({ description: 'Clinic business name', example: 'Phòng khám ABC' })
+  @ApiProperty({ description: 'Clinic business name', example: 'ABC Clinic' })
   name: string;
 
-  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Đường ABC, Quận 1, TP.HCM' })
+  @ApiPropertyOptional({ description: 'Clinic address', example: '123 Main Street, District 1, Ho Chi Minh City' })
   address?: string;
 
   @ApiPropertyOptional({ description: 'Clinic phone number', example: '0901234567' })
@@ -29,16 +31,16 @@ export class DoctorDetailSummaryDto {
   @ApiProperty({ description: 'Doctor ID', example: 'd1a2b3c4-d5e6-7890-abcd-ef1234567890' })
   _id: string;
 
-  @ApiProperty({ description: 'Doctor full name', example: 'BS. Nguyễn Văn A' })
+  @ApiProperty({ description: 'Doctor full name', example: 'Dr. John Smith' })
   name: string;
 
   @ApiPropertyOptional({ description: 'Doctor profile picture URL' })
   profilePicture?: string;
 
-  @ApiPropertyOptional({ description: 'Academic degree', example: 'Bác sĩ Chuyên khoa I' })
+  @ApiPropertyOptional({ description: 'Academic degree', example: 'Specialist Level I' })
   academicDegree?: string;
 
-  @ApiPropertyOptional({ description: 'Position', example: 'Trưởng khoa Xương Khớp' })
+  @ApiPropertyOptional({ description: 'Position', example: 'Head of Orthopedics Department' })
   position?: string;
 }
 
@@ -71,7 +73,7 @@ export class ClinicServiceSummaryDto {
   @ApiProperty({ description: 'Service ID', example: 's1a2b3c4-d5e6-7890-abcd-ef1234567890' })
   _id: string;
 
-  @ApiProperty({ description: 'Service name', example: 'Khám Xương Khớp' })
+  @ApiProperty({ description: 'Service name', example: 'Orthopedic Consultation' })
   service_name: string;
 
   @ApiProperty({ description: 'Service price', example: 270000 })
@@ -104,6 +106,16 @@ export class AppointmentPackageSummaryDto {
 
   @ApiProperty({ description: 'Package amount', example: 270000 })
   amount: number;
+
+  @ApiPropertyOptional({ description: 'Payment method', enum: PaymentType, example: PaymentType.COD })
+  payment_type?: PaymentType;
+
+  @ApiPropertyOptional({ 
+    description: 'Payment status', 
+    enum: AppointmentPackageStatus, 
+    example: AppointmentPackageStatus.PENDING_PAYMENT 
+  })
+  payment_status?: AppointmentPackageStatus;
 
   @ApiProperty({ 
     description: 'Service appointments in this package', 
@@ -144,10 +156,28 @@ export class PatientAppointmentDetailResponseDto {
   doctor?: DoctorDetailSummaryDto;
 
   @ApiProperty({ description: 'Appointment date', example: '2026-03-15' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_date: Date;
 
   @ApiProperty({ description: 'Appointment hour (ISO timestamp)', example: '2026-03-15T08:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   appointment_hour: Date;
+
+  @ApiPropertyOptional({ description: 'Extra hour for out-of-hours bookings (ISO timestamp)', example: '2026-03-15T19:00:00.000Z', nullable: true })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : null)
+  extra_hour?: Date | null;
+
+  @ApiPropertyOptional({ description: 'Clinic shift hour ID (null for out-of-hours bookings)', nullable: true })
+  clinic_shift_hour_id?: string | null;
+
+  @ApiPropertyOptional({ description: 'Shift start hour (null for out-of-hours bookings)', example: '08:00:00', nullable: true })
+  start_hour?: string | null;
+
+  @ApiPropertyOptional({ description: 'Shift end hour (null for out-of-hours bookings)', example: '09:00:00', nullable: true })
+  end_hour?: string | null;
+
+  @ApiPropertyOptional({ description: 'Clinic room name', example: 'Room 101', nullable: true })
+  clinic_room?: string | null;
 
   @ApiProperty({ 
     description: 'Appointment status', 
@@ -164,7 +194,7 @@ export class PatientAppointmentDetailResponseDto {
 
   @ApiPropertyOptional({ 
     description: 'Reject reason (only available when status is CANCELLED)',
-    example: 'Bác sĩ bận đột xuất' 
+    example: 'Doctor suddenly unavailable' 
   })
   reject_reason?: string;
 
@@ -181,8 +211,10 @@ export class PatientAppointmentDetailResponseDto {
   appointment_packages: AppointmentPackageSummaryDto[];
 
   @ApiProperty({ description: 'Appointment creation timestamp', example: '2026-03-10T10:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   created_at: Date;
 
   @ApiProperty({ description: 'Appointment last update timestamp', example: '2026-03-10T10:00:00.000Z' })
+  @Transform(({ value }) => formatToVietnamTime(value))
   updated_at: Date;
 }

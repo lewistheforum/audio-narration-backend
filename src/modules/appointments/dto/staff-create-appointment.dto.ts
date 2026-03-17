@@ -14,8 +14,6 @@ import {
   IsEnum,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { PaymentType } from '../enums/payment-type.enum';
-import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
 
 /**
  * Service Item DTO
@@ -28,7 +26,10 @@ export class ServiceItemDto {
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsNotEmpty({ message: 'Service ID is required' })
-  @IsUUID('4', { message: 'Service ID must be a valid UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)' })
+  @IsUUID('4', {
+    message:
+      'Service ID must be a valid UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)',
+  })
   clinicServiceId: string;
 }
 
@@ -57,13 +58,13 @@ export class StaffCreateAppointmentDto {
   doctorId?: string;
 
   @ApiProperty({
-    description: 'Doctor shift hour ID (optional)',
+    description: 'Clinic shift hour ID (required)',
     example: '123e4567-e89b-12d3-a456-426614174003',
-    required: false,
+    required: true,
   })
-  @IsOptional()
-  @IsUUID('4', { message: 'Invalid doctor shift hour ID format' })
-  doctorShiftHourId?: string;
+  @IsNotEmpty({ message: 'Clinic shift hour ID is required' })
+  @IsUUID('4', { message: 'Invalid clinic shift hour ID format' })
+  clinicShiftHourId: string;
 
   @ApiProperty({
     description: 'Appointment date (YYYY-MM-DD)',
@@ -74,16 +75,16 @@ export class StaffCreateAppointmentDto {
   appointmentDate: string;
 
   @ApiProperty({
-    description: 'Appointment hour (ISO 8601 format)',
+    description: 'Appointment hour (optional, server will derive from clinic shift hour)',
     example: '2026-01-26T09:00:00.000Z',
+    required: false,
   })
-  @IsNotEmpty({ message: 'Appointment hour is required' })
+  @IsOptional()
   @IsDateString({}, { message: 'Invalid datetime format' })
-  appointmentHour: string;
+  appointmentHour?: string;
 
   @ApiProperty({
     description: 'Extra hour if applicable (ISO 8601 format)',
-    example: '2026-01-26T10:00:00.000Z',
     required: false,
   })
   @IsOptional()
@@ -107,7 +108,8 @@ export class StaffCreateAppointmentDto {
   services: ServiceItemDto[];
 
   @ApiProperty({
-    description: 'Total amount for all services (optional - will be auto-calculated from services if not provided). Leave empty to auto-calculate.',
+    description:
+      'Total amount for all services (optional - will be auto-calculated from services if not provided). Leave empty to auto-calculate.',
     required: false,
   })
   @IsOptional()
@@ -116,36 +118,8 @@ export class StaffCreateAppointmentDto {
   total?: number;
 
   @ApiProperty({
-    description: 'Transaction ID for payment (optional - can be created later). Leave empty if payment not yet processed.',
-    required: false,
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'Invalid transaction ID format' })
-  @Transform(({ value }) => (value === '' ? null : value))
-  transactionId?: string;
-
-  @ApiProperty({
-    description: 'Payment status (e.g., PAID, PENDING, UNPAID). Leave empty if not applicable.',
-    example: AppointmentPackageStatus.PAID,
-    required: false,
-    enum: AppointmentPackageStatus,
-  })
-  @IsOptional()
-  @IsEnum(AppointmentPackageStatus, { message: 'Payment status must be a valid AppointmentPackageStatus' })
-  paymentStatus?: AppointmentPackageStatus;
-
-  @ApiProperty({
-    description: 'Payment type (online or cod). Leave empty if not applicable.',
-    example: PaymentType.ONLINE,
-    required: false,
-    enum: PaymentType,
-  })
-  @IsOptional()
-  @IsEnum(PaymentType, { message: 'Payment type must be either online or cod' })
-  paymentType?: PaymentType;
-
-  @ApiProperty({
-    description: 'Staff note or patient note for the appointment. Leave empty if no special notes.',
+    description:
+      'Staff note or patient note for the appointment. Leave empty if no special notes.',
     required: false,
   })
   @IsOptional()

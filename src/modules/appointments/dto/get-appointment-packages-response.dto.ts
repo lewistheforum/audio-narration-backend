@@ -21,7 +21,7 @@ export class PackageServiceItemDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tổng quát',
+    example: 'General Consultation',
   })
   serviceName: string;
 
@@ -30,6 +30,13 @@ export class PackageServiceItemDto {
     example: 500000,
   })
   servicePrice: number;
+
+  @ApiProperty({
+    description: 'Service discount (VNĐ)',
+    example: 50000,
+    required: false,
+  })
+  serviceDiscount?: number;
 }
 
 /**

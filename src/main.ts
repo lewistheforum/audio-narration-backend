@@ -1,3 +1,8 @@
+// Force Node.js to use Vietnam timezone (Asia/Ho_Chi_Minh)
+// This ensures all Date operations use GMT+7 by default
+process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
+console.log(`✅ Application timezone set to: ${process.env.TZ}`);
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -50,10 +55,6 @@ async function bootstrap(): Promise<void> {
       'Authentication endpoints - Login, Google OAuth, and session management',
     )
     .addTag(
-      'Users management',
-      'User management endpoints - CRUD operations for patients, clinic staff, doctors, and admins',
-    )
-    .addTag(
       'Conversations',
       'Conversation management - Create and manage conversations between users',
     )
@@ -66,6 +67,10 @@ async function bootstrap(): Promise<void> {
       'Health check endpoints - Monitor application and database health status',
     )
     .addTag('Mailer', 'Mail service endpoints - Send emails and notifications')
+    .addTag(
+      'Staff Patients Management',
+      'Manage patient accounts and direct walk-in appointments as a clinic staff',
+    )
     .addBearerAuth(
       {
         type: 'http',

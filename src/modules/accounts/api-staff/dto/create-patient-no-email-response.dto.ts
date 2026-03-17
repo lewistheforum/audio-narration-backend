@@ -56,10 +56,17 @@ export class CreatePatientNoEmailResponseDto {
   temporaryPassword: string;
 
   @ApiProperty({
-    description: 'Email was NOT sent (fake email does not exist)',
-    example: false,
+    description: 'Email sent status',
+    example: true,
   })
   emailSent: boolean;
+
+  @ApiProperty({
+    description: 'Timestamp when the email was sent',
+    example: '2025-03-10T15:30:00Z',
+    required: false,
+  })
+  emailSentAt?: string;
 
   @ApiProperty({
     description: 'Account activation status',

@@ -30,7 +30,7 @@ export class SendReminderResponseDto {
 
   @ApiProperty({
     description: 'Success message',
-    example: 'Email nhắc nhở đã được gửi thành công',
+    example: 'Reminder email sent successfully',
   })
   message: string;
 }

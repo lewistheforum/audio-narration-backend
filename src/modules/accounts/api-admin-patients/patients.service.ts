@@ -81,7 +81,7 @@ export class PatientsService {
     const query = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
-      .leftJoinAndSelect('account.addresses', 'addresses')
+      .leftJoinAndSelect('account.address', 'address')
       .where('account.role = :role', { role: AccountRole.PATIENT });
 
     if (search) {
@@ -104,7 +104,7 @@ export class PatientsService {
   async findOne(id: string): Promise<PatientResponseDto> {
     const account = await this.accountRepository.findOne({
       where: { _id: id, role: AccountRole.PATIENT },
-      relations: ['generalAccount', 'addresses'],
+      relations: ['generalAccount', 'address'],
     });
 
     if (!account) {

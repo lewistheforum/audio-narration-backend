@@ -1,12 +1,15 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { MailerService } from './mailer.service';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
-import { CreateMailerDto } from './dto/create-mailer.dto';
+import { CreateMailerDto, SendMailDataDto, SendAccountCredentialsDto } from './dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
-import { SendMailDataDto } from './dto/send-mail-data.dto';
 import { ForgotPasswordDto, ResendVerificationDto } from '../auth/dto';
 import { AccountsService } from '../accounts/accounts.service';
+import { JwtAuthGuard } from '../auth/jwt.strategy';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AccountRole } from '../accounts/enums';
 
 @ApiTags('Mailer')
 @Controller('mailer')
@@ -118,6 +121,45 @@ export class MailerController {
 
     return {
       message: MESSAGES.successMessage.passwordResetCodeSentSuccess,
+    };
+  }
+
+  /**
+   * Send Account Credentials
+   * Notifies the user about their new account and provides login details.
+   * Useful for walk-in patients created by staff.
+   *
+   * @param dto - Account credentials and patient info
+   * @returns Success message
+   */
+  @Post('send-account-credentials')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Send account credentials to user email',
+    description: 'Notifies a new user about their account and provides login details (fullName, username, password, phone, dob).',
+  })
+  @ApiBody({ type: SendAccountCredentialsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Account credentials sent successfully',
+  })
+  async sendAccountCredentials(
+    @Body() dto: SendAccountCredentialsDto,
+  ): Promise<{ message: string }> {
+    await this.mailerService.sendAccountNotification({
+      email: dto.email,
+      fullName: dto.fullName,
+      username: dto.username,
+      password: dto.temporaryPassword,
+      phone: dto.phone,
+      dob: dto.dateOfBirth,
+    });
+
+    return {
+      message: 'Account credentials sent successfully to ' + dto.email,
     };
   }
 }

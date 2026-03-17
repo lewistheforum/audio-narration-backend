@@ -15,7 +15,7 @@ export class PendingServiceItemDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tư vấn',
+    example: 'Consultation',
   })
   serviceName: string;
 
@@ -48,12 +48,25 @@ export class PendingServiceItemDto {
     nullable: true,
   })
   ermStatus?: ERMStatus | null;
+
+  @ApiProperty({
+    description: 'Service price',
+    example: 500000,
+  })
+  price: number;
+
+  @ApiProperty({
+    description: 'Service discount',
+    example: 50000,
+    required: false,
+  })
+  discount?: number;
 }
 
 /**
  * Pending Services Response DTO
  *
- * Response for Step 6: Get pending and in-progress services
+ * Response for Step 6: Get pending, in-progress and completed services
  */
 export class PendingServicesResponseDto {
   @ApiProperty({
@@ -62,29 +75,52 @@ export class PendingServicesResponseDto {
     example: [
       {
         serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
-        serviceName: 'X-quang khớp gối',
+        serviceName: 'Knee X-Ray',
         serviceType: 'XRAY',
         hasErm: false,
         ermId: null,
         ermStatus: null,
+        price: 200000,
+        discount: 20000,
       },
     ],
   })
   pendingServices: PendingServiceItemDto[];
 
   @ApiProperty({
-    description: 'Services with ERM in IN_PROGRESS status',
+    description:
+      'Services that already have ERM but required fields are not fully filled',
     type: [PendingServiceItemDto],
     example: [
       {
         serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
-        serviceName: 'Khám tư vấn',
+        serviceName: 'Consultation',
         serviceType: 'CONSULTATION',
         hasErm: true,
         ermId: '123e4567-e89b-12d3-a456-426614174000',
         ermStatus: 'IN_PROGRESS',
+        price: 500000,
+        discount: 50000,
       },
     ],
   })
   inProgressServices: PendingServiceItemDto[];
+
+  @ApiProperty({
+    description: 'Services with ERM and all required fields filled',
+    type: [PendingServiceItemDto],
+    example: [
+      {
+        serviceAppointmentId: '123e4567-e89b-12d3-a456-426614174000',
+        serviceName: 'Lab Test',
+        serviceType: 'LAB',
+        hasErm: true,
+        ermId: '123e4567-e89b-12d3-a456-426614174000',
+        ermStatus: 'IN_PROGRESS',
+        price: 300000,
+        discount: 0,
+      },
+    ],
+  })
+  completedServices: PendingServiceItemDto[];
 }

@@ -2,6 +2,7 @@ import { DataSource, EntityMetadata, Repository } from 'typeorm';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
 import { AppModule } from '../../app.module';
+import { formatToVietnamTime } from '../utils/date.util';
 
 // Command line arguments parsing
 const args = process.argv.slice(2);
@@ -115,7 +116,7 @@ function generateFakeData(column: any): any {
 
   // Logic đoán kiểu dữ liệu dựa trên tên cột
   if (name.includes('email')) return faker.internet.email();
-  if (name.includes('phone')) return faker.phone.number();
+  if (name.includes('phone')) return generateVietnamPhone();
   if (name.includes('name')) return faker.person.fullName();
   if (name.includes('address')) return faker.location.streetAddress();
   if (name.includes('url') || name.includes('link'))
@@ -131,7 +132,7 @@ function generateFakeData(column: any): any {
   // Logic dựa trên TypeORM type
   if (type === 'uuid') return faker.string.uuid();
   if (type === 'boolean') return faker.datatype.boolean();
-  if (type === 'date' || type === 'timestamptz') return faker.date.recent();
+  if (type === 'date' || type === 'timestamptz') return formatToVietnamTime(faker.date.recent());
   if (type === 'int' || type === 'integer' || type === 'bigint')
     return faker.number.int({ max: 100 });
 
@@ -151,6 +152,10 @@ function generateFakeData(column: any): any {
   }
 
   return faker.lorem.word();
+}
+
+function generateVietnamPhone(): string {
+  return `0${faker.string.numeric(9)}`;
 }
 
 bootstrap();

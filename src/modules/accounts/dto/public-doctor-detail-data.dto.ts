@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { AccountRole, AccountStatus } from '../enums';
 import { PublicDoctorInfo } from './public-doctor-info.dto';
 import { PublicClinicInfo } from './public-clinic-info.dto';
+import { formatToVietnamTime } from '../../../common/utils/date.util';
 
 /**
  * Public Doctor Detail Data DTO
@@ -30,7 +32,7 @@ export class PublicDoctorDetailData {
 
   @ApiProperty({
     description: 'Doctor phone number',
-    example: '+84987654321',
+    example: '0987654321',
     required: false,
     nullable: true,
   })
@@ -42,6 +44,7 @@ export class PublicDoctorDetailData {
     required: false,
     nullable: true,
   })
+  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
   dob?: Date;
 
   @ApiProperty({
@@ -76,6 +79,7 @@ export class PublicDoctorDetailData {
     description: 'Account creation timestamp',
     example: '2023-10-27T10:00:00.000Z',
   })
+  @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
   @ApiProperty({
@@ -92,11 +96,7 @@ export class PublicDoctorDetailData {
   })
   clinic?: PublicClinicInfo;
 
-  constructor(
-    account: any,
-    doctorInfo: any,
-    clinicInfo?: any,
-  ) {
+  constructor(account: any, doctorInfo: any, clinicInfo?: any) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;

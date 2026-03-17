@@ -87,6 +87,7 @@ Khi áp dụng một cấu hình mới cho ca làm việc:
 -   Khi thay đổi `workDate`, `employeeId`, hoặc `clinicShiftId`:
     -   Hệ thống tự động kích hoạt **Kiểm tra xung đột**.
     -   Nếu phát hiện trùng lịch -> Ném lỗi `ConflictException`.
+    -   **Lưu ý quan trọng:** Không thể thay đổi lịch làm việc (do khác ca trực / ngày / bác sĩ) nếu lịch này đã có bệnh nhân đặt hẹn (trạng thái hợp lệ, trừ `CANCELLED`, `REJECTED`, `NO_SHOW`). Nếu có bệnh nhân đặt, sẽ báo lỗi `ConflictException`.
 
 ### 4.3. Sao Chép Lịch (`copySchedule`)
 Chức năng hỗ trợ quản lý sao chép nhanh lịch làm việc:
@@ -94,6 +95,9 @@ Chức năng hỗ trợ quản lý sao chép nhanh lịch làm việc:
 -   **Xử lý xung đột**:
     -   Nếu lịch sao chép bị trùng -> **Bỏ qua (Skip)**, không ghi đè.
     -   Chỉ sao chép các lịch hợp lệ.
+
+### 4.4. Xóa Lịch (`remove`)
+-   **Quy tắc an toàn:** Không thể xóa một lịch làm việc (`EmployeeSchedule`) nếu lịch đó đã có bệnh nhân đặt hẹn (với trạng thái hợp lệ). Việc xóa chỉ khả thi khi không có ca khám nào phụ thuộc vào tài nguyên này.
 
 ---
 

@@ -6,6 +6,7 @@
 export enum AppointmentStatus {
   // Appointment lifecycle
   PENDING = 'PENDING',                         // Awaiting clinic confirmation
+  PENDING_DOCTOR = 'PENDING_DOCTOR',           // Awaiting doctor approval (for extra hour requests)
   CONFIRMED = 'CONFIRMED',                     // Confirmed, ready for consultation
   
   // On-site workflow - At clinic

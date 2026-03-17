@@ -1,7 +1,7 @@
 import { DataSource } from 'typeorm';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
-import { TransactionType } from '../../modules/transactions/entities/transaction-type.entity';
+import { TransactionType, TransactionTypeCode } from '../../modules/transactions/entities/transaction-type.entity';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -11,9 +11,11 @@ async function bootstrap() {
   console.log('🌱 Seeding Transaction Types...');
 
   const types = [
-    { name: 'SUBSCRIPTION', code: 'SUBSCRIPTION' },
-    { name: 'VERIFICATION', code: 'VERIFICATION' },
-    { name: 'ONLINE', code: 'ONLINE' },
+    { name: 'SUBSCRIPTION', code: TransactionTypeCode.SUBSCRIPTION },
+    { name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION },
+    { name: 'ONLINE', code: TransactionTypeCode.ONLINE },
+    { name: 'CASH', code: TransactionTypeCode.CASH },
+    { name: 'Subscription Payment', code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
   ];
 
   for (const t of types) {

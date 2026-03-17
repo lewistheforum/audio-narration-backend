@@ -9,9 +9,9 @@ import {
   Query,
   HttpStatus,
   UseGuards,
-  Request,
-  ParseUUIDPipe,
-  Res,
+  ValidationPipe,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,24 +19,19 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
-  ApiParam,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiProduces,
 } from '@nestjs/swagger';
-import { Response } from 'express';
 import { PrescriptionsService } from './prescriptions.service';
 import {
   CreateMedicineDto,
   UpdateMedicineDto,
-  PatientEPrescriptionDetailResponseDto,
-  PatientERMDetailResponseDto,
+  PaginatedMedicinesResponseDto,
+  SearchMedicinesQueryDto,
 } from './dto';
 import { Medicine } from './entities/medicine.entity';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { AccountRole } from 'src/modules/accounts/enums';
+import { AccountRole } from '../accounts/enums';
 
 /**
  * Prescriptions Controller
@@ -47,7 +42,7 @@ import { AccountRole } from 'src/modules/accounts/enums';
 @ApiTags('Medicines & Prescriptions')
 @Controller('medicines')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class PrescriptionsController {
   constructor(private readonly prescriptionsService: PrescriptionsService) {}
 
@@ -83,14 +78,37 @@ export class PrescriptionsController {
    */
   @Get()
   @ApiOperation({ summary: 'Get all medicines' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+    example: 20,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Medicines retrieved successfully',
-    type: [Medicine],
+    description: 'Medicines retrieved successfully (paginated)',
+    type: PaginatedMedicinesResponseDto,
   })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
-  async findAll(): Promise<Medicine[]> {
-    return await this.prescriptionsService.findAll();
+  async findAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const normalizedPage = page < 1 ? 1 : page;
+    const normalizedLimit = limit < 1 ? 20 : Math.min(limit, 100);
+
+    return await this.prescriptionsService.findAll(
+      normalizedPage,
+      normalizedLimit,
+    );
   }
 
   /**
@@ -104,14 +122,39 @@ export class PrescriptionsController {
     description: 'Medicine name to search (partial match)',
     example: 'para',
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+    example: 20,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Search results retrieved successfully',
-    type: [Medicine],
+    description: 'Search results retrieved successfully (paginated)',
+    type: PaginatedMedicinesResponseDto,
   })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
-  async search(@Query('name') name: string): Promise<Medicine[]> {
-    return await this.prescriptionsService.searchByName(name);
+  async search(
+    @Query(new ValidationPipe({ transform: true, whitelist: true }))
+    query: SearchMedicinesQueryDto,
+  ): Promise<PaginatedMedicinesResponseDto> {
+    const normalizedPage = query.page;
+    const normalizedLimit = query.limit;
+    const normalizedName = query.name.trim();
+
+    return await this.prescriptionsService.searchByName(
+      normalizedName,
+      normalizedPage,
+      normalizedLimit,
+    );
   }
 
   /**
@@ -252,211 +295,5 @@ export class PrescriptionsController {
     return await this.prescriptionsService.restore(id);
   }
 
-  /**
-   * Get Patient E-Prescription Detail
-   * Patient only - nested under appointment route
-   * 
-   * Retrieves electronic prescription for a specific appointment
-   * Only accessible when appointment status is COMPLETED
-   */
-  @Get('patients/me/appointments/:appointmentId/e-prescription')
-  @Roles(AccountRole.PATIENT)
-  @ApiOperation({ 
-    summary: 'Get E-Prescription for a specific appointment',
-    description: 'Retrieves the electronic prescription details including all prescribed medicines. Only available for completed appointments.'
-  })
-  @ApiParam({
-    name: 'appointmentId',
-    type: 'string',
-    format: 'uuid',
-    description: 'Appointment ID',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'E-Prescription retrieved successfully',
-    type: PatientEPrescriptionDetailResponseDto,
-  })
-  @ApiNotFoundResponse({
-    description: 'Appointment or E-Prescription not found',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Appointment not found or access denied',
-        error: 'Not Found',
-      },
-    },
-  })
-  @ApiForbiddenResponse({
-    description: 'E-Prescription only available for completed appointments',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'E-Prescription is only available for completed appointments',
-        error: 'Forbidden',
-      },
-    },
-  })
-  @ApiResponse({ 
-    status: HttpStatus.UNAUTHORIZED, 
-    description: 'Unauthorized - Invalid or missing JWT token' 
-  })
-  async getPatientEPrescription(
-    @Param('appointmentId', ParseUUIDPipe) appointmentId: string,
-    @Request() req: any,
-  ): Promise<PatientEPrescriptionDetailResponseDto> {
-    const patientId = req.user._id;
-    return await this.prescriptionsService.getPatientEPrescription(
-      patientId,
-      appointmentId,
-    );
-  }
 
-  /**
-   * Export Patient E-Prescription as PDF
-   * Patient only - generates downloadable PDF document
-   * 
-   * Exports the electronic prescription in a medical-compliant PDF format
-   * with clinic, doctor, and patient information headers
-   */
-  @Get('patients/me/appointments/:appointmentId/e-prescription/export/pdf')
-  @Roles(AccountRole.PATIENT)
-  @ApiOperation({
-    summary: 'Export E-Prescription as PDF',
-    description: 'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines. Only available for completed appointments.',
-  })
-  @ApiParam({
-    name: 'appointmentId',
-    type: 'string',
-    format: 'uuid',
-    description: 'Appointment ID',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  @ApiProduces('application/pdf')
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'PDF file generated and downloaded successfully',
-    schema: {
-      type: 'string',
-      format: 'binary',
-    },
-  })
-  @ApiNotFoundResponse({
-    description: 'Appointment or E-Prescription not found',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Appointment not found or access denied',
-        error: 'Not Found',
-      },
-    },
-  })
-  @ApiForbiddenResponse({
-    description: 'E-Prescription only available for completed appointments',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'E-Prescription is only available for completed appointments',
-        error: 'Forbidden',
-      },
-    },
-  })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  async exportEPrescriptionPdf(
-    @Param('appointmentId', ParseUUIDPipe) appointmentId: string,
-    @Request() req: any,
-    @Res() res: Response,
-  ): Promise<void> {
-    const patientId = req.user._id;
-
-    // Generate PDF buffer
-    const pdfBuffer = await this.prescriptionsService.generateEPrescriptionPdf(
-      patientId,
-      appointmentId,
-    );
-
-    // Set response headers for PDF download
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="prescription-${appointmentId}.pdf"`,
-    );
-    res.setHeader('Content-Length', pdfBuffer.length.toString());
-
-    // Send PDF buffer
-    res.send(pdfBuffer);
-  }
-
-  /**
-   * Get Patient ERM Detail (Polymorphic Retrieval)
-   * Patient only - retrieves specific ERM record
-   * 
-   * Returns ERM details with polymorphic child data based on record_type
-   * Enforces strict 3-layer linkage validation and visibility rules
-   */
-  @Get('patients/me/appointments/:appointmentId/erms/:ermId')
-  @Roles(AccountRole.PATIENT)
-  @ApiOperation({
-    summary: 'Get ERM record details for a specific appointment',
-    description:
-      'Retrieves Electronic Record Management (ERM) details including polymorphic child records (X-ray, Lab, Ultrasound, Consultation, Bone Density, Procedure). Only COMPLETED records are accessible to patients. Enforces strict ownership validation (patient -> appointment -> ERM).',
-  })
-  @ApiParam({
-    name: 'appointmentId',
-    type: 'string',
-    format: 'uuid',
-    description: 'Appointment ID',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  @ApiParam({
-    name: 'ermId',
-    type: 'string',
-    format: 'uuid',
-    description: 'ERM record ID',
-    example: '123e4567-e89b-12d3-a456-426614174001',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'ERM record retrieved successfully',
-    type: PatientERMDetailResponseDto,
-  })
-  @ApiNotFoundResponse({
-    description: 'Appointment, ERM, or child record not found',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Appointment not found or access denied',
-        error: 'Not Found',
-      },
-    },
-  })
-  @ApiForbiddenResponse({
-    description: 'ERM record not available (status must be COMPLETED)',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'ERM record is not available (status must be COMPLETED)',
-        error: 'Forbidden',
-      },
-    },
-  })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  async getPatientERMDetail(
-    @Param('appointmentId', ParseUUIDPipe) appointmentId: string,
-    @Param('ermId', ParseUUIDPipe) ermId: string,
-    @Request() req: any,
-  ): Promise<PatientERMDetailResponseDto> {
-    const patientId = req.user._id;
-    return await this.prescriptionsService.getPatientERMDetail(
-      patientId,
-      appointmentId,
-      ermId,
-    );
-  }
 }

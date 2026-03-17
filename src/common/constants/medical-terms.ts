@@ -335,3 +335,14 @@ export const DESCRIPTIONS = [
 
 export const EXPERIENCE_YEARS = (years: number): string =>
   `${years} years of experience`;
+
+export const REJECTION_REASONS = [
+  'Base salary is lower than negotiated',
+  'Total monthly allowance does not match previous agreement',
+  'Working hours are too flexible/not as discussed',
+  'Job description includes tasks not agreed upon during interview',
+  'Health insurance policy is not comprehensive enough',
+  'Contract duration is too short/long',
+  'Performance bonus structure is unclear or missing',
+  'Required relocation to a different branch was not discussed',
+];

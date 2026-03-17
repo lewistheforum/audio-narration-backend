@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Transaction } from '../entities/transaction.entity';
+import { parseVietnamTime } from '../../../common/utils/date.util';
 
 @Injectable()
 export class TransactionRepository extends Repository<Transaction> {
@@ -124,15 +125,79 @@ export class TransactionRepository extends Repository<Transaction> {
     }
 
     if (filters?.fromDate) {
-      params.push(new Date(filters.fromDate));
+      params.push(parseVietnamTime(filters.fromDate));
       conditions.push(`t.transaction_date >= $${params.length}`);
     }
 
     if (filters?.toDate) {
-      params.push(new Date(filters.toDate));
+      params.push(parseVietnamTime(filters.toDate));
       conditions.push(`t.transaction_date <= $${params.length}`);
     }
 
     return { whereClause: conditions.join(' AND '), params };
+  }
+
+  /**
+   * Get revenue statistics grouped by period
+   *
+   * @param clinicId Clinic Account ID
+   * @param startDate Filter from date
+   * @param endDate Filter to date
+   * @param period 'day', 'month', or 'year'
+   */
+  async getRevenueStats(
+    clinicId: string,
+    startDate: Date,
+    endDate: Date,
+    period: string,
+  ): Promise<any[]> {
+    return this.query(
+      `SELECT
+          DATE_TRUNC($1, transaction_date) as label,
+          SUM(amount)::bigint as total_revenue,
+          COUNT(*)::int as transaction_count
+       FROM transactions
+       WHERE deleted_at IS NULL
+         AND clinic_id = $2
+         AND status = 'SUCCESS'
+         AND transaction_date >= $3
+         AND transaction_date <= $4
+       GROUP BY label
+       ORDER BY label ASC`,
+      [period, clinicId, startDate, endDate],
+    );
+  }
+
+  /**
+   * Get raw transactions for export
+   *
+   * @param clinicId Clinic Account ID
+   * @param startDate Filter from date
+   * @param endDate Filter to date
+   */
+  async getTransactionsForExport(
+    clinicId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<any[]> {
+    return this.query(
+      `SELECT
+          t.transaction_date as date,
+          t._id as transaction_id,
+          t.amount as amount,
+          t.status as status,
+          t.gateway as gateway,
+          t.description as description,
+          ga.full_name as patient_name
+       FROM transactions t
+       LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
+       WHERE t.deleted_at IS NULL
+         AND t.clinic_id = $1
+         AND t.status = 'SUCCESS'
+         AND t.transaction_date >= $2
+         AND t.transaction_date <= $3
+       ORDER BY t.transaction_date DESC`,
+      [clinicId, startDate, endDate],
+    );
   }
 }

@@ -1,7 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
+import { ZaloWebhookService } from './zalo-webhook.service';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import {
@@ -82,6 +84,7 @@ import { ClinicManagerController } from './api-clinic-admin/clinic-manager.contr
     forwardRef(() => MailerModule),
     forwardRef(() => SubscriptionsModule),
     forwardRef(() => TransactionsModule),
+    HttpModule,
   ],
   controllers: [
     AccountsController,
@@ -102,6 +105,7 @@ import { ClinicManagerController } from './api-clinic-admin/clinic-manager.contr
     TransactionRepository,
     AccountsService,
     ClinicManagerService,
+    ZaloWebhookService,
   ],
   exports: [
     AccountsService,
@@ -117,6 +121,7 @@ import { ClinicManagerController } from './api-clinic-admin/clinic-manager.contr
     DoctorInformationRepository,
     ClinicAdminInformationRepository,
     TransactionRepository,
+    ZaloWebhookService,
   ],
 })
 export class AccountsModule { }
