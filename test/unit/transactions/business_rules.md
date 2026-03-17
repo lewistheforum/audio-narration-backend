@@ -94,12 +94,24 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 *Dùng cho: Thanh toán Đơn thuốc.*
 
 1.  **Khớp lệnh**: Tìm `Appointment` theo ID (được trích xuất từ nội dung chuyển khoản).
-297. **Khởi tạo**: Tạo một bản ghi `Transaction` **MỚI**.
+2.  **Khởi tạo**: Tạo một bản ghi `Transaction` **MỚI**.
     -   Loại: `ONLINE` (Mặc định).
     -   Liên kết: Phòng khám, Người gửi (Bệnh nhân).
-100. **Hậu xử lý (Post-Processing)**:
+3.  **Hậu xử lý (Post-Processing)**:
     - **Cập nhật Gói dịch vụ**: Chuyển trạng thái **tất cả** `AppointmentPackage` từ `PENDING_PAYMENT` sang `PAID` liên kết với lịch hẹn này.
     - **Gán Giao dịch**: Lưu ID của Transaction vừa tạo vào cột `transactionId` của các package tương ứng.
+    - **⚠️ Webhook**: **KHÔNG** trigger n8n webhook (chỉ trigger cho đặt lịch mới).
+
+### Chiến Lược C: Online Booking Session (Mới)
+*Dùng cho: Đặt lịch trực tuyến qua SessionId.*
+
+1.  **Khớp lệnh**: Tìm `BookingSession` trong Redis bằng `sessionId` (trích xuất từ nội dung chuyển khoản).
+2.  **Xử lý lịch hẹn**: Gọi `AppointmentsService.createAppointmentOnlineFromCallback`.
+    -   Tạo Appointment mới với trạng thái `CONFIRMED`.
+    -   Tạo Transaction `SUCCESS`.
+3.  **Hậu xử lý (Post-Processing)**:
+    - **⚠️ Webhook**: Trigger `AppointmentWebhookService.sendConfirmation(appointmentId)` để gửi thông báo sang n8n.
+    - **Dọn dẹp**: Xóa session trong Redis.
 
 ---
 

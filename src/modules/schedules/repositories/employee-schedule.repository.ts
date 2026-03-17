@@ -344,4 +344,34 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
     return roomsMap;
   }
+  /**
+   * Find Room Conflict
+   *
+   * Checks if a room is already assigned to any doctor on a specific date and shift.
+   *
+   * @param roomId - ID of the room
+   * @param workDate - Date of work
+   * @param clinicShiftId - ID of the shift
+   * @param excludeId - (Optional) ID of a schedule to exclude
+   * @returns Matching EmployeeSchedule or null
+   */
+  async findRoomConflict(
+    roomId: string,
+    workDate: Date,
+    clinicShiftId: string,
+    excludeId?: string,
+  ): Promise<EmployeeSchedule | null> {
+    const queryBuilder = this.createQueryBuilder('schedule')
+      .innerJoin('schedule.rooms', 'room')
+      .where('room._id = :roomId', { roomId })
+      .andWhere('schedule.workDate = :workDate', { workDate })
+      .andWhere('schedule.clinicShiftId = :clinicShiftId', { clinicShiftId })
+      .andWhere('schedule.deletedAt IS NULL');
+
+    if (excludeId) {
+      queryBuilder.andWhere('schedule._id != :excludeId', { excludeId });
+    }
+
+    return queryBuilder.getOne();
+  }
 }

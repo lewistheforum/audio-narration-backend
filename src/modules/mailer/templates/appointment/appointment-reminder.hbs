@@ -1,0 +1,112 @@
+<style>
+  .email-container {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: #ffffff;
+  }
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    text-align: center;
+    padding: 30px 20px;
+  }
+  .header img {
+    max-width: 180px;
+    height: auto;
+    margin-bottom: 15px;
+  }
+  .header h1 {
+    color: #ffffff;
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  .content {
+    padding: 30px 25px;
+  }
+  .info-box {
+    background-color: #f8fafc;
+    padding: 20px;
+    border-radius: 8px;
+    margin: 25px 0;
+  }
+  .info-box h3 {
+    margin: 0 0 15px 0;
+    color: #1e293b;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .address-box {
+    background-color: #fef3c7;
+    padding: 20px;
+    border-radius: 8px;
+    margin: 25px 0;
+  }
+  .address-box h3 {
+    margin: 0 0 15px 0;
+    color: #92400e;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .footer {
+    background-color: #f8fafc;
+    padding: 25px;
+    text-align: center;
+    font-size: 13px;
+    color: #64748b;
+  }
+</style>
+
+<div class="email-container">
+  <div class="header">
+    <img src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png" alt="{{clinicName}}">
+    <h1>NHẮC NHỞ LỊCH HẸN</h1>
+  </div>
+
+  <div class="content">
+    <p>Kính gửi <strong>{{patientName}}</strong>,</p>
+    <p>Đây là email nhắc nhở về lịch hẹn của bạn tại <strong>{{clinicName}}</strong>:</p>
+
+    <div class="info-box">
+      <h3>THÔNG TIN LỊCH HẸN</h3>
+      <p><strong>Ngày giờ:</strong> {{appointmentHour}}, {{appointmentDate}}</p>
+      {{#if doctorName}}
+      <p><strong>Bác sĩ:</strong> {{doctorName}}</p>
+      {{/if}}
+      {{#if services.length}}
+      <p><strong>Dịch vụ:</strong></p>
+      <ul>
+        {{#each services}}
+        <li>{{serviceName}}</li>
+        {{/each}}
+      </ul>
+      {{/if}}
+    </div>
+
+    <div class="address-box">
+      <h3>ĐỊA CHỈ PHÒNG KHÁM</h3>
+      <p><strong>Địa chỉ:</strong> {{clinicAddress}}</p>
+      <p><strong>Hotline:</strong> {{clinicPhone}}</p>
+    </div>
+
+    <div class="prep-guide">
+      <h3 style="color: #1e293b; font-size: 16px; font-weight: 600;">HƯỚNG DẪN CHUẨN BỊ</h3>
+      <ul style="color: #475569; font-size: 14px;">
+        <li>Vui lòng có mặt trước 15 phút để làm thủ tục</li>
+        <li>Mang theo giấy tờ tùy thân (CMND/CCCD)</li>
+        <li>Mang theo kết quả xét nghiệm cũ (nếu có)</li>
+      </ul>
+    </div>
+
+    <p style="font-size: 14px; color: #64748b; margin-top: 25px;">Nếu bạn cần thay đổi hoặc hủy lịch hẹn, vui lòng liên hệ với chúng tôi sớm nhất có thể.</p>
+  </div>
+
+  <div class="footer">
+    <p style="font-weight: 600; color: #475569;">{{clinicName}}</p>
+    <p>Hotline: {{clinicPhone}}</p>
+    <p>{{clinicAddress}}</p>
+    <p style="color: #94a3b8; font-size: 12px; margin-top: 15px;">© 2026 Bonix. All rights reserved.</p>
+  </div>
+</div>

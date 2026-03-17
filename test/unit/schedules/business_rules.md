@@ -81,12 +81,13 @@ Khi áp dụng một cấu hình mới cho ca làm việc:
 -   **Validate**:
     -   `employeeId`, `clinicShiftId`, `roomId` phải tồn tại và thuộc về phòng khám hiện tại.
 -   **Chặn Xung Đột (Conflict Rule)**:
-    -   Một nhân viên **không thể** có 2 lịch làm việc cho **cùng một ca** vào **cùng một ngày**.
+    -   **Nhân viên**: Một nhân viên **không thể** có 2 lịch làm việc cho **cùng một ca** vào **cùng một ngày** (không thể ở 2 phòng khác nhau trong cùng 1 ca).
+    -   **Phòng khám**: Một phòng khám (`roomId`) **không thể** được gán cho 2 bác sĩ khác nhau trong **cùng một ca** vào **cùng một ngày**.
 
 ### 4.2. Cập Nhật Lịch (`update`)
--   Khi thay đổi `workDate`, `employeeId`, hoặc `clinicShiftId`:
-    -   Hệ thống tự động kích hoạt **Kiểm tra xung đột**.
-    -   Nếu phát hiện trùng lịch -> Ném lỗi `ConflictException`.
+-   Khi thay đổi `workDate`, `employeeId`, `clinicShiftId` hoặc `roomId`:
+    -   Hệ thống tự động kích hoạt **Kiểm tra xung đột** cho cả nhân viên và phòng khám.
+    -   Nếu phát hiện trùng lịch hoặc phòng đã có người trực -> Ném lỗi `ConflictException`.
     -   **Lưu ý quan trọng:** Không thể thay đổi lịch làm việc (do khác ca trực / ngày / bác sĩ) nếu lịch này đã có bệnh nhân đặt hẹn (trạng thái hợp lệ, trừ `CANCELLED`, `REJECTED`, `NO_SHOW`). Nếu có bệnh nhân đặt, sẽ báo lỗi `ConflictException`.
 
 ### 4.3. Sao Chép Lịch (`copySchedule`)

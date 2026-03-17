@@ -17,6 +17,8 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { PrescriptionsModule } from '../prescriptions/prescriptions.module';
 import { HttpModule } from '@nestjs/axios';
 import { AppointmentWebhookService } from './appointment-webhook.service';
+import { AppointmentCronService } from './appointment-cron.service';
+import { AppointmentCronController } from './appointment-cron.controller';
 
 /**
  * Appointments Module
@@ -52,11 +54,12 @@ import { AppointmentWebhookService } from './appointment-webhook.service';
     PrescriptionsModule,
     HttpModule,
   ],
-  controllers: [AppointmentsController],
+  controllers: [AppointmentsController, AppointmentCronController],
   providers: [
     AppointmentsService,
     BookingSessionService,
     AppointmentWebhookService,
+    AppointmentCronService,
     AppointmentRepository,
     AppointmentPackageRepository,
     ClinicStaffInformationRepository,

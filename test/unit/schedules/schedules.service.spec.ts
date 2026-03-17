@@ -24,6 +24,7 @@ describe('SchedulesService', () => {
     const mockScheduleRepository = {
         findSchedules: jest.fn(),
         findConflict: jest.fn(),
+        findRoomConflict: jest.fn(),
         findOne: jest.fn(),
         save: jest.fn(),
         softDelete: jest.fn(),
@@ -76,6 +77,9 @@ describe('SchedulesService', () => {
     };
 
     beforeEach(async () => {
+        mockScheduleRepository.findRoomConflict.mockResolvedValue(null);
+        mockScheduleRepository.findConflict.mockResolvedValue(null);
+        
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 SchedulesService,
@@ -166,6 +170,26 @@ describe('SchedulesService', () => {
             await expect(service.create(clinicId, createDto)).rejects.toThrow(ConflictException);
             expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
         });
+
+        it('should throw ConflictException if room is already assigned to another doctor', async () => {
+            const clinicId = 'clinic-id';
+            const createDto: CreateScheduleDto = {
+                employeeId: 'emp-id',
+                items: [
+                    { clinicShiftId: 'shift-id', workDate: '2024-05-20', roomId: 'occupied-room-id' }
+                ]
+            };
+
+            mockAccountRepository.findOne.mockResolvedValueOnce({ _id: 'emp-id' });
+            mockAccountRepository.findOne.mockResolvedValueOnce({ _id: 'clinic-id' });
+            mockShiftRepository.findOne.mockResolvedValue({ _id: 'shift-id' });
+            mockRoomRepository.findOne.mockResolvedValue({ _id: 'occupied-room-id' });
+            mockScheduleRepository.findConflict.mockResolvedValue(null);
+            mockScheduleRepository.findRoomConflict.mockResolvedValue({ _id: 'other-sched-id' }); // Conflict!
+
+            await expect(service.create(clinicId, createDto)).rejects.toThrow(ConflictException);
+            expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+        });
     });
 
     describe('findAll', () => {
@@ -225,6 +249,19 @@ describe('SchedulesService', () => {
 
              await expect(service.update(id, updateDto)).rejects.toThrow(ConflictException);
         });
+
+        it('should throw ConflictException if updated room is already occupied', async () => {
+            const id = 'sched-id';
+            const updateDto = { roomId: 'occupied-room-id' };
+            const schedule = { _id: id, clinicId: 'clinic-id', rooms: [], workDate: new Date() };
+
+            mockScheduleRepository.findOne.mockResolvedValue(schedule);
+            mockRoomRepository.findOne.mockResolvedValue({ _id: 'occupied-room-id' });
+            mockQueryBuilder.getRawMany.mockResolvedValue([]); // No appointments
+            mockScheduleRepository.findRoomConflict.mockResolvedValue({ _id: 'other-id' }); // Room occupied
+
+            await expect(service.update(id, updateDto)).rejects.toThrow(ConflictException);
+        });
     });
 
 
@@ -259,6 +296,27 @@ describe('SchedulesService', () => {
             expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
             expect(result.copied).toBe(1);
             expect(result.skipped).toBe(0);
+        });
+
+        it('should skip schedules with room conflicts in target date', async () => {
+            const user = { _id: 'manager-id', role: AccountRole.CLINIC_MANAGER, parentId: 'clinic-id' };
+            const copyDto = {
+                fromDates: ['2024-05-20'],
+                targetDate: '2024-05-27'
+            };
+
+            const sourceSchedules = [
+                { employeeId: 'emp-1', clinicShiftId: 'shift-1', clinicId: 'clinic-id', rooms: [{ _id: 'room-1' }] }
+            ];
+
+            mockScheduleRepository.find.mockResolvedValueOnce(sourceSchedules);
+            mockScheduleRepository.findConflict.mockResolvedValue(null); // No doctor conflict
+            mockScheduleRepository.findRoomConflict.mockResolvedValue({ _id: 'other-sched' }); // Room conflict!
+
+            const result = await service.copySchedule(user, copyDto);
+
+            expect(result.copied).toBe(0);
+            expect(result.skipped).toBe(1);
         });
     });
 
