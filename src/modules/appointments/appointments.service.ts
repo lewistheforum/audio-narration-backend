@@ -754,6 +754,35 @@ export class AppointmentsService {
       );
     }
 
+    // NEW LOGIC: Check and update packages
+    const packages = await this.dataSource.getRepository(AppointmentPackage).find({
+      where: { appointmentId },
+    });
+
+    const hasOnlinePaidPackage = packages.some(
+      (pkg) =>
+        pkg.paymentType === PaymentType.ONLINE &&
+        pkg.status === AppointmentPackageStatus.PAID,
+    );
+
+    if (hasOnlinePaidPackage) {
+      throw new BadRequestException(
+        'Cannot cancel an appointment that has been paid online',
+      );
+    }
+
+    // Update COD packages to CANCELLED
+    const codPackagesToCancel = packages.filter(
+      (pkg) => pkg.paymentType === PaymentType.COD && pkg.status !== AppointmentPackageStatus.CANCELLED,
+    );
+
+    if (codPackagesToCancel.length > 0) {
+      for (const pkg of codPackagesToCancel) {
+        pkg.status = AppointmentPackageStatus.CANCELLED;
+      }
+      await this.dataSource.getRepository(AppointmentPackage).save(codPackagesToCancel);
+    }
+
     // Update appointment
     appointment.status = AppointmentStatus.CANCELLED;
 
@@ -818,6 +847,35 @@ export class AppointmentsService {
       throw new BadRequestException(
         `Cannot cancel appointment with status "${appointment.status}"`,
       );
+    }
+
+    // NEW LOGIC: Check and update packages
+    const packages = await this.dataSource.getRepository(AppointmentPackage).find({
+      where: { appointmentId },
+    });
+
+    const hasOnlinePaidPackage = packages.some(
+      (pkg) =>
+        pkg.paymentType === PaymentType.ONLINE &&
+        pkg.status === AppointmentPackageStatus.PAID,
+    );
+
+    if (hasOnlinePaidPackage) {
+      throw new BadRequestException(
+        'Cannot cancel an appointment that has been paid online',
+      );
+    }
+
+    // Update COD packages to CANCELLED
+    const codPackagesToCancel = packages.filter(
+      (pkg) => pkg.paymentType === PaymentType.COD && pkg.status !== AppointmentPackageStatus.CANCELLED,
+    );
+
+    if (codPackagesToCancel.length > 0) {
+      for (const pkg of codPackagesToCancel) {
+        pkg.status = AppointmentPackageStatus.CANCELLED;
+      }
+      await this.dataSource.getRepository(AppointmentPackage).save(codPackagesToCancel);
     }
 
     // Update appointment
