@@ -38,6 +38,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     const queryBuilder = this.createQueryBuilder('schedule')
       .leftJoinAndSelect('schedule.employee', 'employee')
       .leftJoinAndSelect('schedule.clinicShift', 'clinicShift')
+      .leftJoinAndSelect('clinicShift.hours', 'clinicShiftHour')
       .leftJoinAndSelect('schedule.rooms', 'rooms')
       // Map doctor information manually
       .leftJoinAndMapOne(

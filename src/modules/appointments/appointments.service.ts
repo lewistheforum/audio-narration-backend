@@ -4406,7 +4406,7 @@ export class AppointmentsService {
         appointmentDate: new Date(session.appointmentDate),
         appointmentHour: session.appointmentHour ? new Date(session.appointmentHour) : new Date(session.appointmentDate),
         total: finalAmount, // Required field
-        status: AppointmentStatus.CONFIRMED, // Paid online -> Confirmed
+        status: AppointmentStatus.PENDING, // Paid online -> Waiting for clinic confirmation (Updated v5.1)
         patientNote: session.patientNote,
       });
 

@@ -278,7 +278,7 @@ export class SchedulesService {
 
       for (const item of items) {
         const { clinicShiftId, workDate, roomId } = item;
-        const workDateObj = new Date(workDate);
+        const workDateObj = getStartOfDay(workDate);
 
         // WeekDay calculation
         const dayOfWeek = workDateObj.getDay();
@@ -659,7 +659,7 @@ export class SchedulesService {
     }
 
     if (workDate) {
-      schedule.workDate = new Date(workDate);
+      schedule.workDate = getStartOfDay(workDate);
       const dayOfWeek = schedule.workDate.getDay();
       const weekDayMap = [
         WeekDay.SUNDAY,
@@ -781,7 +781,7 @@ export class SchedulesService {
 
     return this.shiftRepository.find({
       where: { clinicId },
-      select: ['_id', 'shift'],
+      relations: ['hours'],
       order: { shift: 'ASC' },
     });
   }

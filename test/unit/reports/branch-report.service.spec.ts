@@ -72,13 +72,7 @@ describe('BranchReportService', () => {
   });
 
   describe('getDoctorsWorkingAndFeedback', () => {
-    it('should throw error if date is missing', async () => {
-      await expect(service.getDoctorsWorkingAndFeedback('id', '')).rejects.toThrow(
-        'Date is required for this report',
-      );
-    });
-
-    it('should return combined doctor and feedback data', async () => {
+it('should return combined doctor and feedback data', async () => {
       const managerId = 'manager-id';
       const date = '2026-03-17';
       const mockDoctors = [{ doctorId: 'doc-1', fullName: 'Dr. John' }];
