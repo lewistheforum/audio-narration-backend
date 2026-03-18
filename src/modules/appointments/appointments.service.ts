@@ -7147,6 +7147,88 @@ export class AppointmentsService {
   }
 
   /**
+   * Complete COD Appointment
+   * Complete appointment flow: update appointment status to COMPLETED, 
+   * set all PENDING_PAYMENT packages to PAID, 
+   * and update transaction status to SUCCESS.
+   *
+   * @param staffAccountId - Staff account UUID
+   * @param appointmentId - Appointment UUID
+   */
+  async completeCodAppointment(
+    staffAccountId: string,
+    appointmentId: string,
+  ): Promise<any> {
+    // 1. Verify staff has access
+    const staffAccount =
+      await this.accountRepository.findAccountById(staffAccountId);
+
+    if (
+      !staffAccount ||
+      staffAccount.role !== AccountRole.CLINIC_STAFF ||
+      !staffAccount.parentId
+    ) {
+      throw new ForbiddenException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const clinicId = staffAccount.parentId;
+
+    return await this.dataSource.transaction(async (manager) => {
+      try {
+        // Step 1: Query and Update Appointment
+        const appointment = await manager.findOne(Appointment, {
+          where: { _id: appointmentId, clinicId },
+        });
+
+        if (!appointment) {
+          throw new NotFoundException('Appointment not found');
+        }
+
+        if (appointment.status === AppointmentStatus.COMPLETED) {
+          throw new BadRequestException('Appointment is already completed');
+        }
+
+        appointment.status = AppointmentStatus.COMPLETED;
+        await manager.save(appointment);
+
+        // Step 2: Query Transactions logically mapped to these packages and EXPIRE spam ones except newest mapping
+        // Simply marking all PENDING transactions to EXPIRED then mapping the specific one to SUCCESS could be complicated if we don't have transaction ID.
+        // Actually, since staff handles COD directly without using QR flow (or overwriting QR flow), 
+        // we can simply update all related PENDING ones to EXPIRED, and just mark the package PAID.
+        // OR, the prompt states: "check that if this appointment already have transaction then update status that transaction to SUCCESS"
+        await manager.update(
+          Transaction,
+          { appointmentId, status: PaymentStatus.PENDING },
+          { status: PaymentStatus.SUCCESS }
+        );
+
+        // Step 3: Update Appointment Packages
+        await manager.update(
+          AppointmentPackage,
+          { appointmentId, status: AppointmentPackageStatus.PENDING_PAYMENT },
+          { status: AppointmentPackageStatus.PAID, paymentType: PaymentType.COD }
+        );
+
+        return {
+          message: 'Appointment completed successfully',
+          data: appointment,
+        };
+      } catch (error) {
+        if (
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException ||
+          error instanceof ForbiddenException
+        ) {
+          throw error;
+        }
+        throw new InternalServerErrorException(
+          'Failed to complete appointment via transactions',
+        );
+      }
+    });
+  }
+
+  /**
    * Get Clinic Schedules (VERSION 4.5 - Option 1 & Option 3)
    *
    * Merged 2 legacy APIs (working-days + slots) into single API.
