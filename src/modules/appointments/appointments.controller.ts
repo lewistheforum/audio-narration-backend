@@ -13,6 +13,8 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Res,
+  HttpException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -113,12 +115,14 @@ import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
  * - POST /patients/booking-sessions - Create booking session
  * - PATCH /patients/booking-sessions/:sessionId - Update booking session
  * - POST /patients/appointments - Create appointment from session
+ * - POST /appointments/reminders/trigger - Manually trigger appointment reminders (Admin/Staff)
  */
 import { PrescriptionsService } from '../prescriptions/prescriptions.service';
 import {
   PatientEPrescriptionDetailResponseDto,
   PatientERMDetailResponseDto,
 } from '../prescriptions/dto';
+import { AppointmentCronService } from './appointment-cron.service';
 
 @ApiTags('Appointments')
 @ApiExtraModels(
@@ -140,7 +144,9 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) { }
+  ) {
+    console.log('✅ AppointmentsController initialized');
+  }
 
   /**
    * Get all appointments for staff's clinic
@@ -2936,19 +2942,31 @@ export class AppointmentsController {
     @Body() createDto: CreateAppointmentFromSessionDto,
   ): Promise<any> {
     const patientId = req.user._id;
-    const result = await this.appointmentsService.createAppointmentFromSession(
-      createDto.session_id,
-      patientId,
-    );
+    let result: any;
+    try {
+      result = await this.appointmentsService.createAppointmentFromSession(
+        createDto.session_id,
+        patientId,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        error?.message || 'An unexpected error occurred while creating appointment',
+      );
+    }
 
-    // Return result directly - it's either appointment data (COD) or payment URL (ONLINE)
-    // The result already includes appropriate message from service layer
+    if (!result) {
+      throw new InternalServerErrorException('Failed to create appointment: No result returned');
+    }
+
     return result.message
       ? result
       : {
-        message: 'Đặt lịch hẹn thành công',
-        data: result,
-      };
+          message: 'Đặt lịch hẹn thành công',
+          data: result,
+        };
   }
 
   @Post('patients/appointments/:sessionId/payment-qr')
@@ -3339,6 +3357,30 @@ export class AppointmentsController {
       appointmentId,
       packageId,
       staffAccountId,
+    );
+  }
+
+  @Post('staff/:id/complete-cod-appointment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_STAFF)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete COD appointment (Change all COD packages and transactions to SUCCESS)',
+    description: 'Updates un-paid COD packages and transactions to SUCCESS/PAID and completes the appointment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment COD completed successfully.',
+  })
+  async completeCodAppointment(
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Request() req: any,
+  ) {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.completeCodAppointment(
+      staffAccountId,
+      appointmentId,
     );
   }
 

@@ -198,6 +198,20 @@ export class SchedulesService {
             continue;
           }
 
+          // Check room conflict in target
+          if (schedule.rooms && schedule.rooms.length > 0) {
+            const roomConflict = await this.scheduleRepository.findRoomConflict(
+              schedule.rooms[0]._id,
+              currentTargetDate,
+              schedule.clinicShiftId,
+            );
+
+            if (roomConflict) {
+              skippedCount++;
+              continue;
+            }
+          }
+
           // Clone
           const newSchedule = queryRunner.manager.create(EmployeeSchedule, {
             ...schedule,
@@ -306,6 +320,21 @@ export class SchedulesService {
           throw new ConflictException(
             `Schedule exists for Employee ${employeeId} on ${workDate} for Shift ${clinicShiftId}`,
           );
+        }
+
+        // Room Occupancy Check
+        if (roomId) {
+          const roomConflict = await this.scheduleRepository.findRoomConflict(
+            roomId,
+            workDateObj,
+            clinicShiftId,
+          );
+
+          if (roomConflict) {
+            throw new ConflictException(
+              `Room ${roomId} is already assigned to another doctor on ${workDate} for Shift ${clinicShiftId}`,
+            );
+          }
         }
 
         // Create
@@ -666,8 +695,26 @@ export class SchedulesService {
       );
       if (conflict) {
         throw new ConflictException(
-          'Update failed: Schedule conflict detected',
+          'Update failed: Shift conflict for doctor detected',
         );
+      }
+    }
+
+    // Room Occupancy Check on Update
+    if (roomId || clinicShiftId || workDate) {
+      const roomToCheck = roomId || (schedule.rooms && schedule.rooms.length > 0 ? schedule.rooms[0]._id : null);
+      if (roomToCheck) {
+        const roomConflict = await this.scheduleRepository.findRoomConflict(
+          roomToCheck,
+          schedule.workDate,
+          schedule.clinicShiftId,
+          id, // exclude current
+        );
+        if (roomConflict) {
+          throw new ConflictException(
+            'Update failed: Room is already assigned to another doctor for this shift',
+          );
+        }
       }
     }
 

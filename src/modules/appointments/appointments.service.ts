@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
   forwardRef,
 } from '@nestjs/common';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -3688,16 +3689,37 @@ export class AppointmentsService {
     sessionId: string,
     patientId: string,
   ): Promise<any> {
+    console.log('[DEBUG] Starting createAppointmentFromSession, sessionId:', sessionId, 'patientId:', patientId);
+    
     // ========================================================================
     // STEP 1: RETRIEVE AND VALIDATE SESSION
     // ========================================================================
 
     const session = await this.bookingSessionService.getSession(sessionId);
+    console.log('[DEBUG] Session fetched:', JSON.stringify(session, null, 2));
 
     // Verify session ownership
     if (session.patientId !== patientId) {
+      console.log('[DEBUG] Session ownership check failed. Session patientId:', session.patientId, 'Request patientId:', patientId);
       throw new ForbiddenException(
         'You do not have permission to access this session',
+      );
+    }
+
+    // Validate session has required fields
+    if (!session.paymentMethod) {
+      console.log('[DEBUG] paymentMethod missing in session. Session keys:', Object.keys(session));
+      throw new BadRequestException(
+        'Payment method not found in booking session. Please restart the booking process.',
+      );
+    }
+
+    // SAFETY GUARD: Out-of-hours appointments ONLY accept COD payment
+    const bookingOption = session.bookingOption || 'service_first';
+    if (bookingOption === 'out_of_hours' && session.paymentMethod !== 'cod') {
+      console.log('[DEBUG] Out-of-hours with online payment detected - BLOCKING');
+      throw new BadRequestException(
+        'Out-of-hours appointments strictly require COD payment method. Online payment is not supported.',
       );
     }
 
@@ -3706,7 +3728,7 @@ export class AppointmentsService {
     // ========================================================================
 
     // Detect booking option (default to option 1/2/3 if not specified)
-    const bookingOption = session.bookingOption || 'service_first';
+    console.log('[DEBUG] Booking option detected:', bookingOption);
 
     if (bookingOption === 'out_of_hours') {
       // ============================================================
@@ -3714,6 +3736,8 @@ export class AppointmentsService {
       // - REQUIRED: extraHour (ISO datetime string)
       // - NOT REQUIRED: clinicShiftHourId
       // ============================================================
+      console.log('[DEBUG] Processing OUT-OF-HOURS booking');
+      
       if (
         !session.serviceIds ||
         session.serviceIds.length === 0 ||
@@ -3722,6 +3746,14 @@ export class AppointmentsService {
         !session.paymentMethod ||
         !session.extraHour
       ) {
+        console.log('[DEBUG] Missing required fields for out_of_hours:', {
+          hasServiceIds: !!session.serviceIds,
+          serviceIdsLength: session.serviceIds?.length,
+          hasClinicId: !!session.clinicId,
+          hasDoctorId: !!session.doctorId,
+          hasPaymentMethod: !!session.paymentMethod,
+          hasExtraHour: !!session.extraHour,
+        });
         throw new BadRequestException(
           'Incomplete out-of-hours booking session. Required: serviceIds, clinicId, doctorId, paymentMethod, extraHour.',
         );
@@ -3732,6 +3764,7 @@ export class AppointmentsService {
         typeof session.extraHour !== 'string' ||
         !session.extraHour.includes('T')
       ) {
+        console.log('[DEBUG] Invalid extraHour format:', session.extraHour);
         throw new BadRequestException(
           'extraHour must be a valid ISO datetime string (e.g., 2026-03-15T19:30:00)',
         );
@@ -3740,6 +3773,7 @@ export class AppointmentsService {
       // Parse extraHour to Date object
       const extraHourDate = new Date(session.extraHour);
       if (isNaN(extraHourDate.getTime())) {
+        console.log('[DEBUG] extraHour parse failed:', session.extraHour);
         throw new BadRequestException(
           'Invalid extraHour format. Must be a valid ISO datetime.',
         );
@@ -3747,13 +3781,29 @@ export class AppointmentsService {
 
       // Validate extraHour is in the future (use Vietnam timezone)
       if (isInPast(extraHourDate)) {
+        console.log('[DEBUG] extraHour is in the past:', extraHourDate);
         throw new BadRequestException('extraHour must be in the future');
+      }
+
+      // Out-of-hours validation passed, now process it
+      if (session.paymentMethod === 'cod') {
+        return await this.createAppointmentOutOfHours(
+          sessionId,
+          patientId,
+          session,
+        );
+      } else {
+        throw new BadRequestException(
+          'Online payment for out-of-hours appointments is not yet supported',
+        );
       }
     } else {
       // ============================================================
       // OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)
       // - REQUIRED: clinicShiftHourId, appointmentDate
       // ============================================================
+      console.log('[DEBUG] Processing STANDARD booking (options 1/2/3)');
+      
       if (
         !session.serviceIds ||
         session.serviceIds.length === 0 ||
@@ -3763,6 +3813,15 @@ export class AppointmentsService {
         !session.doctorId ||
         !session.paymentMethod
       ) {
+        console.log('[DEBUG] Missing required fields for standard booking:', {
+          hasServiceIds: !!session.serviceIds,
+          serviceIdsLength: session.serviceIds?.length,
+          hasClinicId: !!session.clinicId,
+          hasAppointmentDate: !!session.appointmentDate,
+          hasClinicShiftHourId: !!session.clinicShiftHourId,
+          hasDoctorId: !!session.doctorId,
+          hasPaymentMethod: !!session.paymentMethod,
+        });
         throw new BadRequestException(
           'Incomplete booking session. Please complete all steps (including payment method selection) before confirming.',
         );
@@ -3770,8 +3829,9 @@ export class AppointmentsService {
 
       // Validate payment method (common for all options)
       if (!['cod', 'online'].includes(session.paymentMethod)) {
+        console.log('[DEBUG] Invalid payment method:', session.paymentMethod);
         throw new BadRequestException(
-          'Invalid payment method. Must be \"cod\" or \"online\"',
+          'Invalid payment method. Must be "cod" or "online"',
         );
       }
 
@@ -3892,32 +3952,41 @@ export class AppointmentsService {
     session: any,
     dateString: string,
   ): Promise<any> {
+    console.log('[DEBUG-COD] Starting createAppointmentCOD transaction', { sessionId, patientId, dateString, paymentMethod: session.paymentMethod });
+    
+    let result: any;
+    
     // Execute transaction with SERIALIZABLE isolation level
     // This ensures ACID compliance and prevents race conditions
-    const result = await this.dataSource.transaction(
-      'SERIALIZABLE',
-      async (manager) => {
-        // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
-        // SELECT ... FOR UPDATE prevents concurrent bookings
-        const shiftHourRepo = manager.getRepository('clinic_shift_hour');
-        const shiftHour = await manager
-          .createQueryBuilder()
-          .select('csh')
-          .from('clinic_shift_hour', 'csh')
-          .where('csh._id = :id', { id: session.clinicShiftHourId })
-          .setLock('pessimistic_write') // Critical: Prevents race conditions
-          .getOne();
+    try {
+      result = await this.dataSource.transaction(
+        'SERIALIZABLE',
+        async (manager) => {
+          console.log('[DEBUG-COD] Inside transaction, validating shiftHour');
+          // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
+          // SELECT ... FOR UPDATE prevents concurrent bookings
+          const shiftHourRepo = manager.getRepository('clinic_shift_hour');
+          const shiftHour = await manager
+            .createQueryBuilder()
+            .select('csh')
+            .from('clinic_shift_hour', 'csh')
+            .where('csh._id = :id', { id: session.clinicShiftHourId })
+            .setLock('pessimistic_write') // Critical: Prevents race conditions
+            .getOne();
 
-        if (!shiftHour) {
-          throw new NotFoundException('Time slot not found');
-        }
+          console.log('[DEBUG-COD] ShiftHour fetched:', shiftHour);
 
-        // Business Rule: Check slot availability
-        if (shiftHour.limit <= 0) {
-          throw new BadRequestException(
-            'This time slot is fully booked. Please select another time.',
-          );
-        }
+          if (!shiftHour) {
+            throw new NotFoundException('Time slot not found');
+          }
+
+          // Business Rule: Check slot availability
+          if (shiftHour.limit <= 0) {
+            console.log('[DEBUG-COD] Slot fully booked, limit:', shiftHour.limit);
+            throw new BadRequestException(
+              'This time slot is fully booked. Please select another time.',
+            );
+          }
 
         // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
         // Query ALL service_ids from clinic_service_config in ONE batch query
@@ -4129,10 +4198,21 @@ export class AppointmentsService {
         };
       },
     );
+  } catch (error) {
+    console.error('[DEBUG-COD] Transaction error:', error);
+    throw error;
+  }
 
-    // === STEP 10: Delete Redis Session (Cleanup) ===
-    // V4.0: COD flow deletes session immediately after successful creation
-    await this.bookingSessionService.deleteSession(sessionId);
+  // Validate transaction result
+  if (!result) {
+    throw new InternalServerErrorException(
+      'Failed to create appointment: Transaction returned no result',
+    );
+  }
+
+  // === STEP 10: Delete Redis Session (Cleanup) ===
+  // V4.0: COD flow deletes session immediately after successful creation
+  await this.bookingSessionService.deleteSession(sessionId);
 
     // === STEP 11: Send Email Notifications (Async - Non-blocking) ===
     // Email failures should NOT rollback the appointment
@@ -4510,8 +4590,11 @@ export class AppointmentsService {
     patientId: string,
     session: any,
   ): Promise<any> {
+    console.log('[DEBUG-OOH] Starting createAppointmentOutOfHours', { sessionId, patientId });
+    
     // === STEP 1: Parse extraHour ===
     const extraHourDate = new Date(session.extraHour);
+    console.log('[DEBUG-OOH] extraHour parsed:', extraHourDate);
 
     // Double-check validity (should already be validated in main function)
     if (isNaN(extraHourDate.getTime())) {
@@ -4523,7 +4606,10 @@ export class AppointmentsService {
     const day = String(extraHourDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
 
-    const result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+    let result: any;
+    try {
+      result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+        console.log('[DEBUG-OOH] Inside transaction');
 
       // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
       // Query clinic_service_config for ALL serviceIds in one batch
@@ -4675,12 +4761,23 @@ export class AppointmentsService {
         return { appointment: savedAppointment, serviceConfigs };
       },
     );
+  } catch (error) {
+    console.error('[DEBUG-OOH] Transaction error:', error);
+    throw error;
+  }
 
-    // === STEP 8: Delete Redis Session ===
-    await this.bookingSessionService.deleteSession(sessionId);
+  // Validate transaction result
+  if (!result) {
+    throw new InternalServerErrorException(
+      'Failed to create out-of-hours appointment: Transaction returned no result',
+    );
+  }
 
-    // === STEP 9: Build Response ===
-    const services = result.serviceConfigs.map((sc: ClinicServiceConfig) => {
+  // === STEP 8: Delete Redis Session ===
+  await this.bookingSessionService.deleteSession(sessionId);
+
+  // === STEP 9: Build Response ===
+  const services = result.serviceConfigs.map((sc: ClinicServiceConfig) => {
       const price = Number(sc.price) || 0;
       const discount = Number(sc.discount) || 0;
       const finalPrice = price - (price * discount) / 100;
@@ -7105,6 +7202,88 @@ export class AppointmentsService {
       allPackagesPaid,
       remainingPendingPackages: remainingPendingCount,
     };
+  }
+
+  /**
+   * Complete COD Appointment
+   * Complete appointment flow: update appointment status to COMPLETED, 
+   * set all PENDING_PAYMENT packages to PAID, 
+   * and update transaction status to SUCCESS.
+   *
+   * @param staffAccountId - Staff account UUID
+   * @param appointmentId - Appointment UUID
+   */
+  async completeCodAppointment(
+    staffAccountId: string,
+    appointmentId: string,
+  ): Promise<any> {
+    // 1. Verify staff has access
+    const staffAccount =
+      await this.accountRepository.findAccountById(staffAccountId);
+
+    if (
+      !staffAccount ||
+      staffAccount.role !== AccountRole.CLINIC_STAFF ||
+      !staffAccount.parentId
+    ) {
+      throw new ForbiddenException(MESSAGES.failMessage.accountNotFound);
+    }
+
+    const clinicId = staffAccount.parentId;
+
+    return await this.dataSource.transaction(async (manager) => {
+      try {
+        // Step 1: Query and Update Appointment
+        const appointment = await manager.findOne(Appointment, {
+          where: { _id: appointmentId, clinicId },
+        });
+
+        if (!appointment) {
+          throw new NotFoundException('Appointment not found');
+        }
+
+        if (appointment.status === AppointmentStatus.COMPLETED) {
+          throw new BadRequestException('Appointment is already completed');
+        }
+
+        appointment.status = AppointmentStatus.COMPLETED;
+        await manager.save(appointment);
+
+        // Step 2: Query Transactions logically mapped to these packages and EXPIRE spam ones except newest mapping
+        // Simply marking all PENDING transactions to EXPIRED then mapping the specific one to SUCCESS could be complicated if we don't have transaction ID.
+        // Actually, since staff handles COD directly without using QR flow (or overwriting QR flow), 
+        // we can simply update all related PENDING ones to EXPIRED, and just mark the package PAID.
+        // OR, the prompt states: "check that if this appointment already have transaction then update status that transaction to SUCCESS"
+        await manager.update(
+          Transaction,
+          { appointmentId, status: PaymentStatus.PENDING },
+          { status: PaymentStatus.SUCCESS }
+        );
+
+        // Step 3: Update Appointment Packages
+        await manager.update(
+          AppointmentPackage,
+          { appointmentId, status: AppointmentPackageStatus.PENDING_PAYMENT },
+          { status: AppointmentPackageStatus.PAID, paymentType: PaymentType.COD }
+        );
+
+        return {
+          message: 'Appointment completed successfully',
+          data: appointment,
+        };
+      } catch (error) {
+        if (
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException ||
+          error instanceof ForbiddenException
+        ) {
+          throw error;
+        }
+        throw new InternalServerErrorException(
+          'Failed to complete appointment via transactions',
+        );
+      }
+    });
   }
 
   /**

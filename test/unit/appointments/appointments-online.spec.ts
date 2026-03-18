@@ -119,6 +119,9 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(null),
       getMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
     }),
   });
 
@@ -346,6 +349,9 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
           setLock: jest.fn().mockReturnThis(),
           getOne: jest.fn().mockResolvedValue({ _id: mockSlotId, limit: 0, startHour: '08:00:00' }),
           leftJoinAndSelect: jest.fn().mockReturnThis(),
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({ affected: 1 }),
         });
 
         await expect(

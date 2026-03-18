@@ -9,3 +9,4 @@ export * from './response-report.dto';
 export * from './update-feedback.dto';
 export * from './doctor-feedbacks-query.dto';
 export * from './doctor-feedbacks-response.dto';
+export * from './branch-report-query.dto';
