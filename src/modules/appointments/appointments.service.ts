@@ -342,8 +342,7 @@ export class AppointmentsService {
     const clinicId = staffAccount.parentId;
 
     // Convert date strings to Date objects
-    const appointmentDate = new Date(createDto.appointmentDate);
-    appointmentDate.setHours(0, 0, 0, 0);
+    const appointmentDate = getStartOfDay(createDto.appointmentDate);
     const extraHour = createDto.extraHour
       ? new Date(createDto.extraHour)
       : null;
@@ -909,7 +908,7 @@ export class AppointmentsService {
     }
 
     // Convert new date to Date object
-    const newAppointmentDate = new Date(rescheduleDto.appointmentDate);
+    const newAppointmentDate = getStartOfDay(rescheduleDto.appointmentDate);
     newAppointmentDate.setHours(0, 0, 0, 0);
 
     // Validate new appointment date
@@ -1098,7 +1097,7 @@ export class AppointmentsService {
     const newExtraHour = new Date(rescheduleDto.extraHour);
 
     // Validate extra_hour is in the future
-    if (newExtraHour <= new Date()) {
+    if (newExtraHour <= getCurrentVietnamTime()) {
       throw new BadRequestException('Extra hour must be in the future');
     }
 
@@ -1194,7 +1193,7 @@ export class AppointmentsService {
       );
     }
 
-    let newAppointmentDate = new Date(appointment.appointmentDate);
+    let newAppointmentDate = getStartOfDay(appointment.appointmentDate);
     let newClinicShiftHourId = appointment.clinicShiftHourId;
     let newExtraHour = appointment.extraHour;
     let newExtraRoomId = appointment.extraRoomId;
@@ -1205,15 +1204,12 @@ export class AppointmentsService {
       const targetShiftHourId =
         rescheduleDto.clinicShiftHourId || appointment.clinicShiftHourId;
 
-      
-
       let targetDate: Date;
       if (rescheduleDto.appointmentDate) {
-        targetDate = new Date(rescheduleDto.appointmentDate);
+        targetDate = getStartOfDay(rescheduleDto.appointmentDate);
       } else {
-        targetDate = new Date(appointment.appointmentDate);
+        targetDate = getStartOfDay(appointment.appointmentDate);
       }
-      targetDate.setHours(0, 0, 0, 0);
 
       // Check if doctor has schedule for this specific shift and date
       const specificSchedule = await this.dataSource
@@ -1240,7 +1236,7 @@ export class AppointmentsService {
         // Update appointmentHour from shift startHour
         if (specificSchedule.startHour) {
           const [h, m] = specificSchedule.startHour.split(':');
-          newAppointmentHour = new Date(targetDate);
+          newAppointmentHour = new Date(targetDate.getTime());
           newAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
         }
       } else {
@@ -1279,12 +1275,12 @@ export class AppointmentsService {
         }
 
         newClinicShiftHourId = targetShiftHourId;
-        newAppointmentDate = new Date(alternativeSchedule.workDate);
+        newAppointmentDate = getStartOfDay(alternativeSchedule.workDate);
 
         // Update appointmentHour from shift startHour
         if (alternativeSchedule.startHour) {
           const [h, m] = alternativeSchedule.startHour.split(':');
-          newAppointmentHour = new Date(newAppointmentDate);
+          newAppointmentHour = new Date(newAppointmentDate.getTime());
           newAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
         }
       }
@@ -1296,7 +1292,7 @@ export class AppointmentsService {
         ? new Date(rescheduleDto.extraHour)
         : null;
       if (newExtraHour) {
-        newAppointmentHour = new Date(newExtraHour);
+        newAppointmentHour = new Date(newExtraHour.getTime());
       }
     }
 
@@ -1384,6 +1380,7 @@ export class AppointmentsService {
     appointment.clinicShiftHourId = newClinicShiftHourId;
     appointment.extraHour = newExtraHour;
     appointment.extraRoomId = newExtraRoomId;
+    appointment.updatedAt = getCurrentVietnamTime();
 
     // Save changes
     const updatedAppointment =

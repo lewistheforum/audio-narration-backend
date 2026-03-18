@@ -12,6 +12,10 @@ import {
   UseGuards,
   Res,
 } from '@nestjs/common';
+import {
+  getCurrentVietnamTime,
+  getVietnamTimestamp,
+} from '../../common/utils/date.util';
 import { Response } from 'express';
 import {
   ApiBearerAuth,
@@ -499,7 +503,7 @@ export class TransactionsController {
       dto,
     );
 
-    const filename = `revenue_report_${user._id}_${new Date().getTime()}.xlsx`;
+    const filename = `revenue_report_${user._id}_${getVietnamTimestamp()}.xlsx`;
 
     res.set({
       'Content-Type':

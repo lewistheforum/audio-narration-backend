@@ -21,6 +21,12 @@ import { RegistrationStatus } from './enums/subscription-status.enum';
 import { MESSAGES } from 'src/common/message';
 import { ClinicSubscriptionHistory } from './entities/clinic-subscription-history.entity';
 import { DataSource } from 'typeorm';
+import {
+  getCurrentVietnamTime,
+  getStartOfDay,
+  getEndOfDay,
+  addToDate,
+} from 'src/common/utils/date.util';
 
 /**
  * Subscription Services Service
@@ -584,45 +590,15 @@ export class SubscriptionServicesService {
         `[Subscription] Queueing renewal/change for clinic ${subscription.clinicId}. Next Service: ${service.serviceName}`,
       );
 
+      // Determine Current Expiration in VN Time
+      // currentExpirationDate is already stored as Wall-Clock UTC (representing VN time)
       const currentExpirationDate = new Date(subscription.expirationDate);
+      const targetStartDate = getStartOfDay(addToDate(currentExpirationDate, 60, 'second'));
 
-      // --- TRANSITION LOGIC: Convert Old Real-UTC (16:59) to New Wall-UTC (23:59) if needed ---
-      // 1. Get offset in milliseconds for VN (UTC+7)
-      const VN_OFFSET = 7 * 60 * 60 * 1000;
-
-      // 2. Determine Current Expiration in VN Time
-      const currentExpireVnSimulated = new Date(
-        currentExpirationDate.getTime() + VN_OFFSET,
-      );
-
-      // 3. Determine Next Start Date (Start of Next Day in VN)
-      // If current expires today 23:59 VN, next starts tomorrow 00:00 VN.
-      // We want to store this as 00:00 UTC.
-
-      // Add 1 second to move from 23:59:59 to 00:00:00 next day
-      const nextStartVn = new Date(currentExpireVnSimulated.getTime() + 1000);
-
-      const startYear = nextStartVn.getUTCFullYear();
-      const startMonth = nextStartVn.getUTCMonth();
-      const startDay = nextStartVn.getUTCDate();
-
-      // Target Start Date: 00:00:00 UTC (Wall Clock)
-      const targetStartDate = new Date(
-        Date.UTC(startYear, startMonth, startDay, 0, 0, 0, 0),
-      );
-
-      // Target End Date: 23:59:59 UTC (Wall Clock)
-      const targetEndDate = new Date(
-        Date.UTC(startYear, startMonth + DURATION_MONTHS, startDay, 0, 0, 0, 0),
-      );
-      // Align day logic if needed (e.g. standard month addition), then set end of day
-      // Generally end date is (Start + Duration - 1 day) at 23:59:59
-      // E.g. Start Jan 1. End Jan 1 next year? Or Dec 31?
-      // Usually Start Jan 1 -> End Dec 31. (Inclusive full year).
-      // If we just add 12 months, we get Jan 1 next year.
-      // So subtract 1 day.
-      targetEndDate.setUTCDate(targetEndDate.getUTCDate() - 1);
-      targetEndDate.setUTCHours(23, 59, 59, 999);
+      // Determine Next End Date
+      // Inclusive full period: Start + Duration - 1 day
+      const targetEndDate = getEndOfDay(addToDate(targetStartDate, DURATION_MONTHS, 'month'));
+      targetEndDate.setUTCDate(targetEndDate.getUTCDate() - 1); // Make inclusive 23:59:59
 
       // Create or Update Queue Record
       let queueRecord =
@@ -661,29 +637,12 @@ export class SubscriptionServicesService {
         `[Subscription] Activating subscription for clinic ${subscription.clinicId}. Service: ${service.serviceName}`,
       );
 
-      // 1. Get offset in milliseconds for VN (UTC+7)
-      const VN_OFFSET = 7 * 60 * 60 * 1000;
+      // 1. Get Start Date (Today 00:00:00)
+      const startDate = getStartOfDay();
 
-      // 2. Determine "Today" in Vietnam Time
-      const nowVnSimulated = new Date(now.getTime() + VN_OFFSET);
-
-      const vnYear = nowVnSimulated.getUTCFullYear();
-      const vnMonth = nowVnSimulated.getUTCMonth();
-      const vnDay = nowVnSimulated.getUTCDate();
-
-      // 3. Create Start Date (00:00:00 VN) stored as 00:00:00 UTC
-      const startDate = new Date(Date.UTC(vnYear, vnMonth, vnDay, 0, 0, 0, 0));
-
-      // 4. Create End Date (23:59:59.999 VN) stored as 23:59:59.999 UTC
-      // Add duration (e.g. 1 year)
-      const endDate = new Date(
-        Date.UTC(vnYear, vnMonth + DURATION_MONTHS, vnDay, 0, 0, 0, 0),
-      );
-      // Subtract 1 day to make it inclusive (Jan 1 to Dec 31)
-      endDate.setUTCDate(endDate.getUTCDate() - 1);
-      endDate.setUTCHours(23, 59, 59, 999);
-
-      const expirationDate = endDate;
+      // 2. Get End Date (Start + Duration - 1 day at 23:59:59.999)
+      const expirationDate = getEndOfDay(addToDate(startDate, DURATION_MONTHS, 'month'));
+      expirationDate.setUTCDate(expirationDate.getUTCDate() - 1); // Make inclusive
 
       console.log(`[DEBUG] Date Calculation (VN Wall Clock stored as UTC):`);
       console.log(`   Now (UTC): ${now.toISOString()}`);

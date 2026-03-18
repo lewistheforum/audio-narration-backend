@@ -11,6 +11,7 @@ import {
   addToVietnamTime,
   getStartOfDay,
   getDateString,
+  getCurrentVietnamTime,
 } from 'src/common/utils/date.util';
 import { EmployeeSchedule } from './entities/employee-schedule.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
@@ -150,12 +151,12 @@ export class SchedulesService {
     let skippedCount = 0;
 
     try {
-      const targetStartDateObj = new Date(targetDate);
+      const targetStartDateObj = getStartOfDay(targetDate);
 
       // Iterate through each source date
       for (let i = 0; i < fromDates.length; i++) {
         const sourceDateStr = fromDates[i];
-        const sourceDateObj = new Date(sourceDateStr);
+        const sourceDateObj = getStartOfDay(sourceDateStr);
 
         // Calculate target date for this index (Consecutive)
         const currentTargetDate = new Date(targetStartDateObj);
@@ -559,7 +560,7 @@ export class SchedulesService {
    * internal helper to transform entity structure to DTO response format
    */
   private mapSchedules(schedules: any[]) {
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;

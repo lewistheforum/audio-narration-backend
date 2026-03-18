@@ -15,6 +15,9 @@ import {
   getCurrentVietnamTime,
   addToVietnamTime,
   formatToVietnamTime,
+  getStartOfDay,
+  parseVietnamTime,
+  getVietnamTimestamp,
 } from 'src/common/utils/date.util';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
@@ -700,7 +703,7 @@ export class TransactionsService {
     if (existingTransaction) {
       existingTransaction.status = status;
       existingTransaction.gateway = payload.gateway;
-      existingTransaction.transactionDate = new Date(payload.transactionDate);
+      existingTransaction.transactionDate = parseVietnamTime(payload.transactionDate);
       existingTransaction.accountNumber = payload.accountNumber;
       existingTransaction.code = payload.code;
       // existingTransaction.content = payload.content; // FIX: Don't overwrite metadata
@@ -887,7 +890,7 @@ export class TransactionsService {
           status: PaymentStatus.SUCCESS,
           qrCodeUrl: undefined,
           qrPayload: undefined,
-          expiresAt: new Date(),
+          expiresAt: getCurrentVietnamTime(),
         });
       }
 
@@ -924,7 +927,7 @@ export class TransactionsService {
       clinicId: appointment?.clinicId,
       senderAccountId: appointment?.patientId,
       transactionTypeId: transactionType?._id,
-      transactionDate: new Date(payload.transactionDate),
+      transactionDate: parseVietnamTime(payload.transactionDate),
       accountNumber: payload.accountNumber,
       code: payload.code,
       // content: payload.content, // EXISTING BUG: This overwrites our JSON metadata (targetServiceId) with the raw bank transfer message.
@@ -1272,8 +1275,8 @@ export class TransactionsService {
     clinicId: string,
     dto: ManagerRevenueReportDto,
   ): Promise<any> {
-    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
-    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
+    const startDate = dto.startDate ? getStartOfDay(dto.startDate) : new Date(0);
+    const endDate = dto.endDate ? getStartOfDay(dto.endDate) : getCurrentVietnamTime();
 
     // Default to day if not specified
     const periodMap = {
@@ -1316,8 +1319,8 @@ export class TransactionsService {
     clinicId: string,
     dto: ManagerRevenueReportDto,
   ): Promise<Buffer> {
-    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
-    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
+    const startDate = dto.startDate ? getStartOfDay(dto.startDate) : new Date(0);
+    const endDate = dto.endDate ? getStartOfDay(dto.endDate) : getCurrentVietnamTime();
 
     const transactions = await this.transactionRepository.getTransactionsForExport(
       clinicId,
