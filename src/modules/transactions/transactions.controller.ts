@@ -43,6 +43,7 @@ import { AccountRole } from '../accounts/enums';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { SeepayAuthGuard } from './guards/seepay-auth.guard';
+import { CreateTransactionAtClinicDto } from './dto/create-transaction-at-clinic.dto';
 
 /**
  * Transactions Controller
@@ -103,7 +104,7 @@ export class TransactionsController {
    * @param body Transaction creation DTO
    * @returns Created payment response with QR payload (if applicable)
    */
-  @Post(':appointmentID/qr/at-clinic')
+  @Post('qr/at-clinic')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(
@@ -118,17 +119,15 @@ export class TransactionsController {
     message: 'Payment QR created successfully',
   })
   @ApiBody({
-    type: CreateTransactionBodyDto,
-    description: 'Transaction payload (appointmentId is provided from path)',
+    type: CreateTransactionAtClinicDto,
+    description: 'Transaction payload (appointmentId is provided from body)',
   })
   async createStaffQrPayment(
-    @Param('appointmentID', ParseUUIDPipe) appointmentId: string,
-    @Body() body: CreateTransactionBodyDto,
+    @Body() body: CreateTransactionAtClinicDto,
   ) {
-    const payment = await this.transactionsService.createDynamicQrAtClinic({
-      ...body,
-      appointmentId,
-    });
+    const payment = await this.transactionsService.createDynamicQrAtClinic(
+      body,
+    );
     return {
       data: payment,
       message: 'Payment QR created successfully',
