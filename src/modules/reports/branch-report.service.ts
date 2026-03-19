@@ -52,10 +52,6 @@ export class BranchReportService {
    * Get doctors working on a specific day and their feedback stats
    */
   async getDoctorsWorkingAndFeedback(managerId: string, date: string) {
-    if (!date) {
-      throw new BadRequestException('Date is required for this report');
-    }
-
     // 1. Find all doctors who have appointments in this clinic on this date
     const doctorsData = await this.dataSource.query(`
       SELECT DISTINCT 

@@ -4,6 +4,10 @@ import { Repository } from 'typeorm';
 import { ClinicShiftHour } from './entities/clinic-shift-hour.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
 
+import {
+  getCurrentVietnamTime,
+  getVietnamTimestamp,
+} from 'src/common/utils/date.util';
 import { ConfigureShiftDto } from './dto/configure-shift.dto';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole } from '../accounts/enums';
@@ -250,6 +254,6 @@ export class ClinicShiftHoursService {
         });
 
         // Sort by createdAt descending
-        return history.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return history.sort((a, b) => getVietnamTimestamp(b.createdAt) - getVietnamTimestamp(a.createdAt));
     }
 }

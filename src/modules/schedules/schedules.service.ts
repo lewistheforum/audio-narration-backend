@@ -11,6 +11,7 @@ import {
   addToVietnamTime,
   getStartOfDay,
   getDateString,
+  getCurrentVietnamTime,
 } from 'src/common/utils/date.util';
 import { EmployeeSchedule } from './entities/employee-schedule.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
@@ -24,6 +25,7 @@ import { WeekDay } from './enums';
 import { ClinicRoom } from './entities/clinic_room.entity';
 import { Account } from '../accounts/entities/accounts.entity';
 import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
+import { GeneralAccount } from '../accounts/entities/general_accounts.entity';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { EmployeeScheduleRepository } from './repositories/employee-schedule.repository';
 import { AppointmentStatus } from '../appointments/enums';
@@ -40,6 +42,8 @@ export class SchedulesService {
     private readonly accountRepository: Repository<Account>,
     @InjectRepository(DoctorInformation)
     private readonly doctorInfoRepository: Repository<DoctorInformation>,
+    @InjectRepository(GeneralAccount)
+    private readonly generalAccountRepository: Repository<GeneralAccount>,
     private readonly dataSource: DataSource,
   ) { }
 
@@ -92,23 +96,48 @@ export class SchedulesService {
 
     if (!employees.length) return [];
 
-    // Manual Fetch DoctorInformation
+    // Manual Fetch DoctorInformation and GeneralAccount
     const employeeIds = employees.map((e) => e._id);
-    const doctorInfos = await this.doctorInfoRepository.find({
-      where: { accountId: In(employeeIds) },
+    const [doctorInfos, generalAccounts] = await Promise.all([
+      this.doctorInfoRepository.find({
+        where: { accountId: In(employeeIds) },
+      }),
+      this.generalAccountRepository.find({
+        where: { accountId: In(employeeIds) },
+      }),
+    ]);
+
+    // Create Maps for quick lookup
+    const doctorInfoMap = new Map<string, DoctorInformation>();
+    doctorInfos.forEach((info) => {
+      doctorInfoMap.set(info.accountId, info);
     });
 
-    // Create Map for quick lookup
-    const infoMap = new Map<string, DoctorInformation>();
-    doctorInfos.forEach((info) => {
-      infoMap.set(info.accountId, info);
+    const generalAccountMap = new Map<string, GeneralAccount>();
+    generalAccounts.forEach((acc) => {
+      generalAccountMap.set(acc.accountId, acc);
     });
 
     let results = employees.map((emp) => {
-      const info = infoMap.get(emp._id);
+      const doctorInfo = doctorInfoMap.get(emp._id);
+      const generalAccount = generalAccountMap.get(emp._id);
+
+      // Rule:
+      // For DOCTOR: fullName from doctorInfo
+      // For CLINIC_STAFF: fullName from generalAccount
+      let fullName = emp.username || 'Unknown';
+      if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
+        fullName = doctorInfo.fullName;
+      } else if (
+        emp.role === AccountRole.CLINIC_STAFF &&
+        generalAccount?.fullName
+      ) {
+        fullName = generalAccount.fullName;
+      }
+
       return {
         id: emp._id,
-        name: info?.fullName || emp.username,
+        name: fullName,
         role: emp.role,
         username: emp.username,
       };
@@ -150,12 +179,12 @@ export class SchedulesService {
     let skippedCount = 0;
 
     try {
-      const targetStartDateObj = new Date(targetDate);
+      const targetStartDateObj = getStartOfDay(targetDate);
 
       // Iterate through each source date
       for (let i = 0; i < fromDates.length; i++) {
         const sourceDateStr = fromDates[i];
-        const sourceDateObj = new Date(sourceDateStr);
+        const sourceDateObj = getStartOfDay(sourceDateStr);
 
         // Calculate target date for this index (Consecutive)
         const currentTargetDate = new Date(targetStartDateObj);
@@ -278,7 +307,7 @@ export class SchedulesService {
 
       for (const item of items) {
         const { clinicShiftId, workDate, roomId } = item;
-        const workDateObj = new Date(workDate);
+        const workDateObj = getStartOfDay(workDate);
 
         // WeekDay calculation
         const dayOfWeek = workDateObj.getDay();
@@ -559,10 +588,24 @@ export class SchedulesService {
    * internal helper to transform entity structure to DTO response format
    */
   private mapSchedules(schedules: any[]) {
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
+      const generalAccount = emp?.generalAccount;
+
+      // Rule:
+      // For DOCTOR: fullName from doctorInfo
+      // For CLINIC_STAFF: fullName from generalAccount
+      let fullName = emp?.username || 'Unknown';
+      if (emp?.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
+        fullName = doctorInfo.fullName;
+      } else if (
+        emp?.role === AccountRole.CLINIC_STAFF &&
+        generalAccount?.fullName
+      ) {
+        fullName = generalAccount.fullName;
+      }
 
       return {
         id: schedule._id,
@@ -570,8 +613,11 @@ export class SchedulesService {
         weekDay: schedule.weekDay,
         employee: {
           id: emp?._id,
-          fullName: doctorInfo?.fullName || emp?.username || 'Unknown',
-          avatar: doctorInfo?.profilePicture || null,
+          fullName: fullName,
+          avatar:
+            emp?.role === AccountRole.DOCTOR
+              ? doctorInfo?.profilePicture
+              : generalAccount?.profilePicture || null,
         },
         shift: {
           id: schedule.clinicShift?._id,
@@ -659,7 +705,7 @@ export class SchedulesService {
     }
 
     if (workDate) {
-      schedule.workDate = new Date(workDate);
+      schedule.workDate = getStartOfDay(workDate);
       const dayOfWeek = schedule.workDate.getDay();
       const weekDayMap = [
         WeekDay.SUNDAY,
@@ -781,7 +827,7 @@ export class SchedulesService {
 
     return this.shiftRepository.find({
       where: { clinicId },
-      select: ['_id', 'shift'],
+      relations: ['hours'],
       order: { shift: 'ASC' },
     });
   }

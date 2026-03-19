@@ -113,8 +113,8 @@ export class AppointmentCronService {
       ? new Date(appointment_hour).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       : 'N/A';
 
-    // Handle doctor name specifically
-    const finalDoctorName = (doctor_name && doctor_name !== 'null' && doctor_name !== 'N/A') 
+    // Handle doctor name (SQL now provides 'Bác sĩ trực' as COALESCE fallback)
+    const finalDoctorName = (doctor_name && doctor_name !== 'null') 
       ? String(doctor_name) 
       : 'Bác sĩ trực';
 

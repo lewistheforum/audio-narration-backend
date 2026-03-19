@@ -40,7 +40,8 @@ export class BranchReportController {
     @User() user: any,
     @Query() query: BranchReportQueryDto,
   ) {
-    return this.branchReportService.getDoctorsWorkingAndFeedback(user._id, query.date);
+    const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
+    return this.branchReportService.getDoctorsWorkingAndFeedback(user._id, targetDate);
   }
 
   @Get('services-stats')
