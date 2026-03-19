@@ -1350,7 +1350,9 @@ export class AppointmentsService {
         ? new Date(rescheduleDto.extraHour)
         : null;
       if (newExtraHour) {
-        newAppointmentHour = new Date(newExtraHour.getTime());
+        newAppointmentHour = new Date(newExtraHour);
+        newAppointmentDate = new Date(newExtraHour);
+        newAppointmentDate.setHours(0, 0, 0, 0);
       }
     }
 
