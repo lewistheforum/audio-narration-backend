@@ -946,21 +946,18 @@ export class AppointmentsService {
 
     // Check if appointment can be rescheduled based on type
     if (isOutOfHours) {
-      // Out-of-Hours: Allow PENDING or PENDING_DOCTOR
-      const allowedStatuses = [
-        AppointmentStatus.PENDING,
-        AppointmentStatus.PENDING_DOCTOR,
-      ];
-      if (!allowedStatuses.includes(appointment.status)) {
+      // BR: Out-of-Hours: Only PENDING status is allowed
+      // Note: PENDING_DOCTOR status is NOT allowed for rescheduling out-of-hours bookings
+      if (appointment.status !== AppointmentStatus.PENDING) {
         throw new BadRequestException(
-          `Cannot reschedule appointment with status "${appointment.status}". Only PENDING or PENDING_DOCTOR appointments can be rescheduled.`,
+          `Cannot reschedule out-of-hours appointment with status "${appointment.status}". Only PENDING appointments can be rescheduled.`,
         );
       }
     } else {
       // Standard Booking: Allow PENDING only
       if (appointment.status !== AppointmentStatus.PENDING) {
         throw new BadRequestException(
-          `Cannot reschedule appointment with status "${appointment.status}". Only PENDING appointments can be rescheduled.`,
+          `Cannot reschedule standard booking with status "${appointment.status}". Only PENDING appointments can be rescheduled.`,
         );
       }
     }
@@ -1020,6 +1017,13 @@ export class AppointmentsService {
       );
     }
 
+    // BR: Standard bookings (Option 1, 2, 3) must include doctorId when rescheduling
+    if (!rescheduleDto.doctorId) {
+      throw new BadRequestException(
+        'Doctor ID is required for standard booking reschedule. Please provide a valid doctorId for the selected shift.',
+      );
+    }
+
     // Use transaction with pessimistic locking
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1056,6 +1060,25 @@ export class AppointmentsService {
       // FIX: Use clinic_id from joined clinic_shift table
       if (newShiftHour.clinic_id !== appointment.clinicId) {
         throw new BadRequestException('New time slot must belong to the same clinic');
+      }
+
+      // BR: Verify doctorId is assigned to the new shift hour on the selected date
+      const doctorSchedule = await queryRunner.manager
+        .createQueryBuilder()
+        .select('es._id', 'schedule_id')
+        .from('employee_schedule', 'es')
+        .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+        .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+        .where('es.employee_id = :doctorId', { doctorId: rescheduleDto.doctorId })
+        .andWhere('csh._id = :shiftHourId', { shiftHourId: rescheduleDto.clinicShiftHourId })
+        .andWhere('es.work_date = :workDate', { workDate: newAppointmentDate })
+        .andWhere('es.deleted_at IS NULL')
+        .getRawOne();
+
+      if (!doctorSchedule) {
+        throw new BadRequestException(
+          'The selected doctor is not assigned to this shift on the chosen date. Please select a different doctor or shift.',
+        );
       }
 
       // Check for conflicts at new slot using QueryBuilder
@@ -1101,13 +1124,14 @@ export class AppointmentsService {
       const [hours, minutes] = newShiftHour.start_hour.split(':').map(Number);
       appointmentHour.setHours(hours, minutes, 0, 0);
 
-      // Update appointment
+      // Update appointment with new doctor, date, shift, and hour
       await queryRunner.manager
         .createQueryBuilder()
         .update('appointments')
         .set({
           appointmentDate: newAppointmentDate,
           clinicShiftHourId: newShiftHourId,
+          doctorId: rescheduleDto.doctorId,
           appointmentHour: appointmentHour,
           updatedAt: getCurrentVietnamTime(),
         })
@@ -1145,6 +1169,13 @@ export class AppointmentsService {
     rescheduleDto: PatientRescheduleAppointmentDto,
     newAppointmentDate: Date,
   ): Promise<AppointmentResponseDto> {
+    // BR: Out-of-hours appointments can ONLY be rescheduled if their status is PENDING
+    if (appointment.status !== AppointmentStatus.PENDING) {
+      throw new BadRequestException(
+        'Out-of-hours appointments can only be rescheduled when in PENDING status.',
+      );
+    }
+
     // Validate extra_hour is provided
     if (!rescheduleDto.extraHour) {
       throw new BadRequestException(
