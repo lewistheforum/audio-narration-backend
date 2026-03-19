@@ -3360,6 +3360,30 @@ export class AppointmentsController {
     );
   }
 
+  @Post('staff/:id/complete-cod-appointment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_STAFF)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete COD appointment (Change all COD packages and transactions to SUCCESS)',
+    description: 'Updates un-paid COD packages and transactions to SUCCESS/PAID and completes the appointment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment COD completed successfully.',
+  })
+  async completeCodAppointment(
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Request() req: any,
+  ) {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.completeCodAppointment(
+      staffAccountId,
+      appointmentId,
+    );
+  }
+
   /**
    * Get available doctors for out-of-hours booking (Option 4)
    *
