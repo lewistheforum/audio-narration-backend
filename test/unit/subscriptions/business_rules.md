@@ -92,7 +92,7 @@ targetEndDate = targetStartDate + duration months - 1 day (23:59:59 UTC)
 
 **Queue Record:**
 - Mỗi clinic chỉ có **1 queue record** (UNIQUE constraint).
-- Nếu đã có → **Update** thay vì create mới.
+- **Quy tắc chặn:** Hệ thống không cho phép tạo thêm giao dịch gia hạn/đổi gói nếu đã có bản ghi trong hàng đợi. Người dùng phải chờ gói chờ kích hoạt xong hoặc yêu cầu admin hủy gói chờ nếu muốn thay đổi.
 
 ---
 

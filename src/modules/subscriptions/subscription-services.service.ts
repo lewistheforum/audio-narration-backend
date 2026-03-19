@@ -17,6 +17,7 @@ import { SubscriptionServiceStatus } from './enums/subscription-service-status.e
 import { ClinicSubscriptionRepository } from './repositories/clinic-subscription.repository';
 import { ClinicSubscriptionHistoryRepository } from './repositories/clinic-subscription-history.repository';
 import { ClinicSubscriptionRenewalQueueRepository } from './repositories/clinic-subscription-renewal-queue.repository';
+import { ClinicSubscriptionRenewalQueue } from './entities/clinic-subscription-renewal-queue.entity';
 import { RegistrationStatus } from './enums/subscription-status.enum';
 import { MESSAGES } from 'src/common/message';
 import { ClinicSubscriptionHistory } from './entities/clinic-subscription-history.entity';
@@ -532,6 +533,20 @@ export class SubscriptionServicesService {
   }
 
   /**
+   * Get the renewal queue record for a clinic
+   *
+   * @param {string} clinicId - Clinic account UUID
+   * @returns {Promise<ClinicSubscriptionRenewalQueue | null>} Queue record
+   */
+  async getRenewalQueueByClinicId(
+    clinicId: string,
+  ): Promise<ClinicSubscriptionRenewalQueue | null> {
+    return this.clinicSubscriptionRenewalQueueRepository.findByClinicId(
+      clinicId,
+    );
+  }
+
+  /**
    * Handle Subscription Payment Success
    *
    * Logic:
@@ -575,7 +590,7 @@ export class SubscriptionServicesService {
     // Use duration from parameter (passed from transaction content)
     const DURATION_MONTHS = duration;
 
-    const now = new Date();
+    const now = getCurrentVietnamTime();
 
     // Check if currently Active AND Not Expired
     const isActive =
@@ -760,7 +775,7 @@ export class SubscriptionServicesService {
 
     let remainingDays = 0;
     if (subscription.expirationDate) {
-      const now = new Date();
+      const now = getCurrentVietnamTime();
       const expirationDate = new Date(subscription.expirationDate);
       const diffTime = expirationDate.getTime() - now.getTime();
       // Calculate remaining days (if expired, will be 0)

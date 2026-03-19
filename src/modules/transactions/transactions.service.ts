@@ -167,6 +167,15 @@ export class TransactionsService {
       throw new NotFoundException('Subscription not found for this clinic');
     }
 
+    // Check if there's already a renewal in the queue
+    const hasQueue =
+      await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);
+    if (hasQueue) {
+      throw new BadRequestException(
+        'A renewal or package change is already queued for this clinic. Please wait for the current queued package to be activated.',
+      );
+    }
+
     const now = getCurrentVietnamTime();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
@@ -222,6 +231,16 @@ export class TransactionsService {
 
     // Case B: Exist but Active & Valid (User mistake?)
     const now = getCurrentVietnamTime();
+
+    // Check if there's already a renewal in the queue
+    const hasQueue =
+      await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);
+    if (hasQueue) {
+      throw new BadRequestException(
+        'A renewal or package change is already queued for this clinic. Please wait for the current queued package to be activated.',
+      );
+    }
+
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
@@ -262,6 +281,15 @@ export class TransactionsService {
 
     if (!subscription) {
       throw new NotFoundException('Subscription not found for this clinic');
+    }
+
+    // Check if there's already a renewal in the queue
+    const hasQueue =
+      await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);
+    if (hasQueue) {
+      throw new BadRequestException(
+        'A renewal or package change is already queued for this clinic. Please wait for the current queued package to be activated.',
+      );
     }
 
     const transaction = await this.handlePackageChangeTransaction(
