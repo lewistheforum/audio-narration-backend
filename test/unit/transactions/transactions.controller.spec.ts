@@ -5,13 +5,15 @@ import { CreateTransactionDto } from '../../../src/modules/transactions/dto/crea
 import { SeepayCallbackDto } from '../../../src/modules/transactions/dto/seepay-callback.dto';
 import { Account } from '../../../src/modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../../src/modules/accounts/enums';
-
 import { ConfigService } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ClinicAdminInformation } from '../../../src/modules/accounts/entities/clinic-admin-information.entity';
 
 describe('TransactionsController', () => {
     let controller: TransactionsController;
     let service: any;
     let configService: any;
+    let clinicAdminRepo: any;
 
     beforeEach(async () => {
         service = {
@@ -27,6 +29,10 @@ describe('TransactionsController', () => {
             get: jest.fn(),
         };
 
+        clinicAdminRepo = {
+            findOne: jest.fn(),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             controllers: [TransactionsController],
             providers: [
@@ -37,6 +43,10 @@ describe('TransactionsController', () => {
                 {
                     provide: ConfigService,
                     useValue: configService,
+                },
+                {
+                    provide: getRepositoryToken(ClinicAdminInformation),
+                    useValue: clinicAdminRepo,
                 },
             ],
         }).compile();
@@ -84,13 +94,11 @@ describe('TransactionsController', () => {
         it('should call service.getAllPaymentHistory with correct filters for Admin', async () => {
             const user = { _id: 'admin-id', role: AccountRole.CLINIC_ADMIN } as Account;
             service.getAllPaymentHistory.mockResolvedValue({ items: [], total: 0 });
-            service.getClinicAdminIdByAccountId.mockResolvedValue('clinic-id');
 
             await controller.getAllPaymentHistory(user, 1, 10);
 
-            expect(service.getClinicAdminIdByAccountId).toHaveBeenCalledWith(user._id);
             expect(service.getAllPaymentHistory).toHaveBeenCalledWith(
-                1, 10, expect.objectContaining({ clinicId: 'clinic-id' })
+                1, 10, expect.objectContaining({ clinicId: 'admin-id' })
             );
         });
     });
@@ -98,11 +106,10 @@ describe('TransactionsController', () => {
     describe('getTransactionDetail', () => {
         it('should call service.getTransactionDetail', async () => {
             const user = { _id: 'admin-id', role: AccountRole.CLINIC_ADMIN } as Account;
-            service.getClinicAdminIdByAccountId.mockResolvedValue('clinic-id');
             service.getTransactionDetail.mockResolvedValue({ id: 'trans-1' });
 
             const result = await controller.getTransactionDetail('trans-1', user);
-            expect(service.getTransactionDetail).toHaveBeenCalledWith('trans-1', 'clinic-id');
+            expect(service.getTransactionDetail).toHaveBeenCalledWith('trans-1', 'admin-id');
             expect(result.data.id).toBe('trans-1');
         });
     });

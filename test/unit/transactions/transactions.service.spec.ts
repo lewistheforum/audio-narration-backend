@@ -21,6 +21,7 @@ import { AppointmentPackageStatus } from '../../../src/modules/appointments/enum
 import { Account } from '../../../src/modules/accounts/entities/accounts.entity';
 import { BookingSessionService } from '../../../src/modules/appointments/booking-session.service';
 import { AppointmentsService } from '../../../src/modules/appointments/appointments.service';
+import { AppointmentWebhookService } from '../../../src/modules/appointments/appointment-webhook.service';
 import { RevenuePeriod } from '../../../src/modules/transactions/dto/manager-revenue-report.dto';
 import * as XLSX from 'xlsx';
 
@@ -44,6 +45,7 @@ describe('TransactionsService', () => {
     let accountRepo: any;
     let bookingSessionService: any;
     let appointmentsService: any;
+    let appointmentWebhookService: any;
 
     // ========================================
     // SETUP
@@ -107,6 +109,10 @@ describe('TransactionsService', () => {
             updateAppointmentStatusDirectly: jest.fn(),
         };
 
+        appointmentWebhookService = {
+            sendConfirmation: jest.fn().mockResolvedValue(undefined),
+        };
+
         configService = {
             get: jest.fn((key) => {
                 if (key === 'SEEPAY_QR_BASE') return 'https://qr.seepay.vn';
@@ -131,11 +137,13 @@ describe('TransactionsService', () => {
                 { provide: SubscriptionServicesService, useValue: subscriptionServicesService },
                 { provide: BookingSessionService, useValue: bookingSessionService },
                 { provide: AppointmentsService, useValue: appointmentsService },
+                { provide: AppointmentWebhookService, useValue: appointmentWebhookService },
                 { provide: ConfigService, useValue: configService },
             ],
         }).compile();
 
         service = module.get<TransactionsService>(TransactionsService);
+        appointmentWebhookService = module.get<AppointmentWebhookService>(AppointmentWebhookService);
     });
 
     it('should be defined', () => {
@@ -655,7 +663,38 @@ describe('TransactionsService', () => {
                     { appointmentId: 'uuid-appointment', status: AppointmentPackageStatus.PENDING_PAYMENT },
                     { status: AppointmentPackageStatus.PAID, transactionId: 'new-tx', paymentType: PaymentType.ONLINE }
                 );
+                // Webhook should NOT be called for standard appointments
+                expect(appointmentWebhookService.sendConfirmation).not.toHaveBeenCalled();
                 expect(result.status).toBe(PaymentStatus.SUCCESS);
+            });
+        });
+
+        describe('Strategy C: Online Booking Session (Webhook logic)', () => {
+            const sessionId = '550e8400-e29b-41d4-a716-446655440002';
+            const bookingPayload = { ...basePayload, content: `booking ${sessionId}`, prescriptionId: null, appointmentId: null };
+
+            it('should trigger n8n webhook for Strategy C (Online Booking Session)', async () => {
+                const appointmentResult = { appointment_id: 'new-apt-id', transaction_id: 'new-tx-id' };
+                
+                (transactionRepository.findOne as jest.Mock).mockResolvedValue(null);
+                (bookingSessionService.getSession as jest.Mock).mockResolvedValue({ paymentMethod: 'online' });
+                appointmentsService.createAppointmentOnlineFromCallback.mockResolvedValue(appointmentResult);
+
+                const result = await service.handleCallback(bookingPayload);
+
+                expect(appointmentsService.createAppointmentOnlineFromCallback).toHaveBeenCalledWith(sessionId, bookingPayload);
+                expect(appointmentWebhookService.sendConfirmation).toHaveBeenCalledWith('new-apt-id');
+                expect(result.status).toBe(PaymentStatus.SUCCESS);
+            });
+
+            it('should NOT trigger webhook if createAppointmentOnlineFromCallback fails', async () => {
+                (transactionRepository.findOne as jest.Mock).mockResolvedValue(null);
+                (bookingSessionService.getSession as jest.Mock).mockResolvedValue({ paymentMethod: 'online' });
+                appointmentsService.createAppointmentOnlineFromCallback.mockResolvedValue(null);
+
+                await expect(service.handleCallback(bookingPayload)).rejects.toThrow(BadRequestException);
+
+                expect(appointmentWebhookService.sendConfirmation).not.toHaveBeenCalled();
             });
         });
     });

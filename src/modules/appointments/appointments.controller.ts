@@ -115,12 +115,14 @@ import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
  * - POST /patients/booking-sessions - Create booking session
  * - PATCH /patients/booking-sessions/:sessionId - Update booking session
  * - POST /patients/appointments - Create appointment from session
+ * - POST /appointments/reminders/trigger - Manually trigger appointment reminders (Admin/Staff)
  */
 import { PrescriptionsService } from '../prescriptions/prescriptions.service';
 import {
   PatientEPrescriptionDetailResponseDto,
   PatientERMDetailResponseDto,
 } from '../prescriptions/dto';
+import { AppointmentCronService } from './appointment-cron.service';
 
 @ApiTags('Appointments')
 @ApiExtraModels(
@@ -142,7 +144,9 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) { }
+  ) {
+    console.log('✅ AppointmentsController initialized');
+  }
 
   /**
    * Get all appointments for staff's clinic
@@ -3353,6 +3357,30 @@ export class AppointmentsController {
       appointmentId,
       packageId,
       staffAccountId,
+    );
+  }
+
+  @Post('staff/:id/complete-cod-appointment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_STAFF)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete COD appointment (Change all COD packages and transactions to SUCCESS)',
+    description: 'Updates un-paid COD packages and transactions to SUCCESS/PAID and completes the appointment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment COD completed successfully.',
+  })
+  async completeCodAppointment(
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Request() req: any,
+  ) {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.completeCodAppointment(
+      staffAccountId,
+      appointmentId,
     );
   }
 

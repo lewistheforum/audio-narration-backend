@@ -160,6 +160,7 @@ export class SchedulesController {
     AccountRole.CLINIC_ADMIN,
     AccountRole.CLINIC_MANAGER,
     AccountRole.CLINIC_STAFF,
+    AccountRole.DOCTOR,
   )
   @ApiOperation({ summary: 'Get clinic rooms list by staff ID' })
   async getRoomsByManagerId(@Param('staffId') staffId: string) {
@@ -174,6 +175,14 @@ export class SchedulesController {
    * Roles: ANY
    */
   @Get('options/rooms/staff-account/:staffId')
+  @Roles(
+    AccountRole.ADMIN,
+    AccountRole.CLINIC_ADMIN,
+    AccountRole.CLINIC_MANAGER,
+    AccountRole.CLINIC_STAFF,
+    AccountRole.DOCTOR,
+    AccountRole.PATIENT,
+  )
   @ApiOperation({ summary: 'Get clinic rooms for dropdown by staff ID' })
   async getRoomsByStaffIdRoute(@Param('staffId') staffId: string) {
     return this.schedulesService.getRoomsByStaffId(staffId);
@@ -384,6 +393,7 @@ export class SchedulesController {
     AccountRole.ADMIN,
     AccountRole.CLINIC_ADMIN,
     AccountRole.CLINIC_MANAGER,
+    AccountRole.DOCTOR,
     AccountRole.CLINIC_STAFF,
   )
   @ApiOperation({ summary: 'Get paginated list of clinic rooms by staff ID' })
@@ -391,7 +401,10 @@ export class SchedulesController {
     @Param('staffId') staffId: string,
     @Query() query: ClinicRoomQueryDto,
   ) {
-    return this.schedulesService.getPaginatedClinicRoomsByStaffId(staffId, query);
+    return this.schedulesService.getPaginatedClinicRoomsByStaffId(
+      staffId,
+      query,
+    );
   }
 
   @Get('rooms/:id')
@@ -439,7 +452,7 @@ export class SchedulesController {
    * Roles: CLINIC_STAFF
    */
   @Get('staff/rooms-shift-hours')
-  @Roles(AccountRole.CLINIC_STAFF)
+  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get clinic rooms with shift hours (Staff only)',
@@ -507,7 +520,7 @@ export class SchedulesController {
    * Roles: CLINIC_STAFF
    */
   @Get('staff/doctors')
-  @Roles(AccountRole.CLINIC_STAFF)
+  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get doctor schedules (Staff only)',
@@ -583,7 +596,7 @@ export class SchedulesController {
    */
   @Get('staff/doctors/schedules/by-date')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.CLINIC_STAFF)
+  @Roles(AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get doctor schedules by specific date (Staff)',

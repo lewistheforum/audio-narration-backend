@@ -36,6 +36,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 import { BookingSessionService } from '../appointments/booking-session.service';
 import { ManagerRevenueReportDto, RevenuePeriod } from './dto/manager-revenue-report.dto';
 import * as XLSX from 'xlsx';
+import { CreateTransactionAtClinicDto } from './dto/create-transaction-at-clinic.dto';
 
 /**
  * Transactions Service
@@ -500,7 +501,7 @@ export class TransactionsService {
     }
 
     const amount = pendingPackages.reduce((sum, pkg) => sum + Number(pkg.amount), 0);
-    // Ignore dto.amount, use source of truth from DB packages
+    // Calculated from the source of truth in DB packages
 
     const expiresAt = this.computeExpireTime();
     const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
@@ -526,7 +527,7 @@ export class TransactionsService {
    * Create a dynamic payment QR for a prescription
    */
   async createDynamicQrAtClinic(
-    dto: CreateTransactionDto,
+    dto: CreateTransactionAtClinicDto,
   ): Promise<PaymentResponseDto> {
     // Verify appointment and get real amount & clinic
     const appointment = await this.appointmentRepository.findOne({
@@ -556,32 +557,58 @@ export class TransactionsService {
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
 
     // Calculate sum of all pending packages for this appointment
-    const pendingFinalAppointments = await this.appointmentRepository.find({
+    const pendingPackages = await this.packageRepo.find({
       where: {
-        _id: dto.appointmentId,
-        status: AppointmentStatus.NEED_FINAL_PAYMENT
+        appointmentId: dto.appointmentId,
+        status: AppointmentPackageStatus.PENDING_PAYMENT
       }
     });
 
-    if (pendingFinalAppointments.length === 0) {
+    if (pendingPackages.length === 0) {
       throw new BadRequestException('No pending payments for this appointment');
     }
 
-    // const amount = pendingFinalAppointments.reduce((sum, apt) => sum + Number(apt.amount), 0);
-    // Ignore dto.amount, use source of truth from DB packages
+    const amount = pendingPackages.reduce((sum, pkg) => sum + Number(pkg.amount), 0);
+    // Calculated from the source of truth in DB packages
 
-    const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(dto.amount, dto.appointmentId, acc, bank);
-    const qrPayload = this.buildQrPayload(
-      dto.amount,
-      dto.appointmentId,
-      acc,
-      bank,
+    // Expire any existing pending transactions for this appointment to prevent spam
+    await this.transactionRepository.update(
+      {
+        appointmentId: dto.appointmentId,
+        status: PaymentStatus.PENDING,
+      },
+      {
+        status: PaymentStatus.EXPIRED,
+      }
     );
 
+    const expiresAt = this.computeExpireTime();
+    const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
+    const qrPayload = JSON.stringify({
+      amount: amount,
+      description: dto.note || `Payment for appointment ${dto.appointmentId}`,
+      appointmentId: dto.appointmentId,
+      clinicId: dto.clinicId || appointment.clinicId,
+    });
+
+    let transaction = this.transactionRepository.create({
+      appointmentId: dto.appointmentId,
+      clinicId: dto.clinicId || appointment.clinicId,
+      amount,
+      currency: 'VND',
+      status: PaymentStatus.PENDING,
+    });
+    transaction = await this.transactionRepository.save(transaction);
+
+    // Map the new transaction ID back to the pending packages
+    for (const pkg of pendingPackages) {
+      pkg.transactionId = transaction.id;
+      await this.packageRepo.save(pkg);
+    }
+
     return new PaymentResponseDto({
-      id: null,
-      amount: dto.amount,
+      id: transaction.id,
+      amount: amount,
       currency: 'VND',
       status: PaymentStatus.PENDING,
       qrCodeUrl,
@@ -867,9 +894,17 @@ export class TransactionsService {
           payload,
         );
 
+        if (!appointmentResult) {
+          throw new BadRequestException(
+            'Failed to create appointment from online session',
+          );
+        }
+
         // Kích hoạt Webhook xác nhận lịch hẹn gửi thông tin sang n8n
-        if (appointmentResult && appointmentResult.appointment_id) {
-          await this.appointmentWebhookService.sendConfirmation(appointmentResult.appointment_id);
+        if (appointmentResult.appointment_id) {
+          await this.appointmentWebhookService.sendConfirmation(
+            appointmentResult.appointment_id,
+          );
         }
 
         return new PaymentResponseDto({

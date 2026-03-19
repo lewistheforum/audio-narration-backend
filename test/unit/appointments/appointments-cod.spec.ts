@@ -77,6 +77,9 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       getMany: jest.fn().mockResolvedValue([]),
       getRawMany: jest.fn().mockResolvedValue([]),
       getRawOne: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     // Create mock query builder for UPDATE queries
@@ -553,7 +556,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
             };
           }
           
-          // For slot (shiftHour) and duplicate check
+          // For slot (shiftHour) and duplicate check, AND update
           return {
             ...mockQueryBuilder,
             getOne: jest.fn().mockImplementation(async () => {

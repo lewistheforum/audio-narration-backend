@@ -349,3 +349,31 @@ npm test -- --watch reports.service.spec.ts
    - Clear, descriptive test names following AAA pattern (Arrange-Act-Assert)
    - Each test case isolated và independent
    - `afterEach()` clear all mocks để avoid side effects
+---
+
+## 🧪 Test Suite Structure: BranchReportService
+
+### 1. ✅ SUCCESS Cases
+
+#### TC-17: ✅ Should get customer stats for different periods
+**Mục đích:** Kiểm tra thống kê khách hàng theo Ngày/Tháng/Năm.
+**Setup:** Gọi `getCustomerStats` với `DAY`, `MONTH`, `YEAR`.
+**Expected:** QueryBuilder gọi đúng hàm SQL `TO_CHAR` tương ứng với định dạng ngày.
+
+#### TC-18: ✅ Should return combined doctor feedback data
+**Mục đích:** Kiểm tra việc tổng hợp dữ liệu bác sĩ, điểm đánh giá và nội dung feedback.
+**Expected:** Kết quả trả về mảng object chứa đầy đủ: `doctorId`, `fullName`, `avgRating`, `totalFeedback`, `recentFeedbacks`.
+
+#### TC-19: ✅ Should calculate service statistics correctly
+**Mục đích:** Kiểm tra tính toán số lượt đăng ký và doanh thu dịch vụ.
+**Expected:** Các giá trị chuỗi từ SQL phải được convert sang `number` chính xác.
+
+### 2. ❌ FAILURE & EDGE Cases
+
+#### TC-20: ❌ Should throw error when date is missing for doctor report
+**Mục đích:** Đảm bảo hệ thống báo lỗi nếu thiếu ngày.
+**Expected:** Trả về `BadRequestException` với message "Date is required for this report".
+
+#### TC-21: ✅ Should filter out CANCELLED/ABSENT appointments
+**Mục đích:** Bảo vệ tính chính xác của dữ liệu.
+**Expected:** Query phải có điều kiện `NOT IN ('CANCELLED', 'ABSENT')`.

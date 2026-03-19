@@ -20,6 +20,7 @@ import {
 import { randomBytes } from 'crypto';
 import { CodeVerificationRepository } from '../accounts/repositories';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
+import { Account } from '../accounts/entities/accounts.entity';
 import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 
 /**
@@ -34,6 +35,19 @@ export class AuthService {
     private socketGatewayService: SocketGatewayService,
     private codeVerificationRepository: CodeVerificationRepository,
   ) {}
+
+  private async buildJwtPayload(user: Account): Promise<Record<string, any>> {
+    const subscriptionPayload =
+      await this.AccountsService.getSubscriptionPayloadForAccount(user);
+
+    return {
+      sub: user._id,
+      uId: user._id,
+      email: user.email,
+      role: user.role,
+      ...subscriptionPayload,
+    };
+  }
 
   /**
    * Standard email/password login
@@ -67,7 +81,7 @@ export class AuthService {
     // Check clinic subscription status for clinic-related roles
     await this.AccountsService.validateClinicSubscription(user);
 
-    const payload = { sub: user._id, email: user.email, role: user.role };
+    const payload = await this.buildJwtPayload(user);
     this.socketGatewayService.markUserOnline(String(user._id));
 
     // Get general account data for response
@@ -179,7 +193,7 @@ export class AuthService {
       // Check clinic subscription status for clinic-related roles
       await this.AccountsService.validateClinicSubscription(user);
 
-      const payload = { sub: userId, email: userEmail, role: user.role };
+      const payload = await this.buildJwtPayload(user);
       const accessToken = this.jwtService.sign(payload);
 
       this.socketGatewayService.markUserOnline(String(userId));
