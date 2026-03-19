@@ -2224,6 +2224,70 @@ export class AccountsService {
   }
 
   /**
+   * Resolve Subscription Payload For JWT
+   *
+   * Returns subscription metadata for clinic-related roles:
+   * - CLINIC_ADMIN: direct subscription
+   * - CLINIC_MANAGER: parent CLINIC_ADMIN subscription
+   * - CLINIC_STAFF/DOCTOR: manager -> parent CLINIC_ADMIN subscription
+   */
+  async getSubscriptionPayloadForAccount(account: Account): Promise<{
+    subscriptionId?: string;
+    subscriptionName?: string;
+    subscriptionCode?: string;
+  }> {
+    const clinicRoles = [
+      AccountRole.CLINIC_ADMIN,
+      AccountRole.CLINIC_MANAGER,
+      AccountRole.CLINIC_STAFF,
+      AccountRole.DOCTOR,
+    ];
+
+    if (!clinicRoles.includes(account.role)) {
+      return {};
+    }
+
+    let clinicAdminId: string | undefined;
+
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      clinicAdminId = account._id;
+    } else if (account.role === AccountRole.CLINIC_MANAGER) {
+      clinicAdminId = account.parentId;
+    } else {
+      if (!account.parentId) {
+        return {};
+      }
+
+      const managerAccount = await this.accountRepository.findAccountById(
+        account.parentId,
+      );
+
+      clinicAdminId = managerAccount?.parentId;
+    }
+
+    if (!clinicAdminId) {
+      return {};
+    }
+
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+
+    if (!subscription) {
+      return {};
+    }
+
+    const service = await this.subscriptionServiceRepository.findById(
+      subscription.serviceId,
+    );
+
+    return {
+      subscriptionId: subscription._id,
+      subscriptionName: service?.serviceName,
+      subscriptionCode: service?.code,
+    };
+  }
+
+  /**
    * Find Account by Email
    *
    * Retrieves an account by email address. Used for authentication and email uniqueness validation.
