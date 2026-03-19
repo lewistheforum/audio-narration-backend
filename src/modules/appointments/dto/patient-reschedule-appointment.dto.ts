@@ -33,4 +33,13 @@ export class PatientRescheduleAppointmentDto {
   @IsOptional()
   @IsISO8601({}, { message: 'Extra hour must be a valid ISO 8601 timestamp' })
   extraHour?: string;
+
+  @ApiPropertyOptional({
+    description: 'Doctor ID for standard bookings (Options 1, 2, 3). Required when rescheduling a standard booking. Must be a doctor assigned to the new clinic shift hour on the selected date. Can be retrieved via GET /schedules/staff/doctors or GET /schedules/staff/doctors/schedules/by-date',
+    example: '123e4567-e89b-12d3-a456-426614174001',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'Doctor ID must be a valid UUID' })
+  doctorId?: string;
 }
