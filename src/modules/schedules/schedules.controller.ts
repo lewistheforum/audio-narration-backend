@@ -99,7 +99,7 @@ export class SchedulesController {
    * Roles: CLINIC_MANAGER
    */
   @Post('copy')
-  @HttpCode(HttpStatus.BAD_REQUEST) // Default if empty? Or 200/201
+  @HttpCode(HttpStatus.OK)
   @ApiResponse({ status: HttpStatus.OK, description: 'Schedules copied' })
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiOperation({ summary: 'Copy schedules from list of dates' })

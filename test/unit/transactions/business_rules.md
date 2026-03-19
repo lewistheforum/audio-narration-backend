@@ -107,7 +107,7 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 
 1.  **Khớp lệnh**: Tìm `BookingSession` trong Redis bằng `sessionId` (trích xuất từ nội dung chuyển khoản).
 2.  **Xử lý lịch hẹn**: Gọi `AppointmentsService.createAppointmentOnlineFromCallback`.
-    -   Tạo Appointment mới với trạng thái `CONFIRMED`.
+    -   Tạo Appointment mới với trạng thái `PENDING`.
     -   Tạo Transaction `SUCCESS`.
 3.  **Hậu xử lý (Post-Processing)**:
     - **⚠️ Webhook**: Trigger `AppointmentWebhookService.sendConfirmation(appointmentId)` để gửi thông báo sang n8n.

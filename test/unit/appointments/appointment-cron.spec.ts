@@ -4,7 +4,7 @@ import { AppointmentRepository } from '../../../src/modules/appointments/reposit
 import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { Logger } from '@nestjs/common';
 
-describe('AppointmentCronService (V6.0) - Unit Tests', () => {
+describe('AppointmentCronService (V6.2) - Unit Tests', () => {
   let service: AppointmentCronService;
   let repository: AppointmentRepository;
   let mailerService: MailerService;
@@ -13,7 +13,7 @@ describe('AppointmentCronService (V6.0) - Unit Tests', () => {
     appointment_id: 'app-1',
     patient_email: 'patient@example.com',
     patient_name: 'John Doe',
-    clinic_name: 'Medicare Hai Phong',
+    clinic_name: 'Medicare Clinic - Hai Phong Branch',
     appointment_date: '2026-03-20',
     appointment_hour: '2026-03-20T10:00:00Z',
     address: '123 Street',
@@ -102,12 +102,12 @@ describe('AppointmentCronService (V6.0) - Unit Tests', () => {
       );
     });
 
-    it('TC-REM-05: should use default "Bác sĩ trực" if doctor_name is "null"', async () => {
-      const appointmentWithNullDoctor = {
+    it('TC-REM-05: should use doctor_name from SQL (fallback is "Bác sĩ trực")', async () => {
+      const appointmentWithFallbackDoctor = {
         ...mockAppointment,
-        doctor_name: 'null',
+        doctor_name: 'Bác sĩ trực',
       };
-      mockRepo.findAppointmentsNeedingReminder.mockResolvedValue([appointmentWithNullDoctor]);
+      mockRepo.findAppointmentsNeedingReminder.mockResolvedValue([appointmentWithFallbackDoctor]);
 
       await service.processReminders();
 

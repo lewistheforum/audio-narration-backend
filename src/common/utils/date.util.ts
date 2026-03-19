@@ -112,16 +112,21 @@ export function getCurrentTime(): string {
 }
 
 /**
- * Get current timestamp in milliseconds (Vietnam timezone aware)
- * REPLACES: Date.now()
+ * Get timestamp in milliseconds (Vietnam timezone aware)
+ * REPLACES: Date.now() or new Date(date).getTime()
  * 
+ * @param date - Optional date to get timestamp for
  * @returns Milliseconds since epoch
  * 
  * @example
- * getVietnamTimestamp() // 1709992843075
+ * getVietnamTimestamp() // Current timestamp
+ * getVietnamTimestamp("2026-03-10") // Specific date timestamp
  */
-export function getVietnamTimestamp(): number {
-  return dayjs().tz(VIETNAM_TIMEZONE).valueOf();
+export function getVietnamTimestamp(date?: Date | string | number): number {
+  if (!date) {
+    return dayjs().tz(VIETNAM_TIMEZONE).valueOf();
+  }
+  return dayjs(date).tz(VIETNAM_TIMEZONE).valueOf();
 }
 
 /**
