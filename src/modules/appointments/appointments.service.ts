@@ -1437,8 +1437,28 @@ export class AppointmentsService {
     appointment.appointmentHour = newAppointmentHour;
     appointment.clinicShiftHourId = newClinicShiftHourId;
     appointment.extraHour = newExtraHour;
+<<<<<<< HEAD
     appointment.extraRoomId = newExtraRoomId;
     appointment.updatedAt = getCurrentVietnamTime();
+=======
+
+    // Fix: properly update extraRoom relation to ensure TypeORM saves it and response matches
+    if (newExtraRoomId !== appointment.extraRoomId) {
+      if (newExtraRoomId) {
+        const [newRoom] = await this.dataSource.query(
+          `SELECT _id, room_name as "roomName" FROM clinic_room WHERE _id = $1 AND deleted_at IS NULL`,
+          [newExtraRoomId]
+        );
+        if (!newRoom) {
+          throw new BadRequestException('Extra room not found');
+        }
+        appointment.extraRoom = newRoom;
+      } else {
+        appointment.extraRoom = null;
+      }
+      appointment.extraRoomId = newExtraRoomId;
+    }
+>>>>>>> bc12408a88ac8cd5b1c9b6be1dba9ca070a54e28
 
     // Save changes
     const updatedAppointment =
