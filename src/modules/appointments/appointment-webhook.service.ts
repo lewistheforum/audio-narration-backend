@@ -72,8 +72,15 @@ export class AppointmentWebhookService {
       // 4. Resolve labels
       const patient = appointment.patient;
       const patientProfile = patient?.generalAccount;
+      
       const clinic = appointment.clinic;
-      const clinicAdminInfo = clinic?.clinicAdminInformation;
+      const clinicAdminInfo = clinic?.clinicAdminInformation || clinic?.parent?.clinicAdminInformation;
+      const clinicManagerInfo = clinic?.clinicManagerInformation;
+      
+      const doctor = appointment.doctor;
+      const doctorProfile = doctor?.doctorInformation;
+      const doctorGeneralAccount = doctor?.generalAccount;
+      
       const shiftHour = appointment.clinicShiftHour;
 
       // Map data to the requested payload structure
@@ -82,15 +89,24 @@ export class AppointmentWebhookService {
         ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
         : clinic?.address_text || 'N/A';
 
+      // Refined Clinic Name: [Admin Name] - [Branch Name]
+      const adminName = clinicAdminInfo?.clinicName || '';
+      const branchName = clinicManagerInfo?.clinicBranchName || '';
+      const finalClinicName = [adminName, branchName].filter(Boolean).join(' - ') || clinic?.username || 'N/A';
+
+      // Doctor Name with fallbacks (Prioritize General Accounts)
+      const finalDoctorName = doctorGeneralAccount?.fullName || doctorProfile?.fullName || doctor?.username || 'Bác sĩ trực';
+
       const payload = {
         patientName: patientProfile?.fullName || patient?.username || 'N/A',
         patientPhone: patient?.phone || 'N/A',
         appointmentDate: appointment.appointmentDate ? formatToDateOnly(appointment.appointmentDate) : 'N/A',
         appointmentTime: shiftHour?.startHour || 'N/A',
-        clinicName: clinicAdminInfo?.clinicName || clinic?.username || 'N/A',
+        clinicName: finalClinicName,
         clinicAddress: fullClinicAddress,
         clinicPhone: clinicAdminInfo?.clinicPhone || clinic?.phone || 'N/A',
         room: roomName,
+        doctorName: finalDoctorName, // NEW
         serviceName: allServices.map(s => s.service_name).filter(Boolean).join(', ') || 'N/A',
         total: Number(appointment.total || 0),
         appointmentId: appointment._id,
