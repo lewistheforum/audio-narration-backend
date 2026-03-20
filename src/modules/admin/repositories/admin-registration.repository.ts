@@ -225,7 +225,7 @@ export class AdminRegistrationRepository {
   ): Promise<[any[], number]> {
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.legalDocumentsRepository
+    const baseQueryBuilder = this.legalDocumentsRepository
       .createQueryBuilder('legalDocs')
       .leftJoinAndSelect('legalDocs.account', 'managerAccount')
       .leftJoin(
@@ -242,6 +242,17 @@ export class AdminRegistrationRepository {
       .where('legalDocs.verification_status = :status', {
         status: 'PENDING_REVIEW',
       })
+      .andWhere(
+        `(SELECT COUNT(*) FROM accounts "childAccount"
+          WHERE "childAccount"."parent_id" = "adminAccount"."_id"
+            AND "childAccount"."role" = :managerRole) = 1`,
+        {
+          managerRole: AccountRole.CLINIC_MANAGER,
+        },
+      );
+
+    const dataQueryBuilder = baseQueryBuilder
+      .clone()
       .select([
         'adminAccount._id as "id"',
         'legalDocs._id as "legalDocumentId"',
@@ -261,12 +272,8 @@ export class AdminRegistrationRepository {
       .limit(limit);
 
     const [data, total] = await Promise.all([
-      queryBuilder.getRawMany(),
-      this.legalDocumentsRepository.count({
-        where: {
-          verificationStatus: LegalDocumentVerificationStatus.PENDING_REVIEW,
-        },
-      }),
+      dataQueryBuilder.getRawMany(),
+      baseQueryBuilder.clone().getCount(),
     ]);
 
     return [data, total];
@@ -335,7 +342,7 @@ export class AdminRegistrationRepository {
   ): Promise<[any[], number]> {
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.legalDocumentsRepository
+    const baseQueryBuilder = this.legalDocumentsRepository
       .createQueryBuilder('legalDocs')
       .leftJoinAndSelect('legalDocs.account', 'managerAccount')
       .leftJoin(
@@ -350,6 +357,17 @@ export class AdminRegistrationRepository {
         'subscription.clinic_id = adminAccount._id',
       )
       .where('legalDocs.verification_status = :status', { status: 'REJECTED' })
+      .andWhere(
+        `(SELECT COUNT(*) FROM accounts "childAccount"
+          WHERE "childAccount"."parent_id" = "adminAccount"."_id"
+            AND "childAccount"."role" = :managerRole) = 1`,
+        {
+          managerRole: AccountRole.CLINIC_MANAGER,
+        },
+      );
+
+    const queryBuilder = baseQueryBuilder
+      .clone()
       .select([
         'adminAccount._id as "id"',
         'legalDocs._id as "legalDocumentId"',
@@ -369,9 +387,7 @@ export class AdminRegistrationRepository {
 
     const [data, total] = await Promise.all([
       queryBuilder.getRawMany(),
-      this.legalDocumentsRepository.count({
-        where: { verificationStatus: LegalDocumentVerificationStatus.REJECTED },
-      }),
+      baseQueryBuilder.clone().getCount(),
     ]);
 
     return [data, total];
