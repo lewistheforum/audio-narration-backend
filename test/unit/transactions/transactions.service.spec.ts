@@ -793,8 +793,8 @@ describe('TransactionsService', () => {
         describe('getManagerRevenueStats', () => {
             it('should calculate total revenue and transaction count from repository results', async () => {
                 const mockStats = [
-                    { label: '2024-03-01', total_revenue: '100000', transaction_count: '2' },
-                    { label: '2024-03-02', total_revenue: '50000', transaction_count: '1' },
+                    { label: '2024-03-01', payment_type: PaymentType.ONLINE, total_revenue: '100000', transaction_count: '2' },
+                    { label: '2024-03-02', payment_type: PaymentType.COD, total_revenue: '50000', transaction_count: '1' },
                 ];
                 (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue(mockStats);
 
@@ -802,9 +802,11 @@ describe('TransactionsService', () => {
                 const result = await service.getManagerRevenueStats(managerId, dto as any);
 
                 expect(result.totalRevenue).toBe(150000);
+                expect(result.totalOnlineRevenue).toBe(100000);
+                expect(result.totalCODRevenue).toBe(50000);
                 expect(result.totalTransactions).toBe(3);
-                expect(result.data).toHaveLength(2);
-                expect(result.data[0].total_revenue).toBe('100000');
+                expect(result.onlineTransactions).toBe(2);
+                expect(result.codTransactions).toBe(1);
             });
 
             it('should handle empty repository results', async () => {

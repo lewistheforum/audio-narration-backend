@@ -89,7 +89,7 @@ export class ClinicManagerController {
    * GET /api/clinic-managers/:managerId
    */
   @Get(':managerId')
-  @Roles(AccountRole.CLINIC_ADMIN)
+  @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @ApiOperation({ 
     summary: 'Get manager details',
     description: 'Returns complete information including personnel list'
@@ -104,10 +104,12 @@ export class ClinicManagerController {
     @Req() req: any,
     @Param('managerId', ParseUUIDPipe) managerId: string,
   ): Promise<{ data: ManagerDetailResponseDto; message: string }> {
-    const clinicAdminId = req.user._id;
+    const requesterId = req.user._id;
+    const requesterRole = req.user.role;
     
     const result = await this.clinicManagerService.getManagerDetail(
-      clinicAdminId,
+      requesterId,
+      requesterRole,
       managerId,
     );
 
@@ -205,16 +207,21 @@ export class ClinicManagerController {
     @Req() req: any,
     @Param('managerId', ParseUUIDPipe) managerId: string,
     @Body() dto: UpdateManagerProfileDto,
-  ): Promise<{ message: string }> {
+  ): Promise<{ data: ManagerDetailResponseDto; message: string }> {
     const requesterId = req.user._id;
     const requesterRole = req.user.role;
     
-    return await this.clinicManagerService.updateManagerProfile(
+    const result = await this.clinicManagerService.updateManagerProfile(
       requesterId,
       requesterRole,
       managerId,
       dto,
     );
+
+    return {
+      data: result,
+      message: 'Profile updated successfully',
+    };
   }
 
   /**

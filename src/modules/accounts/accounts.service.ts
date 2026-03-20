@@ -2989,7 +2989,7 @@ export class AccountsService {
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.CLINIC_STAFF,
-        status: AccountStatus.ACTIVE, // Account is active by default
+        status: AccountStatus.PENDING_APPROVAL, // Account starts in pending approval state
         isEmailVerified: false, // Staff must verify themselves
         publicKey,
         encryptedPrivateKey,
@@ -3092,7 +3092,7 @@ export class AccountsService {
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.DOCTOR,
-        status: AccountStatus.ACTIVE, // Account is active by default
+        status: AccountStatus.PENDING_APPROVAL, // Account starts in pending approval state
         isEmailVerified: false, // Doctor must verify themselves
         publicKey,
         encryptedPrivateKey,
@@ -3870,10 +3870,9 @@ export class AccountsService {
       if (dto.isVerify !== undefined) {
         profile.isVerify = dto.isVerify;
       }
-      return this.clinicAdminInfoRepository.save(profile);
     } else {
       // Create new profile if doesn't exist
-      const profile = this.clinicAdminInfoRepository.create({
+      profile = this.clinicAdminInfoRepository.create({
         accountId,
         clinicName: dto.clinicName,
         description: dto.description,
@@ -3888,9 +3887,9 @@ export class AccountsService {
         sepayVa: dto.sepayVa,
         isVerify: dto.isVerify ?? false,
       });
-
-      return this.clinicAdminInfoRepository.save(profile);
     }
+
+    return this.clinicAdminInfoRepository.save(profile);
   }
 
   /**
