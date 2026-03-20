@@ -78,9 +78,22 @@ import {
   PatientAddressDto,
 } from './dto';
 import { MESSAGES } from 'src/common/message';
-import { Appointment, AppointmentPackage, ServiceAppointment } from './entities';
-import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from './enums';
-import { Transaction, TransactionType, TransactionTypeCode, PaymentStatus } from '../transactions/entities';
+import {
+  Appointment,
+  AppointmentPackage,
+  ServiceAppointment,
+} from './entities';
+import {
+  AppointmentStatus,
+  AppointmentPackageStatus,
+  PaymentType,
+} from './enums';
+import {
+  Transaction,
+  TransactionType,
+  TransactionTypeCode,
+  PaymentStatus,
+} from '../transactions/entities';
 import { ERMRecordType, ERMStatus } from '../prescriptions/enums';
 import { ERM } from '../prescriptions/entities/erm.entity';
 import { ERMConsultation } from '../prescriptions/entities/erm-consultation.entity';
@@ -126,7 +139,7 @@ export class AppointmentsService {
     private readonly mailerService: MailerService,
     @Inject(forwardRef(() => TransactionsService))
     private readonly transactionsService: TransactionsService,
-  ) { }
+  ) {}
 
   /**
    * Get all appointments for a clinic (Staff access)
@@ -624,10 +637,16 @@ export class AppointmentsService {
     appointment.rejectReason = cancelDto.rejectReason;
 
     // Save changes
-    const updatedAppointment = await this.appointmentRepository.save(appointment);
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
 
     // Handle slot return if necessary
-    await this.handleSlotReturn(this.dataSource.manager, updatedAppointment, oldStatus, newStatus);
+    await this.handleSlotReturn(
+      this.dataSource.manager,
+      updatedAppointment,
+      oldStatus,
+      newStatus,
+    );
 
     return this.transformToResponseDto(updatedAppointment);
   }
@@ -754,9 +773,11 @@ export class AppointmentsService {
     }
 
     // NEW LOGIC: Check and update packages
-    const packages = await this.dataSource.getRepository(AppointmentPackage).find({
-      where: { appointmentId },
-    });
+    const packages = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .find({
+        where: { appointmentId },
+      });
 
     const hasOnlinePaidPackage = packages.some(
       (pkg) =>
@@ -772,14 +793,18 @@ export class AppointmentsService {
 
     // Update COD packages to CANCELLED
     const codPackagesToCancel = packages.filter(
-      (pkg) => pkg.paymentType === PaymentType.COD && pkg.status !== AppointmentPackageStatus.CANCELLED,
+      (pkg) =>
+        pkg.paymentType === PaymentType.COD &&
+        pkg.status !== AppointmentPackageStatus.CANCELLED,
     );
 
     if (codPackagesToCancel.length > 0) {
       for (const pkg of codPackagesToCancel) {
         pkg.status = AppointmentPackageStatus.CANCELLED;
       }
-      await this.dataSource.getRepository(AppointmentPackage).save(codPackagesToCancel);
+      await this.dataSource
+        .getRepository(AppointmentPackage)
+        .save(codPackagesToCancel);
     }
 
     // Update appointment
@@ -849,9 +874,11 @@ export class AppointmentsService {
     }
 
     // NEW LOGIC: Check and update packages
-    const packages = await this.dataSource.getRepository(AppointmentPackage).find({
-      where: { appointmentId },
-    });
+    const packages = await this.dataSource
+      .getRepository(AppointmentPackage)
+      .find({
+        where: { appointmentId },
+      });
 
     const hasOnlinePaidPackage = packages.some(
       (pkg) =>
@@ -867,14 +894,18 @@ export class AppointmentsService {
 
     // Update COD packages to CANCELLED
     const codPackagesToCancel = packages.filter(
-      (pkg) => pkg.paymentType === PaymentType.COD && pkg.status !== AppointmentPackageStatus.CANCELLED,
+      (pkg) =>
+        pkg.paymentType === PaymentType.COD &&
+        pkg.status !== AppointmentPackageStatus.CANCELLED,
     );
 
     if (codPackagesToCancel.length > 0) {
       for (const pkg of codPackagesToCancel) {
         pkg.status = AppointmentPackageStatus.CANCELLED;
       }
-      await this.dataSource.getRepository(AppointmentPackage).save(codPackagesToCancel);
+      await this.dataSource
+        .getRepository(AppointmentPackage)
+        .save(codPackagesToCancel);
     }
 
     // Update appointment
@@ -1037,10 +1068,16 @@ export class AppointmentsService {
         .addSelect('csh.limit', 'limit')
         .addSelect('cs.clinic_id', 'clinic_id')
         .from('clinic_shift_hour', 'csh')
-        .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')  // FIX: INNER JOIN for pessimistic lock
+        .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id') // FIX: INNER JOIN for pessimistic lock
         .where('csh._id = :id', { id: rescheduleDto.clinicShiftHourId })
         .setLock('pessimistic_write')
-        .getRawOne<{ _id: string; start_hour: string; end_hour: string; limit: number; clinic_id: string }>();
+        .getRawOne<{
+          _id: string;
+          start_hour: string;
+          end_hour: string;
+          limit: number;
+          clinic_id: string;
+        }>();
 
       if (!newShiftHour) {
         throw new NotFoundException('Clinic shift hour not found');
@@ -1055,7 +1092,9 @@ export class AppointmentsService {
       // Verify new shift belongs to same clinic
       // FIX: Use clinic_id from joined clinic_shift table
       if (newShiftHour.clinic_id !== appointment.clinicId) {
-        throw new BadRequestException('New time slot must belong to the same clinic');
+        throw new BadRequestException(
+          'New time slot must belong to the same clinic',
+        );
       }
 
       // Check for conflicts at new slot using QueryBuilder
@@ -1063,15 +1102,23 @@ export class AppointmentsService {
         .createQueryBuilder(Appointment, 'a')
         .select('a._id')
         .where('a.clinic_id = :clinicId', { clinicId: appointment.clinicId })
-        .andWhere('a.appointment_date = :appointmentDate', { appointmentDate: newAppointmentDate })
-        .andWhere('a.clinic_shift_hour_id = :shiftHourId', { shiftHourId: rescheduleDto.clinicShiftHourId })
-        .andWhere('a.status NOT IN (:...statuses)', { statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT] })
+        .andWhere('a.appointment_date = :appointmentDate', {
+          appointmentDate: newAppointmentDate,
+        })
+        .andWhere('a.clinic_shift_hour_id = :shiftHourId', {
+          shiftHourId: rescheduleDto.clinicShiftHourId,
+        })
+        .andWhere('a.status NOT IN (:...statuses)', {
+          statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
+        })
         .andWhere('a.deleted_at IS NULL')
         .andWhere('a._id != :appointmentId', { appointmentId: appointment._id })
         .getRawOne();
 
       if (conflict) {
-        throw new ConflictException('This time slot is already booked. Please choose another time.');
+        throw new ConflictException(
+          'This time slot is already booked. Please choose another time.',
+        );
       }
 
       // Update slot limits (release old, claim new)
@@ -1172,15 +1219,21 @@ export class AppointmentsService {
       .createQueryBuilder(Appointment, 'a')
       .select('a._id')
       .where('a.clinic_id = :clinicId', { clinicId: appointment.clinicId })
-      .andWhere('a.appointment_date = :appointmentDate', { appointmentDate: newAppointmentDate })
+      .andWhere('a.appointment_date = :appointmentDate', {
+        appointmentDate: newAppointmentDate,
+      })
       .andWhere('a.extra_hour = :extraHour', { extraHour: newExtraHour })
-      .andWhere('a.status NOT IN (:...statuses)', { statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT] })
+      .andWhere('a.status NOT IN (:...statuses)', {
+        statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
+      })
       .andWhere('a.deleted_at IS NULL')
       .andWhere('a._id != :appointmentId', { appointmentId: appointment._id })
       .getRawOne();
 
     if (conflict) {
-      throw new ConflictException('This time slot is already booked. Please choose another time.');
+      throw new ConflictException(
+        'This time slot is already booked. Please choose another time.',
+      );
     }
 
     // Update appointment
@@ -1362,9 +1415,9 @@ export class AppointmentsService {
     // Check for conflicts if date or shift changed
     const dateChanged =
       newAppointmentDate.getTime() !==
-      new Date(appointment.appointmentDate).getTime() ||
+        new Date(appointment.appointmentDate).getTime() ||
       newAppointmentHour.getTime() !==
-      new Date(appointment.appointmentHour).getTime();
+        new Date(appointment.appointmentHour).getTime();
     const shiftChanged = newClinicShiftHourId !== appointment.clinicShiftHourId;
 
     if (dateChanged || shiftChanged) {
@@ -1443,7 +1496,7 @@ export class AppointmentsService {
       if (newExtraRoomId) {
         const [newRoom] = await this.dataSource.query(
           `SELECT _id, room_name as "roomName" FROM clinic_room WHERE _id = $1 AND deleted_at IS NULL`,
-          [newExtraRoomId]
+          [newExtraRoomId],
         );
         if (!newRoom) {
           throw new BadRequestException('Extra room not found');
@@ -1837,10 +1890,16 @@ export class AppointmentsService {
     }
 
     // Save changes
-    const updatedAppointment = await this.appointmentRepository.save(appointment);
+    const updatedAppointment =
+      await this.appointmentRepository.save(appointment);
 
     // Handle slot return if necessary
-    await this.handleSlotReturn(this.dataSource.manager, updatedAppointment, oldStatus, newStatus);
+    await this.handleSlotReturn(
+      this.dataSource.manager,
+      updatedAppointment,
+      oldStatus,
+      newStatus,
+    );
 
     return this.transformToResponseDto(updatedAppointment);
   }
@@ -2130,16 +2189,18 @@ export class AppointmentsService {
       patientEmail: appointment.patient?.email,
       patientPhone: appointment.patient?.phone,
       patientProfileImage,
-      patientAddress: patientAddress ? {
-        id: patientAddress._id,
-        address: patientAddress.address,
-        ward: patientAddress.ward,
-        wardName: patientAddress.wardName,
-        district: patientAddress.district,
-        districtName: patientAddress.districtName,
-        province: patientAddress.province,
-        provinceName: patientAddress.provinceName,
-      } : null,
+      patientAddress: patientAddress
+        ? {
+            id: patientAddress._id,
+            address: patientAddress.address,
+            ward: patientAddress.ward,
+            wardName: patientAddress.wardName,
+            district: patientAddress.district,
+            districtName: patientAddress.districtName,
+            province: patientAddress.province,
+            provinceName: patientAddress.provinceName,
+          }
+        : null,
       clinicId: appointment.clinicId,
       clinicName,
       doctorId: appointment.doctorId,
@@ -2147,10 +2208,12 @@ export class AppointmentsService {
       doctorProfileImage,
       clinicRooms: clinicRooms || [],
       services: services || [],
-      extraRoom: appointment.extraRoom ? {
-        id: appointment.extraRoom._id,
-        roomName: appointment.extraRoom.roomName,
-      } : null,
+      extraRoom: appointment.extraRoom
+        ? {
+            id: appointment.extraRoom._id,
+            roomName: appointment.extraRoom.roomName,
+          }
+        : null,
       appointmentDate: appointment.appointmentDate,
       appointmentHour: appointment.appointmentHour,
       extraHour: appointment.extraHour,
@@ -2272,16 +2335,18 @@ export class AppointmentsService {
       gender: patientProfile?.gender,
       dob: patientProfile?.dob,
       profilePicture: patientProfile?.profilePicture,
-      address: patientAddress ? {
-        id: patientAddress._id,
-        address: patientAddress.address,
-        ward: patientAddress.ward,
-        wardName: patientAddress.wardName,
-        district: patientAddress.district,
-        districtName: patientAddress.districtName,
-        province: patientAddress.province,
-        provinceName: patientAddress.provinceName,
-      } : null,
+      address: patientAddress
+        ? {
+            id: patientAddress._id,
+            address: patientAddress.address,
+            ward: patientAddress.ward,
+            wardName: patientAddress.wardName,
+            district: patientAddress.district,
+            districtName: patientAddress.districtName,
+            province: patientAddress.province,
+            provinceName: patientAddress.provinceName,
+          }
+        : null,
     };
 
     // Doctor details from raw query result (if assigned)
@@ -2352,10 +2417,12 @@ export class AppointmentsService {
         id: room.id,
         roomName: room.roomName,
       })),
-      extraRoom: appointment.extraRoom ? {
-        id: appointment.extraRoom._id,
-        roomName: appointment.extraRoom.roomName,
-      } : null,
+      extraRoom: appointment.extraRoom
+        ? {
+            id: appointment.extraRoom._id,
+            roomName: appointment.extraRoom.roomName,
+          }
+        : null,
       total: parseFloat(appointment.total),
       status: appointment.status,
       isReminder: appointment.isRemider || false,
@@ -2755,12 +2822,14 @@ export class AppointmentsService {
 
     for (const sa of serviceAppointments) {
       // First, prioritize getting service type directly from category
-      let serviceType: ERMRecordType = sa.clinicService?.service?.category?.type as unknown as ERMRecordType;
+      let serviceType: ERMRecordType = sa.clinicService?.service?.category
+        ?.type as unknown as ERMRecordType;
 
       // If category type is missing, try from service_functions or default to CONSULTATION
       if (!serviceType) {
         serviceType = ERMRecordType.CONSULTATION; // Default fallback
-        const serviceFunctions = sa.clinicService?.service?.serviceFunctions || [];
+        const serviceFunctions =
+          sa.clinicService?.service?.serviceFunctions || [];
 
         if (serviceFunctions.length > 0) {
           const matchedType = serviceFunctions.find((func) =>
@@ -3118,7 +3187,12 @@ export class AppointmentsService {
     await this.dataSource.getRepository(Appointment).save(appointment);
 
     // Handle slot return if necessary
-    await this.handleSlotReturn(this.dataSource.manager, appointment, oldStatus, appointmentStatus);
+    await this.handleSlotReturn(
+      this.dataSource.manager,
+      appointment,
+      oldStatus,
+      appointmentStatus,
+    );
 
     // 10. Get prescription info
     const ePrescription = await this.dataSource
@@ -3222,7 +3296,9 @@ export class AppointmentsService {
       .getMany();
 
     if (clinicServices.length !== clinicServiceIds.length) {
-      throw new NotFoundException('One or more clinic services not found or inactive');
+      throw new NotFoundException(
+        'One or more clinic services not found or inactive',
+      );
     }
 
     for (const service of clinicServices) {
@@ -3239,7 +3315,9 @@ export class AppointmentsService {
       .createQueryBuilder('sa')
       .innerJoin('sa.appointmentPackage', 'pkg')
       .where('pkg.appointment_id = :appointmentId', { appointmentId })
-      .andWhere('sa.clinic_service_id IN (:...clinicServiceIds)', { clinicServiceIds })
+      .andWhere('sa.clinic_service_id IN (:...clinicServiceIds)', {
+        clinicServiceIds,
+      })
       .andWhere('sa.deleted_at IS NULL')
       .getMany();
 
@@ -3251,7 +3329,7 @@ export class AppointmentsService {
 
     // 5. Calculate prices, discounts and total amount
     let totalPackageAmount = 0;
-    const serviceDetails = clinicServices.map(service => {
+    const serviceDetails = clinicServices.map((service) => {
       const price = parseFloat(service.price.toString());
       const discount = parseFloat((service.discount || 0).toString());
       const finalPrice = (price * (100 - discount)) / 100;
@@ -3263,7 +3341,7 @@ export class AppointmentsService {
         clinicServiceConfig: service,
         price,
         discount,
-        amount
+        amount,
       };
     });
 
@@ -3308,13 +3386,15 @@ export class AppointmentsService {
 
         savedServiceAppointments.push(savedServiceAppointment);
 
-        const serviceType = (details.clinicServiceConfig.service?.category?.type ||
-          'CONSULTATION') as ERMRecordType;
+        const serviceType = (details.clinicServiceConfig.service?.category
+          ?.type || 'CONSULTATION') as ERMRecordType;
 
         responseServices.push({
           serviceAppointmentId: savedServiceAppointment._id,
           clinicServiceId: details.clinicServiceConfig._id,
-          serviceName: details.clinicServiceConfig.service?.serviceName || 'Unknown Service',
+          serviceName:
+            details.clinicServiceConfig.service?.serviceName ||
+            'Unknown Service',
           serviceType: serviceType,
           price: details.price,
           discount: details.discount,
@@ -3326,9 +3406,7 @@ export class AppointmentsService {
       const currentTotal = parseFloat(appointment.total?.toString() || '0');
       appointment.total = currentTotal + totalPackageAmount;
 
-      await queryRunner.manager
-        .getRepository(Appointment)
-        .save(appointment);
+      await queryRunner.manager.getRepository(Appointment).save(appointment);
 
       await queryRunner.commitTransaction();
 
@@ -3417,16 +3495,15 @@ export class AppointmentsService {
     const hasTransaction =
       serviceAppointment.appointmentPackage.transactionId !== null;
 
-    if (
-      packageStatus === AppointmentPackageStatus.PAID ||
-      hasTransaction
-    ) {
+    if (packageStatus === AppointmentPackageStatus.PAID || hasTransaction) {
       throw new BadRequestException(
         'Cannot remove service because payment package is already paid',
       );
     }
 
-    const appointmentStartTime = new Date(appointment.appointmentHour).getTime();
+    const appointmentStartTime = new Date(
+      appointment.appointmentHour,
+    ).getTime();
     const serviceCreatedTime = new Date(serviceAppointment.createdAt).getTime();
 
     if (serviceCreatedTime <= appointmentStartTime) {
@@ -3437,11 +3514,15 @@ export class AppointmentsService {
 
     const now = getCurrentVietnamTime();
 
-    const servicePrice = parseFloat(serviceAppointment.price?.toString() || '0');
+    const servicePrice = parseFloat(
+      serviceAppointment.price?.toString() || '0',
+    );
     const serviceDiscount = parseFloat(
       (serviceAppointment.discount || 0).toString(),
     );
-    const removedAmount = Math.round((servicePrice * (100 - serviceDiscount)) / 100);
+    const removedAmount = Math.round(
+      (servicePrice * (100 - serviceDiscount)) / 100,
+    );
     const previousPackageAmount = Number(
       serviceAppointment.appointmentPackage.amount || 0,
     );
@@ -3488,12 +3569,11 @@ export class AppointmentsService {
       const remainingServicesCount = remainingServices.length;
 
       if (remainingServicesCount === 0) {
-        await queryRunner.manager.getRepository(AppointmentPackage).update(
-          serviceAppointment.appointmentPackageId,
-          {
+        await queryRunner.manager
+          .getRepository(AppointmentPackage)
+          .update(serviceAppointment.appointmentPackageId, {
             deletedAt: now,
-          },
-        );
+          });
         packageRemoved = true;
       } else {
         const updatedPackageAmount = remainingServices.reduce((sum, sa) => {
@@ -3503,12 +3583,11 @@ export class AppointmentsService {
           return sum + amount;
         }, 0);
 
-        await queryRunner.manager.getRepository(AppointmentPackage).update(
-          serviceAppointment.appointmentPackageId,
-          {
+        await queryRunner.manager
+          .getRepository(AppointmentPackage)
+          .update(serviceAppointment.appointmentPackageId, {
             amount: updatedPackageAmount,
-          },
-        );
+          });
       }
 
       const activePackages = await queryRunner.manager
@@ -3523,12 +3602,11 @@ export class AppointmentsService {
         0,
       );
 
-      await queryRunner.manager.getRepository(Appointment).update(
-        appointment._id,
-        {
+      await queryRunner.manager
+        .getRepository(Appointment)
+        .update(appointment._id, {
           total: updatedAppointmentTotal,
-        },
-      );
+        });
 
       await queryRunner.commitTransaction();
     } catch (err) {
@@ -3636,8 +3714,8 @@ export class AppointmentsService {
     const servicesMap =
       appointmentIds.length > 0
         ? await this.appointmentPackageRepository.findServicesByAppointmentIds(
-          appointmentIds,
-        )
+            appointmentIds,
+          )
         : new Map();
 
     // Fetch clinic rooms for all appointments
@@ -3651,8 +3729,8 @@ export class AppointmentsService {
     const clinicRoomsMap =
       appointmentIds.length > 0
         ? await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
-          appointmentData,
-        )
+            appointmentData,
+          )
         : new Map();
 
     // Transform to response DTOs
@@ -3701,7 +3779,12 @@ export class AppointmentsService {
     sessionId: string,
     patientId: string,
   ): Promise<any> {
-    console.log('[DEBUG] Starting createAppointmentFromSession, sessionId:', sessionId, 'patientId:', patientId);
+    console.log(
+      '[DEBUG] Starting createAppointmentFromSession, sessionId:',
+      sessionId,
+      'patientId:',
+      patientId,
+    );
 
     // ========================================================================
     // STEP 1: RETRIEVE AND VALIDATE SESSION
@@ -3712,7 +3795,12 @@ export class AppointmentsService {
 
     // Verify session ownership
     if (session.patientId !== patientId) {
-      console.log('[DEBUG] Session ownership check failed. Session patientId:', session.patientId, 'Request patientId:', patientId);
+      console.log(
+        '[DEBUG] Session ownership check failed. Session patientId:',
+        session.patientId,
+        'Request patientId:',
+        patientId,
+      );
       throw new ForbiddenException(
         'You do not have permission to access this session',
       );
@@ -3720,7 +3808,10 @@ export class AppointmentsService {
 
     // Validate session has required fields
     if (!session.paymentMethod) {
-      console.log('[DEBUG] paymentMethod missing in session. Session keys:', Object.keys(session));
+      console.log(
+        '[DEBUG] paymentMethod missing in session. Session keys:',
+        Object.keys(session),
+      );
       throw new BadRequestException(
         'Payment method not found in booking session. Please restart the booking process.',
       );
@@ -3729,7 +3820,9 @@ export class AppointmentsService {
     // SAFETY GUARD: Out-of-hours appointments ONLY accept COD payment
     const bookingOption = session.bookingOption || 'service_first';
     if (bookingOption === 'out_of_hours' && session.paymentMethod !== 'cod') {
-      console.log('[DEBUG] Out-of-hours with online payment detected - BLOCKING');
+      console.log(
+        '[DEBUG] Out-of-hours with online payment detected - BLOCKING',
+      );
       throw new BadRequestException(
         'Out-of-hours appointments strictly require COD payment method. Online payment is not supported.',
       );
@@ -3895,7 +3988,7 @@ export class AppointmentsService {
       // ========================================================================
 
       // OPTION 4: Out of Hours Booking
-      if (bookingOption as string === 'out_of_hours') {
+      if ((bookingOption as string) === 'out_of_hours') {
         if (session.paymentMethod === 'cod') {
           return await this.createAppointmentOutOfHours(
             sessionId,
@@ -3964,7 +4057,12 @@ export class AppointmentsService {
     session: any,
     dateString: string,
   ): Promise<any> {
-    console.log('[DEBUG-COD] Starting createAppointmentCOD transaction', { sessionId, patientId, dateString, paymentMethod: session.paymentMethod });
+    console.log('[DEBUG-COD] Starting createAppointmentCOD transaction', {
+      sessionId,
+      patientId,
+      dateString,
+      paymentMethod: session.paymentMethod,
+    });
 
     let result: any;
 
@@ -3994,7 +4092,10 @@ export class AppointmentsService {
 
           // Business Rule: Check slot availability
           if (shiftHour.limit <= 0) {
-            console.log('[DEBUG-COD] Slot fully booked, limit:', shiftHour.limit);
+            console.log(
+              '[DEBUG-COD] Slot fully booked, limit:',
+              shiftHour.limit,
+            );
             throw new BadRequestException(
               'This time slot is fully booked. Please select another time.',
             );
@@ -4015,7 +4116,9 @@ export class AppointmentsService {
             .createQueryBuilder(ClinicServiceConfig, 'csc')
             .leftJoinAndSelect('csc.service', 'service')
             .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
-            .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
+            .andWhere('csc.clinic_id = :clinicId', {
+              clinicId: session.clinicId,
+            })
             .andWhere('csc.is_active = :isActive', { isActive: true })
             .andWhere('csc.deleted_at IS NULL')
             .andWhere('service.deleted_at IS NULL')
@@ -4315,7 +4418,9 @@ export class AppointmentsService {
       .getMany();
 
     if (serviceConfigs.length !== uniqueServiceIds.length) {
-      throw new BadRequestException('One or more services are not available or have been discontinued');
+      throw new BadRequestException(
+        'One or more services are not available or have been discontinued',
+      );
     }
 
     // Calculate total amount (Sum of all service prices after discounts)
@@ -4323,16 +4428,22 @@ export class AppointmentsService {
     for (const sc of serviceConfigs) {
       const basePrice = parseFloat(sc.price.toString());
       const discount = sc.discount ? parseFloat(sc.discount.toString()) : 0;
-      const finalPrice = basePrice - (basePrice * discount / 100);
+      const finalPrice = basePrice - (basePrice * discount) / 100;
       totalAmount += finalPrice;
     }
     const finalRoundedTotal = Math.round(totalAmount);
 
     // 2. Resolve Clinic Admin ID for Seepay Config
-    const managerAccount = await this.accountRepository.findAccountById(session.clinicId);
+    const managerAccount = await this.accountRepository.findAccountById(
+      session.clinicId,
+    );
 
     let clinicIdForConfig = session.clinicId;
-    if (managerAccount && managerAccount.role === AccountRole.CLINIC_MANAGER && managerAccount.parentId) {
+    if (
+      managerAccount &&
+      managerAccount.role === AccountRole.CLINIC_MANAGER &&
+      managerAccount.parentId
+    ) {
       clinicIdForConfig = managerAccount.parentId;
     }
 
@@ -4344,7 +4455,8 @@ export class AppointmentsService {
     const clinicAdminInfoId = clinicAdminInfo?._id;
 
     // 3. Generate QR via TransactionsService
-    const seepayConfig = await this.transactionsService.resolveSepayConfig(clinicAdminInfoId);
+    const seepayConfig =
+      await this.transactionsService.resolveSepayConfig(clinicAdminInfoId);
     const qrCodeUrl = this.transactionsService.buildQrUrl(
       finalRoundedTotal,
       sessionId, // Use sessionId as the description/reference
@@ -4397,17 +4509,23 @@ export class AppointmentsService {
     // 1. Fetch session from Redis
     const session = await this.bookingSessionService.getSession(sessionId);
     if (!session) {
-      throw new NotFoundException('Booking session does not exist or has expired');
+      throw new NotFoundException(
+        'Booking session does not exist or has expired',
+      );
     }
 
     // 2. Ownership check
     if (session.patientId !== patientId) {
-      throw new ForbiddenException('You do not have permission to access this booking session');
+      throw new ForbiddenException(
+        'You do not have permission to access this booking session',
+      );
     }
 
     // 3. Must be an ONLINE payment session
     if (session.paymentMethod !== 'online') {
-      throw new BadRequestException('This booking session does not use online payment');
+      throw new BadRequestException(
+        'This booking session does not use online payment',
+      );
     }
 
     // 4. Generate QR using existing logic
@@ -4424,7 +4542,9 @@ export class AppointmentsService {
   ): Promise<any> {
     const session = await this.bookingSessionService.getSession(sessionId);
     if (!session) {
-      throw new NotFoundException('Booking session does not exist or has expired');
+      throw new NotFoundException(
+        'Booking session does not exist or has expired',
+      );
     }
 
     return await this.dataSource.transaction(async (manager) => {
@@ -4436,7 +4556,9 @@ export class AppointmentsService {
         .getOne();
 
       if (!slot || slot.limit <= 0) {
-        throw new BadRequestException('This slot is currently full. Please choose another slot.');
+        throw new BadRequestException(
+          'This slot is currently full. Please choose another slot.',
+        );
       }
 
       // 2. Validate Service Configs (multi-service)
@@ -4463,7 +4585,7 @@ export class AppointmentsService {
       for (const sc of serviceConfigs) {
         const p = parseFloat(sc.price.toString());
         const d = sc.discount ? parseFloat(sc.discount.toString()) : 0;
-        calculatedTotal += p - (p * d / 100);
+        calculatedTotal += p - (p * d) / 100;
       }
       const finalAmount = session.paymentAmount || calculatedTotal;
 
@@ -4474,7 +4596,9 @@ export class AppointmentsService {
         doctorId: session.doctorId,
         clinicShiftHourId: session.clinicShiftHourId,
         appointmentDate: new Date(session.appointmentDate),
-        appointmentHour: session.appointmentHour ? new Date(session.appointmentHour) : new Date(session.appointmentDate),
+        appointmentHour: session.appointmentHour
+          ? new Date(session.appointmentHour)
+          : new Date(session.appointmentDate),
         total: finalAmount, // Required field
         status: AppointmentStatus.PENDING, // Paid online -> Waiting for clinic confirmation (Updated v5.1)
         patientNote: session.patientNote,
@@ -4518,7 +4642,10 @@ export class AppointmentsService {
         status: AppointmentPackageStatus.PAID,
         paymentType: PaymentType.ONLINE,
       });
-      const savedPackage = await manager.save(AppointmentPackage, appointmentPackage);
+      const savedPackage = await manager.save(
+        AppointmentPackage,
+        appointmentPackage,
+      );
 
       // 6. Create Service Appointment links
       const serviceAppointmentsToSave = serviceConfigs.map((config) => {
@@ -4602,7 +4729,10 @@ export class AppointmentsService {
     patientId: string,
     session: any,
   ): Promise<any> {
-    console.log('[DEBUG-OOH] Starting createAppointmentOutOfHours', { sessionId, patientId });
+    console.log('[DEBUG-OOH] Starting createAppointmentOutOfHours', {
+      sessionId,
+      patientId,
+    });
 
     // === STEP 1: Parse extraHour ===
     const extraHourDate = new Date(session.extraHour);
@@ -4620,158 +4750,165 @@ export class AppointmentsService {
 
     let result: any;
     try {
-      result = await this.dataSource.transaction('SERIALIZABLE', async (manager) => {
-        console.log('[DEBUG-OOH] Inside transaction');
+      result = await this.dataSource.transaction(
+        'SERIALIZABLE',
+        async (manager) => {
+          console.log('[DEBUG-OOH] Inside transaction');
 
-        // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
-        // Query clinic_service_config for ALL serviceIds in one batch
-        const serviceIds: string[] = session.serviceIds;
-        // Deduplicate serviceIds to handle duplicate UUIDs in the array
-        const uniqueServiceIds = Array.from(new Set(serviceIds));
+          // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
+          // Query clinic_service_config for ALL serviceIds in one batch
+          const serviceIds: string[] = session.serviceIds;
+          // Deduplicate serviceIds to handle duplicate UUIDs in the array
+          const uniqueServiceIds = Array.from(new Set(serviceIds));
 
-        // Guard clause: Check for empty array
-        if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
-          throw new BadRequestException('Service IDs array cannot be empty');
-        }
+          // Guard clause: Check for empty array
+          if (!uniqueServiceIds || uniqueServiceIds.length === 0) {
+            throw new BadRequestException('Service IDs array cannot be empty');
+          }
 
-        const serviceConfigs = await manager
-          .createQueryBuilder(ClinicServiceConfig, 'csc')
-          .leftJoinAndSelect('csc.service', 'service')
-          .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
-          .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
-          .andWhere('csc.is_active = :isActive', { isActive: true })
-          .andWhere('csc.deleted_at IS NULL')
-          .andWhere('service.deleted_at IS NULL')
-          .andWhere('service.is_active = :serviceActive', {
-            serviceActive: true,
-          })
-          .getMany();
+          const serviceConfigs = await manager
+            .createQueryBuilder(ClinicServiceConfig, 'csc')
+            .leftJoinAndSelect('csc.service', 'service')
+            .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+            .andWhere('csc.clinic_id = :clinicId', {
+              clinicId: session.clinicId,
+            })
+            .andWhere('csc.is_active = :isActive', { isActive: true })
+            .andWhere('csc.deleted_at IS NULL')
+            .andWhere('service.deleted_at IS NULL')
+            .andWhere('service.is_active = :serviceActive', {
+              serviceActive: true,
+            })
+            .getMany();
 
-        // Verify ALL requested services exist and are active
-        if (serviceConfigs.length !== uniqueServiceIds.length) {
-          const foundIds = serviceConfigs.map((s) => s._id);
-          const missingIds = uniqueServiceIds.filter(
-            (id) => !foundIds.includes(id),
-          );
-          throw new BadRequestException(
-            `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ') || 'Unknown'}`,
-          );
-        }
+          // Verify ALL requested services exist and are active
+          if (serviceConfigs.length !== uniqueServiceIds.length) {
+            const foundIds = serviceConfigs.map((s) => s._id);
+            const missingIds = uniqueServiceIds.filter(
+              (id) => !foundIds.includes(id),
+            );
+            throw new BadRequestException(
+              `One or more services are not available at this clinic. Missing or inactive: ${missingIds.join(', ') || 'Unknown'}`,
+            );
+          }
 
-        // === STEP 3: Validate Doctor Schedule ===
-        // Doctor must have a schedule on this date (even for out-of-hours)
-        // Get all valid clinic IDs (clinic itself + all branches)
-        const branches = await manager
-          .createQueryBuilder()
-          .select('_id')
-          .from('accounts', 'acc')
-          .where('acc.parent_id = :clinicId', { clinicId: session.clinicId })
-          .andWhere('acc.role = :role', { role: 'CLINIC_MANAGER' })
-          .andWhere('acc.status = :status', { status: 'ACTIVE' })
-          .andWhere('acc.deleted_at IS NULL')
-          .getRawMany();
+          // === STEP 3: Validate Doctor Schedule ===
+          // Doctor must have a schedule on this date (even for out-of-hours)
+          // Get all valid clinic IDs (clinic itself + all branches)
+          const branches = await manager
+            .createQueryBuilder()
+            .select('_id')
+            .from('accounts', 'acc')
+            .where('acc.parent_id = :clinicId', { clinicId: session.clinicId })
+            .andWhere('acc.role = :role', { role: 'CLINIC_MANAGER' })
+            .andWhere('acc.status = :status', { status: 'ACTIVE' })
+            .andWhere('acc.deleted_at IS NULL')
+            .getRawMany();
 
-        const validClinicIds = branches.map((b) => b._id);
-        validClinicIds.push(session.clinicId);
+          const validClinicIds = branches.map((b) => b._id);
+          validClinicIds.push(session.clinicId);
 
-        // Check if doctor has schedule on this date
-        const doctorSchedule = await manager.query(
-          `SELECT * FROM employee_schedule 
+          // Check if doctor has schedule on this date
+          const doctorSchedule = await manager.query(
+            `SELECT * FROM employee_schedule 
          WHERE employee_id = $1 
          AND clinic_id = ANY($2::uuid[])
          AND TO_CHAR(work_date AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') = $3
          AND deleted_at IS NULL
          LIMIT 1`,
-          [session.doctorId, validClinicIds, dateString],
-        );
-
-        if (!doctorSchedule || doctorSchedule.length === 0) {
-          throw new BadRequestException(
-            'Doctor is not available on this date at this clinic',
+            [session.doctorId, validClinicIds, dateString],
           );
-        }
 
-        // === STEP 4: PREVENT DOUBLE BOOKING ===
-        // CRITICAL: Check if doctor already has an appointment at this extraHour
-        // Query both appointment_hour AND extra_hour columns to prevent conflicts
+          if (!doctorSchedule || doctorSchedule.length === 0) {
+            throw new BadRequestException(
+              'Doctor is not available on this date at this clinic',
+            );
+          }
 
-        const existingAppointment = await manager
-          .createQueryBuilder()
-          .select('a')
-          .from('appointments', 'a')
-          .where('a.doctor_id = :doctorId', { doctorId: session.doctorId })
-          .andWhere(
-            '(a.appointment_hour = :extraHour OR a.extra_hour = :extraHour)',
-            { extraHour: extraHourDate },
-          )
-          .andWhere(
-            "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
-          )
-          .andWhere('a.deleted_at IS NULL')
-          .getOne();
+          // === STEP 4: PREVENT DOUBLE BOOKING ===
+          // CRITICAL: Check if doctor already has an appointment at this extraHour
+          // Query both appointment_hour AND extra_hour columns to prevent conflicts
 
-        if (existingAppointment) {
-          throw new ConflictException(
-            'Doctor already has an appointment at this time. Please select a different time.',
-          );
-        }
+          const existingAppointment = await manager
+            .createQueryBuilder()
+            .select('a')
+            .from('appointments', 'a')
+            .where('a.doctor_id = :doctorId', { doctorId: session.doctorId })
+            .andWhere(
+              '(a.appointment_hour = :extraHour OR a.extra_hour = :extraHour)',
+              { extraHour: extraHourDate },
+            )
+            .andWhere(
+              "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
+            )
+            .andWhere('a.deleted_at IS NULL')
+            .getOne();
 
-        // === TIER 1: Create Appointment with placeholder total ===
-        const apptRepo = manager.getRepository(Appointment);
-        const newAppointment = apptRepo.create({
-          patientId,
-          doctorId: session.doctorId,
-          clinicId: session.clinicId,
-          clinicShiftHourId: null, // Out-of-hours: no shift
-          appointmentDate: extraHourDate,
-          appointmentHour: extraHourDate,
-          extraHour: extraHourDate,
-          status: AppointmentStatus.PENDING,
-          patientNote: session.patientNote || null,
-          total: 0, // Placeholder
-        });
-        const savedAppointment = await apptRepo.save(newAppointment);
+          if (existingAppointment) {
+            throw new ConflictException(
+              'Doctor already has an appointment at this time. Please select a different time.',
+            );
+          }
 
-        // === TIER 2 (Phase A): Create AppointmentPackage placeholder ===
-        // Must exist before ServiceAppointment due to FK constraint
-        const pkgRepo = manager.getRepository(AppointmentPackage);
-        const savedPackage = await pkgRepo.save(
-          pkgRepo.create({
-            appointmentId: savedAppointment._id,
-            amount: 0, // Placeholder, updated after Tier 3
-            paymentType: PaymentType.COD,
-            status: AppointmentPackageStatus.PENDING_PAYMENT,
-          }),
-        );
+          // === TIER 1: Create Appointment with placeholder total ===
+          const apptRepo = manager.getRepository(Appointment);
+          const newAppointment = apptRepo.create({
+            patientId,
+            doctorId: session.doctorId,
+            clinicId: session.clinicId,
+            clinicShiftHourId: null, // Out-of-hours: no shift
+            appointmentDate: extraHourDate,
+            appointmentHour: extraHourDate,
+            extraHour: extraHourDate,
+            status: AppointmentStatus.PENDING,
+            patientNote: session.patientNote || null,
+            total: 0, // Placeholder
+          });
+          const savedAppointment = await apptRepo.save(newAppointment);
 
-        // === TIER 3: Create ServiceAppointment snapshots ===
-        const saRepo = manager.getRepository(ServiceAppointment);
-        let grandTotal = 0;
-
-        for (const sc of serviceConfigs) {
-          const snapshotPrice = Number(sc.price) || 0;
-          const snapshotDiscount = Number(sc.discount) || 0;
-          const lineFinalPrice =
-            snapshotPrice - (snapshotPrice * snapshotDiscount) / 100;
-          grandTotal += lineFinalPrice;
-
-          await saRepo.save(
-            saRepo.create({
-              clinicServiceId: sc._id, // FK → clinic_service_config
-              appointmentPackageId: savedPackage._id, // FK → appointment_package
-              price: snapshotPrice,
-              discount: snapshotDiscount,
+          // === TIER 2 (Phase A): Create AppointmentPackage placeholder ===
+          // Must exist before ServiceAppointment due to FK constraint
+          const pkgRepo = manager.getRepository(AppointmentPackage);
+          const savedPackage = await pkgRepo.save(
+            pkgRepo.create({
+              appointmentId: savedAppointment._id,
+              amount: 0, // Placeholder, updated after Tier 3
+              paymentType: PaymentType.COD,
+              status: AppointmentPackageStatus.PENDING_PAYMENT,
             }),
           );
-        }
 
-        // === TIER 2 (Phase B): Update totals ===
-        await pkgRepo.update({ _id: savedPackage._id }, { amount: grandTotal });
-        savedAppointment.total = grandTotal;
-        await apptRepo.save(savedAppointment);
+          // === TIER 3: Create ServiceAppointment snapshots ===
+          const saRepo = manager.getRepository(ServiceAppointment);
+          let grandTotal = 0;
 
-        return { appointment: savedAppointment, serviceConfigs };
-      },
+          for (const sc of serviceConfigs) {
+            const snapshotPrice = Number(sc.price) || 0;
+            const snapshotDiscount = Number(sc.discount) || 0;
+            const lineFinalPrice =
+              snapshotPrice - (snapshotPrice * snapshotDiscount) / 100;
+            grandTotal += lineFinalPrice;
+
+            await saRepo.save(
+              saRepo.create({
+                clinicServiceId: sc._id, // FK → clinic_service_config
+                appointmentPackageId: savedPackage._id, // FK → appointment_package
+                price: snapshotPrice,
+                discount: snapshotDiscount,
+              }),
+            );
+          }
+
+          // === TIER 2 (Phase B): Update totals ===
+          await pkgRepo.update(
+            { _id: savedPackage._id },
+            { amount: grandTotal },
+          );
+          savedAppointment.total = grandTotal;
+          await apptRepo.save(savedAppointment);
+
+          return { appointment: savedAppointment, serviceConfigs };
+        },
       );
     } catch (error) {
       console.error('[DEBUG-OOH] Transaction error:', error);
@@ -5792,10 +5929,10 @@ export class AppointmentsService {
         },
         doctor: apt.doctor_id
           ? {
-            _id: apt.doctor_id,
-            name: apt.doctor_name,
-            profilePicture: apt.doctor_profile_picture,
-          }
+              _id: apt.doctor_id,
+              name: apt.doctor_name,
+              profilePicture: apt.doctor_profile_picture,
+            }
           : null,
         appointment_date: apt.appointment_date,
         // Time resolution: extra_hour takes priority for out-of-hours bookings
@@ -5814,7 +5951,8 @@ export class AppointmentsService {
         payment_status: apt.payment_status,
         services: servicesMap.get(apt.appointment_id) || [],
         erms: ermsMap.get(apt.appointment_id) || [],
-        e_prescription_summary: ePrescriptionMap.get(apt.appointment_id) || null,
+        e_prescription_summary:
+          ePrescriptionMap.get(apt.appointment_id) || null,
       };
     });
 
@@ -5950,7 +6088,7 @@ export class AppointmentsService {
     if (!appointmentRaw) {
       throw new NotFoundException(
         MESSAGES.failMessage.appointmentNotFound ||
-        'Appointment not found or access denied',
+          'Appointment not found or access denied',
       );
     }
 
@@ -6166,7 +6304,8 @@ export class AppointmentsService {
     // Time resolution logic:
     // - If extra_hour exists (Out-of-Hours/Option 4): use extra_hour for appointment_hour, start_hour/end_hour = null
     // - If no extra_hour (Standard Booking): use appointment_hour from shift, include start_hour/end_hour
-    const isOutOfHoursDetail = appointmentRaw.extra_hour && !appointmentRaw.clinic_shift_hour_id;
+    const isOutOfHoursDetail =
+      appointmentRaw.extra_hour && !appointmentRaw.clinic_shift_hour_id;
 
     return {
       _id: appointmentRaw.appointment_id,
@@ -6180,7 +6319,8 @@ export class AppointmentsService {
       doctor: doctorInfo,
       appointment_date: appointmentRaw.appointment_date,
       // Time resolution: extra_hour takes priority for out-of-hours bookings
-      appointment_hour: appointmentRaw.extra_hour || appointmentRaw.appointment_hour,
+      appointment_hour:
+        appointmentRaw.extra_hour || appointmentRaw.appointment_hour,
       // Include clinic_shift_hour_id to help frontend identify booking type
       clinic_shift_hour_id: appointmentRaw.clinic_shift_hour_id || null,
       // extra_hour field for out-of-hours bookings
@@ -6350,8 +6490,6 @@ export class AppointmentsService {
     };
   }
 
-
-
   /**
    * Get clinics by working date (Option 3: Date-first booking - Step 2a)
    *
@@ -6407,8 +6545,8 @@ export class AppointmentsService {
         'cai.description AS description', // Admin description
         'cmi.clinic_branch_name AS branch_name', // Branch name only
         "CASE WHEN cmi.clinic_branch_name IS NOT NULL AND cmi.clinic_branch_name != '' " +
-        "THEN CONCAT(cai.clinic_name, ' - ', cmi.clinic_branch_name) " +
-        'ELSE cai.clinic_name END AS full_branch_name', // Full branch name for display
+          "THEN CONCAT(cai.clinic_name, ' - ', cmi.clinic_branch_name) " +
+          'ELSE cai.clinic_name END AS full_branch_name', // Full branch name for display
         "COALESCE(addr.address, '') AS clinic_address",
         'addr.district AS district',
       ])
@@ -7163,7 +7301,9 @@ export class AppointmentsService {
     }
 
     if (packageData.appointmentId !== appointmentId) {
-      throw new BadRequestException('Payment package does not belong to this appointment');
+      throw new BadRequestException(
+        'Payment package does not belong to this appointment',
+      );
     }
 
     // 4. Check if package is pending payment
@@ -7218,8 +7358,8 @@ export class AppointmentsService {
 
   /**
    * Complete COD Appointment
-   * Complete appointment flow: update appointment status to COMPLETED, 
-   * set all PENDING_PAYMENT packages to PAID, 
+   * Complete appointment flow: update appointment status to COMPLETED,
+   * set all PENDING_PAYMENT packages to PAID,
    * and update transaction status to SUCCESS.
    *
    * @param staffAccountId - Staff account UUID
@@ -7263,20 +7403,23 @@ export class AppointmentsService {
 
         // Step 2: Query Transactions logically mapped to these packages and EXPIRE spam ones except newest mapping
         // Simply marking all PENDING transactions to EXPIRED then mapping the specific one to SUCCESS could be complicated if we don't have transaction ID.
-        // Actually, since staff handles COD directly without using QR flow (or overwriting QR flow), 
+        // Actually, since staff handles COD directly without using QR flow (or overwriting QR flow),
         // we can simply update all related PENDING ones to EXPIRED, and just mark the package PAID.
         // OR, the prompt states: "check that if this appointment already have transaction then update status that transaction to SUCCESS"
         await manager.update(
           Transaction,
           { appointmentId, status: PaymentStatus.PENDING },
-          { status: PaymentStatus.SUCCESS }
+          { status: PaymentStatus.SUCCESS },
         );
 
         // Step 3: Update Appointment Packages
         await manager.update(
           AppointmentPackage,
           { appointmentId, status: AppointmentPackageStatus.PENDING_PAYMENT },
-          { status: AppointmentPackageStatus.PAID, paymentType: PaymentType.COD }
+          {
+            status: AppointmentPackageStatus.PAID,
+            paymentType: PaymentType.COD,
+          },
         );
 
         return {
@@ -7354,7 +7497,9 @@ export class AppointmentsService {
       .andWhere('acc.deleted_at IS NULL')
       .getRawMany();
 
-    console.log(`[DEBUG] STEP 1 - Branches found for clinicId as Admin-ID: ${branches.length}`);
+    console.log(
+      `[DEBUG] STEP 1 - Branches found for clinicId as Admin-ID: ${branches.length}`,
+    );
     console.log(`[DEBUG] Branches:`, branches);
 
     const branchIds = branches.map((b) => b._id);
@@ -7362,7 +7507,9 @@ export class AppointmentsService {
     if (branchIds.length === 0) {
       // If no branches, treat clinicId as a branch itself
       branchIds.push(clinicId);
-      console.log(`[DEBUG] No branches found => treating clinicId as Manager ID directly`);
+      console.log(
+        `[DEBUG] No branches found => treating clinicId as Manager ID directly`,
+      );
     }
 
     console.log(`[DEBUG] Final branchIds to query schedules:`, branchIds);
@@ -7420,56 +7567,95 @@ export class AppointmentsService {
       .addOrderBy('csh.start_hour', 'ASC')
       .getRawMany();
 
-    console.log(`[DEBUG] STEP 2 - Raw slots from DB: ${rawSlots.length} records`);
+    console.log(
+      `[DEBUG] STEP 2 - Raw slots from DB: ${rawSlots.length} records`,
+    );
     if (rawSlots.length > 0) {
-      console.log(`[DEBUG] Sample raw slot[0]:`, JSON.stringify(rawSlots[0], null, 2));
+      console.log(
+        `[DEBUG] Sample raw slot[0]:`,
+        JSON.stringify(rawSlots[0], null, 2),
+      );
     }
 
     if (rawSlots.length === 0) {
       console.log(`[DEBUG] => No raw slots found. Possible reasons:`);
       console.log(`  - No employee_schedule rows matching branchIds`);
-      console.log(`  - No clinic_shift_hour rows linked to those shifts (INNER JOIN fails)`);
+      console.log(
+        `  - No clinic_shift_hour rows linked to those shifts (INNER JOIN fails)`,
+      );
       console.log(`  - Doctor role/status filter eliminated all rows`);
       console.log(`  - Date range filter (today to +60 days) eliminated rows`);
-      console.log(`[DEBUG] Checking employee_schedule rows without slot filter...`);
+      console.log(
+        `[DEBUG] Checking employee_schedule rows without slot filter...`,
+      );
 
       const rawScheduleCheck = await this.dataSource
         .createQueryBuilder()
-        .select(['es._id', 'es.work_date', 'es.clinic_id', 'es.employee_id', 'es.clinic_shift_id'])
+        .select([
+          'es._id',
+          'es.work_date',
+          'es.clinic_id',
+          'es.employee_id',
+          'es.clinic_shift_id',
+        ])
         .from('employee_schedule', 'es')
         .where('es.clinic_id IN (:...branchIds)', { branchIds })
         .andWhere('es.deleted_at IS NULL')
         .getRawMany();
-      console.log(`[DEBUG] employee_schedule rows (no date/shift filter): ${rawScheduleCheck.length}`);
+      console.log(
+        `[DEBUG] employee_schedule rows (no date/shift filter): ${rawScheduleCheck.length}`,
+      );
       if (rawScheduleCheck.length > 0) {
         console.log(`[DEBUG] Sample schedule:`, rawScheduleCheck[0]);
 
         // Check if clinic_shift_hour exists for those shifts
-        const shiftIds = [...new Set(rawScheduleCheck.map((r) => r.es_clinic_shift_id))];
+        const shiftIds = [
+          ...new Set(rawScheduleCheck.map((r) => r.es_clinic_shift_id)),
+        ];
         console.log(`[DEBUG] Distinct shift IDs from schedules:`, shiftIds);
 
         const hourCheck = await this.dataSource
           .createQueryBuilder()
-          .select(['csh._id', 'csh.shift_id', 'csh.start_hour', 'csh.end_hour', 'csh.limit', 'csh.deleted_at'])
+          .select([
+            'csh._id',
+            'csh.shift_id',
+            'csh.start_hour',
+            'csh.end_hour',
+            'csh.limit',
+            'csh.deleted_at',
+          ])
           .from('clinic_shift_hour', 'csh')
-          .where('csh.shift_id IN (:...shiftIds)', { shiftIds: shiftIds.length ? shiftIds : ['none'] })
+          .where('csh.shift_id IN (:...shiftIds)', {
+            shiftIds: shiftIds.length ? shiftIds : ['none'],
+          })
           .getRawMany();
-        console.log(`[DEBUG] clinic_shift_hour rows for those shifts: ${hourCheck.length}`);
+        console.log(
+          `[DEBUG] clinic_shift_hour rows for those shifts: ${hourCheck.length}`,
+        );
         if (hourCheck.length > 0) {
           console.log(`[DEBUG] Sample hour:`, hourCheck[0]);
         } else {
-          console.log(`[DEBUG] *** ROOT CAUSE: clinic_shift_hour table has NO rows for those shifts! ***`);
+          console.log(
+            `[DEBUG] *** ROOT CAUSE: clinic_shift_hour table has NO rows for those shifts! ***`,
+          );
         }
 
         // Check doctor status
-        const empIds = [...new Set(rawScheduleCheck.map((r) => r.es_employee_id))];
+        const empIds = [
+          ...new Set(rawScheduleCheck.map((r) => r.es_employee_id)),
+        ];
         const doctorCheck = await this.dataSource
           .createQueryBuilder()
           .select(['acc._id', 'acc.role', 'acc.status'])
           .from('accounts', 'acc')
-          .where('acc._id IN (:...empIds)', { empIds: empIds.length ? empIds : ['none'] })
+          .where('acc._id IN (:...empIds)', {
+            empIds: empIds.length ? empIds : ['none'],
+          })
           .getRawMany();
-        console.log(`[DEBUG] Doctor accounts for those schedules:`, doctorCheck);
+        console.log(
+          `[DEBUG] Doctor accounts for those schedules:`,
+          doctorCheck,
+        );
       }
 
       return { data: [] };
@@ -7505,13 +7691,21 @@ export class AppointmentsService {
     );
 
     // Filter out fully booked slots
-    console.log(`[DEBUG] STEP 3 - After booking enrichment: ${enrichedSlots.length} total slots`);
-    const fullyBookedCount = enrichedSlots.filter((s) => s.available_slots <= 0).length;
+    console.log(
+      `[DEBUG] STEP 3 - After booking enrichment: ${enrichedSlots.length} total slots`,
+    );
+    const fullyBookedCount = enrichedSlots.filter(
+      (s) => s.available_slots <= 0,
+    ).length;
     if (fullyBookedCount > 0) {
-      console.log(`[DEBUG] Slots filtered out (fully booked): ${fullyBookedCount}`);
+      console.log(
+        `[DEBUG] Slots filtered out (fully booked): ${fullyBookedCount}`,
+      );
     }
     const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
-    console.log(`[DEBUG] STEP 3 - Available slots after filtering: ${availableSlots.length}`);
+    console.log(
+      `[DEBUG] STEP 3 - Available slots after filtering: ${availableSlots.length}`,
+    );
 
     // DATA TRANSFORMATION: Group by Date -> Shift -> Slots
     const dateMap = new Map<string, any>();
@@ -7872,8 +8066,8 @@ export class AppointmentsService {
     if (search && search.trim()) {
       queryBuilder.andWhere(
         '(generalAccount.fullName ILIKE :search OR ' +
-        'patient.phone LIKE :searchExact OR ' +
-        'patient.email ILIKE :searchExact)',
+          'patient.phone LIKE :searchExact OR ' +
+          'patient.email ILIKE :searchExact)',
         { search: `%${search}%`, searchExact: `%${search}%` },
       );
     }
@@ -8063,7 +8257,11 @@ export class AppointmentsService {
     }
 
     // Step 2: Get patient information with address
-    const patient = await this.accountRepository.findAccountById(patientId);
+    const patient = await this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where('account._id = :patientId', { patientId })
+      .getOne();
 
     if (!patient) {
       throw new NotFoundException('Patient not found');
@@ -8202,8 +8400,8 @@ export class AppointmentsService {
     const servicesMap =
       appointmentIds.length > 0
         ? await this.appointmentPackageRepository.findServicesByAppointmentIds(
-          appointmentIds,
-        )
+            appointmentIds,
+          )
         : new Map();
 
     // Fetch clinic rooms for all appointments
@@ -8217,8 +8415,8 @@ export class AppointmentsService {
     const clinicRoomsMap =
       appointmentIds.length > 0
         ? await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
-          appointmentData,
-        )
+            appointmentData,
+          )
         : new Map();
 
     // Transform appointments to AppointmentResponseDto
@@ -8246,15 +8444,15 @@ export class AppointmentsService {
         : null,
       addressDetail: addressData
         ? {
-          id: addressData.id || '',
-          address: addressData.address || '',
-          ward: addressData.ward || '',
-          wardName: addressData.ward_name || '',
-          district: addressData.district || '',
-          districtName: addressData.district_name || '',
-          province: addressData.province || '',
-          provinceName: addressData.province_name || '',
-        }
+            id: addressData.id || '',
+            address: addressData.address || '',
+            ward: addressData.ward || '',
+            wardName: addressData.ward_name || '',
+            district: addressData.district || '',
+            districtName: addressData.district_name || '',
+            province: addressData.province || '',
+            provinceName: addressData.province_name || '',
+          }
         : undefined,
     };
 
@@ -8341,9 +8539,8 @@ export class AppointmentsService {
       phone: appointment.patient?.phone || null,
       email: appointment.patient?.email || 'N/A',
       profile_image_url: patientGeneral?.profilePicture || null,
-      address:
-        appointment.patient?.address
-          ? {
+      address: appointment.patient?.address
+        ? {
             address: appointment.patient.address.address || '',
             ward: appointment.patient.address.ward || '',
             wardName: appointment.patient.address.wardName || '',
@@ -8352,7 +8549,7 @@ export class AppointmentsService {
             province: appointment.patient.address.province || '',
             provinceName: appointment.patient.address.provinceName || '',
           }
-          : undefined,
+        : undefined,
     };
 
     // Step 4: Build doctor info
@@ -8603,10 +8800,12 @@ export class AppointmentsService {
           : new Date(appointment.appointmentDate).toISOString().split('T')[0],
       appointment_hour: appointment.appointmentHour,
       extra_hour: appointment.extraHour || null,
-      extraRoom: appointment.extraRoom ? {
-        id: appointment.extraRoom._id,
-        roomName: appointment.extraRoom.roomName,
-      } : null,
+      extraRoom: appointment.extraRoom
+        ? {
+            id: appointment.extraRoom._id,
+            roomName: appointment.extraRoom.roomName,
+          }
+        : null,
       status: appointment.status,
       total_price: parseFloat(appointment.total.toString()),
       patient,
@@ -8643,7 +8842,7 @@ export class AppointmentsService {
     if (!appointment) {
       throw new NotFoundException(
         MESSAGES.failMessage.appointmentNotFound ||
-        'Appointment not found or access denied',
+          'Appointment not found or access denied',
       );
     }
 
@@ -8713,36 +8912,36 @@ export class AppointmentsService {
       created_at: e.created_at,
       special_erm: e.ec_id
         ? {
-          id: e.ec_id,
-          service_code: e.ec_service_code,
-          created_at: e.ec_created_at,
-        }
+            id: e.ec_id,
+            service_code: e.ec_service_code,
+            created_at: e.ec_created_at,
+          }
         : e.ex_id
           ? { id: e.ex_id, region: e.ex_region, created_at: e.ex_created_at }
           : e.el_id
             ? {
-              id: e.el_id,
-              panel_name: e.el_panel_name,
-              created_at: e.el_created_at,
-            }
+                id: e.el_id,
+                panel_name: e.el_panel_name,
+                created_at: e.el_created_at,
+              }
             : e.eu_id
               ? {
-                id: e.eu_id,
-                service_code: e.eu_service_code,
-                created_at: e.eu_created_at,
-              }
+                  id: e.eu_id,
+                  service_code: e.eu_service_code,
+                  created_at: e.eu_created_at,
+                }
               : e.erd_id
                 ? {
-                  id: e.erd_id,
-                  procedure_code: e.erd_procedure_code,
-                  created_at: e.erd_created_at,
-                }
+                    id: e.erd_id,
+                    procedure_code: e.erd_procedure_code,
+                    created_at: e.erd_created_at,
+                  }
                 : e.ebd_id
                   ? {
-                    id: e.ebd_id,
-                    site: e.ebd_site,
-                    created_at: e.ebd_created_at,
-                  }
+                      id: e.ebd_id,
+                      site: e.ebd_site,
+                      created_at: e.ebd_created_at,
+                    }
                   : null,
     }));
   }
@@ -8766,7 +8965,7 @@ export class AppointmentsService {
     if (!appointment) {
       throw new NotFoundException(
         MESSAGES.failMessage.appointmentNotFound ||
-        'Appointment not found or access denied',
+          'Appointment not found or access denied',
       );
     }
 
