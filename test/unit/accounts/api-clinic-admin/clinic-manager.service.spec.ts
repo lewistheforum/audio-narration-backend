@@ -480,8 +480,8 @@ describe('ClinicManagerService', () => {
     it('should throw NotFoundException if manager not found', async () => {
       managerInfoRepository.findManagerDetailById.mockResolvedValue(null);
 
-      await expect(service.getManagerDetail(adminId, managerId)).rejects.toThrow(NotFoundException);
-      await expect(service.getManagerDetail(adminId, managerId)).rejects.toThrow('Manager not found');
+      await expect(service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId)).rejects.toThrow(NotFoundException);
+      await expect(service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId)).rejects.toThrow('Manager not found');
     });
 
     it('should throw ForbiddenException if admin does not own manager', async () => {
@@ -491,8 +491,8 @@ describe('ClinicManagerService', () => {
         })
       );
 
-      await expect(service.getManagerDetail(adminId, managerId)).rejects.toThrow(ForbiddenException);
-      await expect(service.getManagerDetail(adminId, managerId)).rejects.toThrow(
+      await expect(service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId)).rejects.toThrow(ForbiddenException);
+      await expect(service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId)).rejects.toThrow(
         'You do not have access to this manager'
       );
     });
@@ -526,7 +526,7 @@ describe('ClinicManagerService', () => {
 
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
 
-      const result = await service.getManagerDetail(adminId, managerId);
+      const result = await service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId);
 
       expect(result).toMatchObject({
         managerId: managerId,
@@ -565,7 +565,7 @@ describe('ClinicManagerService', () => {
 
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
 
-      const result = await service.getManagerDetail(adminId, managerId);
+      const result = await service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId);
 
       expect(result.personnel).toEqual([]);
       expect(result.status).toBe(AccountStatus.PENDING_APPROVAL);
@@ -583,7 +583,7 @@ describe('ClinicManagerService', () => {
 
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
 
-      const result = await service.getManagerDetail(adminId, managerId);
+      const result = await service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId);
 
       expect(result.personnel).toHaveLength(2);
       expect(result.status).toBe(AccountStatus.MANAGER_DISABLED);
@@ -605,7 +605,7 @@ describe('ClinicManagerService', () => {
 
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
 
-      const result = await service.getManagerDetail(adminId, managerId);
+      const result = await service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId);
 
       expect(result.personnel).toHaveLength(2);
       expect(result.personnel.find(p => p.accountId === 'staff-2')).toBeUndefined();
@@ -619,7 +619,7 @@ describe('ClinicManagerService', () => {
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
       addressRepository.findByAccountId.mockResolvedValue(null);
 
-      const result = await service.getManagerDetail(adminId, managerId);
+      const result = await service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId);
 
       expect(result.address).toEqual({
         address: '',
@@ -638,7 +638,7 @@ describe('ClinicManagerService', () => {
       managerInfoRepository.findManagerDetailById.mockResolvedValue(mockManager);
       legalDocsRepository.findByAccountId.mockResolvedValue(null);
 
-      const result = await service.getManagerDetail(adminId, managerId);
+      const result = await service.getManagerDetail(adminId, AccountRole.CLINIC_ADMIN, managerId);
 
       expect(result.legalDocuments).toMatchObject({
         operatingLicense: undefined,
