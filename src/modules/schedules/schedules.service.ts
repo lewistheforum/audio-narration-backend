@@ -26,6 +26,7 @@ import { ClinicRoom } from './entities/clinic_room.entity';
 import { Account } from '../accounts/entities/accounts.entity';
 import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
 import { GeneralAccount } from '../accounts/entities/general_accounts.entity';
+import { ClinicStaffInformation } from '../accounts/entities/clinic_staff_information.entity';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { EmployeeScheduleRepository } from './repositories/employee-schedule.repository';
 import { AppointmentStatus } from '../appointments/enums';
@@ -44,6 +45,8 @@ export class SchedulesService {
     private readonly doctorInfoRepository: Repository<DoctorInformation>,
     @InjectRepository(GeneralAccount)
     private readonly generalAccountRepository: Repository<GeneralAccount>,
+    @InjectRepository(ClinicStaffInformation)
+    private readonly clinicStaffRepository: Repository<ClinicStaffInformation>,
     private readonly dataSource: DataSource,
   ) { }
 
@@ -96,13 +99,16 @@ export class SchedulesService {
 
     if (!employees.length) return [];
 
-    // Manual Fetch DoctorInformation and GeneralAccount
+    // Manual Fetch DoctorInformation, GeneralAccount, and ClinicStaffInformation
     const employeeIds = employees.map((e) => e._id);
-    const [doctorInfos, generalAccounts] = await Promise.all([
+    const [doctorInfos, generalAccounts, staffInfos] = await Promise.all([
       this.doctorInfoRepository.find({
         where: { accountId: In(employeeIds) },
       }),
       this.generalAccountRepository.find({
+        where: { accountId: In(employeeIds) },
+      }),
+      this.clinicStaffRepository.find({
         where: { accountId: In(employeeIds) },
       }),
     ]);
@@ -118,20 +124,28 @@ export class SchedulesService {
       generalAccountMap.set(acc.accountId, acc);
     });
 
+    const staffInfoMap = new Map<string, ClinicStaffInformation>();
+    staffInfos.forEach((info) => {
+      staffInfoMap.set(info.accountId, info);
+    });
+
     let results = employees.map((emp) => {
       const doctorInfo = doctorInfoMap.get(emp._id);
       const generalAccount = generalAccountMap.get(emp._id);
+      const staffInfo = staffInfoMap.get(emp._id);
 
       // Rule:
       // For DOCTOR: fullName from doctorInfo
-      // For CLINIC_STAFF: fullName from generalAccount
+      // For CLINIC_STAFF: fullName from staffInfo (ClinicStaffInformation)
       let fullName = emp.username || 'Unknown';
       if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
         fullName = doctorInfo.fullName;
       } else if (
         emp.role === AccountRole.CLINIC_STAFF &&
-        generalAccount?.fullName
+        staffInfo?.fullName
       ) {
+        fullName = staffInfo.fullName;
+      } else if (generalAccount?.fullName) {
         fullName = generalAccount.fullName;
       }
 
@@ -592,18 +606,21 @@ export class SchedulesService {
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
+      const staffInfo = emp?.clinicStaffInformation;
       const generalAccount = emp?.generalAccount;
 
       // Rule:
       // For DOCTOR: fullName from doctorInfo
-      // For CLINIC_STAFF: fullName from generalAccount
+      // For CLINIC_STAFF: fullName from staffInfo (ClinicStaffInformation)
       let fullName = emp?.username || 'Unknown';
       if (emp?.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
         fullName = doctorInfo.fullName;
       } else if (
         emp?.role === AccountRole.CLINIC_STAFF &&
-        generalAccount?.fullName
+        staffInfo?.fullName
       ) {
+        fullName = staffInfo.fullName;
+      } else if (generalAccount?.fullName) {
         fullName = generalAccount.fullName;
       }
 
@@ -617,7 +634,7 @@ export class SchedulesService {
           avatar:
             emp?.role === AccountRole.DOCTOR
               ? doctorInfo?.profilePicture
-              : generalAccount?.profilePicture || null,
+              : staffInfo?.profilePicture || generalAccount?.profilePicture || null,
         },
         shift: {
           id: schedule.clinicShift?._id,

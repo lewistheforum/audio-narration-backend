@@ -87,6 +87,7 @@ describe('TransactionsService', () => {
 
         subscriptionServicesService = {
             handleSubscriptionPaymentSuccess: jest.fn(),
+            getRenewalQueueByClinicId: jest.fn(),
         };
 
         packageRepo = {
@@ -380,6 +381,20 @@ describe('TransactionsService', () => {
                     .rejects.toThrow(BadRequestException);
             });
 
+            it('should throw BadRequest if a renewal/change is already queued', async () => {
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                    subscriptionStatus: RegistrationStatus.EXPIRED,
+                    expirationDate: new Date('2020-01-01'),
+                });
+
+                subscriptionServicesService.getRenewalQueueByClinicId.mockResolvedValue({ _id: 'queue-1' });
+
+                await expect(service.createNewSubscriptionQr('clinic-1', 'service-1'))
+                    .rejects.toThrow(BadRequestException);
+            });
+
             it('should use Company account (ENV) for QR generation', async () => {
                 clinicSubscriptionRepo.findOne.mockResolvedValue({
                     _id: 'sub-1',
@@ -427,6 +442,18 @@ describe('TransactionsService', () => {
 
                 expect(result.id).toBe('tx-renew');
                 expect(result.qrCodeUrl).toContain('COMPANY_ACC_123');
+            });
+
+            it('should throw BadRequest if a renewal/change is already queued', async () => {
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                });
+
+                subscriptionServicesService.getRenewalQueueByClinicId.mockResolvedValue({ _id: 'queue-1' });
+
+                await expect(service.createRenewalQr('clinic-1'))
+                    .rejects.toThrow(BadRequestException);
             });
 
             it('should allow renewal if subscription is EXPIRED', async () => {
@@ -546,6 +573,18 @@ describe('TransactionsService', () => {
                 const result = await service.createPackageChangeQr('clinic-1', 'service-new');
 
                 expect(result.qrCodeUrl).toContain('COMPANY_ACC_123');
+            });
+
+            it('should throw BadRequest if a renewal/change is already queued', async () => {
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                });
+
+                subscriptionServicesService.getRenewalQueueByClinicId.mockResolvedValue({ _id: 'queue-1' });
+
+                await expect(service.createPackageChangeQr('clinic-1', 'service-new'))
+                    .rejects.toThrow(BadRequestException);
             });
         });
     });

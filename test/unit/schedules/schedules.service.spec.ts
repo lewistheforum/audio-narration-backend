@@ -8,6 +8,7 @@ import { ClinicRoom } from 'src/modules/schedules/entities/clinic_room.entity';
 import { Account } from 'src/modules/accounts/entities/accounts.entity';
 import { DoctorInformation } from 'src/modules/accounts/entities/doctor_information.entity';
 import { GeneralAccount } from 'src/modules/accounts/entities/general_accounts.entity';
+import { ClinicStaffInformation } from 'src/modules/accounts/entities/clinic_staff_information.entity';
 import { CreateScheduleDto } from 'src/modules/schedules/dto/create-schedule.dto';
 import { AccountRole } from 'src/modules/accounts/enums';
 import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
@@ -21,6 +22,7 @@ describe('SchedulesService', () => {
     let accountRepository: Repository<Account>;
     let doctorInfoRepository: Repository<DoctorInformation>;
     let generalAccountRepository: Repository<GeneralAccount>;
+    let clinicStaffRepository: Repository<ClinicStaffInformation>;
     let dataSource: DataSource;
 
     const mockScheduleRepository = {
@@ -53,6 +55,10 @@ describe('SchedulesService', () => {
     };
 
     const mockGeneralAccountRepository = {
+        find: jest.fn(),
+    };
+
+    const mockClinicStaffRepository = {
         find: jest.fn(),
     };
 
@@ -114,6 +120,10 @@ describe('SchedulesService', () => {
                     useValue: mockGeneralAccountRepository,
                 },
                 {
+                    provide: getRepositoryToken(ClinicStaffInformation),
+                    useValue: mockClinicStaffRepository,
+                },
+                {
                     provide: DataSource,
                     useValue: mockDataSource,
                 },
@@ -127,6 +137,7 @@ describe('SchedulesService', () => {
         accountRepository = module.get<Repository<Account>>(getRepositoryToken(Account));
         doctorInfoRepository = module.get<Repository<DoctorInformation>>(getRepositoryToken(DoctorInformation));
         generalAccountRepository = module.get<Repository<GeneralAccount>>(getRepositoryToken(GeneralAccount));
+        clinicStaffRepository = module.get<Repository<ClinicStaffInformation>>(getRepositoryToken(ClinicStaffInformation));
         dataSource = module.get<DataSource>(DataSource);
     });
 
@@ -230,7 +241,7 @@ describe('SchedulesService', () => {
                         _id: 'emp-staff',
                         username: 'staff1',
                         role: AccountRole.CLINIC_STAFF,
-                        generalAccount: { fullName: 'Staff John', profilePicture: 'staff_pic.jpg' }
+                        clinicStaffInformation: { fullName: 'Staff Mary', profilePicture: 'staff_pic.jpg' }
                     },
                     clinicShift: { _id: 'shift-id', shift: 'morning' },
                     rooms: [{ _id: 'room-2', roomName: 'Room 2' }]
@@ -245,8 +256,8 @@ describe('SchedulesService', () => {
             expect(result).toHaveLength(2);
             // Doctor name from doctorInformation
             expect(result[0].employee.fullName).toEqual('Dr. House');
-            // Staff name from generalAccount
-            expect(result[1].employee.fullName).toEqual('Staff John');
+            // Staff name from ClinicStaffInformation
+            expect(result[1].employee.fullName).toEqual('Staff Mary');
         });
     });
 
@@ -360,8 +371,8 @@ describe('SchedulesService', () => {
             const doctorInfos = [
                 { accountId: 'emp-1', fullName: 'Dr. Who', profilePicture: 'url' }
             ];
-            const generalAccounts = [
-                { accountId: 'emp-2', fullName: 'Staff John', profilePicture: 'url' }
+            const staffInfos = [
+                { accountId: 'emp-2', fullName: 'Staff Mary', profilePicture: 'url' }
             ];
 
             // Manager lookup
@@ -369,13 +380,14 @@ describe('SchedulesService', () => {
             // Employee lookup
             mockAccountRepository.find.mockResolvedValue(employees);
             mockDoctorInfoRepository.find.mockResolvedValue(doctorInfos as any);
-            mockGeneralAccountRepository.find.mockResolvedValue(generalAccounts as any);
+            mockGeneralAccountRepository.find.mockResolvedValue([]);
+            mockClinicStaffRepository.find.mockResolvedValue(staffInfos as any);
 
             const result = await service.getEmployees(user);
 
             expect(result).toHaveLength(2);
             expect(result.find(e => e.id === 'emp-1').name).toBe('Dr. Who'); // From DoctorInfo
-            expect(result.find(e => e.id === 'emp-2').name).toBe('Staff John'); // From GeneralAccount
+            expect(result.find(e => e.id === 'emp-2').name).toBe('Staff Mary'); // From ClinicStaffInfo
         });
     });
 

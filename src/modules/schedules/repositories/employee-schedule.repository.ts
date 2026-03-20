@@ -49,6 +49,13 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       )
       // Map staff information from GeneralAccount
       .leftJoinAndSelect('employee.generalAccount', 'generalAccount')
+      // Map staff information from ClinicStaffInformation
+      .leftJoinAndMapOne(
+        'employee.clinicStaffInformation',
+        'ClinicStaffInformation',
+        'staffInfo',
+        'staffInfo.accountId = employee._id',
+      )
       .where('schedule.clinicId = :clinicId', { clinicId });
 
     if (options.role) {
@@ -130,6 +137,13 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       )
       // Map staff information from GeneralAccount
       .leftJoinAndSelect('employee.generalAccount', 'generalAccount')
+      // Map staff information from ClinicStaffInformation
+      .leftJoinAndMapOne(
+        'employee.clinicStaffInformation',
+        'ClinicStaffInformation',
+        'staffInfo',
+        'staffInfo.accountId = employee._id',
+      )
       // Join appointments to count bookings per hour slot
       .leftJoin(
         'appointments',
@@ -144,7 +158,8 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .addGroupBy('clinicShiftHour._id')
       .addGroupBy('rooms._id')
       .addGroupBy('doctorInfo._id')
-      .addGroupBy('generalAccount._id');
+      .addGroupBy('generalAccount._id')
+      .addGroupBy('staffInfo._id');
 
     if (options.role) {
       queryBuilder.andWhere('employee.role = :role', { role: options.role });
