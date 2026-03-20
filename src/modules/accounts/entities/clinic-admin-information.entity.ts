@@ -123,7 +123,7 @@ export class ClinicAdminInformation {
     name: 'bank_number',
     type: 'text',
     nullable: true,
-    transformer: encryptionTransformer,
+    // transformer: encryptionTransformer,
   })
   bankNumber?: string;
 
