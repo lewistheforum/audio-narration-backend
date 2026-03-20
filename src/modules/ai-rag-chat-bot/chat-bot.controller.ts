@@ -20,10 +20,6 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { GetSchedulesDto } from '../schedules/dto/get-schedules.dto';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { AccountRole } from '../accounts/enums';
-import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { AppointmentResponseDto } from '../appointments/dto';
 import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
 
