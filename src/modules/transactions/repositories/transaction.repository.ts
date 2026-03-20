@@ -153,16 +153,18 @@ export class TransactionRepository extends Repository<Transaction> {
   ): Promise<any[]> {
     return this.query(
       `SELECT
-          DATE_TRUNC($1, transaction_date) as label,
-          SUM(amount)::bigint as total_revenue,
+          DATE_TRUNC($1, a.appointment_date) as label,
+          ap.payment_type as payment_type,
+          SUM(ap.amount)::bigint as total_revenue,
           COUNT(*)::int as transaction_count
-       FROM transactions
-       WHERE deleted_at IS NULL
-         AND clinic_id = $2
-         AND status = 'SUCCESS'
-         AND transaction_date >= $3
-         AND transaction_date <= $4
-       GROUP BY label
+       FROM appointment_package ap
+       INNER JOIN appointments a ON a._id = ap.appointment_id
+       WHERE a.clinic_id = $2
+         AND a.status = 'COMPLETED'
+         AND ap.status = 'paid'
+         AND a.appointment_date >= $3
+         AND a.appointment_date <= $4
+       GROUP BY label, payment_type
        ORDER BY label ASC`,
       [period, clinicId, startDate, endDate],
     );
@@ -182,21 +184,22 @@ export class TransactionRepository extends Repository<Transaction> {
   ): Promise<any[]> {
     return this.query(
       `SELECT
-          t.transaction_date as date,
-          t._id as transaction_id,
-          t.amount as amount,
-          t.status as status,
-          t.gateway as gateway,
-          t.description as description,
+          a.appointment_date as date,
+          ap._id as package_id,
+          ap.amount as amount,
+          ap.status as status,
+          ap.payment_type as payment_type,
+          ap.note as description,
           ga.full_name as patient_name
-       FROM transactions t
-       LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
-       WHERE t.deleted_at IS NULL
-         AND t.clinic_id = $1
-         AND t.status = 'SUCCESS'
-         AND t.transaction_date >= $2
-         AND t.transaction_date <= $3
-       ORDER BY t.transaction_date DESC`,
+       FROM appointment_package ap
+       INNER JOIN appointments a ON a._id = ap.appointment_id
+       LEFT JOIN general_accounts ga ON ga.account_id = a.patient_id
+       WHERE a.clinic_id = $1
+         AND a.status = 'COMPLETED'
+         AND ap.status = 'paid'
+         AND a.appointment_date >= $2
+         AND a.appointment_date <= $3
+       ORDER BY a.appointment_date DESC`,
       [clinicId, startDate, endDate],
     );
   }
