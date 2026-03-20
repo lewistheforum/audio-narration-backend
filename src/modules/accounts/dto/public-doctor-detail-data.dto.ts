@@ -4,6 +4,7 @@ import { AccountRole, AccountStatus } from '../enums';
 import { PublicDoctorInfo } from './public-doctor-info.dto';
 import { PublicClinicInfo } from './public-clinic-info.dto';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
+import { FeedbackDto } from './feedback.dto';
 
 /**
  * Public Doctor Detail Data DTO
@@ -96,7 +97,29 @@ export class PublicDoctorDetailData {
   })
   clinic?: PublicClinicInfo;
 
-  constructor(account: any, doctorInfo: any, clinicInfo?: any) {
+  @ApiProperty({
+    description: 'Average rating from feedbacks (0-5)',
+    example: 4.5,
+    required: false,
+    nullable: true,
+  })
+  averageRating?: number;
+
+  @ApiProperty({
+    description: 'Doctor feedbacks',
+    type: [FeedbackDto],
+    required: false,
+    nullable: true,
+  })
+  feedbacks?: FeedbackDto[];
+
+  constructor(
+    account: any,
+    doctorInfo: any,
+    clinicInfo?: any,
+    averageRating?: number,
+    feedbacks?: FeedbackDto[],
+  ) {
     this.id = account._id;
     this.username = account.username;
     this.email = account.email;
@@ -113,5 +136,8 @@ export class PublicDoctorDetailData {
     if (clinicInfo) {
       this.clinic = new PublicClinicInfo(clinicInfo);
     }
+
+    this.averageRating = averageRating !== undefined ? Number(averageRating) || 0 : undefined;
+    this.feedbacks = feedbacks;
   }
 }

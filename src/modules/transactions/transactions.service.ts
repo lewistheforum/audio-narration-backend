@@ -1352,17 +1352,34 @@ export class TransactionsService {
       (sum, s) => sum + Number(s.total_revenue),
       0,
     );
+    const totalOnlineRevenue = stats
+      .filter((s) => s.payment_type === PaymentType.ONLINE)
+      .reduce((sum, s) => sum + Number(s.total_revenue), 0);
+    const totalCODRevenue = stats
+      .filter((s) => s.payment_type === PaymentType.COD)
+      .reduce((sum, s) => sum + Number(s.total_revenue), 0);
+
     const totalTransactions = stats.reduce(
       (sum, s) => sum + Number(s.transaction_count),
       0,
     );
+    const onlineTransactions = stats
+      .filter((s) => s.payment_type === PaymentType.ONLINE)
+      .reduce((sum, s) => sum + Number(s.transaction_count), 0);
+    const codTransactions = stats
+      .filter((s) => s.payment_type === PaymentType.COD)
+      .reduce((sum, s) => sum + Number(s.transaction_count), 0);
 
     return {
       period: dto.period || RevenuePeriod.DAILY,
       startDate,
       endDate,
       totalRevenue,
+      totalOnlineRevenue,
+      totalCODRevenue,
       totalTransactions,
+      onlineTransactions,
+      codTransactions,
       data: stats,
     };
   }
@@ -1384,13 +1401,13 @@ export class TransactionsService {
     );
 
     const worksheetData = transactions.map((t) => ({
-      'Ngày giao dịch': formatToVietnamTime(t.date),
-      'Mã giao dịch': t.transaction_id,
+      'Ngày khám': formatToVietnamTime(t.date),
+      'Mã gói': t.package_id,
       'Số tiền': Number(t.amount),
       'Trạng thái': t.status,
-      'Cổng thanh toán': t.gateway || 'N/A',
+      'Loại thanh toán': t.payment_type,
       'Mô tả': t.description || 'N/A',
-      'Bệnh nhân': t.patient_name || 'Hệ thống',
+      'Bệnh nhân': t.patient_name || 'N/A',
     }));
 
     const workbook = XLSX.utils.book_new();

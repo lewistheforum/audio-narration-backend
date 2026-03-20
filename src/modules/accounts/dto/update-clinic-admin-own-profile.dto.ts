@@ -11,12 +11,12 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 /**
- * Update Clinic Admin Profile DTO
+ * Update Clinic Admin Own Profile DTO
  *
- * Used for updating clinic administrator profile information
+ * Used for clinic administrators to update their own profile information
  * All fields are optional - only provided fields will be updated
  */
-export class UpdateClinicAdminProfileDto {
+export class UpdateClinicAdminOwnProfileDto {
   @ApiProperty({
     description: 'Clinic name',
     example: 'City Medical Clinic',

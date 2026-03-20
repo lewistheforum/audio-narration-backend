@@ -36,6 +36,8 @@ import { MailerModule } from '../mailer/mailer.module';
 import { TransactionRepository } from '../transactions/repositories/transaction.repository';
 import { ClinicManagerService } from './api-clinic-admin/clinic-manager.service';
 import { ClinicManagerController } from './api-clinic-admin/clinic-manager.controller';
+import { ClinicAdminProfileService } from './api-clinic-admin/clinic-admin-profile.service';
+import { ClinicAdminProfileController } from './api-clinic-admin/clinic-admin-profile.controller';
 
 /**
  * Accounts Module
@@ -89,6 +91,7 @@ import { ClinicManagerController } from './api-clinic-admin/clinic-manager.contr
   controllers: [
     AccountsController,
     ClinicManagerController,
+    ClinicAdminProfileController,
   ],
   providers: [
     AccountRepository,
@@ -105,6 +108,7 @@ import { ClinicManagerController } from './api-clinic-admin/clinic-manager.contr
     TransactionRepository,
     AccountsService,
     ClinicManagerService,
+    ClinicAdminProfileService,
     ZaloWebhookService,
   ],
   exports: [
@@ -122,6 +126,7 @@ import { ClinicManagerController } from './api-clinic-admin/clinic-manager.contr
     ClinicAdminInformationRepository,
     TransactionRepository,
     ZaloWebhookService,
+    ClinicAdminProfileService,
   ],
 })
 export class AccountsModule { }
