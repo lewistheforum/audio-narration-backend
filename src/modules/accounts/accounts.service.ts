@@ -2224,6 +2224,70 @@ export class AccountsService {
   }
 
   /**
+   * Resolve Subscription Payload For JWT
+   *
+   * Returns subscription metadata for clinic-related roles:
+   * - CLINIC_ADMIN: direct subscription
+   * - CLINIC_MANAGER: parent CLINIC_ADMIN subscription
+   * - CLINIC_STAFF/DOCTOR: manager -> parent CLINIC_ADMIN subscription
+   */
+  async getSubscriptionPayloadForAccount(account: Account): Promise<{
+    subscriptionId?: string;
+    subscriptionName?: string;
+    subscriptionCode?: string;
+  }> {
+    const clinicRoles = [
+      AccountRole.CLINIC_ADMIN,
+      AccountRole.CLINIC_MANAGER,
+      AccountRole.CLINIC_STAFF,
+      AccountRole.DOCTOR,
+    ];
+
+    if (!clinicRoles.includes(account.role)) {
+      return {};
+    }
+
+    let clinicAdminId: string | undefined;
+
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      clinicAdminId = account._id;
+    } else if (account.role === AccountRole.CLINIC_MANAGER) {
+      clinicAdminId = account.parentId;
+    } else {
+      if (!account.parentId) {
+        return {};
+      }
+
+      const managerAccount = await this.accountRepository.findAccountById(
+        account.parentId,
+      );
+
+      clinicAdminId = managerAccount?.parentId;
+    }
+
+    if (!clinicAdminId) {
+      return {};
+    }
+
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+
+    if (!subscription) {
+      return {};
+    }
+
+    const service = await this.subscriptionServiceRepository.findById(
+      subscription.serviceId,
+    );
+
+    return {
+      subscriptionId: subscription._id,
+      subscriptionName: service?.serviceName,
+      subscriptionCode: service?.code,
+    };
+  }
+
+  /**
    * Find Account by Email
    *
    * Retrieves an account by email address. Used for authentication and email uniqueness validation.
@@ -2925,7 +2989,7 @@ export class AccountsService {
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.CLINIC_STAFF,
-        status: AccountStatus.ACTIVE, // Account is active by default
+        status: AccountStatus.PENDING_APPROVAL, // Account starts in pending approval state
         isEmailVerified: false, // Staff must verify themselves
         publicKey,
         encryptedPrivateKey,
@@ -3028,7 +3092,7 @@ export class AccountsService {
         password: hashedPassword,
         parentId: managerId, // Link to clinic manager
         role: AccountRole.DOCTOR,
-        status: AccountStatus.ACTIVE, // Account is active by default
+        status: AccountStatus.PENDING_APPROVAL, // Account starts in pending approval state
         isEmailVerified: false, // Doctor must verify themselves
         publicKey,
         encryptedPrivateKey,
@@ -3124,9 +3188,24 @@ export class AccountsService {
         clinicAdminInfo = clinic.parent.clinicAdminInformation;
       }
 
+      // Calculate average rating for this clinic
+      let averageRating: number | undefined;
+      try {
+        const ratingResult = await this.dataSource.query(`
+          SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
+          FROM feedbacks f
+          WHERE f.clinic_id = $1
+            AND f.type = 'CLINIC'
+            AND f.deleted_at IS NULL
+        `, [clinic._id]);
+        averageRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+      } catch {
+        averageRating = 0;
+      }
+
       if (clinicInfo && address) {
         clinicItems.push(
-          new ClinicItemDto(clinic, clinicInfo, address, clinicAdminInfo),
+          new ClinicItemDto(clinic, clinicInfo, address, clinicAdminInfo, averageRating),
         );
       }
     }
@@ -3203,6 +3282,21 @@ export class AccountsService {
       // Get primary address (first address)
       const address = await this.addressRepository.findByAccountId(clinic._id);
 
+      // Calculate average rating for this clinic
+      let averageRating: number | undefined;
+      try {
+        const ratingResult = await this.dataSource.query(`
+          SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
+          FROM feedbacks f
+          WHERE f.clinic_id = $1
+            AND f.type = 'CLINIC'
+            AND f.deleted_at IS NULL
+        `, [clinic._id]);
+        averageRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+      } catch {
+        averageRating = 0;
+      }
+
       // if (clinicAdminInfo && address) {
       // Adapt ClinicAdminInformation to match ClinicItemDto's expected clinicInfo structure
       const adaptedClinicInfo = {
@@ -3217,7 +3311,7 @@ export class AccountsService {
       // Pass adapted info as clinicInfo (2nd arg) for display compatibility.
       // Pass original clinicAdminInfo as 4th arg for full details.
       clinicItems.push(
-        new ClinicItemDto(clinic, adaptedClinicInfo, address, clinicAdminInfo),
+        new ClinicItemDto(clinic, adaptedClinicInfo, address, clinicAdminInfo, averageRating),
       );
       // }
     }
@@ -3298,7 +3392,23 @@ export class AccountsService {
       const doctorInfo = await this.doctorInfoRepository.findByAccountId(
         doctor._id,
       );
-      doctors.push(new DoctorSummaryDto(doctor, doctorInfo));
+      
+      // Calculate average rating for this doctor
+      let doctorAvgRating: number | undefined;
+      try {
+        const ratingResult = await this.dataSource.query(`
+          SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
+          FROM feedbacks f
+          WHERE f.doctor_id = $1
+            AND f.type = 'DOCTOR'
+            AND f.deleted_at IS NULL
+        `, [doctor._id]);
+        doctorAvgRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+      } catch {
+        doctorAvgRating = 0;
+      }
+      
+      doctors.push(new DoctorSummaryDto(doctor, doctorInfo, doctorAvgRating));
     }
 
     // Get subscription information
@@ -3351,6 +3461,61 @@ export class AccountsService {
       }
     }
 
+    // Calculate clinic average rating
+    let clinicAvgRating: number | undefined;
+    try {
+      const ratingResult = await this.dataSource.query(`
+        SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
+        FROM feedbacks f
+        WHERE f.clinic_id = $1
+          AND f.type = 'CLINIC'
+          AND f.deleted_at IS NULL
+      `, [clinic._id]);
+      clinicAvgRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+    } catch {
+      clinicAvgRating = 0;
+    }
+
+    // Fetch clinic feedbacks
+    let feedbacks: any[] = [];
+    try {
+      const feedbacksData = await this.dataSource.query(`
+        SELECT 
+          f._id,
+          f.rating,
+          f.description,
+          f.description_label,
+          f.feedback_images,
+          f.feedback_images_label,
+          f.created_at,
+          ga.full_name as patient_name,
+          ga.profile_picture as patient_profile_picture
+        FROM feedbacks f
+        LEFT JOIN appointments apt ON apt._id = f.appointment_id
+        LEFT JOIN accounts acc ON acc._id = apt.patient_id
+        LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+        WHERE f.clinic_id = $1
+          AND f.type = 'CLINIC'
+          AND f.deleted_at IS NULL
+        ORDER BY f.created_at DESC
+        LIMIT 10
+      `, [clinic._id]);
+      
+      feedbacks = feedbacksData.map((fb: any) => ({
+        _id: fb._id,
+        rating: fb.rating,
+        description: fb.description,
+        descriptionLabel: fb.description_label,
+        feedbackImages: fb.feedback_images,
+        feedbackImagesLabel: fb.feedback_images_label,
+        createdAt: fb.created_at,
+        patientName: fb.patient_name,
+        patientProfilePicture: fb.patient_profile_picture,
+      }));
+    } catch {
+      feedbacks = [];
+    }
+
     return new ClinicDetailResponseDto(
       clinic,
       clinicInfo,
@@ -3360,6 +3525,8 @@ export class AccountsService {
       clinicAdmin,
       clinicAdminInfo,
       finalClinicName,
+      clinicAvgRating,
+      feedbacks,
     );
   }
 
@@ -3533,11 +3700,68 @@ export class AccountsService {
       dob: doctorInfo.dob,
     };
 
+    // Calculate doctor average rating
+    let averageRating: number | undefined;
+    try {
+      const ratingResult = await this.dataSource.query(`
+        SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
+        FROM feedbacks f
+        WHERE f.doctor_id = $1
+          AND f.type = 'DOCTOR'
+          AND f.deleted_at IS NULL
+      `, [id]);
+      averageRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+    } catch {
+      averageRating = 0;
+    }
+
+    // Fetch doctor feedbacks
+    let feedbacks: any[] = [];
+    try {
+      const feedbacksData = await this.dataSource.query(`
+        SELECT 
+          f._id,
+          f.rating,
+          f.description,
+          f.description_label,
+          f.feedback_images,
+          f.feedback_images_label,
+          f.created_at,
+          ga.full_name as patient_name,
+          ga.profile_picture as patient_profile_picture
+        FROM feedbacks f
+        LEFT JOIN appointments apt ON apt._id = f.appointment_id
+        LEFT JOIN accounts acc ON acc._id = apt.patient_id
+        LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+        WHERE f.doctor_id = $1
+          AND f.type = 'DOCTOR'
+          AND f.deleted_at IS NULL
+        ORDER BY f.created_at DESC
+        LIMIT 10
+      `, [id]);
+      
+      feedbacks = feedbacksData.map((fb: any) => ({
+        _id: fb._id,
+        rating: fb.rating,
+        description: fb.description,
+        descriptionLabel: fb.description_label,
+        feedbackImages: fb.feedback_images,
+        feedbackImagesLabel: fb.feedback_images_label,
+        createdAt: fb.created_at,
+        patientName: fb.patient_name,
+        patientProfilePicture: fb.patient_profile_picture,
+      }));
+    } catch {
+      feedbacks = [];
+    }
+
     // Create PublicDoctorDetailData with modified account and doctor info
     const publicDoctorDetailData = new PublicDoctorDetailData(
       modifiedAccount,
       doctorInfo,
       clinicInfo,
+      averageRating,
+      feedbacks,
     );
 
     return publicDoctorDetailData;
@@ -3646,10 +3870,9 @@ export class AccountsService {
       if (dto.isVerify !== undefined) {
         profile.isVerify = dto.isVerify;
       }
-      return this.clinicAdminInfoRepository.save(profile);
     } else {
       // Create new profile if doesn't exist
-      const profile = this.clinicAdminInfoRepository.create({
+      profile = this.clinicAdminInfoRepository.create({
         accountId,
         clinicName: dto.clinicName,
         description: dto.description,
@@ -3664,9 +3887,9 @@ export class AccountsService {
         sepayVa: dto.sepayVa,
         isVerify: dto.isVerify ?? false,
       });
-
-      return this.clinicAdminInfoRepository.save(profile);
     }
+
+    return this.clinicAdminInfoRepository.save(profile);
   }
 
   /**

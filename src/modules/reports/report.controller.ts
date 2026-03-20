@@ -29,7 +29,7 @@ export class ReportController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT, AccountRole.CLINIC_STAFF)
+  @Roles(AccountRole.PATIENT, AccountRole.CLINIC_STAFF, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @ApiOperation({ summary: 'Create a new report (Patient & Staff)' })
   @ApiResponse({ status: 201, description: 'Report created successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid input data.' })
@@ -40,7 +40,7 @@ export class ReportController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.ADMIN)
+  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @ApiOperation({ summary: 'Get a paginated list of reports' })
   @ApiResponse({ status: 200, description: 'Return paginated reports.' })
   async findAll(@Query() query: GetReportsDto) {

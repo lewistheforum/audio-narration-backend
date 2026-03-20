@@ -38,6 +38,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     const queryBuilder = this.createQueryBuilder('schedule')
       .leftJoinAndSelect('schedule.employee', 'employee')
       .leftJoinAndSelect('schedule.clinicShift', 'clinicShift')
+      .leftJoinAndSelect('clinicShift.hours', 'clinicShiftHour')
       .leftJoinAndSelect('schedule.rooms', 'rooms')
       // Map doctor information manually
       .leftJoinAndMapOne(
@@ -45,6 +46,15 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
         'DoctorInformation',
         'doctorInfo',
         'doctorInfo.accountId = employee._id',
+      )
+      // Map staff information from GeneralAccount
+      .leftJoinAndSelect('employee.generalAccount', 'generalAccount')
+      // Map staff information from ClinicStaffInformation
+      .leftJoinAndMapOne(
+        'employee.clinicStaffInformation',
+        'ClinicStaffInformation',
+        'staffInfo',
+        'staffInfo.accountId = employee._id',
       )
       .where('schedule.clinicId = :clinicId', { clinicId });
 
@@ -125,6 +135,15 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
         'doctorInfo',
         'doctorInfo.accountId = employee._id',
       )
+      // Map staff information from GeneralAccount
+      .leftJoinAndSelect('employee.generalAccount', 'generalAccount')
+      // Map staff information from ClinicStaffInformation
+      .leftJoinAndMapOne(
+        'employee.clinicStaffInformation',
+        'ClinicStaffInformation',
+        'staffInfo',
+        'staffInfo.accountId = employee._id',
+      )
       // Join appointments to count bookings per hour slot
       .leftJoin(
         'appointments',
@@ -138,7 +157,9 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .addGroupBy('clinicShift._id')
       .addGroupBy('clinicShiftHour._id')
       .addGroupBy('rooms._id')
-      .addGroupBy('doctorInfo._id');
+      .addGroupBy('doctorInfo._id')
+      .addGroupBy('generalAccount._id')
+      .addGroupBy('staffInfo._id');
 
     if (options.role) {
       queryBuilder.andWhere('employee.role = :role', { role: options.role });

@@ -272,6 +272,14 @@ export class AccountResponseDto {
   clinicName?: string;
 
   @ApiProperty({
+    description: 'Clinic phone number',
+    example: '+1234567890',
+    required: false,
+    nullable: true,
+  })
+  clinicPhone?: string;
+
+  @ApiProperty({
     description: 'Description of the clinic',
     required: false,
     nullable: true,
@@ -337,6 +345,13 @@ export class AccountResponseDto {
     nullable: true,
   })
   sepayVa?: string;
+
+  @ApiProperty({
+    description: 'SePay API Key',
+    required: false,
+    nullable: true,
+  })
+  sepayKey?: string;
 
   // Clinic Manager fields
   @ApiProperty({
@@ -572,6 +587,7 @@ export class AccountResponseDto {
     // ClinicAdminInformation data
     if (clinicAdminAccount) {
       this.clinicName = clinicAdminAccount.clinicName;
+      this.clinicPhone = clinicAdminAccount.clinicPhone;
       this.description = clinicAdminAccount.description;
       this.specializedIn = clinicAdminAccount.specializedIn;
       this.pros = clinicAdminAccount.pros;
@@ -582,6 +598,7 @@ export class AccountResponseDto {
       this.bankNumber = clinicAdminAccount.bankNumber;
       this.bankBranch = clinicAdminAccount.bankBranch;
       this.sepayVa = clinicAdminAccount.sepayVa;
+      this.sepayKey = clinicAdminAccount.sepayKey;
     }
 
     // Address data

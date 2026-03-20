@@ -261,7 +261,7 @@ sequenceDiagram
 
 #### 2. Thống kê phản hồi bác sĩ (Doctor Feedback & Working)
 - **Mục tiêu:** Đánh giá chất lượng phục vụ của từng bác sĩ trong ngày.
-- **Tham số bắt buộc:** `date` (YYYY-MM-DD).
+- **Tham số `date`:** (YYYY-MM-DD) Mặc định là ngày hiện tại.
 - **Quy trình:**
     1. Lấy danh sách bác sĩ có lịch khám trong ngày tại chi nhánh.
     2. Tính điểm trung bình (`avgRating`) từ bảng `feedbacks`.
@@ -280,7 +280,7 @@ sequenceDiagram
 ### D. Checklist Kiểm Tra
 
 - [ ] Manager chỉ xem được dữ liệu của đúng chi nhánh mình quản lý.
-- [ ] Tham số `date` cho báo cáo bác sĩ là bắt buộc (HTTP 400 nếu thiếu).
+- [ ] Tham số `date` cho báo cáo bác sĩ mặc định là ngày hiện tại nếu thiếu.
 - [ ] Các cuộc hẹn `CANCELLED/ABSENT` không được tính vào thống kê.
 - [ ] Tên dịch vụ hiển thị đúng, không bị lỗi alias SQL.
 - [ ] Unit tests cho `BranchReportService` đạt coverage cao.

@@ -15,6 +15,9 @@ import {
   getCurrentVietnamTime,
   addToVietnamTime,
   formatToVietnamTime,
+  getStartOfDay,
+  parseVietnamTime,
+  getVietnamTimestamp,
 } from 'src/common/utils/date.util';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
@@ -36,6 +39,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 import { BookingSessionService } from '../appointments/booking-session.service';
 import { ManagerRevenueReportDto, RevenuePeriod } from './dto/manager-revenue-report.dto';
 import * as XLSX from 'xlsx';
+import { CreateTransactionAtClinicDto } from './dto/create-transaction-at-clinic.dto';
 
 /**
  * Transactions Service
@@ -163,6 +167,15 @@ export class TransactionsService {
       throw new NotFoundException('Subscription not found for this clinic');
     }
 
+    // Check if there's already a renewal in the queue
+    const hasQueue =
+      await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);
+    if (hasQueue) {
+      throw new BadRequestException(
+        'A renewal or package change is already queued for this clinic. Please wait for the current queued package to be activated.',
+      );
+    }
+
     const now = getCurrentVietnamTime();
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
@@ -218,6 +231,16 @@ export class TransactionsService {
 
     // Case B: Exist but Active & Valid (User mistake?)
     const now = getCurrentVietnamTime();
+
+    // Check if there's already a renewal in the queue
+    const hasQueue =
+      await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);
+    if (hasQueue) {
+      throw new BadRequestException(
+        'A renewal or package change is already queued for this clinic. Please wait for the current queued package to be activated.',
+      );
+    }
+
     const isActive =
       subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
     const isNotExpired =
@@ -258,6 +281,15 @@ export class TransactionsService {
 
     if (!subscription) {
       throw new NotFoundException('Subscription not found for this clinic');
+    }
+
+    // Check if there's already a renewal in the queue
+    const hasQueue =
+      await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);
+    if (hasQueue) {
+      throw new BadRequestException(
+        'A renewal or package change is already queued for this clinic. Please wait for the current queued package to be activated.',
+      );
     }
 
     const transaction = await this.handlePackageChangeTransaction(
@@ -500,7 +532,7 @@ export class TransactionsService {
     }
 
     const amount = pendingPackages.reduce((sum, pkg) => sum + Number(pkg.amount), 0);
-    // Ignore dto.amount, use source of truth from DB packages
+    // Calculated from the source of truth in DB packages
 
     const expiresAt = this.computeExpireTime();
     const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
@@ -526,7 +558,7 @@ export class TransactionsService {
    * Create a dynamic payment QR for a prescription
    */
   async createDynamicQrAtClinic(
-    dto: CreateTransactionDto,
+    dto: CreateTransactionAtClinicDto,
   ): Promise<PaymentResponseDto> {
     // Verify appointment and get real amount & clinic
     const appointment = await this.appointmentRepository.findOne({
@@ -556,32 +588,58 @@ export class TransactionsService {
     const { acc, bank } = await this.resolveSepayConfig(clinicAdminId);
 
     // Calculate sum of all pending packages for this appointment
-    const pendingFinalAppointments = await this.appointmentRepository.find({
+    const pendingPackages = await this.packageRepo.find({
       where: {
-        _id: dto.appointmentId,
-        status: AppointmentStatus.NEED_FINAL_PAYMENT
+        appointmentId: dto.appointmentId,
+        status: AppointmentPackageStatus.PENDING_PAYMENT
       }
     });
 
-    if (pendingFinalAppointments.length === 0) {
+    if (pendingPackages.length === 0) {
       throw new BadRequestException('No pending payments for this appointment');
     }
 
-    // const amount = pendingFinalAppointments.reduce((sum, apt) => sum + Number(apt.amount), 0);
-    // Ignore dto.amount, use source of truth from DB packages
+    const amount = pendingPackages.reduce((sum, pkg) => sum + Number(pkg.amount), 0);
+    // Calculated from the source of truth in DB packages
 
-    const expiresAt = this.computeExpireTime();
-    const qrCodeUrl = this.buildQrUrl(dto.amount, dto.appointmentId, acc, bank);
-    const qrPayload = this.buildQrPayload(
-      dto.amount,
-      dto.appointmentId,
-      acc,
-      bank,
+    // Expire any existing pending transactions for this appointment to prevent spam
+    await this.transactionRepository.update(
+      {
+        appointmentId: dto.appointmentId,
+        status: PaymentStatus.PENDING,
+      },
+      {
+        status: PaymentStatus.EXPIRED,
+      }
     );
 
+    const expiresAt = this.computeExpireTime();
+    const qrCodeUrl = this.buildQrUrl(amount, dto.appointmentId, acc, bank);
+    const qrPayload = JSON.stringify({
+      amount: amount,
+      description: dto.note || `Payment for appointment ${dto.appointmentId}`,
+      appointmentId: dto.appointmentId,
+      clinicId: dto.clinicId || appointment.clinicId,
+    });
+
+    let transaction = this.transactionRepository.create({
+      appointmentId: dto.appointmentId,
+      clinicId: dto.clinicId || appointment.clinicId,
+      amount,
+      currency: 'VND',
+      status: PaymentStatus.PENDING,
+    });
+    transaction = await this.transactionRepository.save(transaction);
+
+    // Map the new transaction ID back to the pending packages
+    for (const pkg of pendingPackages) {
+      pkg.transactionId = transaction.id;
+      await this.packageRepo.save(pkg);
+    }
+
     return new PaymentResponseDto({
-      id: null,
-      amount: dto.amount,
+      id: transaction.id,
+      amount: amount,
       currency: 'VND',
       status: PaymentStatus.PENDING,
       qrCodeUrl,
@@ -700,7 +758,7 @@ export class TransactionsService {
     if (existingTransaction) {
       existingTransaction.status = status;
       existingTransaction.gateway = payload.gateway;
-      existingTransaction.transactionDate = new Date(payload.transactionDate);
+      existingTransaction.transactionDate = parseVietnamTime(payload.transactionDate);
       existingTransaction.accountNumber = payload.accountNumber;
       existingTransaction.code = payload.code;
       // existingTransaction.content = payload.content; // FIX: Don't overwrite metadata
@@ -887,7 +945,7 @@ export class TransactionsService {
           status: PaymentStatus.SUCCESS,
           qrCodeUrl: undefined,
           qrPayload: undefined,
-          expiresAt: new Date(),
+          expiresAt: getCurrentVietnamTime(),
         });
       }
 
@@ -924,7 +982,7 @@ export class TransactionsService {
       clinicId: appointment?.clinicId,
       senderAccountId: appointment?.patientId,
       transactionTypeId: transactionType?._id,
-      transactionDate: new Date(payload.transactionDate),
+      transactionDate: parseVietnamTime(payload.transactionDate),
       accountNumber: payload.accountNumber,
       code: payload.code,
       // content: payload.content, // EXISTING BUG: This overwrites our JSON metadata (targetServiceId) with the raw bank transfer message.
@@ -1272,8 +1330,8 @@ export class TransactionsService {
     clinicId: string,
     dto: ManagerRevenueReportDto,
   ): Promise<any> {
-    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
-    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
+    const startDate = dto.startDate ? getStartOfDay(dto.startDate) : new Date(0);
+    const endDate = dto.endDate ? getStartOfDay(dto.endDate) : getCurrentVietnamTime();
 
     // Default to day if not specified
     const periodMap = {
@@ -1294,17 +1352,34 @@ export class TransactionsService {
       (sum, s) => sum + Number(s.total_revenue),
       0,
     );
+    const totalOnlineRevenue = stats
+      .filter((s) => s.payment_type === PaymentType.ONLINE)
+      .reduce((sum, s) => sum + Number(s.total_revenue), 0);
+    const totalCODRevenue = stats
+      .filter((s) => s.payment_type === PaymentType.COD)
+      .reduce((sum, s) => sum + Number(s.total_revenue), 0);
+
     const totalTransactions = stats.reduce(
       (sum, s) => sum + Number(s.transaction_count),
       0,
     );
+    const onlineTransactions = stats
+      .filter((s) => s.payment_type === PaymentType.ONLINE)
+      .reduce((sum, s) => sum + Number(s.transaction_count), 0);
+    const codTransactions = stats
+      .filter((s) => s.payment_type === PaymentType.COD)
+      .reduce((sum, s) => sum + Number(s.transaction_count), 0);
 
     return {
       period: dto.period || RevenuePeriod.DAILY,
       startDate,
       endDate,
       totalRevenue,
+      totalOnlineRevenue,
+      totalCODRevenue,
       totalTransactions,
+      onlineTransactions,
+      codTransactions,
       data: stats,
     };
   }
@@ -1316,8 +1391,8 @@ export class TransactionsService {
     clinicId: string,
     dto: ManagerRevenueReportDto,
   ): Promise<Buffer> {
-    const startDate = dto.startDate ? new Date(dto.startDate) : new Date(0);
-    const endDate = dto.endDate ? new Date(dto.endDate) : new Date();
+    const startDate = dto.startDate ? getStartOfDay(dto.startDate) : new Date(0);
+    const endDate = dto.endDate ? getStartOfDay(dto.endDate) : getCurrentVietnamTime();
 
     const transactions = await this.transactionRepository.getTransactionsForExport(
       clinicId,
@@ -1326,13 +1401,13 @@ export class TransactionsService {
     );
 
     const worksheetData = transactions.map((t) => ({
-      'Ngày giao dịch': formatToVietnamTime(t.date),
-      'Mã giao dịch': t.transaction_id,
+      'Ngày khám': formatToVietnamTime(t.date),
+      'Mã gói': t.package_id,
       'Số tiền': Number(t.amount),
       'Trạng thái': t.status,
-      'Cổng thanh toán': t.gateway || 'N/A',
+      'Loại thanh toán': t.payment_type,
       'Mô tả': t.description || 'N/A',
-      'Bệnh nhân': t.patient_name || 'Hệ thống',
+      'Bệnh nhân': t.patient_name || 'N/A',
     }));
 
     const workbook = XLSX.utils.book_new();

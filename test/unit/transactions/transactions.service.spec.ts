@@ -87,6 +87,7 @@ describe('TransactionsService', () => {
 
         subscriptionServicesService = {
             handleSubscriptionPaymentSuccess: jest.fn(),
+            getRenewalQueueByClinicId: jest.fn(),
         };
 
         packageRepo = {
@@ -380,6 +381,20 @@ describe('TransactionsService', () => {
                     .rejects.toThrow(BadRequestException);
             });
 
+            it('should throw BadRequest if a renewal/change is already queued', async () => {
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                    subscriptionStatus: RegistrationStatus.EXPIRED,
+                    expirationDate: new Date('2020-01-01'),
+                });
+
+                subscriptionServicesService.getRenewalQueueByClinicId.mockResolvedValue({ _id: 'queue-1' });
+
+                await expect(service.createNewSubscriptionQr('clinic-1', 'service-1'))
+                    .rejects.toThrow(BadRequestException);
+            });
+
             it('should use Company account (ENV) for QR generation', async () => {
                 clinicSubscriptionRepo.findOne.mockResolvedValue({
                     _id: 'sub-1',
@@ -427,6 +442,18 @@ describe('TransactionsService', () => {
 
                 expect(result.id).toBe('tx-renew');
                 expect(result.qrCodeUrl).toContain('COMPANY_ACC_123');
+            });
+
+            it('should throw BadRequest if a renewal/change is already queued', async () => {
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                });
+
+                subscriptionServicesService.getRenewalQueueByClinicId.mockResolvedValue({ _id: 'queue-1' });
+
+                await expect(service.createRenewalQr('clinic-1'))
+                    .rejects.toThrow(BadRequestException);
             });
 
             it('should allow renewal if subscription is EXPIRED', async () => {
@@ -546,6 +573,18 @@ describe('TransactionsService', () => {
                 const result = await service.createPackageChangeQr('clinic-1', 'service-new');
 
                 expect(result.qrCodeUrl).toContain('COMPANY_ACC_123');
+            });
+
+            it('should throw BadRequest if a renewal/change is already queued', async () => {
+                clinicSubscriptionRepo.findOne.mockResolvedValue({
+                    _id: 'sub-1',
+                    clinicId: 'clinic-1',
+                });
+
+                subscriptionServicesService.getRenewalQueueByClinicId.mockResolvedValue({ _id: 'queue-1' });
+
+                await expect(service.createPackageChangeQr('clinic-1', 'service-new'))
+                    .rejects.toThrow(BadRequestException);
             });
         });
     });
@@ -754,8 +793,8 @@ describe('TransactionsService', () => {
         describe('getManagerRevenueStats', () => {
             it('should calculate total revenue and transaction count from repository results', async () => {
                 const mockStats = [
-                    { label: '2024-03-01', total_revenue: '100000', transaction_count: '2' },
-                    { label: '2024-03-02', total_revenue: '50000', transaction_count: '1' },
+                    { label: '2024-03-01', payment_type: PaymentType.ONLINE, total_revenue: '100000', transaction_count: '2' },
+                    { label: '2024-03-02', payment_type: PaymentType.COD, total_revenue: '50000', transaction_count: '1' },
                 ];
                 (transactionRepository.getRevenueStats as jest.Mock).mockResolvedValue(mockStats);
 
@@ -763,9 +802,11 @@ describe('TransactionsService', () => {
                 const result = await service.getManagerRevenueStats(managerId, dto as any);
 
                 expect(result.totalRevenue).toBe(150000);
+                expect(result.totalOnlineRevenue).toBe(100000);
+                expect(result.totalCODRevenue).toBe(50000);
                 expect(result.totalTransactions).toBe(3);
-                expect(result.data).toHaveLength(2);
-                expect(result.data[0].total_revenue).toBe('100000');
+                expect(result.onlineTransactions).toBe(2);
+                expect(result.codTransactions).toBe(1);
             });
 
             it('should handle empty repository results', async () => {

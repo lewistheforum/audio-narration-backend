@@ -113,7 +113,8 @@ export class ClinicManagerService {
    * BR: If manager status is MANAGER_DISABLED, still show full personnel list.
    */
   async getManagerDetail(
-    clinicAdminId: string,
+    requesterId: string,
+    requesterRole: AccountRole,
     managerId: string,
   ): Promise<ManagerDetailResponseDto> {
     // Validate ownership
@@ -123,7 +124,10 @@ export class ClinicManagerService {
       throw new NotFoundException('Manager not found');
     }
 
-    if (manager.account.parentId !== clinicAdminId) {
+    const isOwner = manager.account.parentId === requesterId && requesterRole === AccountRole.CLINIC_ADMIN;
+    const isSelf = manager.account._id === requesterId && requesterRole === AccountRole.CLINIC_MANAGER;
+
+    if (!isOwner && !isSelf) {
       throw new ForbiddenException('You do not have access to this manager');
     }
 
@@ -433,7 +437,7 @@ export class ClinicManagerService {
     requesterRole: AccountRole,
     managerId: string,
     dto: UpdateManagerProfileDto,
-  ): Promise<{ message: string }> {
+  ): Promise<ManagerDetailResponseDto> {
     const manager = await this.accountRepository.findAccountById(managerId);
 
     if (!manager) {
@@ -468,7 +472,7 @@ export class ClinicManagerService {
 
     await this.managerInfoRepository.save(managerInfo);
 
-    return { message: 'Manager profile updated successfully' };
+    return this.getManagerDetail(requesterId, requesterRole, managerId);
   }
 
   /**

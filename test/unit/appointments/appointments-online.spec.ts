@@ -207,6 +207,13 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
             deleteSession: mockDeleteSession,
             updateSession: jest.fn(),
             createSession: jest.fn(),
+            redisClient: {
+              get: jest.fn(),
+              set: jest.fn(),
+              setex: jest.fn(),
+              del: jest.fn(),
+              ttl: jest.fn().mockResolvedValue(1800),
+            },
           },
         },
         { provide: DataSource, useValue: mockDataSource },
@@ -372,7 +379,7 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
     });
 
     describe('Appointment creation', () => {
-      it('TC-ONL-09: should create appointment with status CONFIRMED (paid online)', async () => {
+      it('TC-ONL-09: should create appointment with status PENDING (paid online)', async () => {
         setupValidCallback();
 
         const createSpy = mockEntityManager.create;
@@ -381,7 +388,7 @@ describe('Online Appointment Payment Flow (V5.0) - Unit Tests', () => {
         // Find the Appointment create call (has status field)
         const allCalls = createSpy.mock.calls;
         const appointmentCall = allCalls.find(
-          (call: any[]) => call[1]?.status === AppointmentStatus.CONFIRMED,
+          (call: any[]) => call[1]?.status === AppointmentStatus.PENDING,
         );
         expect(appointmentCall).toBeDefined();
       });

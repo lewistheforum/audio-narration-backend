@@ -11,6 +11,8 @@ import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
 import { Account } from '../accounts/entities/accounts.entity';
 import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
+import { GeneralAccount } from '../accounts/entities/general_accounts.entity';
+import { ClinicStaffInformation } from '../accounts/entities/clinic_staff_information.entity';
 import { ClinicRoomRepository } from './repositories/clinic-room.repository';
 import { ClinicShiftRepository } from './repositories/clinic-shift.repository';
 import { ClinicShiftHourRepository } from './repositories/clinic-shift-hour.repository';
@@ -35,6 +37,8 @@ import { ClinicShiftsController } from './clinic-shifts.controller';
       EmployeeSchedule,
       Account,
       DoctorInformation,
+      GeneralAccount,
+      ClinicStaffInformation,
     ]),
   ],
   controllers: [

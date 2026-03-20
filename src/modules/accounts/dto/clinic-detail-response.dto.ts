@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { AccountRole, AccountStatus } from '../enums';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
+import { FeedbackDto } from './feedback.dto';
 
 /**
  * Clinic Manager Account DTO
@@ -545,13 +546,22 @@ export class DoctorSummaryDto {
   })
   position?: string;
 
-  constructor(account: any, doctorInfo: any) {
+  @ApiProperty({
+    description: 'Average rating from feedbacks (0-5)',
+    example: 4.5,
+    required: false,
+    nullable: true,
+  })
+  averageRating?: number;
+
+  constructor(account: any, doctorInfo: any, averageRating?: number) {
     this.id = account._id;
     this.username = account.username;
     this.profilePicture = account.profilePicture;
     this.fullName = doctorInfo?.fullName || '';
     this.academicDegree = doctorInfo?.academicDegree;
     this.position = doctorInfo?.position;
+    this.averageRating = averageRating !== undefined ? Number(averageRating) || 0 : undefined;
   }
 }
 
@@ -749,6 +759,22 @@ export class ClinicDetailResponseDto {
   })
   subscription?: SubscriptionDto;
 
+  @ApiProperty({
+    description: 'Average rating from feedbacks (0-5)',
+    example: 4.5,
+    required: false,
+    nullable: true,
+  })
+  averageRating?: number;
+
+  @ApiProperty({
+    description: 'Clinic feedbacks',
+    type: [FeedbackDto],
+    required: false,
+    nullable: true,
+  })
+  feedbacks?: FeedbackDto[];
+
   constructor(
     account: any,
     clinicInfo: any,
@@ -758,6 +784,8 @@ export class ClinicDetailResponseDto {
     clinicAdmin?: any,
     clinicAdminInfo?: any,
     finalClinicName?: string | null,
+    averageRating?: number,
+    feedbacks?: FeedbackDto[],
   ) {
     this.id = account._id;
     this.username = account.username;
@@ -796,5 +824,7 @@ export class ClinicDetailResponseDto {
     this.addresses = addresses;
     this.doctors = doctors;
     this.subscription = subscription;
+    this.averageRating = averageRating !== undefined ? Number(averageRating) || 0 : undefined;
+    this.feedbacks = feedbacks;
   }
 }

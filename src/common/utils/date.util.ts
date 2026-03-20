@@ -17,7 +17,7 @@ export const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
  * @returns Date object representing current time in Vietnam (GMT+7)
  */
 export function getCurrentVietnamTime(): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).toDate();
+  return dayjs().tz(VIETNAM_TIMEZONE).utc(true).toDate();
 }
 
 /**
@@ -49,7 +49,7 @@ export function formatToVietnamTime(date?: Date | string | number): string {
  * parseVietnamTime("2026-03-10T14:25:09.075Z") // Will be converted to Vietnam time
  */
 export function parseVietnamTime(isoString: string): Date {
-  return dayjs(isoString).tz(VIETNAM_TIMEZONE).toDate();
+  return dayjs(isoString).tz(VIETNAM_TIMEZONE).utc(true).toDate();
 }
 
 /**
@@ -67,7 +67,7 @@ export function addToVietnamTime(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).add(amount, unit).toDate();
+  return dayjs().tz(VIETNAM_TIMEZONE).add(amount, unit).utc(true).toDate();
 }
 
 /**
@@ -83,7 +83,7 @@ export function addToDate(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs(date).tz(VIETNAM_TIMEZONE).add(amount, unit).toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).add(amount, unit).utc(true).toDate();
 }
 
 /**
@@ -112,16 +112,21 @@ export function getCurrentTime(): string {
 }
 
 /**
- * Get current timestamp in milliseconds (Vietnam timezone aware)
- * REPLACES: Date.now()
+ * Get timestamp in milliseconds (Vietnam timezone aware)
+ * REPLACES: Date.now() or new Date(date).getTime()
  * 
+ * @param date - Optional date to get timestamp for
  * @returns Milliseconds since epoch
  * 
  * @example
- * getVietnamTimestamp() // 1709992843075
+ * getVietnamTimestamp() // Current timestamp
+ * getVietnamTimestamp("2026-03-10") // Specific date timestamp
  */
-export function getVietnamTimestamp(): number {
-  return dayjs().tz(VIETNAM_TIMEZONE).valueOf();
+export function getVietnamTimestamp(date?: Date | string | number): number {
+  if (!date) {
+    return dayjs().tz(VIETNAM_TIMEZONE).valueOf();
+  }
+  return dayjs(date).tz(VIETNAM_TIMEZONE).valueOf();
 }
 
 /**
@@ -136,9 +141,9 @@ export function getVietnamTimestamp(): number {
  */
 export function getStartOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
 }
 
 /**
@@ -149,9 +154,9 @@ export function getStartOfDay(date?: Date | string): Date {
  */
 export function getEndOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
 }
 
 /**
@@ -185,7 +190,7 @@ export function subtractFromVietnamTime(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).subtract(amount, unit).toDate();
+  return dayjs().tz(VIETNAM_TIMEZONE).subtract(amount, unit).utc(true).toDate();
 }
 
 /**
@@ -249,9 +254,9 @@ export function compareDates(date1: Date | string, date2: Date | string): number
  */
 export function startOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
 }
 
 /**
@@ -262,7 +267,7 @@ export function startOfDay(date?: Date | string): Date {
  */
 export function endOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
 }

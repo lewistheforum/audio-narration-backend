@@ -120,7 +120,16 @@ export class ClinicAdminDetailResponseDto extends ClinicAdminResponseDto {
   bankName?: string;
 
   @ApiProperty({ required: false })
+  bankNumber?: string;
+
+  @ApiProperty({ required: false })
+  bankBranch?: string;
+
+  @ApiProperty({ required: false })
   sepayVa?: string;
+
+  @ApiProperty({ required: false })
+  sepayKey?: string;
 
   @ApiProperty({ description: 'Number of clinic manager accounts linked' })
   clinicManagerCount: number;

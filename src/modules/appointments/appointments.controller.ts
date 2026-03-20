@@ -1982,12 +1982,9 @@ export class AppointmentsController {
    * @returns Paginated list of available services
    */
   @Get('patients/services')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.PATIENT)
-  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get available services for booking (Patient)',
+    summary: 'Get available services for booking (Public)',
     description:
       'List all active services across clinics with pricing. Supports search by name, filter by category and clinic.',
   })
@@ -3357,6 +3354,30 @@ export class AppointmentsController {
       appointmentId,
       packageId,
       staffAccountId,
+    );
+  }
+
+  @Post('staff/:id/complete-cod-appointment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(AccountRole.CLINIC_STAFF)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete COD appointment (Change all COD packages and transactions to SUCCESS)',
+    description: 'Updates un-paid COD packages and transactions to SUCCESS/PAID and completes the appointment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment COD completed successfully.',
+  })
+  async completeCodAppointment(
+    @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Request() req: any,
+  ) {
+    const staffAccountId = req.user._id;
+    return this.appointmentsService.completeCodAppointment(
+      staffAccountId,
+      appointmentId,
     );
   }
 

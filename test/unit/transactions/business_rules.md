@@ -51,16 +51,13 @@ Tài liệu này mô tả các quy tắc nghiệp vụ (BR) và luồng logic đ
     -   Cho phép gia hạn nếu gói đó vẫn còn hạn, đã hết hạn, hoặc Non-renewing.
     -   Tạo Transaction ở trạng thái `PENDING`.
     -   **Metadata Nội dung**: Lưu `{"duration": ...}` để xử lý sau khi thanh toán.
-- **Quy tắc Gia hạn Cộng dồn (Additive Stacking Queue):**
-    - Hệ thống cho phép gọi API `/renew` hoặc `/change-package` bất cứ lúc nào kể cả khi gói đang `ACTIVE` hoặc đã có gói chờ gia hạn trong hàng đợi (`ClinicSubscriptionRenewalQueue`).
-    - **Logic Xử lý (1-to-1 Queue Record):**
-        - Do DB giới hạn 1 phòng khám chỉ có 1 record trong hàng đợi chờ (`unique clinicId`), khi mua thêm nhiều gói, hệ thống sẽ **cộng dồn thời gian (Stacking)** chứ không tạo nhiều records chờ.
-        - **Cơ sở tính toán (Base Expiration):** Nếu chưa có Queue -> Lấy ngày hết hạn của gói Active hiện tại. Nếu ĐÃ CÓ Queue -> Lấy ngày `targetEndDate` của Queue hiện tại.
-        - **Cập nhật CSDL:**
-             - `targetEndDate` của record Queue duy nhất sẽ được kéo giãn thêm `Duration` của lần mua mới.
-             - `targetStartDate` của record Queue giữ nguyên (vẫn nối tiếp vào đuôi gói Active).
-        - **Lịch sử (History):** Hệ thống ghi nhận các Records History rời rạc, đảm bảo mỗi giao dịch được gán chính xác `StartDate` và `EndDate` độc lập tương ứng với phần tiền vừa bỏ ra.
-    - **Lợi ích:** Phòng khám có thể gia hạn trước 2-3 năm liên tục, chống gián đoạn. Logic tối ưu hóa truy vấn khi CronJob chỉ cần đọc đúng 1 targetEndDate cao nhất.
+- **Quy tắc Giới hạn Hàng đợi (Single Queue Restriction):**
+    - Hệ thống chỉ cho phép **tối đa 1 yêu cầu** chờ trong hàng đợi (`ClinicSubscriptionRenewalQueue`) tại một thời điểm.
+    - **Logic Kiểm soát:**
+        - Khi người dùng gọi API `/renew` hoặc `/change-package`, hệ thống sẽ kiểm tra xem phòng khám đã có bản ghi nào trong hàng đợi chưa.
+        - Nếu **ĐÃ CÓ**: Trả về lỗi `400 BadRequest` ("Đã có một yêu cầu gia hạn hoặc đổi gói đang chờ xử lý").
+        - Nếu **CHƯA CÓ**: Cho phép tạo Transaction và tiến hành thanh toán.
+    - **Lý do:** Đảm bảo tính nhất quán của dữ liệu và tránh việc tính toán ngày chồng chéo phức tạp khi có quá nhiều gói chờ. Người dùng muốn mua tiếp phải chờ gói hiện tại trong hàng đợi được kích hoạt xong.
 
 #### C. Đổi Gói (`POST /transactions/subscription/change-package`)
 *   **Logic**:
@@ -107,7 +104,7 @@ Hệ thống xử lý callback theo 2 chiến lược dựa trên việc có tì
 
 1.  **Khớp lệnh**: Tìm `BookingSession` trong Redis bằng `sessionId` (trích xuất từ nội dung chuyển khoản).
 2.  **Xử lý lịch hẹn**: Gọi `AppointmentsService.createAppointmentOnlineFromCallback`.
-    -   Tạo Appointment mới với trạng thái `CONFIRMED`.
+    -   Tạo Appointment mới với trạng thái `PENDING`.
     -   Tạo Transaction `SUCCESS`.
 3.  **Hậu xử lý (Post-Processing)**:
     - **⚠️ Webhook**: Trigger `AppointmentWebhookService.sendConfirmation(appointmentId)` để gửi thông báo sang n8n.

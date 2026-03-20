@@ -190,11 +190,20 @@ export class ClinicItemDto {
   })
   clinicAdminInfor?: ClinicAdminInformation;
 
+  @ApiProperty({
+    description: 'Average rating from feedbacks (0-5)',
+    example: 4.5,
+    required: false,
+    nullable: true,
+  })
+  averageRating?: number;
+
   constructor(
     account: any,
     clinicInfo: any,
     address?: any,
     clinicAdminInfo?: any,
+    averageRating?: number,
   ) {
     this.id = account._id;
     this.username = account.username;
@@ -248,6 +257,8 @@ export class ClinicItemDto {
       this.clinicInfo.clinicBranchName =
         (clinicInfo.clinicBranchName || '').trim() || null;
     }
+
+    this.averageRating = averageRating !== undefined ? Number(averageRating) || 0 : undefined;
   }
 }
 

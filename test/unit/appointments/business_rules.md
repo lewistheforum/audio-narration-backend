@@ -1,13 +1,13 @@
-# Quy Tắc Nghiệp Vụ - Appointments Module (Version 6.0 - Reminders Included)
+# Quy Tắc Nghiệp Vụ - Appointments Module (Version 6.5 - Doctor Profile Priority)
 
 ## Tổng Quan
 
 Tài liệu này mô tả **các quy tắc nghiệp vụ đã được triển khai và validate 100%** cho module Appointments trong hệ thống Medicare. Quy trình đặt lịch sử dụng quản lý phiên Redis để tránh dữ liệu rác, áp dụng Pessimistic Locking để ngăn race conditions, và hỗ trợ thanh toán COD, Online lẫn hệ thống nhắc lịch tự động (Cron Job).
 
-**Document Version**: 6.0 (Reminders Included)  
+**Document Version**: 6.5 (Doctor Profile Priority)  
 **Last Updated**: 17/03/2026  
 **Status**: ✅ Production Ready  
-**Test Coverage**: **85/85 tests passing (100%)** ✓✓✓
+**Test Coverage**: **88/88 tests passing (100%)** ✓✓✓
 
 ---
 
@@ -697,10 +697,10 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
    - **Múi giờ:** 'Asia/Ho_Chi_Minh' (Việt Nam).
 
 2. **Truy vấn dữ liệu (SQL):**
-   - **Trình trạng lịch:** Chỉ nhắc các lịch có status = `CONFIRMED`.
+   - **Trình trạng lịch:** Chỉ nhắc các lịch có status = `PENDING` (Theo yêu cầu V6.5).
    - **Khoảng thời gian:** Lịch hẹn bắt đầu từ thời điểm hiện tại (`NOW()`) đến 24 giờ tới.
    - **Trạng thái nhắc:** Hiện tại hệ thống KHÔNG cập nhật `is_remider = true` sau khi gửi (theo yêu cầu nghiệp vụ).
-   - **Dữ liệu bổ trợ:** Tự động JOIN để lấy tên bác sĩ, danh sách dịch vụ (STRING_AGG) và địa chỉ phòng khám chuẩn xác.
+   - **Dữ liệu bổ trợ:** Tên Clinic ghép Admin + Branch. Bác sĩ ưu tiên lấy `full_name` từ bảng `general_accounts` (Theo yêu cầu mới nhất).
 
 3. **Gửi Email (MailerService):**
    - **Xử lý đồng loạt:** Sử dụng `Promise.allSettled` để tối ưu hiệu năng.
@@ -733,7 +733,7 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 
 ---
 
-**Document Version:** 6.0 (Reminders Included)  
+**Document Version:** 6.2 (Refined Names)  
 **Last Updated:** March 17, 2026  
 **Status:** ✅ 100% Complete - Production Ready  
-**Test Coverage:** **85/85 tests passing (100%)** ✓✓✓
+**Test Coverage:** **88/88 tests passing (100%)** ✓✓✓
