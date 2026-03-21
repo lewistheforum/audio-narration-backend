@@ -557,7 +557,7 @@ export class DoctorSummaryDto {
   constructor(account: any, doctorInfo: any, averageRating?: number) {
     this.id = account._id;
     this.username = account.username;
-    this.profilePicture = account.profilePicture;
+    this.profilePicture = doctorInfo?.profilePicture || null;
     this.fullName = doctorInfo?.fullName || '';
     this.academicDegree = doctorInfo?.academicDegree;
     this.position = doctorInfo?.position;
