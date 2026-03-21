@@ -52,6 +52,7 @@ describe('ContractsService', () => {
             sendContractSignedNotificationToManager: jest.fn(),
             sendContractCompletedNotificationToEmployee: jest.fn(),
             sendContractRejectNotification: jest.fn(),
+            sendContractCancelledNotification: jest.fn(),
         };
 
         codeVerificationRepo = {
@@ -739,6 +740,7 @@ describe('ContractsService', () => {
             const mockPkg = {
                 _id: pkgId,
                 employeeId: empId,
+                clinicManagerId: 'mgr-tampered',
                 managerSignature: 'some-sig',
                 clinicContractInformation: {
                     _id: infoId,
@@ -754,6 +756,11 @@ describe('ContractsService', () => {
                 employeeValid: false,
                 integrity: false
             });
+            accountsService.findAccountEntityById.mockImplementation((id) => {
+                if (id === 'mgr-tampered') return Promise.resolve({ email: 'mgr@test.com' });
+                if (id === empId) return Promise.resolve({ email: 'emp@test.com' });
+                return Promise.resolve(null);
+            });
 
             const result = await service.getPackagesByManager('mgr-1');
 
@@ -762,6 +769,9 @@ describe('ContractsService', () => {
                 contractStatus: ContractStatus.CANCELLED
             }));
             expect(accountsService.updateStatus).toHaveBeenCalledWith(empId, AccountStatus.PENDING_APPROVAL);
+            expect(mailerService.sendContractCancelledNotification).toHaveBeenCalledTimes(2);
+            expect(mailerService.sendContractCancelledNotification).toHaveBeenCalledWith('mgr@test.com', pkgId, expect.any(String));
+            expect(mailerService.sendContractCancelledNotification).toHaveBeenCalledWith('emp@test.com', pkgId, expect.any(String));
             expect(result.data[0].clinicContractInformation.contractStatus).toBe(ContractStatus.CANCELLED);
         });
 

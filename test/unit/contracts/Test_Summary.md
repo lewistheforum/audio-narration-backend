@@ -69,6 +69,7 @@ Kiểm thử Unit Test cho `ContractsService`, tập trung vào các chức năn
 | TC-23 | **Auto Cancel on List** | Khi gọi `getPackagesByManager`, nếu phát hiện hợp đồng bị sửa đổi -> Chế độ tự động hủy và khóa nhân viên. | **Passed** |
 | TC-24 | **Skip Unsigned** | Hợp đồng ở trạng thái `PENDING_SIGNATURE` nhưng chưa có ai ký -> Bỏ qua không báo lỗi can thiệp. | **Passed** |
 | TC-25 | **Integrity OK** | Hợp đồng có chữ ký hợp lệ -> Giữ nguyên trạng thái và hiển thị bình thường. | **Passed** |
+| TC-26 | **Email Notification** | Khi hợp đồng bị hủy do can thiệp -> Hệ thống gửi email cho cả Quản lý và Nhân viên. | **Passed** |
 
 ## 3. Kết Quả Thực Thi (Execution Results)
 *(Cập nhật ngày 2026-03-21)*

@@ -462,7 +462,8 @@ export class ContractsService {
     }
 
     private async handleTamperedContract(contractPackage: ContractPackage): Promise<void> {
-        console.warn(`[SECURITY] Tampered contract detected: ${contractPackage._id}. Cancelling contract and deactivating employee: ${contractPackage.employeeId}`);
+        const contractId = contractPackage._id;
+        console.warn(`[SECURITY] Tampered contract detected: ${contractId}. Cancelling contract and deactivating employee: ${contractPackage.employeeId}`);
 
         // 1. Update contract status to CANCELLED
         if (contractPackage.clinicContractInformation) {
@@ -472,6 +473,22 @@ export class ContractsService {
 
         // 2. Deactivate employee (AccountStatus.PENDING_APPROVAL)
         await this.accountsService.updateStatus(contractPackage.employeeId, AccountStatus.PENDING_APPROVAL);
+
+        // 3. Send Email Notifications to both parties
+        try {
+            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
+            const employee = await this.accountsService.findAccountEntityById(contractPackage.employeeId);
+            const reason = 'Contract file hash mismatch or digital signature invalid (Integrity Check Failed).';
+
+            if (manager && manager.email) {
+                await this.mailerService.sendContractCancelledNotification(manager.email, contractId, reason);
+            }
+            if (employee && employee.email) {
+                await this.mailerService.sendContractCancelledNotification(employee.email, contractId, reason);
+            }
+        } catch (error) {
+            console.error('Failed to send contract cancellation emails:', error);
+        }
     }
 
     async uploadContractFile(contractId: string, file: any): Promise<any> {

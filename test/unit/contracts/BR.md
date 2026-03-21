@@ -82,6 +82,7 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
 -   **Hành động:** 
     -   Chuyển trạng thái hợp đồng thành `CANCELLED`.
     -   **Vô hiệu hóa nhân viên:** Chuyển trạng thái tài khoản nhân viên liên quan thành `PENDING_APPROVAL` để ngăn chặn truy cập trái phép.
+    -   **Thông báo (Notifications):** Hệ thống tự động gửi email cảnh báo cho Quản lý và Nhân viên về việc hợp đồng bị hủy do có can thiệp.
     -   Ghi log bảo mật (Security Warning).
 
 ## 3. Các Quy Tắc Nghiệp Vụ (Business Rules)
