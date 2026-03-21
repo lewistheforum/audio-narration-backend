@@ -405,6 +405,7 @@ export class ClinicContractInformationSeederService {
       ContractStatus.DRAFT,
       ContractStatus.REJECTED,
       ContractStatus.PENDING_SIGNATURE,
+      ContractStatus.CANCELLED,
     ];
     return statuses[Math.floor(Math.random() * statuses.length)];
   }

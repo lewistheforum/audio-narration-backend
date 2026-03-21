@@ -18,6 +18,7 @@ import { ClinicContractInformation } from './entities/clinic-contract-informatio
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { ContractRole } from './enums/contract-role.enum';
 import { ContractStatus } from './enums/contract-status.enum';
+import { AccountStatus } from '../accounts/enums/account-status.enum';
 
 /**
  * Contracts Service
@@ -201,10 +202,20 @@ export class ContractsService {
      * 
      * Retrieves full contract package details.
      * 
-     * @param id - UUID of the contract package
+     * @param _id - UUID of the contract package
      */
-    async getPackageById(id: string): Promise<ContractPackage> {
-        return this.contractPackageRepository.findById(id);
+    async getPackageById(_id: string): Promise<ContractPackage> {
+        const contractPackage = await this.contractPackageRepository.findById(_id);
+        if (contractPackage && [ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(contractPackage.clinicContractInformation?.contractStatus)) {
+            const verification = await this.verifyContract(_id);
+            // Only cons_ider tampered if at least one signature exists but integrity is false
+            const hasSignature = !!(contractPackage.managerSignature || contractPackage.employeeSignature);
+            if (hasSignature && !verification.integrity) {
+                await this.handleTamperedContract(contractPackage);
+                // Status updated in handleTamperedContract, but we should reflect it in the returned object
+            }
+        }
+        return contractPackage;
     }
 
 
@@ -368,6 +379,13 @@ export class ContractsService {
             contractInfo.contractStatus = ContractStatus.CURRENT;
             await this.clinicContractInfoRepository.save(contractInfo);
 
+            // Activate employee account after contract is fully signed
+            if (employeeAccount) {
+                employeeAccount.status = AccountStatus.ACTIVE;
+                employeeAccount.isEmailVerified = true;
+                await this.accountsService.updateAccountEntity(employeeAccount);
+            }
+
             // Notify Employee
             if (employeeAccount && employeeAccount.email) {
                 await this.mailerService.sendContractCompletedNotificationToEmployee(
@@ -443,6 +461,19 @@ export class ContractsService {
         };
     }
 
+    private async handleTamperedContract(contractPackage: ContractPackage): Promise<void> {
+        console.warn(`[SECURITY] Tampered contract detected: ${contractPackage._id}. Cancelling contract and deactivating employee: ${contractPackage.employeeId}`);
+
+        // 1. Update contract status to CANCELLED
+        if (contractPackage.clinicContractInformation) {
+            contractPackage.clinicContractInformation.contractStatus = ContractStatus.CANCELLED;
+            await this.clinicContractInfoRepository.save(contractPackage.clinicContractInformation);
+        }
+
+        // 2. Deactivate employee (AccountStatus.PENDING_APPROVAL)
+        await this.accountsService.updateStatus(contractPackage.employeeId, AccountStatus.PENDING_APPROVAL);
+    }
+
     async uploadContractFile(contractId: string, file: any): Promise<any> {
         const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
         if (!contractInfo) throw new NotFoundException('Contract info not found');
@@ -506,6 +537,19 @@ export class ContractsService {
             limit,
         );
 
+        // Verification check
+        for (const pkg of packages) {
+            if ([ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(pkg.clinicContractInformation?.contractStatus)) {
+                const hasSignature = !!(pkg.managerSignature || pkg.employeeSignature);
+                if (hasSignature) {
+                    const verification = await this.verifyContract(pkg._id);
+                    if (!verification.integrity) {
+                        await this.handleTamperedContract(pkg);
+                    }
+                }
+            }
+        }
+
         return {
             data: packages,
             pagination: {
@@ -529,6 +573,19 @@ export class ContractsService {
             page,
             limit,
         );
+
+        // Verification check
+        for (const pkg of packages) {
+            if ([ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(pkg.clinicContractInformation?.contractStatus)) {
+                const hasSignature = !!(pkg.managerSignature || pkg.employeeSignature);
+                if (hasSignature) {
+                    const verification = await this.verifyContract(pkg._id);
+                    if (!verification.integrity) {
+                        await this.handleTamperedContract(pkg);
+                    }
+                }
+            }
+        }
 
         return {
             data: packages,
@@ -554,6 +611,17 @@ export class ContractsService {
 
         if (contractPackage.clinicContractInformation?.contractStatus === ContractStatus.DRAFT) {
             throw new UnauthorizedException('You do not have access to this contract yet');
+        }
+
+        // Verification check
+        if ([ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(contractPackage.clinicContractInformation?.contractStatus)) {
+            const hasSignature = !!(contractPackage.managerSignature || contractPackage.employeeSignature);
+            if (hasSignature) {
+                const verification = await this.verifyContract(packageId);
+                if (!verification.integrity) {
+                    await this.handleTamperedContract(contractPackage);
+                }
+            }
         }
 
         return contractPackage;

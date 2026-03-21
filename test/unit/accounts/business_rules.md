@@ -948,5 +948,35 @@ LEFT JOIN clinic_service_categories csc ON csc._id = cs.category_id
 
 ---
 
+## KIỂM SOÁT TRUY CẬP KHI HẾT HẠN (EXPIRED SUBSCRIPTION)
+
+Tài liệu này mô tả logic của `ClinicSubscriptionGuard` và decorator `@AllowExpiredSubscription()` nhằm kiểm soát quyền truy cập của các thành viên trong phòng khám khi gói đăng ký bị hết hạn.
+
+### 1. Cơ chế Chặn Khi Hết Hạn
+**Điều kiện chặn:** Khi `ClinicSubscription.subscriptionStatus === 'EXPIRED'`.
+**Phạm vi áp dụng:** Toàn bộ các API yêu cầu xác thực (`JwtAuthGuard`). `ClinicSubscriptionGuard` được đăng ký global.
+
+**Quy tắc theo Vai trò:**
+*   **CLINIC_ADMIN:** 
+    *   ĐƯỢC PHÉP đăng nhập vào hệ thống.
+    *   ĐƯỢC PHÉP truy cập các API được đánh dấu bởi decorator `@AllowExpiredSubscription()`.
+    *   BỊ CHẶN đối với các API thông thường khác.
+*   **CLINIC_MANAGER, DOCTOR, STAFF:** BỊ CHẶN hoàn toàn khi gói đăng ký hết hạn (không phân biệt API có gắn decorator hay không).
+*   **Lý do:** Chỉ Admin mới có quyền hạn giải quyết các vấn đề về gói dịch vụ (thanh toán, gia hạn, đổi gói) để khôi phục hoạt động cho phòng khám. Các vai trò khác bị khóa để đảm bảo tuân thủ chính sách sử dụng dịch vụ.
+
+### 2. Decorator @AllowExpiredSubscription()
+**Mục đích:** Đánh dấu các endpoint "ngoại lệ" cho phép `CLINIC_ADMIN` thao tác để khắc phục trạng thái hết hạn.
+
+**Các Endpoint Áp Dụng:**
+*   **Quản lý Gói (`SubscriptionServicesController`):** `getCurrentSubscription`, `getSubscriptionHistory`.
+*   **Thanh Toán (`TransactionsController`):** Các API tạo mã QR gia hạn, mua mới hoặc đổi gói và callback từ cổng thanh toán.
+
+### 3. Logic Phản Hồi (Exceptions)
+*   **Status Code:** `403 Forbidden`
+*   **Message:** "Your clinic subscription has expired. Please contact your clinic administrator to renew or upgrade your plan."
+*   **Lưu ý:** Nếu là `CLINIC_ADMIN` truy cập API có decorator thì sẽ không bị vướng Exception này.
+
+---
+
 **LƯU Ý**: Tất cả các quy tắc này được kiểm tra và xác minh thông qua unit tests để đảm bảo tính đúng đắn và nhất quán của hệ thống.
 
