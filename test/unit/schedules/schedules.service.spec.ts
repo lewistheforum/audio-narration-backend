@@ -387,7 +387,9 @@ describe('SchedulesService', () => {
 
             expect(result).toHaveLength(2);
             expect(result.find(e => e.id === 'emp-1').name).toBe('Dr. Who'); // From DoctorInfo
+            expect(result.find(e => e.id === 'emp-1').profilePicture).toBe('url');
             expect(result.find(e => e.id === 'emp-2').name).toBe('Staff Mary'); // From ClinicStaffInfo
+            expect(result.find(e => e.id === 'emp-2').profilePicture).toBe('url');
         });
     });
 
