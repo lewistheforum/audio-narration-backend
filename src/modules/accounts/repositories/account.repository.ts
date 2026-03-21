@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DeepPartial, FindOptionsWhere, IsNull } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
-import { AccountRole, AccountStatus } from '../enums';
+import { AccountRole, AccountStatus, LegalDocumentVerificationStatus } from '../enums';
 
 /**
  * Account Repository
@@ -485,10 +485,18 @@ export class AccountRepository {
         'parentAccount.clinicAdminInformation',
         'clinicAdminInfo',
       )
+      .innerJoin(
+        'clinics_legal_documents',
+        'legalDoc',
+        'legalDoc.account_id = account._id',
+      )
       .where('account.role = :role', { role })
       .andWhere('account.status = :status', { status })
       .andWhere('parentAccount.role = :parentRole', {
         parentRole: AccountRole.CLINIC_ADMIN,
+      })
+      .andWhere('legalDoc.verification_status = :verifiedStatus', {
+        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       });
 
     // Apply search filter (ILIKE on clinicName AND description from parent's clinic admin info)
@@ -536,7 +544,22 @@ export class AccountRepository {
       .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
-      .andWhere('account.status = :status', { status });
+      .andWhere('account.status = :status', { status })
+      .andWhere(`EXISTS (
+        SELECT 1 FROM accounts branch 
+        INNER JOIN clinics_legal_documents legalDoc ON legalDoc.account_id = branch._id 
+        WHERE branch.parent_id = account._id 
+          AND branch.role = :branchRole
+          AND branch.status = :branchStatus
+          AND branch.deleted_at IS NULL
+          AND legalDoc.verification_status = :verifiedStatus
+          AND legalDoc.deleted_at IS NULL
+      )`)
+      .setParameters({
+        branchRole: AccountRole.CLINIC_MANAGER,
+        branchStatus: AccountStatus.ACTIVE,
+        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+      });
 
     // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
     if (search) {
