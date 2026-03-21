@@ -49,7 +49,7 @@ export class PublicDoctorDetailData {
   dob?: Date;
 
   @ApiProperty({
-    description: 'Profile picture URL from accounts table',
+    description: 'Profile picture URL from doctor_information table',
     example: 'https://example.com/doctor-avatar.jpg',
     required: false,
     nullable: true,
@@ -125,7 +125,7 @@ export class PublicDoctorDetailData {
     this.email = account.email;
     this.phone = account.phone;
     this.dob = account.dob;
-    this.profilePicture = account.profilePicture;
+    this.profilePicture = doctorInfo?.profilePicture || null;
     this.role = account.role;
     this.status = account.status;
     this.parentId = account.parentId;
