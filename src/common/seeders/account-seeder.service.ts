@@ -86,27 +86,18 @@ export class AccountSeederService {
     private readonly googleIframeRepository: GoogleIframeRepository,
   ) {}
 
-
-
   async seedBaseAccounts(): Promise<void> {
     try {
       this.logger.log(
         'Starting to seed base accounts (Admins, Managers, Patients)...',
       );
 
-      // Step 1: Seed CLINIC_ADMIN accounts
       const clinicAdmins = await this.seedClinicAdmins();
-
-      // Step 2: Seed CLINIC_MANAGER accounts
       await this.seedClinicManagers(clinicAdmins);
-
-      // Step 5: Seed PATIENT accounts
       await this.seedPatients();
-
-      // Step 6: Ensure all accounts have addresses and google iframes
       await this.ensureAddressesAndGoogleIframes();
 
-      this.logger.log('✅ Base Account seeding completed successfully');
+      this.logger.log('Base Account seeding completed successfully');
     } catch (error) {
       this.logger.error('Failed to seed base accounts', error.stack);
       throw error;
@@ -120,9 +111,6 @@ export class AccountSeederService {
     try {
       this.logger.log('Starting to seed employee accounts (Staff, Doctors)...');
 
-      // Only get clinic managers belonging to ACTIVE clinics
-      // For simplicity, since the first 5 are active, we just get their managers.
-      // But we can also be explicit: only the first 5 clinic admins
       const clinicAdmins = await this.accountRepository
         .findAllAccounts()
         .then((accounts) =>
