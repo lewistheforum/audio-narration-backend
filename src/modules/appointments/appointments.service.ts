@@ -111,6 +111,7 @@ import {
   MailerService,
   AppointmentReminderContext,
 } from '../mailer/mailer.service';
+import { AppointmentWebhookService } from './appointment-webhook.service';
 import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
 import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
 
@@ -137,6 +138,7 @@ export class AppointmentsService {
     private readonly accountRepository: AccountRepository,
     private readonly bookingSessionService: BookingSessionService,
     private readonly mailerService: MailerService,
+    private readonly appointmentWebhookService: AppointmentWebhookService,
     @Inject(forwardRef(() => TransactionsService))
     private readonly transactionsService: TransactionsService,
   ) {}
@@ -4042,12 +4044,25 @@ export class AppointmentsService {
         // BRANCH A: COD PAYMENT (Cash on Delivery)
         // Creates appointment immediately, patient pays at clinic
         // ============================================================
-        return await this.createAppointmentCOD(
+        const result = await this.createAppointmentCOD(
           sessionId,
           patientId,
           session,
-          dateString!,
+          dateString,
         );
+
+        // Kích hoạt Webhook xác nhận lịch hẹn gửi thông tin sang n8n cho hình thức COD
+        if (result && result.appointment_id) {
+          this.appointmentWebhookService
+            .sendConfirmation(result.appointment_id)
+            .catch((err) =>
+              console.error(
+                `[Webhook-COD] Failed to trigger webhook for ${result.appointment_id}: ${err.message}`,
+              ),
+            );
+        }
+
+        return result;
       } else {
         // ============================================================
         // BRANCH B: ONLINE PAYMENT (Payment Gateway)
