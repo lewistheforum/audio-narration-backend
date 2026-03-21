@@ -32,6 +32,7 @@ import {
   SubscriptionHistoryResponseDto,
   CreateSubscriptionRequestDto,
 } from './dto';
+import { AllowExpiredSubscription } from 'src/common/decorators/allow-expired-subscription.decorator';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { MESSAGES } from 'src/common/message';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -310,6 +311,7 @@ export class SubscriptionServicesController {
   @Get('clinic/me/current')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_ADMIN)
+  @AllowExpiredSubscription()
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get current subscription (Clinic Admin only)',
@@ -423,6 +425,7 @@ export class SubscriptionServicesController {
   @Get('clinic/me/history')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_ADMIN)
+  @AllowExpiredSubscription()
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get subscription history (Clinic Admin only)',

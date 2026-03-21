@@ -63,9 +63,16 @@ Kiểm thử Unit Test cho `ContractsService`, tập trung vào các chức năn
 | :--- | :--- | :--- | :--- |
 | TC-22 | **Manager Missing Keys** | Manager ký nhưng chưa tạo cặp khóa (encryptedPrivateKey = null) -> `BadRequestException`. | **Passed** |
 
-## 3. Kết Quả Thực Thi (Execution Results)
-*(Cập nhật ngày 2026-03-09)*
+### 2.9 Xử lý Can thiệp Hợp đồng (Contract Tampering Handling)
+| ID | Tên Case | Mô Tả | Trạng Thái |
+| :--- | :--- | :--- | :--- |
+| TC-23 | **Auto Cancel on List** | Khi gọi `getPackagesByManager`, nếu phát hiện hợp đồng bị sửa đổi -> Chế độ tự động hủy và khóa nhân viên. | **Passed** |
+| TC-24 | **Skip Unsigned** | Hợp đồng ở trạng thái `PENDING_SIGNATURE` nhưng chưa có ai ký -> Bỏ qua không báo lỗi can thiệp. | **Passed** |
+| TC-25 | **Integrity OK** | Hợp đồng có chữ ký hợp lệ -> Giữ nguyên trạng thái và hiển thị bình thường. | **Passed** |
 
--   **Tổng số test:** 22
--   **Pass:** 22
+## 3. Kết Quả Thực Thi (Execution Results)
+*(Cập nhật ngày 2026-03-21)*
+
+-   **Tổng số test:** 36 (Bao gồm các kịch bản chi tiết và edge cases)
+-   **Pass:** 36
 -   **Fail:** 0

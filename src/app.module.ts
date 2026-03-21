@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { buildTypeOrmOptions } from './config/typeorm.config';
@@ -30,6 +31,7 @@ import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/cl
 import { ClinicManagersModule } from './modules/accounts/api-clinic-admin/clinic-managers.module';
 import { ManagedAccountsModule } from './modules/accounts/api-clinic-manager/managed-accounts.module';
 import { StaffPatientsModule } from './modules/accounts/api-staff/staff-patients.module';
+import { ClinicSubscriptionGuard } from './common/guards/clinic-subscription.guard';
 
 @Module({
   imports: [
@@ -81,6 +83,11 @@ import { StaffPatientsModule } from './modules/accounts/api-staff/staff-patients
     StaffPatientsModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ClinicSubscriptionGuard,
+    },
+  ],
 })
 export class AppModule {}
