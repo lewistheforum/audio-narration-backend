@@ -7,6 +7,7 @@ import { MailerService } from '../../../src/modules/mailer/mailer.service';
 import { CodeVerificationRepository } from '../../../src/modules/accounts/repositories/code-verification.repository';
 import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ContractStatus } from '../../../src/modules/contracts/enums/contract-status.enum';
+import { AccountStatus } from '../../../src/modules/accounts/enums/account-status.enum';
 import { CreateContractInfoDto } from '../../../src/modules/contracts/dto/create-contract-info.dto';
 import { VerificationType } from '../../../src/modules/accounts/enums';
 import * as crypto from 'crypto';
@@ -43,6 +44,7 @@ describe('ContractsService', () => {
 
         accountsService = {
             findAccountEntityById: jest.fn(),
+            updateAccountEntity: jest.fn(),
         };
 
         mailerService = {
@@ -50,6 +52,7 @@ describe('ContractsService', () => {
             sendContractSignedNotificationToManager: jest.fn(),
             sendContractCompletedNotificationToEmployee: jest.fn(),
             sendContractRejectNotification: jest.fn(),
+            sendContractCancelledNotification: jest.fn(),
         };
 
         codeVerificationRepo = {
@@ -346,6 +349,10 @@ describe('ContractsService', () => {
 
             expect(contractInfoRepo.save).toHaveBeenCalledWith(expect.objectContaining({
                 contractStatus: ContractStatus.CURRENT,
+            }));
+            expect(accountsService.updateAccountEntity).toHaveBeenCalledWith(expect.objectContaining({
+                status: AccountStatus.ACTIVE,
+                isEmailVerified: true,
             }));
             expect(mailerService.sendContractCompletedNotificationToEmployee).toHaveBeenCalledWith(
                 'employee@test.com',
@@ -712,6 +719,106 @@ describe('ContractsService', () => {
             });
             await expect(service.deletePackage(contractId, mgrId))
                 .rejects.toThrow(BadRequestException);
+        });
+    });
+
+    // ========================================
+    // handleTamperedContract & List Verification
+    // ========================================
+    describe('Contract Tampering Handling', () => {
+        const pkgId = 'pkg-tampered';
+        const empId = 'emp-tampered';
+        const infoId = 'info-tampered';
+
+        beforeEach(() => {
+            jest.spyOn(service as any, 'calculateFileHash').mockResolvedValue('modified-hash');
+            (service as any).contractPackageRepository.findPackagesByManagerWithFilters = jest.fn();
+            accountsService.updateStatus = jest.fn();
+        });
+
+        it('should cancel contract and deactivate employee if signature is invalid in getPackagesByManager', async () => {
+            const mockPkg = {
+                _id: pkgId,
+                employeeId: empId,
+                clinicManagerId: 'mgr-tampered',
+                managerSignature: 'some-sig',
+                clinicContractInformation: {
+                    _id: infoId,
+                    contractStatus: ContractStatus.CURRENT,
+                    contractFile: 'some-url'
+                }
+            };
+            (service as any).contractPackageRepository.findPackagesByManagerWithFilters.mockResolvedValue([[mockPkg], 1]);
+            
+            // Mock verifyContract to return integrity: false
+            jest.spyOn(service, 'verifyContract').mockResolvedValue({
+                managerValid: false,
+                employeeValid: false,
+                integrity: false
+            });
+            accountsService.findAccountEntityById.mockImplementation((id) => {
+                if (id === 'mgr-tampered') return Promise.resolve({ email: 'mgr@test.com' });
+                if (id === empId) return Promise.resolve({ email: 'emp@test.com' });
+                return Promise.resolve(null);
+            });
+
+            const result = await service.getPackagesByManager('mgr-1');
+
+            // handleTamperedContract should have been called
+            expect(contractInfoRepo.save).toHaveBeenCalledWith(expect.objectContaining({
+                contractStatus: ContractStatus.CANCELLED
+            }));
+            expect(accountsService.updateStatus).toHaveBeenCalledWith(empId, AccountStatus.PENDING_APPROVAL);
+            expect(mailerService.sendContractCancelledNotification).toHaveBeenCalledTimes(2);
+            expect(mailerService.sendContractCancelledNotification).toHaveBeenCalledWith('mgr@test.com', pkgId, expect.any(String));
+            expect(mailerService.sendContractCancelledNotification).toHaveBeenCalledWith('emp@test.com', pkgId, expect.any(String));
+            expect(result.data[0].clinicContractInformation.contractStatus).toBe(ContractStatus.CANCELLED);
+        });
+
+        it('should NOT call handleTamperedContract if integrity is true', async () => {
+            const mockPkg = {
+                _id: pkgId,
+                employeeId: empId,
+                managerSignature: 'some-sig',
+                clinicContractInformation: {
+                    _id: infoId,
+                    contractStatus: ContractStatus.CURRENT,
+                    contractFile: 'some-url'
+                }
+            };
+            (service as any).contractPackageRepository.findPackagesByManagerWithFilters.mockResolvedValue([[mockPkg], 1]);
+            
+            jest.spyOn(service, 'verifyContract').mockResolvedValue({
+                managerValid: true,
+                employeeValid: false,
+                integrity: true
+            });
+
+            await service.getPackagesByManager('mgr-1');
+
+            expect(contractInfoRepo.save).not.toHaveBeenCalled();
+            expect(accountsService.updateStatus).not.toHaveBeenCalled();
+        });
+
+        it('should skip verification if NO signatures exist even if status is PENDING_SIGNATURE', async () => {
+            const mockPkg = {
+                _id: pkgId,
+                employeeId: empId,
+                managerSignature: null,
+                employeeSignature: null,
+                clinicContractInformation: {
+                    _id: infoId,
+                    contractStatus: ContractStatus.PENDING_SIGNATURE,
+                    contractFile: 'some-url'
+                }
+            };
+            (service as any).contractPackageRepository.findPackagesByManagerWithFilters.mockResolvedValue([[mockPkg], 1]);
+            
+            const verifySpy = jest.spyOn(service, 'verifyContract');
+
+            await service.getPackagesByManager('mgr-1');
+
+            expect(verifySpy).not.toHaveBeenCalled();
         });
     });
 });

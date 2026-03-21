@@ -13,6 +13,7 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
     -   **Validate Employee:** Nhân viên phải tồn tại trong hệ thống.
     -   **Validate Role:** Vai trò của nhân viên phải khớp với loại hợp đồng (Doctor -> DOCTOR, Staff -> CLINIC_STAFF).
     -   Trạng thái ban đầu: `DRAFT`.
+    -   Trạng thái mới: `CANCELLED` (Sử dụng khi hợp đồng bị hủy hoặc vi phạm tính toàn vẹn).
 
 ### 2.2 Upload Hợp Đồng (Manager)
 -   **Actor:** Quản lý.
@@ -49,6 +50,7 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
     2.  Yêu cầu OTP xác thực.
     3.  Nhập OTP để ký số (sử dụng Private Key của quản lý).
 -   **Kiểm tra:** Hệ thống tự động kiểm tra tính toàn vẹn của file và chữ ký nhân viên trước khi cho phép quản lý ký.
+-   **Xác thực tự động (Background Verification):** Hệ thống tự động kiểm tra chữ ký ở các bước liệt kê danh sách (Manager/Employee list) để phát hiện can thiệp sau khi ký.
 -   **Kết quả:**
     -   Hệ thống tạo chữ ký số của quản lý.
     -   Trạng thái chuyển sang `CURRENT` (Hiệu lực).
@@ -74,6 +76,15 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
     -   Nếu đã là `CURRENT`, việc chấm dứt hợp đồng phải tuân theo quy trình pháp lý khác (không nằm trong phạm vi module ký này).
 -   **Kết quả:** Soft delete gói hợp đồng và thông tin liên quan.
 
+### 2.7 Tự Động Hủy do Vi phạm (Auto-Cancel on Tampering)
+-   **Actor:** Hệ thống (System).
+-   **Tình huống:** Phát hiện tệp hợp đồng bị sửa đổi hoặc chữ ký không khớp trong các bước xem danh sách/chi tiết.
+-   **Hành động:** 
+    -   Chuyển trạng thái hợp đồng thành `CANCELLED`.
+    -   **Vô hiệu hóa nhân viên:** Chuyển trạng thái tài khoản nhân viên liên quan thành `PENDING_APPROVAL` để ngăn chặn truy cập trái phép.
+    -   **Thông báo (Notifications):** Hệ thống tự động gửi email cảnh báo cho Quản lý và Nhân viên về việc hợp đồng bị hủy do có can thiệp.
+    -   Ghi log bảo mật (Security Warning).
+
 ## 3. Các Quy Tắc Nghiệp Vụ (Business Rules)
 
 ### 3.1 Tính Bất Biến (Immutability)
@@ -83,6 +94,7 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
     -   `PENDING_MANAGER_SIGNATURE` (Nhân viên đã ký, chờ Quản lý ký)
     -   `REJECTED` (Bị từ chối)
     -   `CURRENT` (Đã hoàn tất)
+    -   `CANCELLED` (Đã bị hủy)
 -   **Quy trình duy nhất:** Thông tin và File chỉ được phép sửa khi hợp đồng đang ở trạng thái `DRAFT`.
 -   **Cách sửa sai:** Nếu phát hiện sai sót khi hợp đồng đã ra khỏi `DRAFT`, Quản lý bắt buộc phải **Hủy bỏ (Cancel)** gói hợp đồng đó và tạo gói hợp đồng mới từ đầu. Không có cơ chế reset về `DRAFT` từ các trạng thái khác.
 
@@ -106,8 +118,8 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
 -   **Missing Keys:** Người dùng chưa tạo cặp khóa kỹ thuật số -> `BadRequestException`.
 -   **Invalid OTP:** OTP sai hoặc hết hạn -> `BadRequestException`.
 -   **Integrity Check Fail:**
-    -   File hợp đồng bị thay đổi sau khi nhân viên ký.
-    -   Chữ ký của nhân viên không khớp với public key.
-    -   -> `BadRequestException`.
+    -   File hợp đồng bị thay đổi sau khi ít nhất một bên đã ký.
+    -   Chữ ký của nhân viên hoặc quản lý không khớp với public key.
+    -   **Hệ quả:** Hợp đồng bị hủy (`CANCELLED`) và tài khoản nhân viên bị khóa tạm thời (`PENDING_APPROVAL`).
 -   **Flow Violation:** Ký sai thứ tự hoặc người dùng không có quyền.
 -   **System Error:** Lỗi kết nối Cloudinary hoặc lỗi thư viện Crypto.

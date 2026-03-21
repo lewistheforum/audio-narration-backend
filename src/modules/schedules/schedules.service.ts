@@ -154,6 +154,10 @@ export class SchedulesService {
         name: fullName,
         role: emp.role,
         username: emp.username,
+        profilePicture:
+          emp.role === AccountRole.DOCTOR
+            ? doctorInfo?.profilePicture
+            : staffInfo?.profilePicture || generalAccount?.profilePicture || null,
       };
     });
 

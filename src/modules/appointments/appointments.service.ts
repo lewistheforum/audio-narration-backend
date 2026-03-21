@@ -26,7 +26,7 @@ import {
   ClinicStaffInformationRepository,
   AccountRepository,
 } from '../accounts/repositories';
-import { AccountRole } from '../accounts/enums';
+import { AccountRole, LegalDocumentVerificationStatus } from '../accounts/enums';
 import { EmployeeScheduleRepository } from '../schedules/repositories/employee-schedule.repository';
 import {
   QueryAppointmentDto,
@@ -5058,9 +5058,17 @@ export class AppointmentsService {
         'addr.account_id = clinic._id',
       )
       .leftJoin('clinic_service_category', 'cat', 'cat._id = cs.category_id')
+      .innerJoin(
+        'clinics_legal_documents',
+        'cld',
+        'cld.account_id = clinic._id',
+      )
       .where('csc.is_active = :active', { active: true })
       .andWhere('cs.is_active = :active', { active: true })
       .andWhere('clinic.status = :status', { status: 'ACTIVE' })
+      .andWhere('cld.verification_status = :verifiedStatus', {
+        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+      })
       .andWhere('csc.deleted_at IS NULL')
       .andWhere('cs.deleted_at IS NULL')
       .andWhere('clinic.deleted_at IS NULL');
@@ -6492,10 +6500,18 @@ export class AppointmentsService {
             'cmi',
             'cmi.account_id = clinic._id',
           )
+          .innerJoin(
+            'clinics_legal_documents',
+            'cld',
+            'cld.account_id = clinic._id',
+          )
           .leftJoin('addresses', 'addr', 'addr.account_id = clinic._id')
           .where('es.employee_id = :doctor_id', { doctor_id: doctor.doctor_id })
           .andWhere('es.deleted_at IS NULL')
           .andWhere('clinic.status = :status', { status: 'ACTIVE' })
+          .andWhere('cld.verification_status = :verifiedStatus', {
+            verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+          })
           .andWhere('clinic.deleted_at IS NULL')
           .getRawMany();
 
@@ -6598,7 +6614,12 @@ export class AppointmentsService {
       .innerJoin('employee_schedule', 'es', 'es.clinic_id = branch._id')
       .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
       .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-      .leftJoin('addresses', 'addr', 'addr.account_id = branch._id') // Get branch address
+      .innerJoin(
+        'clinics_legal_documents',
+        'cld',
+        'cld.account_id = branch._id',
+      )
+      .leftJoin('addresses', 'addr', 'addr.account_id = branch._id')
       .where('branch.role = :branchRole', {
         branchRole: AccountRole.CLINIC_MANAGER,
       })
@@ -6607,6 +6628,9 @@ export class AppointmentsService {
         parentRole: AccountRole.CLINIC_ADMIN,
       })
       .andWhere('parent.status = :parentStatus', { parentStatus: 'ACTIVE' })
+      .andWhere('cld.verification_status = :verifiedStatus', {
+        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+      })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
       .andWhere('csh.limit > 0');
@@ -7519,6 +7543,20 @@ export class AppointmentsService {
       }
     }
 
+    // BR: Verify clinic legal documents are approved
+    const legalDoc = await this.dataSource
+      .createQueryBuilder()
+      .select('verification_status')
+      .from('clinics_legal_documents', 'cld')
+      .where('cld.account_id = :clinicId', { clinicId })
+      .getRawOne();
+
+    if (!legalDoc || legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED) {
+      throw new BadRequestException(
+        'This clinic is pending legal verification and is currently unavailable for booking.',
+      );
+    }
+
     // Get all clinic branches (CLINIC_MANAGER) for this clinic (CLINIC_ADMIN)
     const branches = await this.dataSource
       .createQueryBuilder()
@@ -7817,6 +7855,20 @@ export class AppointmentsService {
     const today = getStartOfDay();
     const maxDate = addToVietnamTime(60, 'day');
 
+    // BR: Verify clinic legal documents are approved
+    const legalDoc = await this.dataSource
+      .createQueryBuilder()
+      .select('verification_status')
+      .from('clinics_legal_documents', 'cld')
+      .where('cld.account_id = :clinicId', { clinicId })
+      .getRawOne();
+
+    if (!legalDoc || legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED) {
+      throw new BadRequestException(
+        'This clinic is pending legal verification and is currently unavailable for booking.',
+      );
+    }
+
     // Build base query for RAW DATA
     const queryBuilder = this.dataSource
       .createQueryBuilder()
@@ -7974,6 +8026,20 @@ export class AppointmentsService {
     if (isNaN(date.getTime())) {
       throw new BadRequestException(
         'Invalid appointment_date format. Use YYYY-MM-DD.',
+      );
+    }
+
+    // BR: Verify clinic legal documents are approved
+    const legalDoc = await this.dataSource
+      .createQueryBuilder()
+      .select('verification_status')
+      .from('clinics_legal_documents', 'cld')
+      .where('cld.account_id = :clinicId', { clinicId })
+      .getRawOne();
+
+    if (!legalDoc || legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED) {
+      throw new BadRequestException(
+        'This clinic is pending legal verification and is currently unavailable for booking.',
       );
     }
 
