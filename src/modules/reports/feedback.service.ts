@@ -15,7 +15,7 @@ import { CreateFeedbackClinicDto } from './dto/create-feedback-clinic.dto';
 import { CreateFeedbackDoctorDto } from './dto/create-feedback-doctor.dto';
 import { UpdateFeedbackDto } from './dto/update-feedback.dto';
 import { DoctorFeedbacksQueryDto } from './dto/doctor-feedbacks-query.dto';
-import { 
+import {
   DoctorFeedbacksResponseDto,
   DoctorFeedbackItemDto,
   FeedbackPatientInfoDto,
@@ -111,10 +111,10 @@ export class FeedbackService {
     // Step 1: Check for bad words in description
     if (dto.description) {
       const detectionResult = await this.detectBadWords(dto.description);
-      if (detectionResult.is_toxic) {
+      if (detectionResult.data.is_toxic) {
         return {
           is_toxic: true,
-          detection: detectionResult,
+          detection: detectionResult.data,
         };
       }
     }
@@ -229,6 +229,8 @@ export class FeedbackService {
           ? this.labelImages(feedback.feedbackImages)
           : Promise.resolve(null);
 
+      console.log('imagesLabelPromise', feedback.feedbackImages);
+
       const [descriptionLabel, feedbackImagesLabel] = await Promise.all([
         descriptionLabelPromise,
         imagesLabelPromise,
@@ -271,6 +273,7 @@ export class FeedbackService {
         detection_type: 'all',
         text: text,
       });
+
       return response.data;
     } catch (error) {
       console.error('Error detecting bad words:', error.message);
@@ -582,7 +585,10 @@ export class FeedbackService {
     `;
 
     queryParams.push(limit, skip);
-    const feedbacksData = await this.dataSource.query(feedbacksQuery, queryParams);
+    const feedbacksData = await this.dataSource.query(
+      feedbacksQuery,
+      queryParams,
+    );
 
     // Calculate statistics (average rating and distribution)
     const statsQuery = `
@@ -617,9 +623,10 @@ export class FeedbackService {
       } as FeedbackPatientInfoDto,
       appointment: {
         appointment_id: fb.appointment_id,
-        appointment_date: fb.appointment_date instanceof Date
-          ? fb.appointment_date.toISOString().split('T')[0]
-          : new Date(fb.appointment_date).toISOString().split('T')[0],
+        appointment_date:
+          fb.appointment_date instanceof Date
+            ? fb.appointment_date.toISOString().split('T')[0]
+            : new Date(fb.appointment_date).toISOString().split('T')[0],
         clinic_name: fb.clinic_name,
       } as FeedbackAppointmentInfoDto,
       created_at: fb.created_at,
