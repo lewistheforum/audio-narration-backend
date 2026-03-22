@@ -982,11 +982,13 @@ export class AppointmentsController {
   async completeExamination(
     @Request() req: any,
     @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Body() completeDto: CompleteExaminationDto,
   ): Promise<CompleteExaminationResponseDto> {
     const doctorId = req.user._id;
     return this.appointmentsService.completeExamination(
       appointmentId,
       doctorId,
+      completeDto,
     );
   }
 

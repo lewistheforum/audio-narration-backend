@@ -3050,6 +3050,7 @@ export class AppointmentsService {
   async completeExamination(
     appointmentId: string,
     doctorId: string,
+    completeDto?: CompleteExaminationDto,
   ): Promise<CompleteExaminationResponseDto> {
     // 1. Find appointment and validate ownership
     const appointment = await this.dataSource
@@ -3215,9 +3216,14 @@ export class AppointmentsService {
       appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
     }
 
-    // 9. Update appointment status based on payment logic
+    // 9. Update appointment status (and diagnosis) based on payment logic
     const oldStatus = appointment.status;
     appointment.status = appointmentStatus;
+
+    // Save diagnosis if provided by doctor
+    if (completeDto?.diagnosis !== undefined) {
+      appointment.diagnosis = completeDto.diagnosis;
+    }
 
     await this.dataSource.getRepository(Appointment).save(appointment);
 
