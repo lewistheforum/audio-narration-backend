@@ -5736,6 +5736,7 @@ export class AppointmentsService {
         'a.clinic_shift_hour_id AS clinic_shift_hour_id',
         'a.status AS status',
         'a.total AS total',
+        'a.diagnosis AS diagnosis',
         'a.created_at AS created_at',
         // Clinic info
         '"clinic"._id AS clinic_id',
@@ -6003,6 +6004,7 @@ export class AppointmentsService {
         clinic_room: apt.clinic_room || null,
         status: apt.status,
         total: parseFloat(apt.total || '0'),
+        diagnosis: apt.diagnosis || null,
         payment_type: apt.payment_type,
         payment_status: apt.payment_status,
         services: servicesMap.get(apt.appointment_id) || [],
@@ -6082,6 +6084,7 @@ export class AppointmentsService {
         'a.total AS total',
         'a.patient_note AS patient_note',
         'a.reject_reason AS reject_reason',
+        'a.diagnosis AS diagnosis',
         'a.created_at AS created_at',
         'a.updated_at AS updated_at',
         // Clinic info
@@ -6388,6 +6391,7 @@ export class AppointmentsService {
       status: appointmentRaw.status,
       total: parseFloat(appointmentRaw.total || '0'),
       patient_note: appointmentRaw.patient_note,
+      diagnosis: appointmentRaw.diagnosis || null,
       reject_reason:
         appointmentRaw.status === AppointmentStatus.CANCELLED
           ? appointmentRaw.reject_reason
