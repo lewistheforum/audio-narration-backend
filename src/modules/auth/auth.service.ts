@@ -229,8 +229,6 @@ export class AuthService {
       throw new BadRequestException('Verification code has expired');
     }
 
-    // await this.codeVerificationRepository.markAsUsed(record._id);
-
     return {
       message: 'Verification code validated successfully. You can now set a new password.',
     };
