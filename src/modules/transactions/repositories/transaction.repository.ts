@@ -189,7 +189,7 @@ export class TransactionRepository extends Repository<Transaction> {
           ap.amount as amount,
           ap.status as status,
           ap.payment_type as payment_type,
-          ap.note as description,
+          a.patient_note as description,
           ga.full_name as patient_name
        FROM appointment_package ap
        INNER JOIN appointments a ON a._id = ap.appointment_id

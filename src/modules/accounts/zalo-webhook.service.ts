@@ -1,13 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class ZaloWebhookService {
   private readonly logger = new Logger(ZaloWebhookService.name);
-  private readonly webhookUrl = 'https://auto.nucuoimekong.com/webhook/send-friend-request';
+  private readonly webhookUrl: string | undefined;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {
+    this.webhookUrl = this.configService.get<string>('N8N_ZALO_FRIEND_REQUEST_WEBHOOK_URL');
+  }
 
   /**
    * Sends a friend request via Zalo webhook
@@ -24,6 +30,11 @@ export class ZaloWebhookService {
     const normalizedPhone = phone.replace(/[\s\-\(\)]/g, '');
 
     try {
+      if (!this.webhookUrl) {
+        this.logger.warn(`[${source}] Zalo friend request webhook URL is not configured`);
+        return;
+      }
+
       this.logger.log(`[${source}] Sending Zalo friend request to: ${normalizedPhone}`);
       await firstValueFrom(
         this.httpService.post(this.webhookUrl, {
