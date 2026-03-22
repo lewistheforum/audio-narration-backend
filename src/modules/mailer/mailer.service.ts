@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -81,6 +81,7 @@ export interface AppointmentReminderContext {
 
 @Injectable()
 export class MailerService {
+  private readonly logger = new Logger(MailerService.name);
   constructor(private readonly configService: ConfigService) {}
 
   mailTransport(): nodemailer.Transporter {
@@ -1275,6 +1276,63 @@ export class MailerService {
             console.log(`✅ Contract rejection email sent to ${email}`);
         } catch (error) {
             console.error('❌ Failed to send contract rejection email:', error);
+        }
+    }
+
+    /**
+     * Send Contract Cancelled Notification
+     * Notifies parties that the contract has been cancelled (e.g., due to tampering)
+     */
+    async sendContractCancelledNotification(
+        email: string,
+        contractId: string,
+        reason: string
+    ) {
+        const transporter = this.mailTransport();
+        const contractCode = contractId.substring(0, 8).toUpperCase();
+        const subject = `[Medicare] ⚠️ ALERT: Contract #${contractCode} has been CANCELLED`;
+        
+        const mailOptions = {
+            from: {
+                name: 'Bonix Security',
+                address: this.configService.get<string>('EMAIL_USER'),
+            },
+            to: email,
+            subject,
+            html: `
+                <div style="font-family: sans-serif; line-height: 1.5; color: #333; max-width: 600px; margin: 0 auto;">
+                    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 25px;">
+                        <h2 style="color: #dc2626; margin-top: 0;">⚠️ Urgent Contract Cancellation Notice</h2>
+                        <p>Dear Recipient,</p>
+                        <p>Our security system has detected an issue with contract <strong>#${contractCode}</strong>.</p>
+                        
+                        <div style="background-color: #ffffff; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                            <p style="margin: 0; font-weight: bold; color: #991b1b;">Status: CANCELLED</p>
+                            <p style="margin: 10px 0 0 0; color: #4b5563;"><strong>Reason:</strong> ${reason}</p>
+                        </div>
+                        
+                        <p style="color: #4b5563;">Please note the following:</p>
+                        <ul style="color: #4b5563;">
+                            <li>This contract is no longer legally valid within our system.</li>
+                            <li>If this is an employee account, your account status has been changed to <strong>Pending Approval</strong> to ensure safety.</li>
+                        </ul>
+                        
+                        <p style="margin-top: 25px;">If you believe this is an error, please contact technical support immediately.</p>
+                        
+                        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 25px 0;">
+                        <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                            © 2026 Bonix Healthcare System. Your security is our top priority.
+                        </p>
+                    </div>
+                </div>
+            `,
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            this.logger.log(`✅ Contract cancellation email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`❌ Failed to send contract cancellation email to ${email}:`, error);
         }
     }
 

@@ -70,6 +70,9 @@ describe('AuthService', () => {
                 id: 'new-user-123',
                 email: 'newuser@example.com',
             }),
+            getSubscriptionPayloadForAccount: jest.fn().mockResolvedValue({}),
+            resolveClinicAdminId: jest.fn().mockResolvedValue('admin-123'),
+            getClinicSubscription: jest.fn().mockResolvedValue(createMockSubscription()),
         };
 
         // Mock JwtService
@@ -129,11 +132,12 @@ describe('AuthService', () => {
                 expect(result.data.userId).toBe('user-123');
                 expect(accountsService.validateAccountAccess).toHaveBeenCalledWith(mockDoctor);
                 expect(accountsService.validateClinicSubscription).toHaveBeenCalledWith(mockDoctor);
-                expect(jwtService.sign).toHaveBeenCalledWith({
+                expect(jwtService.sign).toHaveBeenCalledWith(expect.objectContaining({
                     sub: mockDoctor._id,
+                    uId: mockDoctor._id,
                     email: mockDoctor.email,
                     role: mockDoctor.role,
-                });
+                }));
                 expect(socketGatewayService.markUserOnline).toHaveBeenCalledWith(String(mockDoctor._id));
             });
 
@@ -273,8 +277,8 @@ describe('AuthService', () => {
                 jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
             });
 
-            // CLINIC_ADMIN Tests: Block ONLY EXPIRED status
-            it('should block CLINIC_ADMIN when subscription is EXPIRED', async () => {
+            // CLINIC_ADMIN Tests: Allow login even if subscription is EXPIRED
+            it('should allow CLINIC_ADMIN login when subscription is EXPIRED', async () => {
                 const loginDto = { email: 'admin@clinic.com', password: 'password123' };
 
                 const mockAdmin = createMockAccount({
@@ -284,13 +288,14 @@ describe('AuthService', () => {
                 });
 
                 accountsService.findByEmail.mockResolvedValue(mockAdmin);
-                accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Subscription expired'),
-                );
+                accountsService.validateClinicSubscription.mockResolvedValue(undefined);
 
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
-                await expect(service.login(loginDto)).rejects.toThrow('Subscription expired');
+                // Execute
+                const result = await service.login(loginDto);
+
+                // Verify
+                expect(result).toBeDefined();
+                expect(result.data.accessToken).toBe('mock-jwt-token');
             });
 
             it('should allow CLINIC_ADMIN login when subscription is PENDING_SEPAY_SETUP', async () => {
@@ -937,11 +942,12 @@ describe('AuthService', () => {
                 await service.login(loginDto);
 
                 // Verify - JWT payload should be correct
-                expect(jwtService.sign).toHaveBeenCalledWith({
+                expect(jwtService.sign).toHaveBeenCalledWith(expect.objectContaining({
                     sub: 'unverified-456',
+                    uId: 'unverified-456',
                     email: 'unverified@example.com',
                     role: AccountRole.PATIENT,
-                });
+                }));
             });
 
             it('should fetch general account data for UNVERIFIED user', async () => {
@@ -998,11 +1004,12 @@ describe('AuthService', () => {
                 await service.login(loginDto);
 
                 // Verify
-                expect(jwtService.sign).toHaveBeenCalledWith({
+                expect(jwtService.sign).toHaveBeenCalledWith(expect.objectContaining({
                     sub: 'user-456',
+                    uId: 'user-456',
                     email: 'user@example.com',
                     role: AccountRole.DOCTOR,
-                });
+                }));
             });
 
             it('should return accessToken in response', async () => {
@@ -1049,6 +1056,11 @@ describe('AuthService', () => {
                     return createMockGeneralAccount();
                 });
 
+                accountsService.getSubscriptionPayloadForAccount.mockImplementation(async () => {
+                    callOrder.push('getSubscriptionPayloadForAccount');
+                    return {};
+                });
+
                 jwtService.sign.mockImplementation(() => {
                     callOrder.push('jwtSign');
                     return 'token';
@@ -1062,9 +1074,10 @@ describe('AuthService', () => {
                     'findByEmail',
                     'validateAccountAccess',
                     'validateClinicSubscription',
-                    'jwtSign',
+                    'getSubscriptionPayloadForAccount',
                     'markUserOnline',
                     'findGeneralAccountByUserId',
+                    'jwtSign',
                 ]);
             });
 
@@ -1081,7 +1094,7 @@ describe('AuthService', () => {
                 expect(accountsService.validateClinicSubscription).not.toHaveBeenCalled();
             });
 
-            it('should not mark user online if subscription validation fails', async () => {
+            it('should allow CLINIC_ADMIN login even if subscription is EXPIRED', async () => {
                 const loginDto = { email: 'admin@clinic.com', password: 'password123' };
 
                 const mockAdmin = createMockAccount({
@@ -1089,15 +1102,15 @@ describe('AuthService', () => {
                 });
 
                 accountsService.findByEmail.mockResolvedValue(mockAdmin);
-                accountsService.validateClinicSubscription.mockRejectedValue(
-                    new ForbiddenException('Clinic subscription is not active or has expired.'),
-                );
+                // AccountsService.validateClinicSubscription now returns void (no throw) for CLINIC_ADMIN
+                accountsService.validateClinicSubscription.mockResolvedValue(undefined);
 
-                // Execute & Verify
-                await expect(service.login(loginDto)).rejects.toThrow(ForbiddenException);
+                // Execute
+                const result = await service.login(loginDto);
 
-                expect(socketGatewayService.markUserOnline).not.toHaveBeenCalled();
-                expect(jwtService.sign).not.toHaveBeenCalled();
+                // Verify
+                expect(result).toBeDefined();
+                expect(socketGatewayService.markUserOnline).toHaveBeenCalled();
             });
         });
     });

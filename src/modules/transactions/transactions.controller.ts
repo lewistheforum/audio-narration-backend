@@ -39,6 +39,7 @@ import {
   ChangePackageDto,
   ManagerRevenueReportDto,
 } from './dto';
+import { AllowExpiredSubscription } from '../../common/decorators/allow-expired-subscription.decorator';
 import { ApiResponseData } from '../../common/decorators/api-response.decorator';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { User } from '../../common/decorators/user.decorator';
@@ -183,6 +184,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @AllowExpiredSubscription()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo QR cho đăng ký mới (Onboarding)' })
   async createNewSubscriptionQr(
@@ -217,6 +219,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @AllowExpiredSubscription()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo QR gia hạn gói hiện tại' })
   async createRenewalQr(@User() user: Account) {
@@ -243,6 +246,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @AllowExpiredSubscription()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo QR đổi gói dịch vụ' })
   async createPackageChangeQr(
@@ -339,6 +343,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @AllowExpiredSubscription()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Lấy tất cả lịch sử giao dịch (Chỉ Clinic Admin & Manager)',
@@ -431,6 +436,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
+  @AllowExpiredSubscription()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Xem chi tiết giao dịch' })
   @ApiResponseData({

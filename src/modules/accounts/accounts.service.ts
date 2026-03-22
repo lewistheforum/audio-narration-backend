@@ -1909,6 +1909,24 @@ export class AccountsService {
   }
 
   /**
+   * Update Account Status
+   *
+   * Directly updates the status of an account. 
+   * This is used for security incidents like contract tampering.
+   *
+   * @param accountId - UUID of the account
+   * @param status - New AccountStatus
+   */
+  async updateStatus(accountId: string, status: AccountStatus): Promise<void> {
+    const account = await this.accountRepository.findAccountById(accountId);
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+    account.status = status;
+    await this.accountRepository.saveAccount(account);
+  }
+
+  /**
    * Validate Account Access
    *
    * Validates whether an account is allowed to access the system based on its status.
@@ -2167,11 +2185,9 @@ export class AccountsService {
 
     // Role-specific validation logic
     if (account.role === AccountRole.CLINIC_ADMIN) {
-      // CLINIC_ADMIN: Allow all statuses EXCEPT EXPIRED
-      if (subscription.subscriptionStatus === RegistrationStatus.EXPIRED) {
-        throw new ForbiddenException('Subscription expired');
-      }
-      // All other statuses (PENDING_*, ACTIVE, NON_RENEWING) are allowed
+      // CLINIC_ADMIN: Allow login even if subscription is EXPIRED 
+      // to allow them to pay/renew.
+      // Fine-grained access control is handled by ClinicSubscriptionGuard.
       return;
     }
 
@@ -2221,6 +2237,48 @@ export class AccountsService {
         'Clinic subscription is not active or has expired.',
       );
     }
+  }
+
+  /**
+   * Resolve the root CLINIC_ADMIN ID for any clinic-related account.
+   * Handles multi-level hierarchy (Doctor/Staff -> Manager -> Admin).
+   * 
+   * @param account The account to resolve
+   * @returns The account ID of the root Clinic Admin
+   */
+  async resolveClinicAdminId(account: Account): Promise<string> {
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      return account._id;
+    }
+
+    if (account.role === AccountRole.CLINIC_MANAGER) {
+      if (!account.parentId) {
+        throw new ForbiddenException('No parent clinic admin found for this manager.');
+      }
+      return account.parentId;
+    }
+
+    // DOCTOR or STAFF: parent is Manager
+    if (!account.parentId) {
+      throw new ForbiddenException('No parent clinic manager found for this account.');
+    }
+
+    const parentAccount = await this.accountRepository.findAccountById(account.parentId);
+    if (!parentAccount || !parentAccount.parentId) {
+      throw new ForbiddenException('Invalid account hierarchy: Clinic owner not found.');
+    }
+
+    return parentAccount.parentId;
+  }
+
+  /**
+   * Retrieves the current subscription for a clinic.
+   * 
+   * @param clinicId The account ID of the Clinic Admin
+   * @returns Subscription entity or null if not found
+   */
+  async getClinicSubscription(clinicId: string): Promise<any> {
+    return this.clinicSubscriptionRepository.findByClinicId(clinicId);
   }
 
   /**
