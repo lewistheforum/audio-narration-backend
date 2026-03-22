@@ -17,6 +17,6 @@ export class SaveErmResponseDto {
   @Transform(({ value }) => formatToVietnamTime(value))
   updatedAt: Date;
 
-  @ApiProperty({ example: 'Đã lưu thông tin ERM thành công' })
+  @ApiProperty({ example: 'ERM data saved successfully' })
   message: string;
 }

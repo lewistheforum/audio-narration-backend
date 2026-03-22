@@ -20,47 +20,47 @@ export class XrayFormTemplateDto {
       region: {
         type: 'text',
         required: false,
-        label: 'Vùng chụp (chest, knee, spine...)',
+        label: 'Scan Region (chest, knee, spine...)',
       },
       projection: {
         type: 'text',
         required: false,
-        label: 'Tư thế chụp (AP, Lateral, Oblique...)',
+        label: 'Projection (AP, Lateral, Oblique...)',
       },
       indication: {
         type: 'textarea',
         required: false,
-        label: 'Chỉ định',
+        label: 'Indication',
       },
       technique: {
         type: 'textarea',
         required: false,
-        label: 'Kỹ thuật chụp',
+        label: 'Imaging Technique',
       },
       findings: {
         type: 'textarea',
         required: false,
-        label: 'Các phát hiện',
+        label: 'Findings',
       },
       osteoarthritisGrade: {
         type: 'text',
         required: false,
-        label: 'Độ thoái hóa khớp',
+        label: 'Osteoarthritis Grade',
       },
       conclusion: {
         type: 'textarea',
         required: false,
-        label: 'Kết luận',
+        label: 'Conclusion',
       },
       recommendations: {
         type: 'textarea',
         required: false,
-        label: 'Các khuyến nghị',
+        label: 'Recommendations',
       },
       imageUrls: {
         type: 'array',
         required: false,
-        label: 'URL hình ảnh',
+        label: 'Image URLs',
       },
     },
   })

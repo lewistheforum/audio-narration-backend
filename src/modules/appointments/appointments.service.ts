@@ -3820,28 +3820,15 @@ export class AppointmentsService {
     sessionId: string,
     patientId: string,
   ): Promise<any> {
-    console.log(
-      '[DEBUG] Starting createAppointmentFromSession, sessionId:',
-      sessionId,
-      'patientId:',
-      patientId,
-    );
 
     // ========================================================================
     // STEP 1: RETRIEVE AND VALIDATE SESSION
     // ========================================================================
 
     const session = await this.bookingSessionService.getSession(sessionId);
-    console.log('[DEBUG] Session fetched:', JSON.stringify(session, null, 2));
 
     // Verify session ownership
     if (session.patientId !== patientId) {
-      console.log(
-        '[DEBUG] Session ownership check failed. Session patientId:',
-        session.patientId,
-        'Request patientId:',
-        patientId,
-      );
       throw new ForbiddenException(
         'You do not have permission to access this session',
       );
@@ -3849,10 +3836,6 @@ export class AppointmentsService {
 
     // Validate session has required fields
     if (!session.paymentMethod) {
-      console.log(
-        '[DEBUG] paymentMethod missing in session. Session keys:',
-        Object.keys(session),
-      );
       throw new BadRequestException(
         'Payment method not found in booking session. Please restart the booking process.',
       );
@@ -3861,9 +3844,6 @@ export class AppointmentsService {
     // SAFETY GUARD: Out-of-hours appointments ONLY accept COD payment
     const bookingOption = session.bookingOption || 'service_first';
     if (bookingOption === 'out_of_hours' && session.paymentMethod !== 'cod') {
-      console.log(
-        '[DEBUG] Out-of-hours with online payment detected - BLOCKING',
-      );
       throw new BadRequestException(
         'Out-of-hours appointments strictly require COD payment method. Online payment is not supported.',
       );
@@ -3874,7 +3854,6 @@ export class AppointmentsService {
     // ========================================================================
 
     // Detect booking option (default to option 1/2/3 if not specified)
-    console.log('[DEBUG] Booking option detected:', bookingOption);
 
     if (bookingOption === 'out_of_hours') {
       // ============================================================
@@ -3882,7 +3861,6 @@ export class AppointmentsService {
       // - REQUIRED: extraHour (ISO datetime string)
       // - NOT REQUIRED: clinicShiftHourId
       // ============================================================
-      console.log('[DEBUG] Processing OUT-OF-HOURS booking');
 
       if (
         !session.serviceIds ||
@@ -3892,14 +3870,6 @@ export class AppointmentsService {
         !session.paymentMethod ||
         !session.extraHour
       ) {
-        console.log('[DEBUG] Missing required fields for out_of_hours:', {
-          hasServiceIds: !!session.serviceIds,
-          serviceIdsLength: session.serviceIds?.length,
-          hasClinicId: !!session.clinicId,
-          hasDoctorId: !!session.doctorId,
-          hasPaymentMethod: !!session.paymentMethod,
-          hasExtraHour: !!session.extraHour,
-        });
         throw new BadRequestException(
           'Incomplete out-of-hours booking session. Required: serviceIds, clinicId, doctorId, paymentMethod, extraHour.',
         );
@@ -3910,7 +3880,6 @@ export class AppointmentsService {
         typeof session.extraHour !== 'string' ||
         !session.extraHour.includes('T')
       ) {
-        console.log('[DEBUG] Invalid extraHour format:', session.extraHour);
         throw new BadRequestException(
           'extraHour must be a valid ISO datetime string (e.g., 2026-03-15T19:30:00)',
         );
@@ -3919,7 +3888,6 @@ export class AppointmentsService {
       // Parse extraHour to Date object
       const extraHourDate = new Date(session.extraHour);
       if (isNaN(extraHourDate.getTime())) {
-        console.log('[DEBUG] extraHour parse failed:', session.extraHour);
         throw new BadRequestException(
           'Invalid extraHour format. Must be a valid ISO datetime.',
         );
@@ -3927,7 +3895,6 @@ export class AppointmentsService {
 
       // Validate extraHour is in the future (use Vietnam timezone)
       if (isInPast(extraHourDate)) {
-        console.log('[DEBUG] extraHour is in the past:', extraHourDate);
         throw new BadRequestException('extraHour must be in the future');
       }
 
@@ -3948,7 +3915,6 @@ export class AppointmentsService {
       // OPTIONS 1/2/3: STANDARD BOOKING (Service/Doctor/Date First)
       // - REQUIRED: clinicShiftHourId, appointmentDate
       // ============================================================
-      console.log('[DEBUG] Processing STANDARD booking (options 1/2/3)');
 
       if (
         !session.serviceIds ||
@@ -3959,15 +3925,6 @@ export class AppointmentsService {
         !session.doctorId ||
         !session.paymentMethod
       ) {
-        console.log('[DEBUG] Missing required fields for standard booking:', {
-          hasServiceIds: !!session.serviceIds,
-          serviceIdsLength: session.serviceIds?.length,
-          hasClinicId: !!session.clinicId,
-          hasAppointmentDate: !!session.appointmentDate,
-          hasClinicShiftHourId: !!session.clinicShiftHourId,
-          hasDoctorId: !!session.doctorId,
-          hasPaymentMethod: !!session.paymentMethod,
-        });
         throw new BadRequestException(
           'Incomplete booking session. Please complete all steps (including payment method selection) before confirming.',
         );
@@ -3975,7 +3932,6 @@ export class AppointmentsService {
 
       // Validate payment method (common for all options)
       if (!['cod', 'online'].includes(session.paymentMethod)) {
-        console.log('[DEBUG] Invalid payment method:', session.paymentMethod);
         throw new BadRequestException(
           'Invalid payment method. Must be "cod" or "online"',
         );
@@ -4111,12 +4067,6 @@ export class AppointmentsService {
     session: any,
     dateString: string,
   ): Promise<any> {
-    console.log('[DEBUG-COD] Starting createAppointmentCOD transaction', {
-      sessionId,
-      patientId,
-      dateString,
-      paymentMethod: session.paymentMethod,
-    });
 
     let result: any;
 
@@ -4126,7 +4076,6 @@ export class AppointmentsService {
       result = await this.dataSource.transaction(
         'SERIALIZABLE',
         async (manager) => {
-          console.log('[DEBUG-COD] Inside transaction, validating shiftHour');
           // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
           // SELECT ... FOR UPDATE prevents concurrent bookings
           const shiftHourRepo = manager.getRepository('clinic_shift_hour');
@@ -4138,7 +4087,6 @@ export class AppointmentsService {
             .setLock('pessimistic_write') // Critical: Prevents race conditions
             .getOne();
 
-          console.log('[DEBUG-COD] ShiftHour fetched:', shiftHour);
 
           if (!shiftHour) {
             throw new NotFoundException('Time slot not found');
@@ -4146,10 +4094,6 @@ export class AppointmentsService {
 
           // Business Rule: Check slot availability
           if (shiftHour.limit <= 0) {
-            console.log(
-              '[DEBUG-COD] Slot fully booked, limit:',
-              shiftHour.limit,
-            );
             throw new BadRequestException(
               'This time slot is fully booked. Please select another time.',
             );
@@ -4783,14 +4727,9 @@ export class AppointmentsService {
     patientId: string,
     session: any,
   ): Promise<any> {
-    console.log('[DEBUG-OOH] Starting createAppointmentOutOfHours', {
-      sessionId,
-      patientId,
-    });
 
     // === STEP 1: Parse extraHour ===
     const extraHourDate = new Date(session.extraHour);
-    console.log('[DEBUG-OOH] extraHour parsed:', extraHourDate);
 
     // Double-check validity (should already be validated in main function)
     if (isNaN(extraHourDate.getTime())) {
@@ -4807,7 +4746,6 @@ export class AppointmentsService {
       result = await this.dataSource.transaction(
         'SERIALIZABLE',
         async (manager) => {
-          console.log('[DEBUG-OOH] Inside transaction');
 
           // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
           // Query clinic_service_config for ALL serviceIds in one batch
@@ -7194,9 +7132,6 @@ export class AppointmentsService {
     }
 
     // 4. Log summary
-    console.log(
-      `Bulk send completed: ${totalSent} sent, ${totalFailed} failed, ${totalSkipped} skipped out of ${appointmentIds.length} total`,
-    );
 
     return {
       total_requested: appointmentIds.length,
@@ -7593,22 +7528,14 @@ export class AppointmentsService {
       .andWhere('acc.deleted_at IS NULL')
       .getRawMany();
 
-    console.log(
-      `[DEBUG] STEP 1 - Branches found for clinicId as Admin-ID: ${branches.length}`,
-    );
-    console.log(`[DEBUG] Branches:`, branches);
 
     const branchIds = branches.map((b) => b._id);
 
     if (branchIds.length === 0) {
       // If no branches, treat clinicId as a branch itself
       branchIds.push(clinicId);
-      console.log(
-        `[DEBUG] No branches found => treating clinicId as Manager ID directly`,
-      );
     }
 
-    console.log(`[DEBUG] Final branchIds to query schedules:`, branchIds);
 
     // Build query with conditional date filtering
     const queryBuilder = this.dataSource
@@ -7656,34 +7583,16 @@ export class AppointmentsService {
     }
 
     // Query RAW DATA - Get ALL records without grouping in SQL
-    console.log(`[DEBUG] STEP 2 - Executing main schedule query...`);
     const rawSlots = await queryBuilder
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
       .addOrderBy('csh.start_hour', 'ASC')
       .getRawMany();
 
-    console.log(
-      `[DEBUG] STEP 2 - Raw slots from DB: ${rawSlots.length} records`,
-    );
     if (rawSlots.length > 0) {
-      console.log(
-        `[DEBUG] Sample raw slot[0]:`,
-        JSON.stringify(rawSlots[0], null, 2),
-      );
     }
 
     if (rawSlots.length === 0) {
-      console.log(`[DEBUG] => No raw slots found. Possible reasons:`);
-      console.log(`  - No employee_schedule rows matching branchIds`);
-      console.log(
-        `  - No clinic_shift_hour rows linked to those shifts (INNER JOIN fails)`,
-      );
-      console.log(`  - Doctor role/status filter eliminated all rows`);
-      console.log(`  - Date range filter (today to +60 days) eliminated rows`);
-      console.log(
-        `[DEBUG] Checking employee_schedule rows without slot filter...`,
-      );
 
       const rawScheduleCheck = await this.dataSource
         .createQueryBuilder()
@@ -7698,17 +7607,12 @@ export class AppointmentsService {
         .where('es.clinic_id IN (:...branchIds)', { branchIds })
         .andWhere('es.deleted_at IS NULL')
         .getRawMany();
-      console.log(
-        `[DEBUG] employee_schedule rows (no date/shift filter): ${rawScheduleCheck.length}`,
-      );
       if (rawScheduleCheck.length > 0) {
-        console.log(`[DEBUG] Sample schedule:`, rawScheduleCheck[0]);
 
         // Check if clinic_shift_hour exists for those shifts
         const shiftIds = [
           ...new Set(rawScheduleCheck.map((r) => r.es_clinic_shift_id)),
         ];
-        console.log(`[DEBUG] Distinct shift IDs from schedules:`, shiftIds);
 
         const hourCheck = await this.dataSource
           .createQueryBuilder()
@@ -7725,15 +7629,8 @@ export class AppointmentsService {
             shiftIds: shiftIds.length ? shiftIds : ['none'],
           })
           .getRawMany();
-        console.log(
-          `[DEBUG] clinic_shift_hour rows for those shifts: ${hourCheck.length}`,
-        );
         if (hourCheck.length > 0) {
-          console.log(`[DEBUG] Sample hour:`, hourCheck[0]);
         } else {
-          console.log(
-            `[DEBUG] *** ROOT CAUSE: clinic_shift_hour table has NO rows for those shifts! ***`,
-          );
         }
 
         // Check doctor status
@@ -7748,10 +7645,6 @@ export class AppointmentsService {
             empIds: empIds.length ? empIds : ['none'],
           })
           .getRawMany();
-        console.log(
-          `[DEBUG] Doctor accounts for those schedules:`,
-          doctorCheck,
-        );
       }
 
       return { data: [] };
@@ -7787,21 +7680,12 @@ export class AppointmentsService {
     );
 
     // Filter out fully booked slots
-    console.log(
-      `[DEBUG] STEP 3 - After booking enrichment: ${enrichedSlots.length} total slots`,
-    );
     const fullyBookedCount = enrichedSlots.filter(
       (s) => s.available_slots <= 0,
     ).length;
     if (fullyBookedCount > 0) {
-      console.log(
-        `[DEBUG] Slots filtered out (fully booked): ${fullyBookedCount}`,
-      );
     }
     const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
-    console.log(
-      `[DEBUG] STEP 3 - Available slots after filtering: ${availableSlots.length}`,
-    );
 
     // DATA TRANSFORMATION: Group by Date -> Shift -> Slots
     const dateMap = new Map<string, any>();

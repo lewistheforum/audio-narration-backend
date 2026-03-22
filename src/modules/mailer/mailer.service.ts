@@ -154,7 +154,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Warning email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send warning email:', error);
     }
@@ -216,7 +215,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Ban email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send ban email:', error);
     }
@@ -276,7 +274,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Unban email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send unban email:', error);
     }
@@ -339,7 +336,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Clinic warning email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send clinic warning email:', error);
     }
@@ -404,7 +400,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Clinic ban email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send clinic ban email:', error);
     }
@@ -467,7 +462,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Clinic unban email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send clinic unban email:', error);
     }
@@ -536,7 +530,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Verification code sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send verification email:', error);
       throw new Error('Failed to send verification email');
@@ -615,7 +608,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Password reset code sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send password reset email:', error);
       throw new Error('Failed to send password reset email');
@@ -686,7 +678,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Contract signing OTP sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send contract signing OTP:', error);
       throw new Error('Failed to send contract signing OTP');
@@ -790,7 +781,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Welcome email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send welcome email:', error);
       throw new Error('Failed to send welcome email');
@@ -1121,7 +1111,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Clinic admin welcome email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send clinic admin welcome email:', error);
       // Don't throw error - email should be fire-and-forget
@@ -1180,7 +1169,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Manager notification sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send manager notification:', error);
     }
@@ -1231,7 +1219,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Employee completed notification sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send employee notification:', error);
     }
@@ -1246,7 +1233,7 @@ export class MailerService {
     ) {
         const transporter = this.mailTransport();
         const contractCode = contractId.substring(0, 8).toUpperCase();
-        const subject = `[Medicare] Hợp đồng #${contractCode} đã bị từ chối`;
+        const subject = `[Medicare] Contract #${contractCode} Has Been Rejected`;
         
         const mailOptions = {
             from: {
@@ -1257,23 +1244,22 @@ export class MailerService {
             subject,
             html: `
                 <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
-                    <h2 style="color: #ef4444;">Thông Báo Từ Chối Ký Hợp Đồng</h2>
-                    <p>Chào bạn,</p>
-                    <p>Chúng tôi xin thông báo rằng hợp đồng mã số <strong>${contractCode}</strong> đã bị từ chối bởi <strong>${signerName}</strong>.</p>
+                    <h2 style="color: #ef4444;">Contract Signing Rejection Notice</h2>
+                    <p>Hello,</p>
+                    <p>We would like to inform you that contract <strong>#${contractCode}</strong> has been rejected by <strong>${signerName}</strong>.</p>
                     <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
-                        <p style="margin: 0; font-weight: bold;">Lý do từ chối:</p>
+                        <p style="margin: 0; font-weight: bold;">Rejection Reason:</p>
                         <p style="margin: 5px 0 0 0;">${reason}</p>
                     </div>
-                    <p>Vui lòng đăng nhập vào hệ thống để kiểm tra thông tin chi tiết và thực hiện các bước tiếp theo.</p>
+                    <p>Please log in to the system to review the details and take next steps.</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-                    <p style="font-size: 12px; color: #666;">Đây là email tự động, vui lòng không trả lời email này.</p>
+                    <p style="font-size: 12px; color: #666;">This is an automated email, please do not reply.</p>
                 </div>
             `,
         };
 
         try {
             await transporter.sendMail(mailOptions);
-            console.log(`✅ Contract rejection email sent to ${email}`);
         } catch (error) {
             console.error('❌ Failed to send contract rejection email:', error);
         }
@@ -1425,7 +1411,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Manager credentials email sent to ${managerEmail}`);
     } catch (error) {
       console.error('❌ Failed to send manager credentials email:', error);
       // Don't throw error - email should be fire-and-forget
@@ -1527,7 +1512,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Registration approved email sent to ${adminEmail}`);
     } catch (error) {
       console.error('❌ Failed to send registration approved email:', error);
       // Don't throw error - email should be fire-and-forget
@@ -1645,7 +1629,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Registration rejected email sent to ${adminEmail}`);
     } catch (error) {
       console.error('❌ Failed to send registration rejected email:', error);
       // Don't throw error - email should be fire-and-forget
@@ -1765,7 +1748,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Subscription warning (${type}) email sent to ${to}`);
     } catch (error) {
       console.error(
         `❌ Failed to send subscription warning (${type}) email:`,
@@ -1874,7 +1856,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Subscription reassurance (${type}) email sent to ${to}`);
     } catch (error) {
       console.error(
         `❌ Failed to send subscription reassurance (${type}) email:`,
@@ -1975,7 +1956,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Subscription expired email sent to ${to}`);
     } catch (error) {
       console.error('❌ Failed to send subscription expired email:', error);
       // Don't throw - email should be fire-and-forget
@@ -2091,7 +2071,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Renewal success email sent to ${to}`);
     } catch (error) {
       console.error('❌ Failed to send renewal success email:', error);
       // Don't throw - email should be fire-and-forget
@@ -2234,7 +2213,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Plan change success email sent to ${to}`);
     } catch (error) {
       console.error('❌ Failed to send plan change success email:', error);
       // Don't throw - email should be fire-and-forget
@@ -2377,7 +2355,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Report response email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send report response email:', error);
       throw error;
@@ -2477,7 +2454,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Welcome email with password sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send welcome email with password:', error);
       throw error;
@@ -2580,7 +2556,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Appointment reminder email sent to ${email}`);
     } catch (error) {
       console.error('❌ Failed to send appointment reminder email:', error);
       throw error;
@@ -2686,7 +2661,6 @@ export class MailerService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Account notification email sent to ${data.email}`);
     } catch (error) {
       console.error('❌ Failed to send account notification email:', error);
       throw new Error('Failed to send account notification email');

@@ -63,7 +63,7 @@ export class RoomInfoDto {
 
   @ApiProperty({
     description: 'Room name',
-    example: 'Phòng khám 1',
+    example: 'Room 1',
   })
   roomName: string;
 }
@@ -137,7 +137,7 @@ export class DoctorInfoDto {
 
   @ApiProperty({
     description: 'Doctor full name',
-    example: 'BS. Nguyễn Văn A',
+    example: 'Dr. John Smith',
   })
   fullName: string;
 
@@ -163,7 +163,7 @@ export class DoctorInfoDto {
 
   @ApiProperty({
     description: 'Specialization',
-    example: 'Nội khoa',
+    example: 'Internal Medicine',
     nullable: true,
   })
   specialization: string | null;
@@ -215,13 +215,13 @@ export class ClinicInfoDto {
 
   @ApiProperty({
     description: 'Clinic name',
-    example: 'Phòng khám ABC',
+    example: 'ABC Clinic',
   })
   clinicName: string;
 
   @ApiProperty({
     description: 'Clinic address',
-    example: '123 Nguyễn Huệ, Q.1, TP.HCM',
+    example: '123 Nguyen Hue, District 1, HCMC',
     nullable: true,
   })
   address: string | null;

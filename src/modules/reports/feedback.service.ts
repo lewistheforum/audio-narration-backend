@@ -229,7 +229,6 @@ export class FeedbackService {
           ? this.labelImages(feedback.feedbackImages)
           : Promise.resolve(null);
 
-      console.log('imagesLabelPromise', feedback.feedbackImages);
 
       const [descriptionLabel, feedbackImagesLabel] = await Promise.all([
         descriptionLabelPromise,
@@ -322,7 +321,6 @@ export class FeedbackService {
         });
 
         imageLabels.push({
-          // url: imageUrl,
           description: response.data.data.description,
         });
       } catch (error) {

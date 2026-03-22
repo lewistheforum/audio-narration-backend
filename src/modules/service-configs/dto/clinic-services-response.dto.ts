@@ -14,7 +14,7 @@ export class ClinicServiceItemDto {
 
   @ApiProperty({
     description: 'Service name',
-    example: 'Khám tổng quát',
+    example: 'General Checkup',
   })
   serviceName: string;
 
@@ -26,7 +26,7 @@ export class ClinicServiceItemDto {
 
   @ApiProperty({
     description: 'Service description',
-    example: 'Khám sức khỏe tổng quát bao gồm đo huyết áp, nghe tim phổi, khám nội khoa',
+    example: 'A general health checkup including blood pressure measurement, heart and lung auscultation, and internal medicine examination',
     required: false,
   })
   description?: string;
@@ -71,7 +71,7 @@ export class ClinicServiceItemDto {
 
   @ApiProperty({
     description: 'Note for patient',
-    example: 'Nhịn ăn 8 tiếng trước khi khám',
+    example: 'Fast for 8 hours before examination',
     required: false,
   })
   noteForPatient?: string;
@@ -130,13 +130,13 @@ export class ClinicInfoDto {
 
   @ApiProperty({
     description: 'Clinic name',
-    example: 'Phòng khám Đa khoa ABC',
+    example: 'ABC General Clinic',
   })
   clinicName: string;
 
   @ApiProperty({
     description: 'Clinic address',
-    example: '123 Nguyễn Văn Linh, Q.7, TP.HCM',
+    example: '123 Nguyen Van Linh, Dist. 7, Ho Chi Minh City',
     required: false,
   })
   address?: string;

@@ -50,7 +50,6 @@ export class SchedulesService {
     private readonly dataSource: DataSource,
   ) { }
 
-  // ... (rest of methods)
 
   /**
    * Get Clinic Employees (Doctors & Staff)
@@ -1562,7 +1561,7 @@ export class SchedulesService {
         doctorMap.set(doctorId, {
           doctorId: schedule.doctor_id,
           doctorFullName: schedule.doctor_name,
-          doctorSpecialty: schedule.doctor_specialty || 'Chưa cập nhật',
+          doctorSpecialty: schedule.doctor_specialty || 'Not updated',
           doctorAvatar: schedule.doctor_avatar,
           doctorEmail: schedule.doctor_email,
           doctorPhone: schedule.doctor_phone,

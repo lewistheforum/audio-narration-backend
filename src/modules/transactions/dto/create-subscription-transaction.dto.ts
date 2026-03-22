@@ -4,7 +4,7 @@ import { IsUUID, IsNotEmpty, IsOptional, IsNumber, Min } from 'class-validator';
 export class CreateSubscriptionTransactionDto {
     @ApiProperty({
         example: '550e8400-e29b-41d4-a716-446655440000',
-        description: 'ID của lịch sử đăng ký gói (ClinicSubscriptionHistory ID)',
+        description: 'Subscription history ID (ClinicSubscriptionHistory ID)',
     })
     @IsNotEmpty()
     @IsUUID()
@@ -12,7 +12,7 @@ export class CreateSubscriptionTransactionDto {
 
     @ApiProperty({
         example: 6,
-        description: 'Thời hạn đăng ký (tính theo tháng)',
+        description: 'Subscription duration in months',
         required: false,
     })
     @IsOptional()

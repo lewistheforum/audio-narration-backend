@@ -12,7 +12,7 @@ export class SendAccountCredentialsDto {
 
   @ApiProperty({
     description: 'Patient full name',
-    example: 'Nguyễn Văn A',
+    example: 'John Doe',
   })
   @IsString()
   @IsNotEmpty({ message: 'Full name is required' })
