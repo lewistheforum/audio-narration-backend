@@ -137,7 +137,6 @@ export class BlogResponseDto {
     this.createdAt = blog.createdAt;
     this.updatedAt = blog.updatedAt;
 
-    // Include clinic information if available
     if (blog.clinic) {
       this.clinic = {
         id: blog.clinic._id,
