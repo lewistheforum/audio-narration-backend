@@ -181,6 +181,9 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Reject reason if cancelled', required: false })
   rejectReason?: string | null;
 
+  @ApiProperty({ description: 'Final diagnosis from doctor (COMPLETED appointments only)', required: false })
+  diagnosis?: string | null;
+
   @ApiProperty({ description: 'Creation timestamp' })
   @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;

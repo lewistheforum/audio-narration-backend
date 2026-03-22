@@ -1,6 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-// import { InjectConnection } from '@nestjs/mongoose';
-// import { Connection } from 'mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -29,16 +27,12 @@ export class DatabaseHealthService {
   }
 
   async checkAllConnections(): Promise<{
-    // mongo: boolean;
     postgres: boolean;
     allConnected: boolean;
   }> {
-    this.logger.log('🔍 Checking database connections...');
+    this.logger.log('Checking database connections...');
 
-    const [postgresConnected] = await Promise.all([
-      // Promise.resolve(this.checkMongoConnection()),
-      this.checkPostgresConnection(),
-    ]);
+    const postgresConnected = await this.checkPostgresConnection();
 
     const allConnected = postgresConnected;
 
@@ -56,22 +50,10 @@ export class DatabaseHealthService {
   }
 
   getConnectionInfo() {
-    // const mongoState = this.mongoConnection.readyState;
-    // const mongoHost = this.mongoConnection.host;
-    // const mongoPort = this.mongoConnection.port;
-    // const mongoName = this.mongoConnection.name;
-
     const postgresInitialized = this.postgresDataSource.isInitialized;
     const postgresOptions = this.postgresDataSource.options as any;
 
     return {
-      // mongo: {
-      //   connected: mongoState === 1,
-      //   state: mongoState,
-      //   host: mongoHost,
-      //   port: mongoPort,
-      //   database: mongoName,
-      // },
       postgres: {
         connected: postgresInitialized,
         host: postgresOptions.host,
