@@ -62,13 +62,8 @@ export class GeminiService {
     maxTokens?: number,
   ): Promise<string> {
     try {
-      // Convert messages to Gemini format
       const prompt = this.formatMessagesForGemini(messages);
-
-      // Build request URL
       const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
-
-      // Build request payload
       const payload: any = {
         contents: [
           {
@@ -82,7 +77,6 @@ export class GeminiService {
         generationConfig: {},
       };
 
-      // Add optional parameters
       if (temperature !== undefined) {
         payload.generationConfig.temperature = temperature;
       }
@@ -91,14 +85,12 @@ export class GeminiService {
         payload.generationConfig.maxOutputTokens = maxTokens;
       }
 
-      // Make API request
       const response = await axios.post(url, payload, {
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      // Extract response content
       const content = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!content) {
@@ -124,7 +116,6 @@ export class GeminiService {
         throw new BadRequestException('Clinic ID is required');
       }
 
-      // Fetch feedbacks - filtered by date range if provided
       let clinicFeedbacks;
       if (startDate && endDate) {
         clinicFeedbacks =
@@ -138,7 +129,6 @@ export class GeminiService {
           await this.feedbackRepository.findFeedbacksByClinicId(clinicId);
       }
 
-      // Pre-checks for data size
       if (!clinicFeedbacks || clinicFeedbacks.length === 0) {
         return JSON.stringify({ message: 'Do not have data to analyze' });
       }
@@ -154,10 +144,7 @@ export class GeminiService {
         clinicFeedbacks,
       )} Perform an in-depth analysis following these steps: Part 1: Overview Calculate the percentage of positive/negative/neutral sentiment for each key aspect: STAFF (Receptionist/Front Desk), DR_SKILL (Doctor), DR_ATTITUDE (Doctor's Attitude), COST (Cost), WAIT_TIME (Waiting Time), FACILITY (Facilities), PROCEDURE (Procedure). Identify the clinic's strongest selling proposition (USP) and weakest pain point based on their frequency of appearance in the description label. Part 2: Deep Dive Analysis & Correlation Doctor-Staff Paradox: Analyze the discrepancy between the ratings of doctors (DR_SKILL, DR_ATTITUDE) and staff/receptionists (STAFF). Is it possible for a doctor to be highly skilled but still receive 2-3 stars due to poor receptionist service? Cost Analysis: Specifically analyze complaints about COST. Are customers complaining about high prices or a lack of transparency? Image Analysis: Based on feedbackImagesLabel (e.g., photos of modern operating rooms, clean hospital beds...), compare them with ratings. Can good facilities salvage a poor service experience? Part 3: Actionable Insights: Provide 5 specific solutions, prioritized (Urgent/Long-term), to improve service. For each solution, clearly state: Problem to be solved: (Based on data). Specific action: (e.g., Change the quotation process, Retrain receptionist communication scripts...). Measurement KPI: How will the solution be effective? After completion, please format the output as JSON as follows: { overview : { sentiment_analysis : { staff : { positive : <double>, negative : <double>, neutral : <double> }, dr_skill : { positive : <double>, negative : <double>, neutral : <double> }, dr_attitude : { positive : <double>, negative : <double>, neutral : <double> }, cost : { positive : <double>, negative : <double>, neutral : <double> }, wait_time : { positive : <double>, negative : <double>, neutral : <double> }, facility : { positive : <double>, negative : <double>, neutral : <double> }, procedure : { positive : <double>, negative : <double>, neutral : <double> } }, strong : <string> (strengths), weak : <string> (weakness) }, deep_dive : { doctor_staff : <string>, cost : <string>, image : Array <string> }, action_insights : [ { priority : URGENT | MEDIUM | LONG <enum>, problem : <string>, action : <string>, evaluate : <string> }, ] } Note: Only provide the final output in JSON format; do not include any other information. Be aware that the JSON must follow the format specified above; no other data fields can be entered in that format.`;
 
-      // Build request URL
       const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
-
-      // Build request payload
       const payload: any = {
         contents: [
           {
@@ -171,14 +158,12 @@ export class GeminiService {
         generationConfig: {},
       };
 
-      // Make API request
       const response = await axios.post(url, payload, {
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      // Extract response content
       const content = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!content) {
