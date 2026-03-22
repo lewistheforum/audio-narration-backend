@@ -52,7 +52,7 @@ export class CreatePatientByStaffDto {
 
   @ApiProperty({
     description: 'Patient full name (Vietnamese characters allowed)',
-    example: 'Nguyễn Thị B',
+    example: 'Jane Doe',
   })
   @IsNotEmpty({ message: 'Full name is required' })
   @IsString({ message: 'Full name must be a string' })

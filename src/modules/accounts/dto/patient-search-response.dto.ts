@@ -27,7 +27,7 @@ export class PatientDataDto {
 
   @ApiProperty({
     description: 'Patient full name',
-    example: 'Nguyễn Văn A',
+    example: 'John Doe',
   })
   fullName: string;
 
@@ -48,7 +48,7 @@ export class PatientDataDto {
 
   @ApiProperty({
     description: 'Patient address',
-    example: '123 Đường ABC, Quận 1, TP.HCM',
+    example: '123 Main Street, District 1, Ho Chi Minh City',
     required: false,
   })
   address?: string;
@@ -88,7 +88,7 @@ export class PatientSearchResponseDto {
 
   @ApiProperty({
     description: 'Message when patient is not found',
-    example: 'Không tìm thấy bệnh nhân với số điện thoại này',
+    example: 'No patient found with this phone number',
     required: false,
   })
   message?: string;

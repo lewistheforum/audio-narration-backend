@@ -45,7 +45,7 @@ export class SearchPatientQueryDto {
 
   @ApiProperty({
     description: 'Patient full name for fuzzy search',
-    example: 'Nguyễn Văn A',
+    example: 'John Doe',
     required: false,
   })
   @IsOptional()

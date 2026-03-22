@@ -303,15 +303,15 @@ export class AccountsService {
    * @param {SearchPatientQueryDto} query - Search parameters (phone, email, or fullName)
    * @returns {Promise<PatientSearchResponseDto>} Search result with patient data or not found message
    *
-   * @example
-   * ```typescript
-   * const result = await accountsService.searchPatientByPhone({ phone: '0912345678' });
-   * if (result.found) {
-   *   console.log('Patient found:', result.patient);
-   * } else {
-   *   console.log('Create new account suggested');
-   * }
-   * ```
+    * @example
+    * ```typescript
+    * const result = await accountsService.searchPatientByPhone({ phone: '0912345678' });
+    * if (result.found) {
+    *   // Use result.patient data
+    * } else {
+    *   // Trigger new account creation flow
+    * }
+    * ```
    */
   async searchPatientByPhone(
     query: SearchPatientQueryDto,
@@ -3316,7 +3316,6 @@ export class AccountsService {
         averageRating = 0;
       }
 
-      // if (clinicAdminInfo && address) {
       // Adapt ClinicAdminInformation to match ClinicItemDto's expected clinicInfo structure
       const adaptedClinicInfo = {
         _id: clinicAdminInfo._id,
