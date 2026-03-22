@@ -4,7 +4,7 @@ import { IsNotEmpty, IsUUID, IsOptional, IsInt, Min, Max } from 'class-validator
 export class CreateNewSubscriptionDto {
     @ApiProperty({
         example: '550e8400-e29b-41d4-a716-446655440000',
-        description: 'ID của dịch vụ đăng ký mới',
+        description: 'New subscription service ID',
     })
     @IsNotEmpty()
     @IsUUID()
@@ -12,7 +12,7 @@ export class CreateNewSubscriptionDto {
 
     @ApiProperty({
         example: 1,
-        description: 'Thời hạn gói (tháng). Mặc định 1 = 1 tháng, 12 = 1 năm',
+        description: 'Package duration in months. Default 1 = 1 month, 12 = 1 year',
         default: 1,
         required: false,
     })
@@ -30,7 +30,7 @@ export class RenewSubscriptionDto {
 export class ChangePackageDto {
     @ApiProperty({
         example: '550e8400-e29b-41d4-a716-446655440000',
-        description: 'ID của dịch vụ mục tiêu muốn chuyển đổi sang',
+        description: 'Target service ID to switch to',
     })
     @IsNotEmpty()
     @IsUUID()
@@ -38,7 +38,7 @@ export class ChangePackageDto {
 
     @ApiProperty({
         example: 1,
-        description: 'Thời hạn gói mới (tháng). Mặc định 1 = 1 tháng, 12 = 1 năm',
+        description: 'New package duration in months. Default 1 = 1 month, 12 = 1 year',
         default: 1,
         required: false,
     })

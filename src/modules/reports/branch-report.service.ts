@@ -52,7 +52,7 @@ export class BranchReportService {
    * Get doctors working on a specific day and their feedback stats
    */
   async getDoctorsWorkingAndFeedback(managerId: string, date: string) {
-    // 1. Find all doctors who have appointments in this clinic on this date
+    // Get doctors with appointments at this clinic on this date
     const doctorsData = await this.dataSource.query(`
       SELECT DISTINCT 
         acc._id as "doctorId",
@@ -66,7 +66,7 @@ export class BranchReportService {
         AND apt.status NOT IN ('CANCELLED', 'ABSENT')
     `, [managerId, date]);
 
-    // 2. For each doctor, calculate their average rating and get recent feedbacks
+    // Calculate average rating and fetch recent feedbacks for each doctor
     const result = await Promise.all(
       doctorsData.map(async (doc: any) => {
         const stats = await this.dataSource.query(`

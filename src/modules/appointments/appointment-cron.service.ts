@@ -49,8 +49,6 @@ export class AppointmentCronService {
     const reminderPromises = appointments.map(async (appointment) => {
       try {
         await this.sendEmail(appointment);
-        // User requested NOT to update is_remider column
-        // await this.appointmentRepository.markAsReminded(appointment.appointment_id);
         successCount++;
       } catch (error) {
         failedCount++;
@@ -103,7 +101,7 @@ export class AppointmentCronService {
     const addressParts = [address, ward_name, district_name, province_name].filter(
       (part) => part && part !== 'null' && String(part).trim() !== '',
     );
-    const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Địa chỉ đang cập nhật';
+    const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Address pending update';
     
     const contactPhone = clinic_admin_phone || manager_phone || 'N/A';
 
@@ -122,7 +120,7 @@ export class AppointmentCronService {
     const services = (service_names && service_names !== 'null')
       ? String(service_names).split(', ').map((name: string) => ({
           serviceName: name,
-          serviceType: 'Dịch vụ y tế',
+          serviceType: 'Medical service',
         }))
       : [];
 
@@ -131,7 +129,7 @@ export class AppointmentCronService {
     await this.mailerService.sendAppointmentReminderEmail(
       patient_email,
       {
-        patientName: patient_name && patient_name !== 'null' ? patient_name : 'Quý khách',
+        patientName: patient_name && patient_name !== 'null' ? patient_name : 'Valued customer',
         clinicName: clinic_name && clinic_name !== 'null' ? clinic_name : 'Medicare Clinic',
         clinicAddress: fullAddress,
         clinicPhone: contactPhone,

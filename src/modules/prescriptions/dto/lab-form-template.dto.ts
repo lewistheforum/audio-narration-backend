@@ -21,32 +21,32 @@ export class LabFormTemplateDto {
         type: 'enum',
         required: true,
         options: ['INFLAMMATION', 'GOUT', 'METABOLIC', 'AUTOIMMUNE'],
-        label: 'Tên panel xét nghiệm',
+        label: 'Test Panel Name',
       },
       specimenType: {
         type: 'text',
         required: true,
-        label: 'Loại mẫu (máu, nước tiểu...)',
+        label: 'Specimen Type (blood, urine...)',
       },
       collectedAt: {
         type: 'datetime',
         required: true,
-        label: 'Thời gian lấy mẫu',
+        label: 'Collection Time',
       },
       receivedAt: {
         type: 'datetime',
         required: true,
-        label: 'Thời gian nhận mẫu',
+        label: 'Received Time',
       },
       reportedAt: {
         type: 'datetime',
         required: true,
-        label: 'Thời gian có kết quả',
+        label: 'Report Time',
       },
       results: {
         type: 'json',
         required: true,
-        label: 'Kết quả',
+        label: 'Results',
         structure: {
           testName: {
             value: 'number',
@@ -59,17 +59,17 @@ export class LabFormTemplateDto {
       abnormalSummary: {
         type: 'boolean',
         required: true,
-        label: 'Có bất thường hay không',
+        label: 'Any Abnormalities',
       },
       conclusion: {
         type: 'textarea',
         required: true,
-        label: 'Kết luận',
+        label: 'Conclusion',
       },
       recommendations: {
         type: 'textarea',
         required: true,
-        label: 'Các khuyến nghị',
+        label: 'Recommendations',
       },
     },
   })

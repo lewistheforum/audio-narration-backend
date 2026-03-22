@@ -78,7 +78,7 @@ export class TransactionsController {
     AccountRole.CLINIC_MANAGER,
   )
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán cho cuộc hẹn' })
+  @ApiOperation({ summary: 'Create payment QR for an appointment' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -117,7 +117,7 @@ export class TransactionsController {
     AccountRole.CLINIC_MANAGER,
   )
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR thanh toán tại phòng khám' })
+  @ApiOperation({ summary: 'Create payment QR at clinic' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -146,7 +146,7 @@ export class TransactionsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'DEPRECATED: Use /renew instead. Tạo QR thanh toán cho đăng ký gói dịch vụ (Renewal Logic)',
+      'DEPRECATED: Use /renew instead. Create payment QR for subscription (Renewal Logic)',
   })
   @ApiResponseData({
     type: PaymentResponseDto,
@@ -186,7 +186,7 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @AllowExpiredSubscription()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR cho đăng ký mới (Onboarding)' })
+  @ApiOperation({ summary: 'Create QR for new subscription (Onboarding)' })
   async createNewSubscriptionQr(
     @User() user: Account,
     @Body() body: CreateNewSubscriptionDto,
@@ -221,7 +221,7 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @AllowExpiredSubscription()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR gia hạn gói hiện tại' })
+  @ApiOperation({ summary: 'Create QR to renew current subscription' })
   async createRenewalQr(@User() user: Account) {
     let clinicId = user._id;
 
@@ -248,7 +248,7 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @AllowExpiredSubscription()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR đổi gói dịch vụ' })
+  @ApiOperation({ summary: 'Create QR to change service package' })
   async createPackageChangeQr(
     @User() user: Account,
     @Body() body: ChangePackageDto,
@@ -287,7 +287,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo QR xác minh (10k) cho clinic user đang login' })
+  @ApiOperation({ summary: 'Create verification QR (10k) for logged-in clinic user' })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -312,7 +312,7 @@ export class TransactionsController {
   @Post('seepay/callback')
   @UseGuards(SeepayAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Webhook callback từ Seepay' })
+  @ApiOperation({ summary: 'Webhook callback from Seepay' })
   @ApiBody({ type: SeepayCallbackDto })
   @ApiResponseData({
     type: PaymentResponseDto,
@@ -346,7 +346,7 @@ export class TransactionsController {
   @AllowExpiredSubscription()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Lấy tất cả lịch sử giao dịch (Chỉ Clinic Admin & Manager)',
+    summary: 'Get all payment history (Clinic Admin & Manager only)',
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -438,7 +438,7 @@ export class TransactionsController {
   @Roles(AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER)
   @AllowExpiredSubscription()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Xem chi tiết giao dịch' })
+  @ApiOperation({ summary: 'View transaction details' })
   @ApiResponseData({
     type: TransactionDetailDto,
     status: HttpStatus.OK,
@@ -477,7 +477,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Xem báo cáo doanh thu theo chi nhánh' })
+  @ApiOperation({ summary: 'View revenue report by branch' })
   async getManagerRevenueReport(
     @User() user: Account,
     @Query() dto: ManagerRevenueReportDto,
@@ -488,7 +488,7 @@ export class TransactionsController {
     );
     return {
       statusCode: HttpStatus.OK,
-      message: 'Lấy báo cáo doanh thu thành công',
+      message: 'Revenue report retrieved successfully',
       data: stats,
     };
   }
@@ -497,7 +497,7 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Xuất báo cáo doanh thu theo chi nhánh' })
+  @ApiOperation({ summary: 'Export revenue report by branch' })
   async exportManagerRevenueReport(
     @User() user: Account,
     @Query() dto: ManagerRevenueReportDto,

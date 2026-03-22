@@ -8,4 +8,3 @@ export * from './erm-ultrasound.entity';
 export * from './erm-lab.entity';
 export * from './erm-procedure.entity';
 export * from './erm-bone-density.entity';
-export * from './erm-lab.entity';

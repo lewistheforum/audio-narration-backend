@@ -58,32 +58,19 @@ export class AiService {
    * });
    */
   async chat(dto: AiChatRequestDto): Promise<AiChatResponseDto> {
-    // Determine model to use
     const model = dto.model || this.getDefaultModel(dto.provider);
 
-    // Validate provider and model compatibility
     this.validateProviderModel(dto.provider, model);
 
     let content: string;
 
-    // Route to appropriate provider service
     switch (dto.provider) {
       case AiProvider.GEMINI:
-        content = await this.geminiService.chatCompletion(
-          dto.messages,
-          model,
-          // dto.temperature,
-          // dto.maxTokens,
-        );
+        content = await this.geminiService.chatCompletion(dto.messages, model);
         break;
 
       case AiProvider.CHATGPT:
-        content = await this.chatGptService.chatCompletion(
-          dto.messages,
-          model,
-          // dto.temperature,
-          // dto.maxTokens,
-        );
+        content = await this.chatGptService.chatCompletion(dto.messages, model);
         break;
 
       default:
@@ -92,7 +79,6 @@ export class AiService {
         );
     }
 
-    // Return formatted response
     return {
       content,
       provider: dto.provider,
@@ -108,13 +94,6 @@ export class AiService {
 
     this.validateProviderModel(AiProvider.CHATGPT, model);
 
-    // const content = await this.geminiService.chatCompletionServiceImprovement(
-    //   dto.clinicId,
-    //   model,
-    //   dto.startDate,
-    //   dto.endDate,
-    // );
-
     const content = await this.chatGptService.chatCompletionServiceImprovement(
       dto.clinicId,
       model,
@@ -122,7 +101,6 @@ export class AiService {
       dto.endDate,
     );
 
-    // Try to parse JSON response, fallback to error message if parsing fails
     let formatJson: any;
     try {
       formatJson = JSON.parse(content);
@@ -168,8 +146,6 @@ export class AiService {
     try {
       const url = API.AI.RECOMMENDATION_RECOMMEND_FROM_APPOINTMENT;
 
-      // The clinicIds in dto are clinic manager IDs. We need to find their parent IDs (clinic admin ids)
-      // and skip any duplicates.
       const clinicManagers = await this.accountRepository.findAccountsByIds(
         dto.clinicIds,
       );
@@ -205,7 +181,6 @@ export class AiService {
 
       const formData = new FormData();
 
-      // Ensure it is a valid base64 data URI
       const match = dto.imageBase64.match(
         /^data:image\/([a-zA-Z0-9]+);base64,(.+)$/,
       );

@@ -144,9 +144,7 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) {
-    console.log('✅ AppointmentsController initialized');
-  }
+  ) {}
 
   /**
    * Get all appointments for staff's clinic

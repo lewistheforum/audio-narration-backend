@@ -1,7 +1,6 @@
 import {
     Injectable,
     NotFoundException,
-    ConflictException,
     ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -25,22 +24,19 @@ export class ClinicShiftsService {
      */
     private async resolveClinicId(user: any): Promise<string> {
         if (user.role === AccountRole.CLINIC_MANAGER) {
-            return user._id; // Manager IS the clinic branch
+            return user._id;
         }
         if (user.role === AccountRole.CLINIC_STAFF || user.role === AccountRole.DOCTOR) {
-            // Doctor/Staff's parentId = CLINIC_MANAGER._id (the branch they belong to)
             if (user.parentId) {
                 return user.parentId;
             }
         }
-        return user._id; // Fallback
+        return user._id;
     }
 
     async create(user: any, createDto: CreateClinicShiftDto) {
         const clinicId = await this.resolveClinicId(user);
         if (!clinicId) throw new ForbiddenException('Cannot resolve clinic ID');
-
-
 
         const newShift = this.shiftRepository.create({
             clinicId,
@@ -57,12 +53,8 @@ export class ClinicShiftsService {
         return this.shiftRepository.find({
             where: { clinicId },
             order: { createdAt: 'ASC' }
-            // Or order by predefined ShiftType order? For now created time is simplest.
         });
     }
-
-    // Update not really needed as only 'shift' enum field exists. 
-    // If we rename shift, we might need it, but usually we just delete and create new.
 
     async remove(user: any, id: string) {
         const clinicId = await this.resolveClinicId(user);

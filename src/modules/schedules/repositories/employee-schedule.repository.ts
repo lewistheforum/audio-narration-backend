@@ -194,8 +194,6 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       });
     }
 
-    // Since we used aggregation, we should use getRawAndEntities to retrieve raw counts properly
-    // However, it's cleaner to execute as raw when we introduce complex aggregations.
     return queryBuilder
       .orderBy('schedule.workDate', 'ASC')
       .addOrderBy('clinicShift.createdAt', 'ASC')

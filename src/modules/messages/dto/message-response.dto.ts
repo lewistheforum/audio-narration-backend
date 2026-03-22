@@ -23,7 +23,7 @@ export class MessageResponseDto {
 
   @ApiProperty({
     description: 'ID of the user receiving the message',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    example: '223e4567-e89b-12d3-a456-426614174001',
   })
   receiverId: string;
 
@@ -57,7 +57,7 @@ export class MessageResponseDto {
   deletedBy: string[];
 
   @ApiProperty({
-    description: 'Date when the message can not update or delete',
+    description: 'Date when the message can no longer be updated or deleted',
     example: '2024-01-15T10:30:00.000Z',
   })
   validatedAt: Date;

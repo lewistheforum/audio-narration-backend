@@ -796,8 +796,7 @@ export class AccountsController {
    *
    * Access Control:
    * - Users can change their own password
-   * - Admins can change any password (consider security implications)
-   * - TODO: Consider restricting to self-only updates
+    * - Admins can change any password (consider security implications)
    *
    * @param {string} id - Account UUID
    * @param {UpdatePasswordDto} updatePasswordDto - Old and new password
@@ -1513,7 +1512,7 @@ export class AccountsController {
     required: false,
     type: String,
     description: 'Patient full name for fuzzy search',
-    example: 'Nguyễn Văn A',
+    example: 'John Doe',
   })
   @ApiResponseData({
     type: PatientSearchResponseDto,

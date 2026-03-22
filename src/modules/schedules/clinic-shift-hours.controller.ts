@@ -15,16 +15,12 @@ import { AccountRole } from '../accounts/enums';
 export class ClinicShiftHoursController {
     constructor(private readonly hoursService: ClinicShiftHoursService) { }
 
-
-
     @Get()
     @Roles(AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
     @ApiOperation({ summary: 'Get hours for a shift' })
     findAll(@Request() req, @Query('shiftId') shiftId: string) {
         return this.hoursService.findAll(req.user, shiftId);
     }
-
-
 
     @Post('config')
     @Roles(AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)
@@ -46,8 +42,6 @@ export class ClinicShiftHoursController {
     getHistory(@Request() req, @Param('shiftType') shiftType: string) {
         return this.hoursService.getHistory(req.user, shiftType);
     }
-
-
 
     @Delete(':id')
     @Roles(AccountRole.CLINIC_MANAGER, AccountRole.CLINIC_STAFF, AccountRole.DOCTOR)

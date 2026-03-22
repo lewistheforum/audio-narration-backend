@@ -192,6 +192,9 @@ export class PatientAppointmentDetailResponseDto {
   @ApiPropertyOptional({ description: 'Patient note for the appointment' })
   patient_note?: string;
 
+  @ApiPropertyOptional({ description: 'Final diagnosis from doctor (COMPLETED appointments only)', example: 'Rotator cuff tendinitis' })
+  diagnosis?: string | null;
+
   @ApiPropertyOptional({ 
     description: 'Reject reason (only available when status is CANCELLED)',
     example: 'Doctor suddenly unavailable' 

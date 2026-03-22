@@ -300,7 +300,6 @@ export class BlogsController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Create a new blog' })
   @ApiResponseData({
     type: BlogResponseDto,
@@ -336,7 +335,6 @@ export class BlogsController {
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Update a blog' })
   @ApiResponseData({
     type: BlogResponseDto,
@@ -372,7 +370,6 @@ export class BlogsController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Delete a blog' })
   @ApiResponseData({
     type: null,
