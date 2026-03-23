@@ -12,6 +12,8 @@ import {
   getStartOfDay,
   getDateString,
   getCurrentVietnamTime,
+  formatToDateOnly,
+  formatToTimeOnly,
 } from 'src/common/utils/date.util';
 import { EmployeeSchedule } from './entities/employee-schedule.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
@@ -48,8 +50,7 @@ export class SchedulesService {
     @InjectRepository(ClinicStaffInformation)
     private readonly clinicStaffRepository: Repository<ClinicStaffInformation>,
     private readonly dataSource: DataSource,
-  ) { }
-
+  ) {}
 
   /**
    * Get Clinic Employees (Doctors & Staff)
@@ -139,10 +140,7 @@ export class SchedulesService {
       let fullName = emp.username || 'Unknown';
       if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
         fullName = doctorInfo.fullName;
-      } else if (
-        emp.role === AccountRole.CLINIC_STAFF &&
-        staffInfo?.fullName
-      ) {
+      } else if (emp.role === AccountRole.CLINIC_STAFF && staffInfo?.fullName) {
         fullName = staffInfo.fullName;
       } else if (generalAccount?.fullName) {
         fullName = generalAccount.fullName;
@@ -156,7 +154,9 @@ export class SchedulesService {
         profilePicture:
           emp.role === AccountRole.DOCTOR
             ? doctorInfo?.profilePicture
-            : staffInfo?.profilePicture || generalAccount?.profilePicture || null,
+            : staffInfo?.profilePicture ||
+              generalAccount?.profilePicture ||
+              null,
       };
     });
 
@@ -606,7 +606,14 @@ export class SchedulesService {
    */
   private mapSchedules(schedules: any[]) {
     const now = getCurrentVietnamTime();
+    const nowDateStr = formatToDateOnly();
+    const nowTimeStr = formatToTimeOnly();
+
     return schedules.map((schedule) => {
+      const scheduleDateStr = formatToDateOnly(schedule.workDate);
+      const isPastDate = scheduleDateStr < nowDateStr;
+      const isToday = scheduleDateStr === nowDateStr;
+
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
       const staffInfo = emp?.clinicStaffInformation;
@@ -637,7 +644,9 @@ export class SchedulesService {
           avatar:
             emp?.role === AccountRole.DOCTOR
               ? doctorInfo?.profilePicture
-              : staffInfo?.profilePicture || generalAccount?.profilePicture || null,
+              : staffInfo?.profilePicture ||
+                generalAccount?.profilePicture ||
+                null,
         },
         shift: {
           id: schedule.clinicShift?._id,
@@ -645,9 +654,8 @@ export class SchedulesService {
           hours:
             schedule.clinicShift?.hours
               ?.map((hour: any) => {
-                const [endH, endM] = hour.endHour.split(':').map(Number);
-                const slotEndTime = new Date(schedule.workDate);
-                slotEndTime.setHours(endH, endM, 0, 0);
+                const isPastTime =
+                  isPastDate || (isToday && nowTimeStr > hour.startHour);
 
                 return {
                   id: hour._id,
@@ -655,8 +663,7 @@ export class SchedulesService {
                   endHour: hour.endHour,
                   limit: hour.limit,
                   bookedCount: hour.bookedCount || 0,
-                  isFull:
-                    (hour.bookedCount || 0) >= hour.limit || now > slotEndTime,
+                  isFull: (hour.bookedCount || 0) >= hour.limit || isPastTime,
                 };
               })
               .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
@@ -664,9 +671,9 @@ export class SchedulesService {
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
-              id: schedule.rooms[0]._id,
-              name: schedule.rooms[0].roomName,
-            }
+                id: schedule.rooms[0]._id,
+                name: schedule.rooms[0].roomName,
+              }
             : null,
       };
     });
@@ -768,7 +775,11 @@ export class SchedulesService {
 
     // Room Occupancy Check on Update
     if (roomId || clinicShiftId || workDate) {
-      const roomToCheck = roomId || (schedule.rooms && schedule.rooms.length > 0 ? schedule.rooms[0]._id : null);
+      const roomToCheck =
+        roomId ||
+        (schedule.rooms && schedule.rooms.length > 0
+          ? schedule.rooms[0]._id
+          : null);
       if (roomToCheck) {
         const roomConflict = await this.scheduleRepository.findRoomConflict(
           roomToCheck,
@@ -938,7 +949,10 @@ export class SchedulesService {
     };
   }
 
-  async getPaginatedClinicRoomsByStaffId(staffId: string, query: ClinicRoomQueryDto) {
+  async getPaginatedClinicRoomsByStaffId(
+    staffId: string,
+    query: ClinicRoomQueryDto,
+  ) {
     if (!staffId) throw new BadRequestException('Staff ID is required');
 
     const staffAccount = await this.accountRepository.findOne({
@@ -946,7 +960,9 @@ export class SchedulesService {
     });
 
     if (!staffAccount || !staffAccount.parentId) {
-      throw new BadRequestException('Staff not found or not assigned to a clinic');
+      throw new BadRequestException(
+        'Staff not found or not assigned to a clinic',
+      );
     }
 
     const { page = 1, limit = 10, search } = query;
@@ -1592,9 +1608,9 @@ export class SchedulesService {
           shiftEndTime: '00:00:00', // Will be calculated from slots
           room: scheduleRoom
             ? {
-              roomId: scheduleRoom.room_id,
-              roomName: scheduleRoom.room_name,
-            }
+                roomId: scheduleRoom.room_id,
+                roomName: scheduleRoom.room_name,
+              }
             : null,
           availableSlots: [],
           bookedSlots: [],

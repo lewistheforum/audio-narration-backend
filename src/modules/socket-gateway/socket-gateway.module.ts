@@ -6,6 +6,7 @@ import { AccountsModule } from '../accounts/accounts.module';
 import { MessagesModule } from '../messages/messages.module';
 import { ConversationModule } from '../conversations/conversation.module';
 import { getJwtConfig } from '../../config/jwt.config';
+import { AppointmentsModule } from '../appointments/appointments.module';
 
 @Module({
   imports: [
@@ -15,12 +16,13 @@ import { getJwtConfig } from '../../config/jwt.config';
       useFactory: getJwtConfig,
       inject: [ConfigService],
     }),
-    AccountsModule,
+    forwardRef(() => AccountsModule),
     forwardRef(() => MessagesModule),
     forwardRef(() => ConversationModule),
+    forwardRef(() => AppointmentsModule),
   ],
   controllers: [],
   providers: [SocketGatewayService],
   exports: [SocketGatewayService],
 })
-export class SocketGatewayModule { }
+export class SocketGatewayModule {}

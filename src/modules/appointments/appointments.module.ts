@@ -19,6 +19,7 @@ import { HttpModule } from '@nestjs/axios';
 import { AppointmentWebhookService } from './appointment-webhook.service';
 import { AppointmentCronService } from './appointment-cron.service';
 import { AppointmentCronController } from './appointment-cron.controller';
+import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 
 /**
  * Appointments Module
@@ -53,6 +54,7 @@ import { AppointmentCronController } from './appointment-cron.controller';
     forwardRef(() => TransactionsModule),
     PrescriptionsModule,
     HttpModule,
+    SocketGatewayModule,
   ],
   controllers: [AppointmentsController, AppointmentCronController],
   providers: [

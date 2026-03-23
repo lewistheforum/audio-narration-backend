@@ -1,4 +1,11 @@
-import { ApiOperation, ApiResponse, ApiTags, ApiBody, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBody,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { FeedbackService } from './feedback.service';
 import {
   Controller,
@@ -209,7 +216,10 @@ export class FeedbackController {
     @Param('id') id: string,
   ): Promise<FeedbackAIResponseDto[]> {
     const feedbacks = await this.feedbackService.findAllFeedbacksById(id);
-    return feedbacks.map((feedback) => new FeedbackAIResponseDto(feedback));
+    const result = feedbacks.map(
+      (feedback) => new FeedbackAIResponseDto(feedback),
+    );
+    return result;
   }
 
   /**
