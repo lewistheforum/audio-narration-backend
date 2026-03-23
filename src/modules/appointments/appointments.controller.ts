@@ -526,6 +526,83 @@ export class AppointmentsController {
   }
 
   /**
+   * Get staff's patient history
+   *
+   * Retrieves list of all patients who have been examined by the staff
+   * with summary statistics and last diagnosis
+   *
+   * @param req - Request object containing authenticated staff
+   * @param queryDto - Query parameters (search, pagination, sorting)
+   * @returns Paginated list of patients with visit summary
+   */
+  @Get('staff/me/patients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.CLINIC_STAFF)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Get staff's patient history",
+    description:
+      'Retrieve list of all patients who have been examined by the authenticated staff. ' +
+      'Includes patient information, visit statistics, and last diagnosis.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient history retrieved successfully',
+    type: DoctorPatientHistoryResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User is not a doctor',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of records per page (default: 20)',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by patient name, phone, or email',
+    example: 'John Doe',
+  })
+  @ApiQuery({
+    name: 'sort_by',
+    required: false,
+    enum: ['last_visit_date', 'patient_name', 'total_visits'],
+    description: 'Sort by field (default: last_visit_date)',
+    example: 'last_visit_date',
+  })
+  @ApiQuery({
+    name: 'order',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order (default: DESC)',
+    example: 'DESC',
+  })
+  async getStaffPatientHistory(
+    @Request() req: any,
+    @Query() queryDto: DoctorPatientHistoryQueryDto,
+  ): Promise<DoctorPatientHistoryResponseDto> {
+    const staffId = req.user._id;
+    return this.appointmentsService.getStaffPatientHistory(staffId, queryDto);
+  }
+
+  /**
    * Get doctor's patient detail with appointment history (Step 2)
    *
    * Retrieves detailed information about a specific patient including personal
@@ -541,7 +618,7 @@ export class AppointmentsController {
    */
   @Get('doctor/me/patients/:patient_id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR)
+  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: "Get doctor's patient detail with appointment history",
@@ -656,7 +733,10 @@ export class AppointmentsController {
     @Param('patient_id') patientId: string,
     @Query() queryDto: DoctorPatientAppointmentsQueryDto,
   ): Promise<DoctorPatientDetailResponseDto> {
-    const doctorId = req.user._id;
+    const doctorId = queryDto.doctor_id ? queryDto.doctor_id : req.user._id;
+
+    console.log('check doctorId: ', doctorId);
+
     return this.appointmentsService.getDoctorPatientDetail(
       doctorId,
       patientId,
@@ -682,7 +762,7 @@ export class AppointmentsController {
    */
   @Get('doctor/me/appointments/:appointment_id/history')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR)
+  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get complete appointment detail from patient history',
@@ -726,8 +806,9 @@ export class AppointmentsController {
   async getDoctorAppointmentHistoryDetail(
     @Request() req: any,
     @Param('appointment_id') appointmentId: string,
+    @Query() queryDto: DoctorPatientAppointmentsQueryDto,
   ): Promise<DoctorAppointmentHistoryDetailResponseDto> {
-    const doctorId = req.user._id;
+    const doctorId = queryDto.doctor_id ? queryDto.doctor_id : req.user._id;
     return this.appointmentsService.getDoctorAppointmentHistoryDetail(
       doctorId,
       appointmentId,
@@ -2950,12 +3031,15 @@ export class AppointmentsController {
         throw error;
       }
       throw new InternalServerErrorException(
-        error?.message || 'An unexpected error occurred while creating appointment',
+        error?.message ||
+          'An unexpected error occurred while creating appointment',
       );
     }
 
     if (!result) {
-      throw new InternalServerErrorException('Failed to create appointment: No result returned');
+      throw new InternalServerErrorException(
+        'Failed to create appointment: No result returned',
+      );
     }
 
     return result.message
@@ -2981,7 +3065,8 @@ export class AppointmentsController {
   })
   @ApiParam({
     name: 'sessionId',
-    description: 'Session ID nhận được từ bước tạo booking session (step 4/updateBookingSession)',
+    description:
+      'Session ID nhận được từ bước tạo booking session (step 4/updateBookingSession)',
     type: String,
     format: 'uuid',
   })
@@ -2992,8 +3077,10 @@ export class AppointmentsController {
       example: {
         message: 'Vui lòng thanh toán để hoàn tất đặt lịch',
         data: {
-          qr_code_url: 'https://qr.sepay.vn/img?acc=...&bank=...&amount=270000&des=sessionId',
-          qr_payload: '{"acc":"...","bank":"...","amount":270000,"des":"sessionId"}',
+          qr_code_url:
+            'https://qr.sepay.vn/img?acc=...&bank=...&amount=270000&des=sessionId',
+          qr_payload:
+            '{"acc":"...","bank":"...","amount":270000,"des":"sessionId"}',
           session_id: '123e4567-e89b-12d3-a456-426614174000',
           amount: 270000,
           currency: 'VND',
@@ -3002,8 +3089,14 @@ export class AppointmentsController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Session không phải thanh toán online hoặc đã hết hạn' })
-  @ApiResponse({ status: 403, description: 'Session không thuộc về bệnh nhân này' })
+  @ApiResponse({
+    status: 400,
+    description: 'Session không phải thanh toán online hoặc đã hết hạn',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Session không thuộc về bệnh nhân này',
+  })
   @ApiResponse({ status: 404, description: 'Session không tồn tại' })
   async getOnlinePaymentQr(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -3363,8 +3456,10 @@ export class AppointmentsController {
   @Roles(AccountRole.CLINIC_STAFF)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Complete COD appointment (Change all COD packages and transactions to SUCCESS)',
-    description: 'Updates un-paid COD packages and transactions to SUCCESS/PAID and completes the appointment.',
+    summary:
+      'Complete COD appointment (Change all COD packages and transactions to SUCCESS)',
+    description:
+      'Updates un-paid COD packages and transactions to SUCCESS/PAID and completes the appointment.',
   })
   @ApiResponse({
     status: 200,

@@ -26,7 +26,10 @@ import {
   ClinicStaffInformationRepository,
   AccountRepository,
 } from '../accounts/repositories';
-import { AccountRole, LegalDocumentVerificationStatus } from '../accounts/enums';
+import {
+  AccountRole,
+  LegalDocumentVerificationStatus,
+} from '../accounts/enums';
 import { EmployeeScheduleRepository } from '../schedules/repositories/employee-schedule.repository';
 import {
   QueryAppointmentDto,
@@ -1108,8 +1111,12 @@ export class AppointmentsService {
         .from('employee_schedule', 'es')
         .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
         .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-        .where('es.employee_id = :doctorId', { doctorId: rescheduleDto.doctorId })
-        .andWhere('csh._id = :shiftHourId', { shiftHourId: rescheduleDto.clinicShiftHourId })
+        .where('es.employee_id = :doctorId', {
+          doctorId: rescheduleDto.doctorId,
+        })
+        .andWhere('csh._id = :shiftHourId', {
+          shiftHourId: rescheduleDto.clinicShiftHourId,
+        })
         .andWhere('es.work_date = :workDate', { workDate: newAppointmentDate })
         .andWhere('es.deleted_at IS NULL')
         .getRawOne();
@@ -7551,7 +7558,10 @@ export class AppointmentsService {
       .where('cld.account_id = :clinicId', { clinicId })
       .getRawOne();
 
-    if (!legalDoc || legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED) {
+    if (
+      !legalDoc ||
+      legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED
+    ) {
       throw new BadRequestException(
         'This clinic is pending legal verification and is currently unavailable for booking.',
       );
@@ -7863,7 +7873,10 @@ export class AppointmentsService {
       .where('cld.account_id = :clinicId', { clinicId })
       .getRawOne();
 
-    if (!legalDoc || legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED) {
+    if (
+      !legalDoc ||
+      legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED
+    ) {
       throw new BadRequestException(
         'This clinic is pending legal verification and is currently unavailable for booking.',
       );
@@ -8037,7 +8050,10 @@ export class AppointmentsService {
       .where('cld.account_id = :clinicId', { clinicId })
       .getRawOne();
 
-    if (!legalDoc || legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED) {
+    if (
+      !legalDoc ||
+      legalDoc.verification_status !== LegalDocumentVerificationStatus.APPROVED
+    ) {
       throw new BadRequestException(
         'This clinic is pending legal verification and is currently unavailable for booking.',
       );
@@ -8302,6 +8318,227 @@ export class AppointmentsService {
           totalVisits: parseInt(patient.totalVisits, 10),
           lastDiagnosis,
           lastAppointmentStatus,
+        };
+      }),
+    );
+
+    return {
+      total,
+      page,
+      limit,
+      patients: patientsWithDetails,
+    };
+  }
+
+  /**
+   * Get doctor's patient history
+   *
+   * Retrieves list of all patients who have been examined by the doctor
+   * with summary statistics and last diagnosis
+   *
+   * @param staffId - Staff account UUID
+   * @param queryDto - Query parameters (search, pagination, sorting)
+   * @returns Paginated list of patients with visit summary
+   */
+  async getStaffPatientHistory(
+    staffId: string,
+    queryDto: DoctorPatientHistoryQueryDto,
+  ): Promise<DoctorPatientHistoryResponseDto> {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      sort_by = 'last_visit_date',
+      order = 'DESC',
+    } = queryDto;
+    const skip = (page - 1) * limit;
+
+    // Get staff account and clinicId
+    const staffAccount = await this.accountRepository.findAccountById(staffId);
+    if (!staffAccount || !staffAccount.parentId) {
+      throw new NotFoundException(MESSAGES.failMessage.accountNotFound);
+    }
+    const clinicId = staffAccount.parentId;
+
+    // Build query to get distinct patients with statistics for the clinic
+    const queryBuilder = this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .leftJoin('appointment.patient', 'patient')
+      .leftJoin('patient.generalAccount', 'generalAccount')
+      .where('appointment.clinic_id = :clinicId', { clinicId })
+      .andWhere('appointment.deleted_at IS NULL')
+      .andWhere('appointment.status IN (:...statuses)', {
+        statuses: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
+      })
+      .select('patient._id', 'patientId')
+      .addSelect('patient.email', 'email')
+      .addSelect('patient.phone', 'phone')
+      .addSelect('generalAccount.fullName', 'fullName')
+      .addSelect('generalAccount.dob', 'dateOfBirth')
+      .addSelect('generalAccount.gender', 'gender')
+      .addSelect('generalAccount.profilePicture', 'profilePicture')
+      .addSelect('MIN(appointment.appointmentDate)', 'firstVisitDate')
+      .addSelect('MAX(appointment.appointmentDate)', 'lastVisitDate')
+      .addSelect('COUNT(appointment._id)', 'totalVisits')
+      .groupBy('patient._id')
+      .addGroupBy('patient.email')
+      .addGroupBy('patient.phone')
+      .addGroupBy('generalAccount.fullName')
+      .addGroupBy('generalAccount.dob')
+      .addGroupBy('generalAccount.gender')
+      .addGroupBy('generalAccount.profilePicture');
+
+    // Add search filter if provided
+    if (search && search.trim()) {
+      queryBuilder.andWhere(
+        '(generalAccount.fullName ILIKE :search OR ' +
+          'patient.phone LIKE :searchExact OR ' +
+          'patient.email ILIKE :searchExact)',
+        { search: `%${search}%`, searchExact: `%${search}%` },
+      );
+    }
+
+    // Add sorting - use proper field names for ORDER BY
+    if (sort_by === 'patient_name') {
+      queryBuilder.orderBy('generalAccount.fullName', order as 'ASC' | 'DESC');
+    } else if (sort_by === 'total_visits') {
+      queryBuilder.orderBy('COUNT(appointment._id)', order as 'ASC' | 'DESC');
+    } else {
+      // Default: sort by lastVisitDate
+      queryBuilder.orderBy(
+        'MAX(appointment.appointmentDate)',
+        order as 'ASC' | 'DESC',
+      );
+    }
+
+    // Get total count
+    const totalQuery = queryBuilder.clone();
+    const totalResult = await totalQuery.getRawMany();
+    const total = totalResult.length;
+
+    // Add pagination
+    queryBuilder.offset(skip).limit(limit);
+
+    // Execute query
+    const patients = await queryBuilder.getRawMany();
+
+    // Get last diagnosis and last appointment status for each patient
+    const patientsWithDetails = await Promise.all(
+      patients.map(async (patient) => {
+        // Get last appointment in the clinic
+        const lastAppointment = await this.dataSource
+          .getRepository(Appointment)
+          .findOne({
+            where: {
+              patientId: patient.patientId,
+              clinicId: clinicId,
+              status: AppointmentStatus.COMPLETED,
+            },
+            relations: ['doctor', 'doctor.doctorInformation'],
+            order: { appointmentDate: 'DESC' },
+          });
+
+        let lastDiagnosis: string | null = null;
+        let lastAppointmentStatus = AppointmentStatus.COMPLETED;
+        let lastDoctorId: string | null = null;
+        let lastDoctorName: string | null = null;
+
+        if (lastAppointment) {
+          lastAppointmentStatus = lastAppointment.status;
+          lastDoctorName =
+            lastAppointment.doctor?.doctorInformation?.fullName || null;
+          lastDoctorId =
+            lastAppointment.doctor?.doctorInformation?.accountId || null;
+
+          // Try to get diagnosis from ERM Consultation
+          const lastConsultation = await this.dataSource
+            .getRepository(ERM)
+            .createQueryBuilder('erm')
+            .leftJoinAndSelect('erm.appointment', 'appointment')
+            .leftJoin(
+              'erm_consultations',
+              'consultation',
+              'consultation.erm_id = erm._id',
+            )
+            .where('erm.appointmentId = :appointmentId', {
+              appointmentId: lastAppointment._id,
+            })
+            .andWhere('erm.recordType = :recordType', {
+              recordType: ERMRecordType.CONSULTATION,
+            })
+            .andWhere('erm.status = :status', { status: ERMStatus.COMPLETED })
+            .addSelect('consultation.working_diagnosis', 'workingDiagnosis')
+            .getRawOne();
+
+          if (lastConsultation && lastConsultation.workingDiagnosis) {
+            // Extract diagnosis text from JSONB
+            const diagnosis = lastConsultation.workingDiagnosis;
+            if (typeof diagnosis === 'object' && diagnosis.primary) {
+              lastDiagnosis = diagnosis.primary;
+            } else if (typeof diagnosis === 'string') {
+              lastDiagnosis = diagnosis;
+            }
+          }
+        }
+
+        // Calculate age from date of birth
+        let age: number | null = null;
+        if (patient.dateOfBirth) {
+          const birthDate = new Date(patient.dateOfBirth);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (
+            monthDiff < 0 ||
+            (monthDiff === 0 && today.getDate() < birthDate.getDate())
+          ) {
+            age--;
+          }
+        }
+
+        // Get patient addresses
+        const addressesData = await this.dataSource.query(
+          `
+          SELECT _id, address, ward, ward_name, district, district_name, province, province_name
+          FROM addresses
+          WHERE account_id = $1
+            AND deleted_at IS NULL
+          ORDER BY created_at DESC
+          `,
+          [patient.patientId],
+        );
+
+        const addresses = addressesData.map((addr: any) => ({
+          id: addr._id,
+          address: addr.address,
+          ward: addr.ward,
+          wardName: addr.ward_name,
+          district: addr.district,
+          districtName: addr.district_name,
+          province: addr.province,
+          provinceName: addr.province_name,
+        }));
+
+        return {
+          patientId: patient.patientId,
+          fullName: patient.fullName || 'Unknown',
+          dateOfBirth: patient.dateOfBirth
+            ? this.formatDate(patient.dateOfBirth)
+            : null,
+          age,
+          gender: patient.gender || null,
+          phone: patient.phone || null,
+          email: patient.email || 'No email',
+          profileImageUrl: patient.profilePicture || null,
+          addresses,
+          firstVisitDate: this.formatDate(patient.firstVisitDate),
+          lastVisitDate: this.formatDate(patient.lastVisitDate),
+          totalVisits: parseInt(patient.totalVisits, 10),
+          lastDiagnosis,
+          lastAppointmentStatus,
+          lastDoctorId,
+          lastDoctorName,
         };
       }),
     );
@@ -8852,6 +9089,8 @@ export class AppointmentsService {
           epd.medicine_id,
           m.name as medicine_name,
           m.therapeutic_class,
+          epd.quantity,
+          epd.note,
           epd.check_out,
           m.habit_forming,
           m.side_effect
@@ -8869,6 +9108,8 @@ export class AppointmentsService {
           detail_id: med.detail_id,
           medicine_id: med.medicine_id,
           medicine_name: med.medicine_name,
+          quantity: med.quantity,
+          note: med.note,
           unit: null, // Unit field doesn't exist in Medicine entity
           therapeutic_class: med.therapeutic_class || null,
           check_out: med.check_out,

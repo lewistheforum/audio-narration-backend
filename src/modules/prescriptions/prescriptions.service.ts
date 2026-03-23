@@ -23,10 +23,18 @@ import { ERMRecordType, ERMStatus } from './enums';
 import { MedicineRepository } from './repositories';
 import { CreateMedicineDto } from './dto/create-medicine.dto';
 import { UpdateMedicineDto } from './dto/update-medicine.dto';
-import { CreatePrescriptionDto, PrescriptionResponseDto, PrescriptionMedicineDetailDto } from './dto';
+import {
+  CreatePrescriptionDto,
+  PrescriptionResponseDto,
+  PrescriptionMedicineDetailDto,
+} from './dto';
 import { PaginatedMedicinesResponseDto } from './dto/paginated-medicines-response.dto';
 import { PatientEPrescriptionDetailResponseDto } from './dto/patient-e-prescription-response.dto';
-import { getCurrentVietnamTime, getStartOfDay, getEndOfDay } from 'src/common/utils/date.util';
+import {
+  getCurrentVietnamTime,
+  getStartOfDay,
+  getEndOfDay,
+} from 'src/common/utils/date.util';
 import {
   PatientERMDetailResponseDto,
   ERMXrayDto,
@@ -41,9 +49,9 @@ import { MESSAGES } from '../../common/message';
 
 /**
  * Prescriptions Service
- * 
+ *
  * Handles business logic for medicine management and E-Prescriptions
- * 
+ *
  * Features:
  * - Medicine CRUD operations
  * - Electronic Prescriptions (E-Prescriptions)
@@ -77,7 +85,7 @@ export class PrescriptionsService {
     private readonly ermProcedureRepository: Repository<ERMProcedure>,
     private readonly dataSource: DataSource,
     private readonly pdfGeneratorService: PdfGeneratorService,
-  ) { }
+  ) {}
 
   /**
    * Create a new medicine record
@@ -157,7 +165,10 @@ export class PrescriptionsService {
   /**
    * Update medicine record
    */
-  async update(id: string, updateMedicineDto: UpdateMedicineDto): Promise<Medicine> {
+  async update(
+    id: string,
+    updateMedicineDto: UpdateMedicineDto,
+  ): Promise<Medicine> {
     return await this.medicineRepository.updateMedicine(id, updateMedicineDto);
   }
 
@@ -246,16 +257,23 @@ export class PrescriptionsService {
 
     // Verify doctor has permission
     if (appointment.doctorId !== doctorId) {
-      throw new BadRequestException('You do not have permission to create prescription for this appointment');
+      throw new BadRequestException(
+        'You do not have permission to create prescription for this appointment',
+      );
     }
 
     // Check appointment status
-    if (appointment.status !== 'IN_PROGRESS' && appointment.status !== 'CHECKED_IN') {
-      throw new BadRequestException('Can only create/update prescription when appointment is IN_PROGRESS or CHECKED_IN');
+    if (
+      appointment.status !== 'IN_PROGRESS' &&
+      appointment.status !== 'CHECKED_IN'
+    ) {
+      throw new BadRequestException(
+        'Can only create/update prescription when appointment is IN_PROGRESS or CHECKED_IN',
+      );
     }
 
     // Validate all medicines exist and not deleted
-    const medicineIds = medicines.map(m => m.medicineId);
+    const medicineIds = medicines.map((m) => m.medicineId);
     const validMedicines = await this.dataSource
       .getRepository(Medicine)
       .createQueryBuilder('medicine')
@@ -264,19 +282,21 @@ export class PrescriptionsService {
       .getMany();
 
     if (validMedicines.length !== medicineIds.length) {
-      const foundIds = validMedicines.map(m => m.id);
-      const missingIds = medicineIds.filter(id => !foundIds.includes(id));
-      throw new NotFoundException(`Medicines not found or deleted: ${missingIds.join(', ')}`);
+      const foundIds = validMedicines.map((m) => m.id);
+      const missingIds = medicineIds.filter((id) => !foundIds.includes(id));
+      throw new NotFoundException(
+        `Medicines not found or deleted: ${missingIds.join(', ')}`,
+      );
     }
 
     // Check for habit-forming medicines
-    const habitFormingMedicines = validMedicines.filter(m => m.habitForming);
+    const habitFormingMedicines = validMedicines.filter((m) => m.habitForming);
     const hasHabitForming = habitFormingMedicines.length > 0;
 
     if (hasHabitForming) {
       console.warn(
         `[PRESCRIPTION] Habit-forming medicines detected in prescription for appointment ${appointmentId}:`,
-        habitFormingMedicines.map(m => m.name).join(', ')
+        habitFormingMedicines.map((m) => m.name).join(', '),
       );
     }
 
@@ -295,29 +315,39 @@ export class PrescriptionsService {
         .getRepository(DetailEPrescription)
         .createQueryBuilder()
         .softDelete()
-        .where('e_prescription_id = :prescriptionId', { prescriptionId: existingPrescription._id })
+        .where('e_prescription_id = :prescriptionId', {
+          prescriptionId: existingPrescription._id,
+        })
         .execute();
 
       // Update prescription (updatedAt will be set automatically by @UpdateDateColumn)
       existingPrescription.doctorNote = doctorNote;
-      prescription = await this.dataSource.getRepository(EPrescription).save(existingPrescription);
+      prescription = await this.dataSource
+        .getRepository(EPrescription)
+        .save(existingPrescription);
     } else {
       // CREATE logic: Generate reference ID and create new prescription
       const referenceId = await this.generateReferenceId();
-      
-      const newPrescription = this.dataSource.getRepository(EPrescription).create({
-        appointmentId,
-        referenceId,
-        doctorNote,
-      });
 
-      prescription = await this.dataSource.getRepository(EPrescription).save(newPrescription);
+      const newPrescription = this.dataSource
+        .getRepository(EPrescription)
+        .create({
+          appointmentId,
+          referenceId,
+          doctorNote,
+        });
+
+      prescription = await this.dataSource
+        .getRepository(EPrescription)
+        .save(newPrescription);
     }
 
     // Create new detail records
-    const detailRecords = medicines.map(med => ({
+    const detailRecords = medicines.map((med) => ({
       ePrescriptionId: prescription._id,
       medicineId: med.medicineId,
+      quantity: med.quantity,
+      note: med.note,
       checkOut: med.checkOut,
     }));
 
@@ -356,7 +386,9 @@ export class PrescriptionsService {
 
     // Verify doctor has permission
     if (appointment.doctorId !== doctorId) {
-      throw new BadRequestException('You do not have permission to view this prescription');
+      throw new BadRequestException(
+        'You do not have permission to view this prescription',
+      );
     }
 
     // Find prescription
@@ -367,7 +399,9 @@ export class PrescriptionsService {
       });
 
     if (!prescription) {
-      throw new NotFoundException('Prescription not found for this appointment');
+      throw new NotFoundException(
+        'Prescription not found for this appointment',
+      );
     }
 
     // Get all details with medicine info
@@ -375,20 +409,28 @@ export class PrescriptionsService {
       .getRepository(DetailEPrescription)
       .createQueryBuilder('detail')
       .leftJoinAndSelect('detail.medicine', 'medicine')
-      .where('detail.e_prescription_id = :prescriptionId', { prescriptionId: prescription._id })
+      .where('detail.e_prescription_id = :prescriptionId', {
+        prescriptionId: prescription._id,
+      })
       .andWhere('detail.deleted_at IS NULL')
       .getMany();
 
     // Map to response DTOs
-    const medicineDetails: PrescriptionMedicineDetailDto[] = details.map(detail => ({
-      detailId: detail._id,
-      medicineId: detail.medicineId,
-      medicineName: detail.medicine?.name || 'Unknown Medicine',
-      habitForming: detail.medicine?.habitForming || false,
-      checkOut: detail.checkOut || '',
-    }));
+    const medicineDetails: PrescriptionMedicineDetailDto[] = details.map(
+      (detail) => ({
+        detailId: detail._id,
+        medicineId: detail.medicineId,
+        medicineName: detail.medicine?.name || 'Unknown Medicine',
+        habitForming: detail.medicine?.habitForming || false,
+        quantity: detail.quantity,
+        note: detail.note,
+        checkOut: detail.checkOut || '',
+      }),
+    );
 
-    const hasHabitFormingMedicines = medicineDetails.some(m => m.habitForming);
+    const hasHabitFormingMedicines = medicineDetails.some(
+      (m) => m.habitForming,
+    );
 
     return {
       ePrescriptionId: prescription._id,
@@ -404,14 +446,14 @@ export class PrescriptionsService {
 
   /**
    * Get Patient E-Prescription Detail
-   * 
+   *
    * Retrieves the electronic prescription for a specific appointment
-   * 
+   *
    * Security & Validation:
    * - Layer 1: Verifies appointment ownership (patient_id matching)
    * - Layer 2: Enforces status rule (must be COMPLETED)
    * - Layer 3: Loads E-Prescription with details and medicines
-   * 
+   *
    * @param {string} patientId - Patient ID from JWT token
    * @param {string} appointmentId - Appointment ID from route params
    * @returns {Promise<PatientEPrescriptionDetailResponseDto>} E-Prescription details
@@ -488,14 +530,14 @@ export class PrescriptionsService {
 
   /**
    * Generate E-Prescription PDF
-   * 
+   *
    * Exports electronic prescription as a PDF document with medical/legal compliance
-   * 
+   *
    * Validation & Data Flow:
    * - Layer 1-2: Reuses getPatientEPrescription() for ownership + status validation
    * - Layer 3: Aggregates clinic, doctor, patient metadata for PDF header/footer
    * - Layer 4: Generates PDF using PdfGeneratorService
-   * 
+   *
    * @param {string} patientId - Patient ID from JWT token
    * @param {string} appointmentId - Appointment ID from route params
    * @returns {Promise<Buffer>} PDF binary data
@@ -538,12 +580,28 @@ export class PrescriptionsService {
       ])
       .from('appointments', 'a')
       .innerJoin('accounts', 'clinic', 'clinic._id = a.clinic_id')
-      .leftJoin('clinic_information', 'clinic_info', 'clinic_info.account_id = clinic._id')
-      .leftJoin('addresses', 'clinic_addr', 'clinic_addr.account_id = clinic._id')
+      .leftJoin(
+        'clinic_information',
+        'clinic_info',
+        'clinic_info.account_id = clinic._id',
+      )
+      .leftJoin(
+        'addresses',
+        'clinic_addr',
+        'clinic_addr.account_id = clinic._id',
+      )
       .innerJoin('accounts', 'doctor', 'doctor._id = a.doctor_id')
-      .leftJoin('doctor_information', 'doctor_info', 'doctor_info.account_id = doctor._id')
+      .leftJoin(
+        'doctor_information',
+        'doctor_info',
+        'doctor_info.account_id = doctor._id',
+      )
       .innerJoin('accounts', 'patient', 'patient._id = a.patient_id')
-      .leftJoin('general_accounts', 'patient_info', 'patient_info.account_id = patient._id')
+      .leftJoin(
+        'general_accounts',
+        'patient_info',
+        'patient_info.account_id = patient._id',
+      )
       .where('a._id = :appointmentId', { appointmentId })
       .getRawOne();
 
@@ -564,15 +622,15 @@ export class PrescriptionsService {
 
   /**
    * Get Patient ERM Detail (Polymorphic Retrieval)
-   * 
+   *
    * Retrieves specific ERM record details with strict validation
-   * 
+   *
    * Security & Validation (4 Layers):
    * - Layer 1: Verify appointment ownership (patient_id matching)
    * - Layer 2: Verify ERM belongs to appointment
    * - Layer 3: Enforce visibility rule (status must be COMPLETED)
    * - Layer 4: Fetch polymorphic child record based on record_type
-   * 
+   *
    * @param {string} patientId - Patient ID from JWT token
    * @param {string} appointmentId - Appointment ID from route params
    * @param {string} ermId - ERM ID from route params
@@ -703,9 +761,9 @@ export class PrescriptionsService {
 
   /**
    * Map ERM Details to DTO (Private Helper)
-   * 
+   *
    * Safely maps raw database entities to corresponding typed DTOs
-   * 
+   *
    * @param {ERMRecordType} recordType - Type of ERM record
    * @param {any} details - Raw entity data
    * @returns {ERMXrayDto | ERMLabDto | ERMConsultationDto | ERMUltrasoundDto | ERMBoneDensityDto | ERMProcedureDto}
@@ -850,5 +908,3 @@ export class PrescriptionsService {
     }
   }
 }
-
-

@@ -9,6 +9,7 @@ import {
   HttpStatus,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,12 +20,12 @@ import {
 } from '@nestjs/swagger';
 import { ErmsService } from './erms.service';
 import { PrescriptionsService } from './prescriptions.service';
-import { 
-  InitializeErmDto, 
-  ErmResponseDto, 
-  SaveErmDataDto, 
-  SaveErmResponseDto, 
-  CreatePrescriptionDto, 
+import {
+  InitializeErmDto,
+  ErmResponseDto,
+  SaveErmDataDto,
+  SaveErmResponseDto,
+  CreatePrescriptionDto,
   PrescriptionResponseDto,
   DoctorERMDetailResponseDto,
 } from './dto';
@@ -38,6 +39,7 @@ import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountRole } from '../accounts/enums';
+import { DoctorPatientAppointmentsQueryDto } from '../appointments/dto';
 
 /**
  * ERMs Controller
@@ -52,7 +54,7 @@ import { AccountRole } from '../accounts/enums';
 @ApiTags('ERMs (Electronic Medical Records)')
 @Controller('erms')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(AccountRole.DOCTOR)
+@Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
 @ApiBearerAuth('JWT-auth')
 export class ErmsController {
   constructor(
@@ -153,7 +155,8 @@ export class ErmsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Doctor does not have permission or unknown record type',
+    description:
+      'Bad Request - Doctor does not have permission or unknown record type',
   })
   @ApiResponse({
     status: 401,
@@ -216,7 +219,8 @@ export class ErmsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Doctor does not have permission or ERM is completed',
+    description:
+      'Bad Request - Doctor does not have permission or ERM is completed',
   })
   @ApiResponse({
     status: 401,
@@ -271,7 +275,8 @@ export class ErmsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Invalid data, doctor permission denied, or appointment not in correct status',
+    description:
+      'Bad Request - Invalid data, doctor permission denied, or appointment not in correct status',
   })
   @ApiResponse({
     status: 401,
@@ -316,7 +321,7 @@ export class ErmsController {
    */
   @Get('appointments/:appointmentId/prescriptions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR)
+  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -355,8 +360,10 @@ export class ErmsController {
   async getPrescription(
     @Request() req: any,
     @Param('appointmentId') appointmentId: string,
+    @Query() queryDto: DoctorPatientAppointmentsQueryDto,
   ): Promise<PrescriptionResponseDto> {
-    const doctorId = req.user._id;
+    const doctorId = queryDto.doctor_id ? queryDto.doctor_id : req.user._id;
+
     return this.prescriptionsService.getPrescription(appointmentId, doctorId);
   }
 
@@ -374,7 +381,7 @@ export class ErmsController {
    */
   @Put('appointments/:appointmentId/prescriptions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AccountRole.DOCTOR)
+  @Roles(AccountRole.DOCTOR, AccountRole.CLINIC_STAFF)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -391,7 +398,8 @@ export class ErmsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad Request - Invalid data, doctor permission denied, or appointment completed',
+    description:
+      'Bad Request - Invalid data, doctor permission denied, or appointment completed',
   })
   @ApiResponse({
     status: 401,
@@ -403,7 +411,8 @@ export class ErmsController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Not Found - Appointment, prescription, or medicines not found',
+    description:
+      'Not Found - Appointment, prescription, or medicines not found',
   })
   @ApiParam({
     name: 'appointmentId',
@@ -453,7 +462,8 @@ export class ErmsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User is not a doctor or does not have access to this ERM',
+    description:
+      'Forbidden - User is not a doctor or does not have access to this ERM',
   })
   @ApiResponse({
     status: 404,
@@ -468,8 +478,9 @@ export class ErmsController {
   async getDoctorERMDetail(
     @Request() req: any,
     @Param('ermId') ermId: string,
+    @Query() queryDto: DoctorPatientAppointmentsQueryDto,
   ): Promise<DoctorERMDetailResponseDto> {
-    const doctorId = req.user._id;
+    const doctorId = queryDto.doctor_id ? queryDto.doctor_id : req.user._id;
     return this.ermsService.getDoctorERMDetail(ermId, doctorId);
   }
 }
