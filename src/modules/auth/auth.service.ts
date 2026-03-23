@@ -16,6 +16,7 @@ import {
   ForgotPasswordDto,
   VerifyResetPasswordDto,
   SetNewPasswordDto,
+  SetInitialPasswordDto,
 } from './dto';
 import { randomBytes } from 'crypto';
 import { CodeVerificationRepository } from '../accounts/repositories';
@@ -163,7 +164,7 @@ export class AuthService {
       userId = user._id;
       userEmail = user.email;
     } else {
-        // Create new patient account via Google OAuth
+        // Create new patient account via Google OAuth - require initial password setup
         const randomPassword = randomBytes(16).toString('hex');
 
         // Construct fullName from first and last name
@@ -183,6 +184,19 @@ export class AuthService {
         generalAccount = await this.AccountsService.findGeneralAccountByUserId(
           userId,
         );
+
+        // Generate temporary setup token for new OAuth user
+        const setupToken = this.jwtService.sign(
+          { userId, email: userEmail, type: 'INITIAL_PWD_SETUP' },
+          { expiresIn: '15m' },
+        );
+
+        return {
+          requirePasswordSetup: true,
+          setupToken: setupToken,
+          userId: userId,
+          email: userEmail,
+        };
       }
 
       user = await this.AccountsService.findAccountEntityById(userId);
@@ -234,4 +248,86 @@ export class AuthService {
     };
   }
 
+  /**
+   * Set Initial Password for New OAuth User
+   *
+   * Completes the forced password setup flow for new Google OAuth users.
+   * Validates the temporary setup token, hashes the provided password,
+   * updates the user entity, and returns full access tokens.
+   *
+   * Security Features:
+   * - Temporary token expires after 15 minutes
+   * - Token type must be 'INITIAL_PWD_SETUP'
+   * - User must be OAuth user with no password set
+   * - Password is hashed with bcrypt before storage
+   *
+   * @param {SetInitialPasswordDto} dto - Contains temporary token and new password
+   * @returns {Promise<{accessToken: string, userId: string, user: AccountResponseDto}>} Full auth tokens
+   * @throws {UnauthorizedException} If token is invalid or expired
+   * @throws {BadRequestException} If user is not OAuth-only or already has password
+   *
+   * @example
+   * ```typescript
+   * const result = await authService.setInitialPasswordForOAuthUser({
+   *   token: 'eyJhbGciOiJIUzI1NiIs...',
+   *   password: 'SecureP@ss123'
+   * });
+   * // Returns full access token and user data
+   * ```
+   */
+  async setInitialPasswordForOAuthUser(dto: SetInitialPasswordDto): Promise<{
+    data: {
+      accessToken: string;
+      userId: string;
+      user: AccountResponseDto;
+    };
+    message: string;
+  }> {
+    let decoded: any;
+    try {
+      decoded = this.jwtService.verify(dto.token);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired setup token');
+    }
+
+    if (decoded.type !== 'INITIAL_PWD_SETUP') {
+      throw new UnauthorizedException('Invalid token type');
+    }
+
+    const user = await this.AccountsService.findAccountEntityById(decoded.userId);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (!user.isOAuthUser || user.password) {
+      throw new BadRequestException(
+        'This account does not require initial password setup',
+      );
+    }
+
+    user.password = await bcrypt.hash(dto.password, 10);
+    await this.AccountsService.updateAccountEntity(user);
+
+    const generalAccount = await this.AccountsService.findGeneralAccountByUserId(
+      user._id,
+    );
+
+    this.AccountsService.validateAccountAccess(user);
+    await this.AccountsService.validateClinicSubscription(user);
+
+    const payload = await this.buildJwtPayload(user);
+    const accessToken = this.jwtService.sign(payload);
+
+    this.socketGatewayService.markUserOnline(String(user._id));
+
+    return {
+      data: {
+        accessToken: accessToken,
+        userId: user._id,
+        user: new AccountResponseDto(user, generalAccount),
+      },
+      message: 'Password set successfully. You can now login with email/password or Google.',
+    };
   }
+
+}

@@ -2005,56 +2005,160 @@ export class AccountsService {
   /**
    * Validate Parent Manager Status for Login
    *
-   * Ensures Staff/Doctor cannot login if their parent Manager is disabled.
-   * Implements cascading access control based on account hierarchy.
+   * Ensures Staff/Doctor/Manager cannot login if their parent is disabled.
+   * Implements cascading access control based on account hierarchy:
+   *
+   * 1. Direct Ban: If account itself is banned/inactive, block login
+   * 2. Admin Ban Cascade: If CLINIC_ADMIN is banned, all children (Manager/Staff/Doctor) are blocked
+   * 3. Manager Ban Cascade: If CLINIC_MANAGER is banned, all children (Staff/Doctor) are blocked
+   * 4. Legal Document Rule: If CLINIC_MANAGER's legal docs are not APPROVED, block all children
+   *
+   * Hierarchy Flow:
+   * - CLINIC_ADMIN (parentId = null, is root)
+   *   └── CLINIC_MANAGER (parentId = CLINIC_ADMIN._id)
+   *       └── CLINIC_STAFF (parentId = CLINIC_MANAGER._id)
+   *       └── DOCTOR (parentId = CLINIC_MANAGER._id)
    *
    * @param account - Account attempting to login
-   * @throws {ForbiddenException} If parent manager is disabled or pending approval
+   * @throws {ForbiddenException} If parent hierarchy blocks login
    */
   async validateParentManagerStatus(account: Account): Promise<void> {
-    // Only check for Staff and Doctor roles
+    // PATIENT, ADMIN, and CLINIC_ADMIN skip hierarchical checks
     if (
-      account.role !== AccountRole.CLINIC_STAFF &&
-      account.role !== AccountRole.DOCTOR
+      account.role === AccountRole.PATIENT ||
+      account.role === AccountRole.ADMIN ||
+      account.role === AccountRole.CLINIC_ADMIN
     ) {
       return;
     }
 
-    // Verify parentId exists
-    if (!account.parentId) {
-      throw new ForbiddenException(
-        'Account hierarchy error. No parent manager found.',
+    // === CLINIC_MANAGER: Check parent CLINIC_ADMIN status ===
+    if (account.role === AccountRole.CLINIC_MANAGER) {
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No parent admin found.',
+        );
+      }
+
+      const parentAdmin = await this.accountRepository.findAccountById(
+        account.parentId,
       );
+
+      if (!parentAdmin) {
+        throw new ForbiddenException(
+          'Parent admin not found. Please contact support.',
+        );
+      }
+
+      // Check if parent CLINIC_ADMIN is banned
+      if (parentAdmin.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'The clinic network has been suspended. Please contact support for assistance.',
+        );
+      }
+
+      if (parentAdmin.status === AccountStatus.DELETED) {
+        throw new ForbiddenException(
+          'The clinic network has been deleted. Please contact support.',
+        );
+      }
+
+      // Check CLINIC_MANAGER's own legal documents status
+      const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        account._id,
+      );
+
+      if (
+        !legalDocs ||
+        legalDocs.verificationStatus !== LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          'Your clinic branch\'s legal documents are pending approval or rejected. ' +
+          'Login is currently disabled. Please contact your administrator.',
+        );
+      }
+
+      return;
     }
 
-    // Fetch parent Manager account
-    const parentManager = await this.accountRepository.findAccountById(
-      account.parentId,
-    );
+    // === CLINIC_STAFF and DOCTOR: Check parent CLINIC_MANAGER status ===
+    if (
+      account.role === AccountRole.CLINIC_STAFF ||
+      account.role === AccountRole.DOCTOR
+    ) {
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No parent manager found.',
+        );
+      }
 
-    if (!parentManager) {
-      throw new ForbiddenException(
-        'Parent manager not found. Please contact support.',
+      const parentManager = await this.accountRepository.findAccountById(
+        account.parentId,
       );
-    }
 
-    // Block login if parent Manager is MANAGER_DISABLED
-    if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
-      throw new ForbiddenException(
-        'Your clinic branch has been temporarily disabled. ' +
+      if (!parentManager) {
+        throw new ForbiddenException(
+          'Parent manager not found. Please contact support.',
+        );
+      }
+
+      // Check if parent CLINIC_MANAGER is banned/disabled
+      if (parentManager.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'Your clinic branch has been suspended. Please contact support.',
+        );
+      }
+
+      if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
+        throw new ForbiddenException(
+          'Your clinic branch has been temporarily disabled. ' +
           'Please contact your clinic administrator for assistance.',
-      );
-    }
+        );
+      }
 
-    // Block login if parent Manager is PENDING_APPROVAL
-    if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
-      throw new ForbiddenException(
-        'Your clinic branch is pending legal document approval. ' +
+      if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
+        throw new ForbiddenException(
+          'Your clinic branch is pending legal document approval. ' +
           'You will be able to login once verification is complete.',
-      );
-    }
+        );
+      }
 
-    // Allow login if parent is ACTIVE
+      // Trace up to check grandparent CLINIC_ADMIN status
+      if (parentManager.parentId) {
+        const grandParentAdmin = await this.accountRepository.findAccountById(
+          parentManager.parentId,
+        );
+
+        if (grandParentAdmin && grandParentAdmin.status === AccountStatus.BAN) {
+          throw new ForbiddenException(
+            'The clinic network has been suspended. Please contact support for assistance.',
+          );
+        }
+
+        if (grandParentAdmin && grandParentAdmin.status === AccountStatus.DELETED) {
+          throw new ForbiddenException(
+            'The clinic network has been deleted. Please contact support.',
+          );
+        }
+      }
+
+      // Check CLINIC_MANAGER's legal documents status
+      const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        parentManager._id,
+      );
+
+      if (
+        !legalDocs ||
+        legalDocs.verificationStatus !== LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          'The clinic branch\'s legal documents are pending approval or rejected. ' +
+          'Login is currently disabled. Please contact your administrator.',
+        );
+      }
+
+      return;
+    }
   }
 
   /**
@@ -2552,13 +2656,21 @@ export class AccountsService {
    * - Type: RESET verification
    *
    * Business Rules:
-   * - OAuth-only accounts (no password set) cannot reset password
+  /**
+   * Initiate Password Reset Process
+   *
+   * Generates a verification code for password reset workflow.
+   * This method is the first step in the password reset flow.
+   *
+   * Security Rules:
+   * - Pure OAuth accounts (isOAuthUser=true, password=NULL) cannot reset password
+   * - Hybrid accounts (isOAuthUser=true, password!=NULL) ARE allowed to reset password
    * - Code expires after 15 minutes for security
    *
    * @param {string} email - Account email address
    * @returns {Promise<{code: string, user: Account}>} Generated reset code and account data
    * @throws {NotFoundException} If account does not exist
-   * @throws {BadRequestException} If account is OAuth-only
+   * @throws {BadRequestException} If account is pure OAuth (no password set)
    *
    * @example
    * ```typescript
@@ -2578,7 +2690,7 @@ export class AccountsService {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
 
-    // OAuth users cannot reset password (they don't have one)
+    // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
     if (account.isOAuthUser && !account.password) {
       throw new BadRequestException(
         MESSAGES.failMessage.oauthUserCannotResetPassword,
@@ -2623,7 +2735,7 @@ export class AccountsService {
    *
    * Workflow:
    * 1. Find account by email
-   * 2. Validate account is not OAuth-only
+   * 2. Validate account is not pure OAuth (has password)
    * 3. Find most recent unused RESET code
    * 4. Validate code hasn't expired (15 minutes)
    * 5. Mark code as used
@@ -2633,13 +2745,13 @@ export class AccountsService {
    * - Code expires after 15 minutes
    * - One-time use (prevents code reuse)
    * - Password is hashed with bcrypt before storage
-   * - OAuth-only accounts are blocked
+   * - Pure OAuth accounts (no password) are blocked, hybrid accounts are allowed
    *
    * @param {string} email - Account email address
    * @param {string} newPassword - New password (validated by DTO)
    * @returns {Promise<void>} No return value
    * @throws {NotFoundException} If account does not exist
-   * @throws {BadRequestException} If account is OAuth-only
+   * @throws {BadRequestException} If account is pure OAuth (no password set)
    * @throws {UnauthorizedException} If code is invalid or expired
    *
    * @example
@@ -2662,8 +2774,8 @@ export class AccountsService {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
 
-    // OAuth users cannot reset password
-    if (account.isOAuthUser) {
+    // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
+    if (account.isOAuthUser && !account.password) {
       throw new BadRequestException(
         MESSAGES.failMessage.oauthUserCannotResetPassword,
       );
