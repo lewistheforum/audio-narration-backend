@@ -33,6 +33,18 @@ export class PrescriptionMedicineDetailDto {
   habitForming: boolean;
 
   @ApiProperty({
+    description: 'Quantity of medicines',
+    example: '10',
+  })
+  quantity: number;
+
+  @ApiProperty({
+    description: 'Usage instructions',
+    example: 'Uống 2 viên/lần, ngày 3 lần, sau ăn. Dùng trong 7 ngày',
+  })
+  note: string;
+
+  @ApiProperty({
     description: 'Usage instructions',
     example: 'Uống 2 viên/lần, ngày 3 lần, sau ăn. Dùng trong 7 ngày',
   })

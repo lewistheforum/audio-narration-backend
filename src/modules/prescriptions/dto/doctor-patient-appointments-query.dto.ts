@@ -1,7 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsOptional, IsInt, Min, IsEnum, IsDateString } from 'class-validator';
-import { AppointmentStatus } from '../enums';
 
 /**
  * Doctor Patient Appointments Query DTO

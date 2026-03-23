@@ -99,6 +99,13 @@ export class DoctorPatientSummaryDto {
     example: AppointmentStatus.COMPLETED,
   })
   lastAppointmentStatus: AppointmentStatus;
+
+  @ApiProperty({
+    description: 'Doctor name from the last appointment',
+    example: 'Dr. John Smith',
+    nullable: true,
+  })
+  lastDoctorName?: string | null;
 }
 
 /**

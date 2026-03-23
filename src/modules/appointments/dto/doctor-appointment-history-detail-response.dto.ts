@@ -433,6 +433,20 @@ export class PrescriptionMedicineDto {
   therapeutic_class: string | null;
 
   @ApiProperty({
+    description: 'Unit (not available in current schema)',
+    example: 'viên',
+    nullable: true,
+  })
+  quantity: number;
+
+  @ApiProperty({
+    description: 'Note (not available in current schema)',
+    example: 'Không dùng cho người mẫn cảm với paracetamol',
+    nullable: true,
+  })
+  note: string;
+
+  @ApiProperty({
     description: 'Usage instructions',
     example: 'Uống 1-2 viên mỗi 4-6 giờ khi đau hoặc sốt',
   })
@@ -515,7 +529,7 @@ export class AppointmentPrescriptionDto {
 
 /**
  * Doctor Appointment History Detail Response DTO
- * 
+ *
  * Complete appointment detail for doctor's patient history view
  */
 export class DoctorAppointmentHistoryDetailResponseDto {

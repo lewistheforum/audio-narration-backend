@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
 
 /**
  * Medicine Item DTO
@@ -14,6 +14,22 @@ export class MedicineItemDto {
   @IsNotEmpty()
   @IsUUID('4')
   medicineId: string;
+
+  @ApiProperty({
+    description: 'Quantity of the medicine',
+    example: '10',
+  })
+  @IsNotEmpty()
+  @IsNumber()
+  quantity: number;
+
+  @ApiProperty({
+    description: 'Note for the medicine',
+    example: 'Uống 2 viên/lần, ngày 3 lần, sau ăn. Dùng trong 7 ngày',
+  })
+  @IsNotEmpty()
+  @IsString()
+  note: string;
 
   @ApiProperty({
     description: 'Usage instructions (dosage, frequency, duration)',
