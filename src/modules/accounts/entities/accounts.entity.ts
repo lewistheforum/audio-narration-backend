@@ -147,7 +147,7 @@ export class Account {
   @Column({ name: 'phone', type: 'varchar', length: 20, nullable: true })
   phone?: string;
 
-  @Column({ name: 'password', type: 'varchar', length: 255 })
+  @Column({ name: 'password', type: 'varchar', length: 255, nullable: true })
   password: string;
 
   @Column({ name: 'is_OAuth_user', type: 'boolean', default: false })
