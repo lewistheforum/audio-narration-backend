@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Put,
+  Patch,
   Body,
   Get,
   UseGuards,
@@ -21,6 +22,7 @@ import {
   ResetPasswordDto,
   ResendVerificationDto,
   VerifyResetPasswordDto,
+  SetInitialPasswordDto,
 } from './dto';
 import {
   CreateClinicManagerForRegistrationDto,
@@ -145,10 +147,45 @@ export class AuthController {
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
     const redirectUrl = new URL(`${frontendUrl}/`);
-    redirectUrl.searchParams.set('token', tokenData.accessToken);
-    redirectUrl.searchParams.set('userId', tokenData.userId);
+
+    if (tokenData.requirePasswordSetup) {
+      redirectUrl.searchParams.set('requirePasswordSetup', 'true');
+      redirectUrl.searchParams.set('setupToken', tokenData.setupToken);
+      redirectUrl.searchParams.set('userId', tokenData.userId);
+    } else {
+      redirectUrl.searchParams.set('token', tokenData.accessToken);
+      redirectUrl.searchParams.set('userId', tokenData.userId);
+    }
 
     return res.redirect(redirectUrl.toString());
+  }
+
+  /**
+   * Set Initial Password for New OAuth User
+   *
+   * Completes the forced password setup flow for new Google OAuth users.
+   * Called after user clicks the link in their email or enters the setup token.
+   *
+   * @param setInitialPasswordDto - Contains temporary setup token and new password
+   * @returns Full access token and user data
+   */
+  @Patch('google/set-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Set initial password for new Google OAuth user',
+    description: 'Required for new Google users to establish a password. Token expires after 15 minutes.',
+  })
+  @ApiResponse({ status: 200, description: 'Password set successfully, returns full access token' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token, or password already set' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - invalid token' })
+  @ApiBody({ type: SetInitialPasswordDto })
+  async setInitialPassword(
+    @Body() setInitialPasswordDto: SetInitialPasswordDto,
+  ): Promise<{
+    data: { accessToken: string; userId: string; user: AccountResponseDto };
+    message: string;
+  }> {
+    return await this.authService.setInitialPasswordForOAuthUser(setInitialPasswordDto);
   }
 
   /**
