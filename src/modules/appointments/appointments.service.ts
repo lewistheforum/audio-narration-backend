@@ -117,6 +117,7 @@ import {
 import { AppointmentWebhookService } from './appointment-webhook.service';
 import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
 import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
+import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 
 /**
  * Appointments Service
@@ -142,6 +143,7 @@ export class AppointmentsService {
     private readonly bookingSessionService: BookingSessionService,
     private readonly mailerService: MailerService,
     private readonly appointmentWebhookService: AppointmentWebhookService,
+    private readonly socketGatewayService: SocketGatewayService,
     @Inject(forwardRef(() => TransactionsService))
     private readonly transactionsService: TransactionsService,
   ) {}
@@ -653,6 +655,15 @@ export class AppointmentsService {
       newStatus,
     );
 
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Appointment cancelled by patient',
+      },
+    );
+
     return this.transformToResponseDto(updatedAppointment);
   }
 
@@ -827,6 +838,15 @@ export class AppointmentsService {
     // Load services and clinic rooms
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Appointment cancelled by staff',
+      },
+    );
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -1612,6 +1632,15 @@ export class AppointmentsService {
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
 
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Appointment assigned to doctor',
+      },
+    );
+
     return this.transformToResponseDto(
       updatedAppointment,
       services,
@@ -1660,6 +1689,15 @@ export class AppointmentsService {
     // Load services and clinic rooms
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Patient checked in',
+      },
+    );
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -1711,6 +1749,15 @@ export class AppointmentsService {
     // Load services and clinic rooms
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Patient marked absent',
+      },
+    );
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -1783,6 +1830,15 @@ export class AppointmentsService {
     // Load services and clinic rooms
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Appointment accepted',
+      },
+    );
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -1857,6 +1913,15 @@ export class AppointmentsService {
     // Load services and clinic rooms
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      updatedAppointment.clinicId,
+      {
+        appointmentId: updatedAppointment._id,
+        status: updatedAppointment.status,
+        message: 'Appointment declined',
+      },
+    );
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -2734,6 +2799,15 @@ export class AppointmentsService {
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(appointment);
 
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      appointment.clinicId,
+      {
+        appointmentId: appointment._id,
+        status: appointment.status,
+        message: 'Appointment in progress',
+      },
+    );
+
     return this.transformToResponseDto(appointment, services, clinicRooms);
   }
 
@@ -3260,6 +3334,15 @@ export class AppointmentsService {
       }));
 
     // 12. Return response
+    this.socketGatewayService.broadcastAppointmentStatusChange(
+      appointment.clinicId,
+      {
+        appointmentId: appointment._id,
+        status: appointment.status,
+        message: 'Examination completed',
+      },
+    );
+
     return {
       appointmentId: appointment._id,
       appointmentStatus: appointment.status, // COMPLETED or NEED_FINAL_PAYMENT based on payment logic
@@ -7443,6 +7526,15 @@ export class AppointmentsService {
           {
             status: AppointmentPackageStatus.PAID,
             paymentType: PaymentType.COD,
+          },
+        );
+
+        this.socketGatewayService.broadcastAppointmentStatusChange(
+          appointment.clinicId,
+          {
+            appointmentId: appointment._id,
+            status: appointment.status,
+            message: 'Appointment COD completed',
           },
         );
 
