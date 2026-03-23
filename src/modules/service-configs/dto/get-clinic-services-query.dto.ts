@@ -34,7 +34,7 @@ export class GetClinicServicesQueryDto {
 
   @ApiProperty({
     description: 'Search by service name (fuzzy search)',
-    example: 'Khám',
+    example: 'Checkup',
     required: false,
   })
   @IsOptional()

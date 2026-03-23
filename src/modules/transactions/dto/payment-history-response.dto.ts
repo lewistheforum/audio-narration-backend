@@ -32,10 +32,10 @@ export class PaymentHistoryItemDto {
   @Transform(({ value }) => formatToVietnamTime(value))
   createdAt: Date;
 
-  @ApiProperty({ example: 'Phòng khám ABC', required: false })
+  @ApiProperty({ example: 'ABC Clinic', required: false })
   clinicName?: string;
 
-  @ApiProperty({ example: 'Nguyễn Văn A', required: false })
+  @ApiProperty({ example: 'John Doe', required: false })
   senderFullName?: string;
 
   @ApiProperty({ enum: ['MALE', 'FEMALE', 'OTHER'], required: false })

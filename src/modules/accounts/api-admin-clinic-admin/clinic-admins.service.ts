@@ -518,10 +518,6 @@ export class ClinicAdminsService {
   /**
    * Get list of feedbacks for clinics managed by this admin
    */
-
-  /**
-   * Get list of feedbacks for clinics managed by this admin
-   */
   async getFeedbacks(
     clinicAdminId: string,
   ): Promise<{ data: ClinicAdminFeedbackListDto; total: number }> {
@@ -623,29 +619,9 @@ export class ClinicAdminsService {
     clinicManagerId: string,
     feedbackId: string,
   ): Promise<ClinicAdminFeedbackDetailResponseDto> {
-    // const admin = await this.accountRepository.findOne({
-    //   where: { _id: clinicAdminId, role: AccountRole.CLINIC_ADMIN },
-    // });
-
-    // if (!admin) {
-    //   throw new NotFoundException(
-    //     `Clinic admin with ID ${clinicAdminId} not found.`,
-    //   );
-    // }
-
-    // Verify manager (clinic) exists under this admin context (if checking hierarchy is strict)
-    // However, if we just want to get detail by ID and we assume the feedback belongs to a manager who is under the admin...
-    // The user's prompt implies we are passing `clinicManagerId` now instead of `clinicAdminId` for `getFeedbacks`.
-    // But for `getFeedbackDetail`, the params were `(clinicManagerId, feedbackId)`.
-    // Let's stick to the current signature but update logic.
-
-    // Check if the feedback belongs to the clinic manager
-    // Actually, we can just query the feedback with all relations.
-
     const feedback = await this.feedbackRepository.findOne({
       where: {
         _id: feedbackId,
-        // If we want to strictly ensure it belongs to the passed managerId:
         clinicId: clinicManagerId,
       },
       relations: [
@@ -653,26 +629,13 @@ export class ClinicAdminsService {
         'clinic.clinicManagerInformation',
         'doctor',
         'doctor.generalAccount',
-        'doctor.doctorInformation', // Added doctor info
+        'doctor.doctorInformation',
       ],
     });
 
     if (!feedback) {
       throw new NotFoundException(`Feedback not found.`);
     }
-
-    // Fetch appointment separately to include its relations (patient)
-    // We can also use relations in feedbackRepository.findOne if we add relation to Feedback entity,
-    // but Appointment is manually joined via ID normally.
-    // Let's fetch appointment using its repository because Feedback might not have a direct relation setup in TypeORM for `appointment`.
-    // Looking at Feedback entity, it has `appointmentId` column but no `@ManyToOne` to Appointment yet?
-    // checking file... Yes, I saw `appointmentId` column but I didn't see a `appointment` relation property in the file snippet I read earlier?
-    // Wait, let me re-read Feedback entity to be sure.
-    // Accessing my memory of the file view:
-    // Line 24: @Column({ name: 'appointment_id', type: 'uuid' }) appointmentId: string;
-    // There was NO @ManyToOne for appointment in Feedback entity.
-
-    // So we MUST fetch appointment separately.
 
     const appointment = await this.appointmentRepository.findOne({
       where: { _id: feedback.appointmentId },

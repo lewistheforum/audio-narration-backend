@@ -21,17 +21,17 @@ export class BoneDensityFormTemplateDto {
         type: 'enum',
         required: true,
         options: ['LUMBAR_SPINE', 'TOTAL_HIP', 'FEMORAL_NECK', 'FOREARM'],
-        label: 'Vị trí đo',
+        label: 'Measurement Site',
       },
       bmdValue: {
         type: 'text',
         required: false,
-        label: 'Giá trị BMD',
+        label: 'BMD Value',
       },
       bmdUnit: {
         type: 'text',
         required: false,
-        label: 'Đơn vị (g/cm²)',
+        label: 'Unit (g/cm2)',
       },
       tScore: {
         type: 'number',
@@ -47,17 +47,17 @@ export class BoneDensityFormTemplateDto {
         type: 'enum',
         required: false,
         options: ['NORMAL', 'OSTEOPENIA', 'OSTEOPOROSIS'],
-        label: 'Phân loại WHO',
+        label: 'WHO Category',
       },
       fractureRiskComment: {
         type: 'textarea',
         required: false,
-        label: 'Nhận xét nguy cơ gãy xương',
+        label: 'Fracture Risk Comment',
       },
       recommendations: {
         type: 'textarea',
         required: false,
-        label: 'Các khuyến nghị',
+        label: 'Recommendations',
       },
     },
   })

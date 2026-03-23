@@ -37,8 +37,6 @@ import { AccountRole } from '../accounts/enums';
  */
 @ApiTags('Reports')
 @Controller('feedbacks')
-// @UseGuards(JwtAuthGuard)
-// @ApiBearerAuth('JWT-auth')
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}
 

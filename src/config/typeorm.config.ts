@@ -15,10 +15,7 @@ export const buildTypeOrmOptions = (
   entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
   synchronize: true,
   logging: false,
-  // Store timestamps with Vietnam timezone (GMT+7)
-  // PostgreSQL will store TIMESTAMPTZ in UTC but return values in this timezone
   extra: {
-    // Set PostgreSQL session timezone to Vietnam
     timezone: config.get('TZ') || 'Asia/Ho_Chi_Minh',
   },
   ssl:
@@ -42,13 +39,6 @@ export const AppDataSource = new DataSource({
   logging: process.env.NODE_ENV === 'development',
   // Store timestamps with Vietnam timezone (GMT+7)
   extra: {
-    // Set PostgreSQL session timezone to Vietnam
     timezone: process.env.TZ || 'Asia/Ho_Chi_Minh',
   },
-  // ssl:
-  //   process.env.POSTGRES_SSL === 'true'
-  //     ? {
-  //       rejectUnauthorized: false,
-  //     }
-  //     : false,
 });

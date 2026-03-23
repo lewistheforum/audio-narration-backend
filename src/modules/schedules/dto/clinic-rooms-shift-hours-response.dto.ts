@@ -57,7 +57,7 @@ export class ClinicRoomWithShiftHoursDto {
 
   @ApiProperty({
     description: 'Room name',
-    example: 'Phòng khám số 1',
+    example: 'Room 1',
   })
   roomName: string;
 

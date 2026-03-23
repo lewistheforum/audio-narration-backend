@@ -71,7 +71,7 @@ export class DoctorFeedbacksQueryDto {
 
   @ApiProperty({
     description: 'Search in feedback description',
-    example: 'rất tốt',
+    example: 'excellent',
     required: false,
   })
   @IsOptional()

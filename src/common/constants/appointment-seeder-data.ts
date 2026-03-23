@@ -243,6 +243,43 @@ export const PAYMENT_TYPES: PaymentType[] = [
   PaymentType.COD,
 ];
 
+/**
+ * Realistic English medical diagnoses for COMPLETED appointments
+ * Used by appointment seeder to generate doctor final diagnoses
+ */
+export const APPOINTMENT_DIAGNOSES = [
+  'Mild muscle strain in lumbar region',
+  'Lumbar sprain with muscle spasm',
+  'Early-stage osteoarthritis of the knee',
+  'Rotator cuff tendinitis',
+  'Patellofemoral pain syndrome',
+  'Plantar fasciitis',
+  'Lateral epicondylitis (tennis elbow)',
+  'Carpal tunnel syndrome',
+  'Mild cervical spondylosis',
+  'Acute low back pain',
+  'Ankle sprain (Grade I)',
+  'Shoulder impingement syndrome',
+  'Trochanteric bursitis',
+  'Meniscal tear (degenerative)',
+  'Degenerative disc disease of lumbar spine',
+  'Glenohumeral joint osteoarthritis',
+  'Achilles tendinitis',
+  'Trigger finger',
+  'De Quervain tenosynovitis',
+  'Hip osteoarthritis',
+  'Wrist contusion',
+  'Knee ligament sprain',
+  'Fibromyalgia',
+  'Osteoporosis',
+  'Scoliosis with chronic back pain',
+  'Herniated disc (L4-L5)',
+  'Frozen shoulder (adhesive capsulitis)',
+  'Bursitis of the elbow',
+  'Shin splints',
+  'Tendonitis',
+];
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================

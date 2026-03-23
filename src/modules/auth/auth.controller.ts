@@ -84,7 +84,6 @@ export class AuthController {
    * @param loginDto - User credentials (email & password)
    * @returns JWT access token and user information
    */
-  // Login
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })

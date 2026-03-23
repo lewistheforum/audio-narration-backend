@@ -45,7 +45,7 @@ export class CreatePatientNoEmailDto {
 
   @ApiProperty({
     description: 'Patient full name (Vietnamese characters allowed, used to generate email)',
-    example: 'Trần Văn D',
+    example: 'Jane Doe',
   })
   @IsNotEmpty({ message: 'Full name is required' })
   @IsString({ message: 'Full name must be a string' })

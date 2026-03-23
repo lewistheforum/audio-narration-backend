@@ -144,9 +144,7 @@ export class AppointmentsController {
     private readonly appointmentsService: AppointmentsService,
     private readonly bookingSessionService: BookingSessionService,
     private readonly prescriptionsService: PrescriptionsService,
-  ) {
-    console.log('✅ AppointmentsController initialized');
-  }
+  ) {}
 
   /**
    * Get all appointments for staff's clinic
@@ -1063,11 +1061,13 @@ export class AppointmentsController {
   async completeExamination(
     @Request() req: any,
     @Param('id', ParseUUIDPipe) appointmentId: string,
+    @Body() completeDto: CompleteExaminationDto,
   ): Promise<CompleteExaminationResponseDto> {
     const doctorId = req.user._id;
     return this.appointmentsService.completeExamination(
       appointmentId,
       doctorId,
+      completeDto,
     );
   }
 

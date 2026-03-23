@@ -25,6 +25,7 @@ import { AppointmentRepository, AppointmentPackageRepository } from '../../../sr
 import { ClinicStaffInformationRepository, AccountRepository } from '../../../src/modules/accounts/repositories';
 import { EmployeeScheduleRepository } from '../../../src/modules/schedules/repositories/employee-schedule.repository';
 import { REDIS_CLIENT } from '../../../src/config/redis.config';
+import { AppointmentWebhookService } from '../../../src/modules/appointments/appointment-webhook.service';
 import { mockRedisSession, mockSlotEntity, mockAppointmentEntity } from './fixtures/mock-data';
 
 describe('POST Appointments API (V4.3) - Unit Tests', () => {
@@ -33,6 +34,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
   let dataSource: jest.Mocked<DataSource>;
   let queryRunner: jest.Mocked<QueryRunner>;
   let redisClient: jest.Mocked<Redis>;
+  let appointmentWebhookService: jest.Mocked<AppointmentWebhookService>;
 
   const mockPatientId = '550e8400-e29b-41d4-a716-446655440001';
   const mockSessionId = '550e8400-e29b-41d4-a716-446655440002';
@@ -362,6 +364,12 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
             sendAppointmentConfirmation: jest.fn(),
           },
         },
+        {
+          provide: AppointmentWebhookService,
+          useValue: {
+            sendConfirmation: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -370,6 +378,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
     dataSource = module.get(DataSource);
     queryRunner = dataSource.createQueryRunner() as jest.Mocked<QueryRunner>;
     redisClient = module.get(REDIS_CLIENT);
+    appointmentWebhookService = module.get(AppointmentWebhookService);
   });
 
   describe('createAppointmentFromSession (COD Flow)', () => {
@@ -383,7 +392,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
       clinicId: mockClinicId,
       doctorId: mockDoctorId,
       clinicShiftHourId: mockSlotId,
-      appointmentDate: '2026-03-20',
+      appointmentDate: '2026-04-20',
       paymentMethod: 'cod',
       patientNote: 'Đau mỏi vai gáy',
       currentStep: 4,
@@ -581,6 +590,44 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         // Total: 100,000 + 180,000 = 280,000
         expect(result.total).toBe(280000);
       });
+
+      it('should trigger n8n webhook after successful COD appointment creation', async () => {
+        setupValidSessionMock();
+        
+        // Configure query builder to return available slot
+        mockQueryBuilder.getOne.mockResolvedValueOnce({
+          _id: mockSlotId,
+          limit: 5,
+          startHour: '08:00:00',
+          endHour: '08:30:00',
+        });
+
+        const result = await service.createAppointmentFromSession(mockSessionId, mockPatientId);
+
+        // Verify webhook was triggered with correct appointment_id
+        expect(appointmentWebhookService.sendConfirmation).toHaveBeenCalledWith(result.appointment_id);
+      });
+
+      it('should not block if webhook fails', async () => {
+        setupValidSessionMock();
+        
+        // Configure query builder to return available slot
+        mockQueryBuilder.getOne.mockResolvedValueOnce({
+          _id: mockSlotId,
+          limit: 5,
+          startHour: '08:00:00',
+          endHour: '08:30:00',
+        });
+
+        // Mock webhook to fail
+        appointmentWebhookService.sendConfirmation.mockRejectedValueOnce(new Error('Webhook failed'));
+
+        // Should still succeed
+        const result = await service.createAppointmentFromSession(mockSessionId, mockPatientId);
+
+        expect(result).toHaveProperty('appointment_id');
+        expect(appointmentWebhookService.sendConfirmation).toHaveBeenCalled();
+      });
     });
 
     describe('Transaction management', () => {
@@ -743,7 +790,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         clinicId: mockClinicId,
         doctorId: mockDoctorId,
         clinicShiftHourId: mockSlotId,
-        appointmentDate: '2026-03-20',
+        appointmentDate: '2026-04-20',
         paymentMethod: 'cod',
         currentStep: 4,
       } as any);
@@ -761,7 +808,7 @@ describe('POST Appointments API (V4.3) - Unit Tests', () => {
         clinicId: mockClinicId,
         doctorId: mockDoctorId,
         clinicShiftHourId: mockSlotId,
-        appointmentDate: '2026-03-20',
+        appointmentDate: '2026-04-20',
         paymentMethod: 'cod',
         currentStep: 4,
       } as any);

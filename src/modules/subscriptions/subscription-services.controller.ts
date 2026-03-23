@@ -378,7 +378,7 @@ export class SubscriptionServicesController {
   ): Promise<{ message: string }> {
     await this.subscriptionServicesService.cancelCurrentSubscription(user._id);
     return {
-      message: 'Hủy gia hạn gói dịch vụ thành công.',
+      message: 'Subscription renewal cancelled successfully.',
     };
   }
 

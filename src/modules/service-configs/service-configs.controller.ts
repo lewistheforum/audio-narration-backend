@@ -123,7 +123,7 @@ export class ServiceConfigsController {
     required: false,
     type: String,
     description: 'Search by service name (fuzzy search)',
-    example: 'Khám',
+    example: 'Checkup',
   })
   @ApiQuery({
     name: 'page',
@@ -296,7 +296,7 @@ export class PublicServiceConfigsController {
     required: false,
     type: String,
     description: 'Search by service name (fuzzy search)',
-    example: 'Khám',
+    example: 'Checkup',
   })
   @ApiQuery({
     name: 'page',
@@ -419,7 +419,7 @@ export class DoctorServiceConfigsController {
     required: false,
     type: String,
     description: 'Search by service name (fuzzy search)',
-    example: 'Khám',
+    example: 'Checkup',
   })
   @ApiQuery({
     name: 'page',

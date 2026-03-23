@@ -39,7 +39,7 @@ export class CreatePatientNoEmailResponseDto {
 
   @ApiProperty({
     description: 'Patient full name',
-    example: 'Trần Văn D',
+    example: 'Jane Doe',
   })
   fullName: string;
 

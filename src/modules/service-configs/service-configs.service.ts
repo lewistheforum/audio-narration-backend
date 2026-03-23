@@ -179,7 +179,7 @@ export class ServiceConfigsService {
         serviceCode: raw.serviceCode,
         description: raw.description,
         serviceFunctions: typeof raw.serviceFunctions === 'string'
-          ? raw.serviceFunctions.replace(/^{|}$/g, '').split(',') // parse postgres array string if needed
+          ? raw.serviceFunctions.replace(/^{|}$/g, '').split(',') // Parse Postgres array string format
           : raw.serviceFunctions,
         isActive: raw.isActive,
         price: Number(raw.price),
@@ -243,16 +243,6 @@ export class ServiceConfigsService {
       throw new NotFoundException(`Category with ID ${dto.categoryId} not found.`);
     }
 
-    const existingCode = await this.dataSource.query(
-      `SELECT _id FROM clinic_services WHERE service_code = $1 AND deleted_at IS NULL`,
-      [dto.serviceCode]
-    );
-
-    if (existingCode && existingCode.length > 0) {
-      // throw new BadRequestException(`Service with code ${dto.serviceCode} already exists.`);
-      // Actually, if it's the manager creating it, let's just make it unique by checking
-    }
-
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -298,7 +288,7 @@ export class ServiceConfigsService {
   }
 
   async updateService(clinicManagerId: string, id: string, dto: any): Promise<any> {
-    const raw = await this.getServiceDetail(clinicManagerId, id); // Will throw if not found
+    const raw = await this.getServiceDetail(clinicManagerId, id); // Will throw NotFoundException if service not found
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -375,7 +365,7 @@ export class ServiceConfigsService {
   }
 
   async toggleServiceStatus(clinicManagerId: string, id: string, isActive: boolean): Promise<any> {
-    const raw = await this.getServiceDetail(clinicManagerId, id); // Will throw if not found
+    const raw = await this.getServiceDetail(clinicManagerId, id); // Will throw NotFoundException if service not found
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

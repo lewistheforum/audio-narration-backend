@@ -36,7 +36,7 @@ export class TransactionRepository extends Repository<Transaction> {
               ga.dob        AS sender_dob,
               ss.service_name AS service_name
        FROM transactions t
-      -- FIX: t.clinic_id stores Account ID, join on cai.account_id (not cai._id)
+ 
       LEFT JOIN clinic_admin_information cai ON cai.account_id = t.clinic_id
       LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
       LEFT JOIN clinic_subcriptions_history csh ON csh._id = t.subcription_id
@@ -87,7 +87,7 @@ export class TransactionRepository extends Repository<Transaction> {
               ga.dob        AS sender_dob,
               ss.service_name AS service_name
        FROM transactions t
-      -- FIX: t.clinic_id stores Account ID, join on cai.account_id (not cai._id)
+ 
       LEFT JOIN clinic_admin_information cai ON cai.account_id = t.clinic_id
       LEFT JOIN general_accounts ga ON ga.account_id = t.sender_account_id
       LEFT JOIN clinic_subcriptions_history csh ON csh._id = t.subcription_id
@@ -189,7 +189,7 @@ export class TransactionRepository extends Repository<Transaction> {
           ap.amount as amount,
           ap.status as status,
           ap.payment_type as payment_type,
-          ap.note as description,
+          a.patient_note as description,
           ga.full_name as patient_name
        FROM appointment_package ap
        INNER JOIN appointments a ON a._id = ap.appointment_id

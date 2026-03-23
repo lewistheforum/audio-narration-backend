@@ -10,14 +10,13 @@ import { AppointmentWebhookService } from '../appointments/appointment-webhook.s
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { URLSearchParams } from 'url';
-import { Repository, Like } from 'typeorm';
+import { Repository } from 'typeorm';
 import {
   getCurrentVietnamTime,
   addToVietnamTime,
   formatToVietnamTime,
   getStartOfDay,
   parseVietnamTime,
-  getVietnamTimestamp,
 } from 'src/common/utils/date.util';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
 import { PaymentDirection, PaymentStatus, TransactionType, TransactionTypeCode } from './entities';
@@ -183,13 +182,6 @@ export class TransactionsService {
       subscription.expirationDate &&
       subscription.expirationDate > now;
 
-    if (isActive && isNotExpired) {
-      // throw new BadRequestException('Subscription is still active. Renewal is only allowed after expiration.');
-      console.log(
-        'Allowing renewal for active subscription: Queueing logic will apply on payment success.',
-      );
-    }
-
     const transaction = await this.handleRenewalTransaction(
       subscription,
       duration,
@@ -216,9 +208,6 @@ export class TransactionsService {
 
     // Case A: Subscription does not exist (New Clinic) -> Create PENDING
     if (!subscription) {
-      console.log(
-        `[createNewSubscriptionQr] Creating new subscription record for clinic ${clinicId}`,
-      );
       subscription = this.clinicSubscriptionRepo.create({
         clinicId,
         serviceId, // Set initial service intent
@@ -373,7 +362,7 @@ export class TransactionsService {
       subscription,
       amount,
       content,
-      `Upgrade/Downgrade to ${service.serviceName} (${duration} tháng)`,
+      `Upgrade/Downgrade to ${service.serviceName} (${duration} months)`,
     );
   }
 
@@ -406,12 +395,8 @@ export class TransactionsService {
       // Ensure duration is at least 1
       duration = duration <= 0 ? 1 : duration;
 
-      console.log(
-        `[DEBUG] Calculated base renewal duration: ${duration} months (Start: ${formatToVietnamTime(startDate)}, End: ${formatToVietnamTime(expirationDate)})`,
-      );
     } else {
       duration = Math.max(1, duration);
-      console.log(`[DEBUG] Using provided renewal duration: ${duration} months`);
     }
 
     // 2. Calculate Amount: price * duration (Apply discount)
@@ -653,31 +638,15 @@ export class TransactionsService {
    */
   async createVerificationQr(clinicId: string): Promise<PaymentResponseDto> {
     // 1. Resolve Clinic Admin Info from Account ID
-    console.log(
-      'DEBUG: createVerificationQr - Input clinicId (Account ID):',
-      clinicId,
-    );
 
     const clinicAdmin = await this.clinicAdminRepo.findOne({
       where: { accountId: clinicId },
     });
 
-    console.log(
-      'DEBUG: createVerificationQr - Found clinicAdmin:',
-      clinicAdmin,
-    );
 
     if (!clinicAdmin) {
-      console.error(
-        'DEBUG: createVerificationQr - Clinic Admin NOT FOUND for accountId:',
-        clinicId,
-      );
       // Debug: Try to list all admins to see what is available
       const allAdmins = await this.clinicAdminRepo.find({ take: 5 });
-      console.log(
-        'DEBUG: createVerificationQr - First 5 admins in DB:',
-        JSON.stringify(allAdmins, null, 2),
-      );
       throw new NotFoundException('Clinic Admin Information not found');
     }
 
@@ -761,7 +730,6 @@ export class TransactionsService {
       existingTransaction.transactionDate = parseVietnamTime(payload.transactionDate);
       existingTransaction.accountNumber = payload.accountNumber;
       existingTransaction.code = payload.code;
-      // existingTransaction.content = payload.content; // FIX: Don't overwrite metadata
       existingTransaction.transferType = payload.transferType;
       existingTransaction.transferAmount = payload.transferAmount;
       existingTransaction.accumulated = payload.accumulated;
@@ -769,30 +737,13 @@ export class TransactionsService {
       existingTransaction.referenceCode = payload.referenceCode;
       existingTransaction.seepayTransactionId = payload.id?.toString();
 
-      console.log(
-        'handleCallback Debug - Found Existing Transaction:',
-        existingTransaction.id,
-      );
-      console.log(
-        'handleCallback Debug - Transaction Type:',
-        existingTransaction.transactionType?.name,
-      );
-      console.log(
-        'handleCallback Debug - Clinic ID:',
-        existingTransaction.clinicId,
-      );
 
       const saved = await this.transactionRepository.save(existingTransaction);
 
       const isVerification = existingTransaction.transactionType?.code === TransactionTypeCode.VERIFICATION;
-      console.log('handleCallback Debug - Is Verification:', isVerification);
 
       if (status === PaymentStatus.SUCCESS && isVerification) {
         if (existingTransaction.clinicId) {
-          console.log(
-            'handleCallback Debug - Updating Clinic Verify Status for:',
-            existingTransaction.clinicId,
-          );
           await this.clinicAdminRepo.update(
             { accountId: existingTransaction.clinicId },
             { isVerify: true },
@@ -811,20 +762,9 @@ export class TransactionsService {
             subscription.subscriptionStatus =
               RegistrationStatus.PENDING_MANAGER_SETUP;
             await this.clinicSubscriptionRepo.save(subscription);
-            console.log(
-              'handleCallback Debug - Subscription status advanced to PENDING_MANAGER_SETUP for clinic:',
-              existingTransaction.clinicId,
-            );
           } else {
-            console.warn(
-              'handleCallback Debug - No PENDING_SEPAY_SETUP subscription found for clinic:',
-              existingTransaction.clinicId,
-            );
           }
         } else {
-          console.error(
-            'handleCallback Debug - No Clinic ID in verification transaction!',
-          );
         }
       }
 
@@ -835,10 +775,6 @@ export class TransactionsService {
           existingTransaction.transactionType?.code === TransactionTypeCode.SUBSCRIPTION)
       ) {
         if (existingTransaction.subscriptionId) {
-          console.log(
-            'handleCallback Debug - Updating Subscription Status for:',
-            existingTransaction.subscriptionId,
-          );
 
           // Extract targetServiceId and duration from content if available
           let targetServiceId: string | undefined;
@@ -849,7 +785,6 @@ export class TransactionsService {
               targetServiceId = contentObj.targetServiceId;
               duration = contentObj.duration || 1;
             } catch (e) {
-              console.warn('Failed to parse transaction content:', e);
             }
           }
 
@@ -910,16 +845,12 @@ export class TransactionsService {
     });
 
     if (!appointment) {
-      // C. Strategy 3: Online Booking Session (appointment chưa tồn tại trong DB)
-      // appointmentId ở đây chính là sessionId từ Redis
+      // C. Strategy 3: Online Booking Session (appointment does not yet exist in DB)
+      // appointmentId here is the sessionId from Redis
       const session = await this.bookingSessionService.getSession(appointmentId);
       if (session && session.paymentMethod === 'online') {
-        console.log(
-          'handleCallback Debug - Found Online Booking Session:',
-          appointmentId,
-        );
 
-        // Gọi AppointmentsService để tạo appointment thật từ session này
+        // Create actual appointment from session via AppointmentsService
         const appointmentResult = await this.appointmentsService.createAppointmentOnlineFromCallback(
           appointmentId,
           payload,
@@ -931,7 +862,7 @@ export class TransactionsService {
           );
         }
 
-        // Kích hoạt Webhook xác nhận lịch hẹn gửi thông tin sang n8n
+        // Trigger webhook to send appointment info to n8n
         if (appointmentResult.appointment_id) {
           await this.appointmentWebhookService.sendConfirmation(
             appointmentResult.appointment_id,
@@ -950,9 +881,6 @@ export class TransactionsService {
       }
 
       // STRICT MODE: If neither Transaction nor Appointment nor Session is found, REJECT the callback.
-      console.error(
-        `handleCallback Error - Reference ID ${appointmentId} not found in Transaction, Appointment, or Session tables.`,
-      );
       throw new NotFoundException(
         'Transaction reference (Transaction ID, Appointment ID, or Session ID) not found',
       );
@@ -985,7 +913,6 @@ export class TransactionsService {
       transactionDate: parseVietnamTime(payload.transactionDate),
       accountNumber: payload.accountNumber,
       code: payload.code,
-      // content: payload.content, // EXISTING BUG: This overwrites our JSON metadata (targetServiceId) with the raw bank transfer message.
       transferType: payload.transferType,
       transferAmount: payload.transferAmount,
       accumulated: payload.accumulated,
@@ -1000,10 +927,6 @@ export class TransactionsService {
     if (status === PaymentStatus.SUCCESS) {
       if (payload.transferAmount === 10_000) {
         // Verification payment fallback: assume appointmentId received (if any) holds the account ID
-        console.warn(
-          'handleCallback Debug - Verification fallback strategy reached. appointmentId received:',
-          appointmentId,
-        );
         await this.clinicAdminRepo.update(
           { accountId: appointmentId },
           { isVerify: true },
@@ -1015,53 +938,26 @@ export class TransactionsService {
         where: { _id: savedTransaction.transactionTypeId },
       });
 
-      console.log(
-        'handleCallback Debug - Transaction Type Name:',
-        transactionType?.name,
-      );
-      console.log(
-        'handleCallback Debug - Saved Transaction Subscription ID:',
-        savedTransaction.subscriptionId,
-      );
 
       if (
         transactionType?.code === TransactionTypeCode.SUBSCRIPTION_PAYMENT ||
         transactionType?.code === TransactionTypeCode.SUBSCRIPTION
       ) {
         if (savedTransaction.subscriptionId) {
-          console.log(
-            'handleCallback Debug - Updating Subscription Status for:',
-            savedTransaction.subscriptionId,
-          );
 
           // Extract targetServiceId and duration from content if available
           let targetServiceId: string | undefined;
           let duration: number = 1;
           if (savedTransaction.content) {
-            console.log(
-              '[DEBUG] Processing content for Target Service ID and Duration:',
-              savedTransaction.content,
-            );
             try {
               const contentObj = JSON.parse(savedTransaction.content);
               targetServiceId = contentObj.targetServiceId;
               duration = contentObj.duration || 1;
-              console.log(
-                '[DEBUG] Found targetServiceId:',
-                targetServiceId,
-                'duration:',
-                duration,
-              );
             } catch (e) {
-              console.warn('[DEBUG] Failed to parse transaction content:', e);
             }
           } else {
-            console.log('[DEBUG] No content found in transaction');
           }
 
-          console.log(
-            `[DEBUG] Delegating to SubscriptionService. handleSubscriptionPaymentSuccess(subId=${savedTransaction.subscriptionId}, targetId=${targetServiceId}, duration=${duration})`,
-          );
 
           // Delegate to SubscriptionServicesService to handle renewal/activation logic
           await this.subscriptionServicesService.handleSubscriptionPaymentSuccess(
@@ -1071,9 +967,6 @@ export class TransactionsService {
             duration, // Pass Duration for end date calculation
           );
         } else {
-          console.warn(
-            'handleCallback Debug - Transaction has SUBSCRIPTION type but no subscriptionId',
-          );
         }
       }
 
@@ -1401,18 +1294,18 @@ export class TransactionsService {
     );
 
     const worksheetData = transactions.map((t) => ({
-      'Ngày khám': formatToVietnamTime(t.date),
-      'Mã gói': t.package_id,
-      'Số tiền': Number(t.amount),
-      'Trạng thái': t.status,
-      'Loại thanh toán': t.payment_type,
-      'Mô tả': t.description || 'N/A',
-      'Bệnh nhân': t.patient_name || 'N/A',
+      'Appointment Date': formatToVietnamTime(t.date),
+      'Package ID': t.package_id,
+      'Amount': Number(t.amount),
+      'Status': t.status,
+      'Payment Type': t.payment_type,
+      'Description': t.description || 'N/A',
+      'Patient': t.patient_name || 'N/A',
     }));
 
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Doanh thu');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Revenue');
 
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }

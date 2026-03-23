@@ -4,7 +4,7 @@ import { IsNotEmpty, IsString, MaxLength, IsOptional } from 'class-validator';
 export class RejectContractDto {
     @ApiProperty({
         description: 'Reason for rejecting the contract',
-        example: 'Thông tin lương chưa chính xác'
+        example: 'Salary information is not accurate'
     })
     @IsNotEmpty()
     @IsString()

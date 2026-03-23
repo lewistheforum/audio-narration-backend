@@ -351,13 +351,13 @@ export class SubscriptionServicesService {
 
     if (!subscription) {
       throw new NotFoundException(
-        'Không tìm thấy gói dịch vụ nào đang hoạt động.',
+        'No active subscription found.',
       );
     }
 
     if (subscription.subscriptionStatus !== RegistrationStatus.ACTIVE) {
       throw new BadRequestException(
-        `Không thể hủy gói dịch vụ đang ở trạng thái ${subscription.subscriptionStatus}. Chỉ gói đang hoạt động mới được phép hủy.`,
+        'Cannot cancel subscription in status ' + subscription.subscriptionStatus + '. Only active subscriptions can be cancelled.',
       );
     }
 

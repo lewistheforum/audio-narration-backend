@@ -59,30 +59,4 @@ export class AiChatRequestDto {
   @IsEnum(AiModel, { message: 'Invalid AI model' })
   model?: AiModel;
 
-  // @ApiProperty({
-  //   description:
-  //     'Temperature controls randomness (0.0 = deterministic, 1.0 = creative)',
-  //   example: 0.7,
-  //   required: false,
-  //   minimum: 0,
-  //   maximum: 1,
-  // })
-  // @IsOptional()
-  // @IsNumber({}, { message: 'Temperature must be a number' })
-  // @Min(0, { message: 'Temperature must be at least 0' })
-  // @Max(1, { message: 'Temperature must be at most 1' })
-  // temperature?: number;
-
-  // @ApiProperty({
-  //   description: 'Maximum number of tokens in the response',
-  //   example: 1000,
-  //   required: false,
-  //   minimum: 1,
-  //   maximum: 4096,
-  // })
-  // @IsOptional()
-  // @IsNumber({}, { message: 'Max tokens must be a number' })
-  // @Min(1, { message: 'Max tokens must be at least 1' })
-  // @Max(4096, { message: 'Max tokens must be at most 4096' })
-  // maxTokens?: number;
 }

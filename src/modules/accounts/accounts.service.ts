@@ -303,15 +303,15 @@ export class AccountsService {
    * @param {SearchPatientQueryDto} query - Search parameters (phone, email, or fullName)
    * @returns {Promise<PatientSearchResponseDto>} Search result with patient data or not found message
    *
-   * @example
-   * ```typescript
-   * const result = await accountsService.searchPatientByPhone({ phone: '0912345678' });
-   * if (result.found) {
-   *   console.log('Patient found:', result.patient);
-   * } else {
-   *   console.log('Create new account suggested');
-   * }
-   * ```
+    * @example
+    * ```typescript
+    * const result = await accountsService.searchPatientByPhone({ phone: '0912345678' });
+    * if (result.found) {
+    *   // Use result.patient data
+    * } else {
+    *   // Trigger new account creation flow
+    * }
+    * ```
    */
   async searchPatientByPhone(
     query: SearchPatientQueryDto,
@@ -372,7 +372,7 @@ export class AccountsService {
     if (!account) {
       return {
         found: false,
-        message: 'Không tìm thấy bệnh nhân với thông tin này',
+        message: 'Patient not found with the provided information',
         suggestedAction: 'CREATE_NEW_ACCOUNT',
       };
     }
@@ -780,21 +780,7 @@ export class AccountsService {
     let emailChanged = false;
     const oldPhone = account.phone;
 
-    // Validate email change permission - only PATIENT can change their own email
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
-      // if (account.role !== AccountRole.PATIENT) {
-      //   throw new ForbiddenException(
-      //     'Only PATIENT accounts can change their email address. Other roles must contact administrator.',
-      //   );
-      // }
-
-      // const existingAccountWithEmail = await this.findByEmail(
-      //   updateAccountDto.email,
-      // );
-      // if (existingAccountWithEmail && existingAccountWithEmail._id !== id) {
-      //   throw new ConflictException(MESSAGES.failMessage.emailAlreadyExists);
-      // }
-
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
       account.status = AccountStatus.ACTIVE; // Keep account active
@@ -1643,7 +1629,6 @@ export class AccountsService {
   async delete(id: string): Promise<void> {
     const account = await this.findAccountEntityById(id);
     await this.accountRepository.softDeleteAccount(id);
-    // Also soft delete the general account
     await this.generalAccountRepository.softDeleteGeneralAccount(id);
   }
 
@@ -1672,36 +1657,12 @@ export class AccountsService {
     if (!requestor)
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
-    // Simplified Security Check: employee's parentId must strictly match the requestor's ID
     if (employee.parentId !== requestorId) {
-      console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
-      console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-      console.log(
-        `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
-      );
-      console.log(
-        `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
-      );
-      console.log(`[RESULT] Access Denied because IDs do NOT match!`);
-      console.log('-------------------------------------\n');
-
       throw new ForbiddenException(
         'You only have permission to delete employees that were created under your account (matching Parent ID).',
       );
     }
 
-    console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
-    console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-    console.log(
-      `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
-    );
-    console.log(
-      `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
-    );
-    console.log(`[RESULT] Approved! Executing soft delete...`);
-    console.log('-------------------------------------\n');
-
-    // Pass access check, perform soft delete natively
     await this.accountRepository.softDeleteAccount(id);
     await this.generalAccountRepository.softDeleteGeneralAccount(id);
   }
@@ -3355,7 +3316,6 @@ export class AccountsService {
         averageRating = 0;
       }
 
-      // if (clinicAdminInfo && address) {
       // Adapt ClinicAdminInformation to match ClinicItemDto's expected clinicInfo structure
       const adaptedClinicInfo = {
         _id: clinicAdminInfo._id,
@@ -4169,7 +4129,7 @@ export class AccountsService {
       );
       if (existingSepay) {
         throw new ConflictException(
-          'Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.',
+          'This SePay virtual account number is already linked to another clinic.',
         );
       }
     }

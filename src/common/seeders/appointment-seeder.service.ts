@@ -28,6 +28,7 @@ import {
   PATIENT_NOTES,
   APPOINTMENT_PACKAGE_STATUSES,
   PAYMENT_TYPES,
+  APPOINTMENT_DIAGNOSES,
 } from '../constants/appointment-seeder-data';
 import { getVietnamTimestamp, VIETNAM_TIMEZONE } from '../utils/date.util';
 import * as dayjs from 'dayjs';
@@ -328,7 +329,8 @@ export class AppointmentSeederService {
         status: APPOINTMENT_STATUS,
         isRemider: getRandomInt(0, 1) === 1,
         patientNote: getRandomItem(PATIENT_NOTES),
-        rejectReason: null, // Must be null for COMPLETED appointments
+        rejectReason: null,
+        diagnosis: getRandomItem(APPOINTMENT_DIAGNOSES),
       });
 
       const savedAppointment =
@@ -534,6 +536,7 @@ export class AppointmentSeederService {
         isRemider: getRandomInt(0, 1) === 1,
         patientNote: `${getRandomItem(PATIENT_NOTES)} ${this.getOvertimeSeedMarker(i)}`,
         rejectReason: null,
+        diagnosis: null, // PENDING appointments do not have a diagnosis yet
       });
 
       const savedAppointment = await this.appointmentRepository.save(
