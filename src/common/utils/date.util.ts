@@ -231,6 +231,19 @@ export function formatToDateOnly(date?: Date | string): string {
 }
 
 /**
+ * Format date to HH:mm:ss in Vietnam timezone
+ * 
+ * @param date - Date to format (defaults to current Vietnam time)
+ * @returns Time string in HH:mm:ss format
+ */
+export function formatToTimeOnly(date?: Date | string): string {
+  if (!date) {
+    return dayjs().tz(VIETNAM_TIMEZONE).format('HH:mm:ss');
+  }
+  return dayjs(date).tz(VIETNAM_TIMEZONE).format('HH:mm:ss');
+}
+
+/**
  * Compare two dates in Vietnam timezone
  * 
  * @param date1 - First date

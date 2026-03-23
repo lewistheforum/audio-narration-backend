@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -26,7 +26,7 @@ import {
   ConversationUpdateEvent,
   MessageNotificationEvent,
 } from './types/socket.types';
-import { verifyToken, DecodedToken } from './utils/jwt.utils';
+import { verifyToken } from './utils/jwt.utils';
 import { CreateMessageDto } from '../messages/dto/create-message.dto';
 import { MessageType } from '../messages/enums';
 
@@ -34,8 +34,13 @@ import { MessageType } from '../messages/enums';
   cors: {
     origin:
       process.env.NODE_ENV === 'production'
-        ? ['your-production-domain.com']
-        : ['http://localhost:3000', 'http://localhost:5173'],
+        ? [
+            process.env.FRONTEND_LANDING_URL,
+            process.env.FRONTEND_STAFF_URL,
+            process.env.FRONTEND_MANAGER_URL,
+            process.env.FRONTEND_DASHBOARD_URL,
+          ]
+        : ['http://localhost:8000', 'http://localhost:3000'],
     credentials: true,
   },
   namespace: 'socket-gateway',
@@ -56,7 +61,8 @@ export class SocketGatewayService
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly AccountsService: AccountsService,
+    @Inject(forwardRef(() => AccountsService))
+    private readonly accountsService: AccountsService,
     private readonly messagesService: MessagesService,
     private readonly conversationService: ConversationService,
   ) {}
@@ -100,7 +106,7 @@ export class SocketGatewayService
       }
 
       const decodedToken = verifyToken(token, this.jwtService);
-      const user = await this.AccountsService.findAccountEntityById(
+      const user = await this.accountsService.findAccountEntityById(
         decodedToken.sub,
       );
 
@@ -369,6 +375,41 @@ export class SocketGatewayService
     });
   }
 
+  @SubscribeMessage('joinClinicRoom')
+  async handleJoinClinicRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() clinicManagerId: string,
+  ): Promise<void> {
+    try {
+      // Allow user to join the clinic room based on the provided clinicManagerId
+      client.join(`clinic-${clinicManagerId}`);
+      console.log(
+        `User ${client.data.user?.username} joined clinic room clinic-${clinicManagerId}`,
+      );
+    } catch (error) {
+      client.emit('error', {
+        message: 'Error joining clinic room',
+        code: 'JOIN_CLINIC_ROOM_ERROR',
+      });
+    }
+  }
+
+  public broadcastAppointmentStatusChange(
+    clinicManagerId: string,
+    payload: { appointmentId: string; status: string; message: string },
+  ): void {
+    try {
+      this.server
+        .to(`clinic-${clinicManagerId}`)
+        .emit('appointmentStatusChanged', payload);
+      console.log(
+        `Broadcasted appointmentStatusChanged to clinic-${clinicManagerId} for appointment ${payload.appointmentId}`,
+      );
+    } catch (error) {
+      console.error('Error broadcasting appointment status change:', error);
+    }
+  }
+
   // Public utility methods
   getConnectedUsers(): SocketUser[] {
     return Array.from(this.connectedUsers.values());
@@ -433,7 +474,7 @@ export class SocketGatewayService
         await this.conversationService.findOne(conversationId);
 
       // Get sender information
-      const sender = await this.AccountsService.findAccountEntityById(senderId);
+      const sender = await this.accountsService.findAccountEntityById(senderId);
 
       // Prepare the new message event
       const newMessageEvent: NewMessageEvent = {

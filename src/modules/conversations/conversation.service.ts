@@ -18,6 +18,7 @@ import { MessagesService } from '../messages/messages.service';
 export class ConversationService {
   constructor(
     private readonly conversationRepository: ConversationRepository,
+    @Inject(forwardRef(() => AccountsService))
     private AccountsService: AccountsService,
     @Inject(forwardRef(() => MessagesService))
     private messagesService: MessagesService,

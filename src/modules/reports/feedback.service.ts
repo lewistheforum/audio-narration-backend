@@ -429,7 +429,8 @@ export class FeedbackService {
   }
 
   async findAllFeedbacksById(id: string) {
-    return this.feedbackRepository.findFeedbacksByClinicId(id);
+    const feedback = await this.feedbackRepository.findFeedbackById(id);
+    return feedback ? [feedback] : [];
   }
 
   async findFeedbacksByDoctorId(doctorId: string) {

@@ -10,7 +10,7 @@ import { MessagesModule } from '../messages/messages.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Conversation]),
-    AccountsModule,
+    forwardRef(() => AccountsModule),
     forwardRef(() => MessagesModule),
   ],
   controllers: [ConversationController],
