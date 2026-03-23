@@ -18,7 +18,6 @@ import {
   SetNewPasswordDto,
   SetInitialPasswordDto,
 } from './dto';
-import { randomBytes } from 'crypto';
 import { CodeVerificationRepository } from '../accounts/repositories';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
 import { Account } from '../accounts/entities/accounts.entity';
@@ -69,7 +68,12 @@ export class AuthService {
     const { email, password } = loginDto;
     const user = await this.AccountsService.findByEmail(email);
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    // Block pure OAuth users without a password - they must use Google login
+    if (!user || (user.isOAuthUser && !user.password)) {
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
+    }
+
+    if (!(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
@@ -164,8 +168,8 @@ export class AuthService {
       userId = user._id;
       userEmail = user.email;
     } else {
-        // Create new patient account via Google OAuth - require initial password setup
-        const randomPassword = randomBytes(16).toString('hex');
+      // Create new patient account via Google OAuth - require initial password setup
+      // Password is explicitly set to null for OAuth-only users
 
         // Construct fullName from first and last name
         const fullName =
@@ -173,7 +177,7 @@ export class AuthService {
 
         const createdUser = await this.AccountsService.createPatientViaOAuth({
           email,
-          password: randomPassword,
+          password: null,
           username: email.split('@')[0],
           fullName,
           profilePicture: picture,
@@ -299,7 +303,13 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
 
-    if (!user.isOAuthUser || user.password) {
+    if (user.password !== null) {
+      throw new BadRequestException(
+        'This account already has a password set.',
+      );
+    }
+
+    if (!user.isOAuthUser) {
       throw new BadRequestException(
         'This account does not require initial password setup',
       );
