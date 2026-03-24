@@ -74,18 +74,12 @@ export class BlogSeederService {
     'Preventing Falls in Older Adults',
   ];
 
-  // Blog thumbnails
+  // Verified valid image URLs
   private readonly THUMBNAILS = [
-    'https://example.com/images/health1.jpg',
-    'https://example.com/images/medical2.jpg',
-    'https://example.com/images/wellness3.jpg',
-    'https://example.com/images/news4.jpg',
-    'https://example.com/images/education5.jpg',
-    'https://example.com/images/diabetes.jpg',
-    'https://example.com/images/checkup.jpg',
-    'https://example.com/images/heart.jpg',
-    'https://example.com/images/exercise.jpg',
-    'https://example.com/images/mental.jpg',
+    'https://i.ytimg.com/vi/KJ1Yl0VLqaE/maxresdefault.jpg',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkMvOHtwdmNRduJmgzgeL2zFvn7NUZz9N6NQ&s',
+    'https://cdn.dribbble.com/userupload/10691848/file/original-4053c11ce8191a0f55f4fab8313a6302.png?resize=400x0',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTJt2znZb_a2R2ivRboS39OMPHgWPK1GF4J1g&s',
   ];
 
   // Blog types

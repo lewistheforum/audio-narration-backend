@@ -52,33 +52,96 @@ export class AccountSeederService {
   private readonly STREET_NAMES = STREET_NAMES;
   private readonly BUILDING_TYPES = BUILDING_TYPES;
 
-  // Google Maps iframe templates for Vietnamese cities
-  private readonly MAP_IFRAME_TEMPLATES = [
+  // 7 real addresses for Google Maps compatibility (English format)
+  private readonly REAL_ADDRESSES = [
     {
-      city: 'Ha Noi',
-      center: '21.0285,105.8542',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.8542!2d21.0285!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sHa+Noi!5e0!3m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      address: '135 Nam Ky Khoi Nghia, Ben Thanh Ward, District 1, Ho Chi Minh City',
+      ward: 'Ben Thanh Ward',
+      district: 'District 1',
+      province: 'Ho Chi Minh City',
+      wardCode: '27104',
+      districtCode: '760',
+      provinceCode: '79',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3723.867128869523!2d106.692877!3d10.790093!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f3a5a5d5a5d%3A0x0!2s135%20Nam%20Ky%20Khoi%20Nghia!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Ho Chi Minh - D1',
     },
     {
-      city: 'Ho Chi Minh',
-      center: '10.8231,106.6297',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d106.6297!2d10.8231!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      address: '534 Vinh Khanh, Ward 8, District 4, Ho Chi Minh City',
+      ward: 'Ward 8',
+      district: 'District 4',
+      province: 'Ho Chi Minh City',
+      wardCode: '27121',
+      districtCode: '764',
+      provinceCode: '79',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.567823456789!2d106.707678!3d10.781234!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f4c4c4c4c4c%3A0x0!2s534%20Vinh%20Khanh!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Ho Chi Minh - D4',
     },
     {
-      city: 'Da Nang',
-      center: '16.0544,108.2022',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d108.2022!2d16.0544!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      address: '58 Quoc Tu Giam, Dong Da District, Hanoi',
+      ward: 'Quoc Tu Giam',
+      district: 'Dong Da District',
+      province: 'Hanoi',
+      wardCode: '00056',
+      districtCode: '105',
+      provinceCode: '01',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.123456789012!2d105.845678!3d21.028512!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135a5e5e5e5e5e5%3A0x0!2s58%20Quoc%20Tu%20Giam!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Hanoi - Dong Da',
     },
     {
-      city: 'Can Tho',
-      center: '10.0452,105.7469',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.7469!2d10.0452!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      address: '10 Ly Quoc Su, Hoan Kiem District, Hanoi',
+      ward: 'Ly Quoc Su',
+      district: 'Hoan Kiem District',
+      province: 'Hanoi',
+      wardCode: '00045',
+      districtCode: '104',
+      provinceCode: '01',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.234567890123!2d105.856789!3d21.028123!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135a5d5d5d5d5d5%3A0x0!2s10%20Ly%20Quoc%20Su!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Hanoi - Hoan Kiem',
+    },
+    {
+      address: '61 Hai Thang Tu, Vinh Phuoc Ward, Nha Trang',
+      ward: 'Vinh Phuoc Ward',
+      district: 'Nha Trang',
+      province: 'Khanh Hoa',
+      wardCode: '93158',
+      districtCode: '931',
+      provinceCode: '56',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3725.345678901234!2d109.196789!3d12.245678!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31706e6e6e6e6e6e6%3A0x0!2s61%20Hai%20Thang%20Tu!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Nha Trang',
+    },
+    {
+      address: '81 Huyen Tran Cong Chua, Ngu Hanh Son District, Da Nang',
+      ward: 'Ngu Hanh Son District',
+      district: 'Da Nang',
+      province: 'Da Nang',
+      wardCode: '48201',
+      districtCode: '488',
+      provinceCode: '48',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3726.456789012345!2d108.245678!3d16.054123!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31420e7e7e7e7e7e7%3A0x0!2s81%20Huyen%20Tran%20Cong%20Chua!5e0!3m2!1en!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Da Nang',
+    },
+    {
+      address: '46 Hai Ba Trung Street, Ninh Kieu District, Can Tho',
+      ward: 'Ninh Kieu District',
+      district: 'Can Tho',
+      province: 'Can Tho',
+      wardCode: '95018',
+      districtCode: '956',
+      provinceCode: '92',
+      googleIframe:
+        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3727.567890123456!2d105.756789!3d10.045678!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x319e8f8f8f8f8f8f8%3A0x0!2s46%20Hai%20Ba%20Trung!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+      clinicName: 'Bonix Can Tho',
     },
   ];
+
+  // Map admin index to address index (repeats for admins 8, 9, 10)
+  private readonly ADMIN_ADDRESS_MAPPING = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2];
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -124,8 +187,8 @@ export class AccountSeederService {
           accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER),
         );
 
-      // Filter managers whose parentId is in the first 5 clinic admins (which are ACTIVE)
-      const activeClinicAdminIds = clinicAdmins.slice(0, 5).map((a) => a._id);
+      // Filter managers whose parentId is in the first 10 clinic admins (which are ACTIVE)
+      const activeClinicAdminIds = clinicAdmins.slice(0, 10).map((a) => a._id);
       const activeManagers = allManagers.filter((m) =>
         activeClinicAdminIds.includes(m.parentId),
       );
@@ -155,10 +218,10 @@ export class AccountSeederService {
 
   /**
    * Seed CLINIC_ADMIN accounts
-   * Creates exactly 5 CLINIC_ADMIN accounts
+   * Creates exactly 10 CLINIC_ADMIN accounts with specific locations
    */
   private async seedClinicAdmins(): Promise<Account[]> {
-    const CLINIC_ADMIN_COUNT = 8; // 5 Active, 3 Pending
+    const CLINIC_ADMIN_COUNT = 10; // 10 admins with distributed scenarios
     const existingCount = await this.accountRepository.countByRole(
       AccountRole.CLINIC_ADMIN,
     );
@@ -438,6 +501,9 @@ export class AccountSeederService {
    * This method is idempotent and applies to ALL roles:
    * - PATIENT, ADMIN, CLINIC_ADMIN, CLINIC_MANAGER, CLINIC_STAFF, DOCTOR
    *
+   * For CLINIC_ADMIN accounts, use the 7 predefined real addresses
+   * For other accounts, generate random addresses
+   *
    * For each account:
    * 1. Check if address exists, if not create one with Vietnamese format
    * 2. Check if google_iframe exists for that address, if not create one
@@ -465,19 +531,53 @@ export class AccountSeederService {
       let address = await this.addressRepository.findByAccountId(account._id);
 
       if (!address) {
-        // Generate Vietnamese-style address
-        const location = this.getRandomLocation();
-        const streetAddress = this.generateStreetAddress();
+        let addressData;
+
+        // Use predefined addresses for clinic admins (first 10 accounts)
+        if (account.role === AccountRole.CLINIC_ADMIN) {
+          const clinicAdmins = allAccounts.filter(
+            (a) => a.role === AccountRole.CLINIC_ADMIN,
+          );
+          const adminIndex = clinicAdmins.findIndex(
+            (a) => a._id === account._id,
+          );
+          const addressIndex =
+            adminIndex >= 0 ? this.ADMIN_ADDRESS_MAPPING[adminIndex] : 0;
+          const realAddress = this.REAL_ADDRESSES[addressIndex];
+
+          addressData = {
+            address: realAddress.address,
+            ward: realAddress.ward,
+            district: realAddress.district,
+            province: realAddress.province,
+            wardCode: realAddress.wardCode,
+            districtCode: realAddress.districtCode,
+            provinceName: realAddress.province,
+          };
+        } else {
+          // Generate Vietnamese-style address for other roles
+          const location = this.getRandomLocation();
+          const streetAddress = this.generateStreetAddress();
+          addressData = {
+            address: streetAddress,
+            ward: location.wardCode,
+            district: location.districtCode,
+            province: location.provinceCode,
+            provinceName: location.provinceName,
+            districtName: location.districtName,
+            wardName: location.wardName,
+          };
+        }
 
         address = this.addressRepository.create({
           accountId: account._id,
-          address: streetAddress,
-          ward: location.wardCode,
-          district: location.districtCode,
-          province: location.provinceCode,
-          provinceName: location.provinceName,
-          districtName: location.districtName,
-          wardName: location.wardName,
+          address: addressData.address,
+          ward: addressData.ward,
+          district: addressData.district,
+          province: addressData.province,
+          provinceName: addressData.provinceName,
+          districtName: addressData.districtName || '',
+          wardName: addressData.wardName || '',
         });
 
         address = await this.addressRepository.save(address);
@@ -495,18 +595,33 @@ export class AccountSeederService {
       );
 
       if (!iframeExists) {
-        // Generate Google Maps iframe
-        const mapTemplate = this.getMapTemplateForProvince(
-          address.provinceName,
-        );
-        const fullAddress = `${address.address}, ${address.wardName}, ${address.districtName}, ${address.provinceName}`;
+        // Use predefined iframe for clinic admins
+        let googleMapIframe: string;
+
+        if (account.role === AccountRole.CLINIC_ADMIN) {
+          const clinicAdmins = allAccounts.filter(
+            (a) => a.role === AccountRole.CLINIC_ADMIN,
+          );
+          const adminIndex = clinicAdmins.findIndex(
+            (a) => a._id === account._id,
+          );
+          const addressIndex =
+            adminIndex >= 0 ? this.ADMIN_ADDRESS_MAPPING[adminIndex] : 0;
+          googleMapIframe = this.REAL_ADDRESSES[addressIndex].googleIframe;
+        } else {
+          // Generate Google Maps iframe for other roles
+          const mapTemplate = this.getMapTemplateForProvince(
+            address.provinceName,
+          );
+          googleMapIframe = mapTemplate.placeholder;
+        }
 
         const googleIframe = this.googleIframeRepository.create({
           addressId: address._id,
-          location: fullAddress,
+          location: address.address,
           zoomLevel: 14,
           responsive: true,
-          googleMapIframe: mapTemplate.placeholder,
+          googleMapIframe,
         });
 
         await this.googleIframeRepository.save(googleIframe);
@@ -573,20 +688,23 @@ export class AccountSeederService {
       lowerProvinceName.includes('hanoi') ||
       lowerProvinceName.includes('ha noi')
     ) {
-      return this.MAP_IFRAME_TEMPLATES[0];
+      return { city: 'Hanoi', center: '21.0285,105.8542', placeholder: this.REAL_ADDRESSES[2].googleIframe };
     }
     if (lowerProvinceName.includes('ho chi minh')) {
-      return this.MAP_IFRAME_TEMPLATES[1];
+      return { city: 'Ho Chi Minh', center: '10.8231,106.6297', placeholder: this.REAL_ADDRESSES[0].googleIframe };
     }
     if (lowerProvinceName.includes('da nang')) {
-      return this.MAP_IFRAME_TEMPLATES[2];
+      return { city: 'Da Nang', center: '16.0544,108.2022', placeholder: this.REAL_ADDRESSES[5].googleIframe };
     }
     if (lowerProvinceName.includes('can tho')) {
-      return this.MAP_IFRAME_TEMPLATES[3];
+      return { city: 'Can Tho', center: '10.0452,105.7469', placeholder: this.REAL_ADDRESSES[6].googleIframe };
+    }
+    if (lowerProvinceName.includes('nha trang') || lowerProvinceName.includes('khanh hoa')) {
+      return { city: 'Nha Trang', center: '109.196789,12.245678', placeholder: this.REAL_ADDRESSES[4].googleIframe };
     }
 
     // Default to Ho Chi Minh City template
-    return this.MAP_IFRAME_TEMPLATES[1];
+    return { city: 'Ho Chi Minh', center: '10.8231,106.6297', placeholder: this.REAL_ADDRESSES[0].googleIframe };
   }
 
   /**
