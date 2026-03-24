@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractRole } from '../../modules/contracts/enums/contract-role.enum';
@@ -36,7 +36,7 @@ export class ContractPackageSeederService {
   constructor(
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
-  ) { }
+  ) {}
 
   /**
    * Seed contract packages for CLINIC_STAFF and DOCTOR accounts
@@ -147,7 +147,10 @@ export class ContractPackageSeederService {
    */
   private getRandomHeaderDate(): Date {
     const now = getCurrentVietnamTime();
-    const sixMonthsAgo = dayjs(now).tz(VIETNAM_TIMEZONE).subtract(6, 'month').toDate();
+    const sixMonthsAgo = dayjs(now)
+      .tz(VIETNAM_TIMEZONE)
+      .subtract(6, 'month')
+      .toDate();
     const randomTime =
       sixMonthsAgo.getTime() +
       Math.random() * (now.getTime() - sixMonthsAgo.getTime());
@@ -167,6 +170,8 @@ export class ContractPackageSeederService {
    * Get random position
    */
   private getRandomPosition(): string {
-    return this.POSITIONS_TEMPLATES[Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)];
+    return this.POSITIONS_TEMPLATES[
+      Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)
+    ];
   }
 }

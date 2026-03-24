@@ -5,10 +5,14 @@
  * This file contains all configurable values for generating realistic test data.
  */
 
-import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../../modules/appointments/enums';
+import {
+  AppointmentStatus,
+  PaymentType,
+  AppointmentPackageStatus,
+} from '../../modules/appointments/enums';
 import { ERMRecordType, ERMStatus } from '../../modules/prescriptions/enums';
 import { subtractFromVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -485,12 +489,22 @@ export const ULTRASOUND_CONCLUSIONS = [
 /**
  * Lab panel names for orthopedic-relevant tests
  */
-export const LAB_PANEL_NAMES = ['INFLAMMATION', 'GOUT', 'METABOLIC', 'AUTOIMMUNE'];
+export const LAB_PANEL_NAMES = [
+  'INFLAMMATION',
+  'GOUT',
+  'METABOLIC',
+  'AUTOIMMUNE',
+];
 
 /**
  * Specimen types for lab tests
  */
-export const SPECIMEN_TYPES = ['Serum', 'Plasma', 'Whole blood', 'Synovial fluid'];
+export const SPECIMEN_TYPES = [
+  'Serum',
+  'Plasma',
+  'Whole blood',
+  'Synovial fluid',
+];
 
 /**
  * Lab conclusions
@@ -522,7 +536,12 @@ export const LAB_RECOMMENDATIONS = [
 /**
  * Bone density sites
  */
-export const BONE_DENSITY_SITES = ['LUMBAR_SPINE', 'TOTAL_HIP', 'FEMORAL_NECK', 'FOREARM'];
+export const BONE_DENSITY_SITES = [
+  'LUMBAR_SPINE',
+  'TOTAL_HIP',
+  'FEMORAL_NECK',
+  'FOREARM',
+];
 
 /**
  * WHO categories for bone density
@@ -734,7 +753,14 @@ export const EDUCATION_ADVICE = [
 /**
  * Visit types
  */
-export const VISIT_TYPES = ['FIRST_VISIT', 'FOLLOW_UP', 'POST_PROCEDURE', 'ROUTINE', 'ONLINE', 'EMERGENCY'];
+export const VISIT_TYPES = [
+  'FIRST_VISIT',
+  'FOLLOW_UP',
+  'POST_PROCEDURE',
+  'ROUTINE',
+  'ONLINE',
+  'EMERGENCY',
+];
 
 /**
  * Severity levels
