@@ -169,7 +169,7 @@ export class ClinicContractInformationSeederService {
           effectiveTo: this.getRandomEffectiveTo(),
           partyASignerName: this.getRandomPartyASignerName(),
           partyBSignerName: this.getRandomPartyBSignerName(),
-          contractFile: this.getRandomContractFile(),
+          contractFile: this.VALID_CONTRACT_PDF,
           contractStatus: status,
           rejectionReason:
             status === ContractStatus.REJECTED
@@ -383,26 +383,8 @@ export class ClinicContractInformationSeederService {
     ];
   }
 
-  /**
-   * Get random contract file path or URL (nullable)
-   */
-  private getRandomContractFile(): string | null {
-    const contractFiles = [
-      '/contracts/contract_' + Math.floor(Math.random() * 10000) + '.pdf',
-      '/contracts/employment_agreement_' +
-        Math.floor(Math.random() * 10000) +
-        '.pdf',
-      'https://storage.Bonix.vn/contracts/contract_' +
-        Math.floor(Math.random() * 10000) +
-        '.pdf',
-      'https://s3.Bonix.vn/contracts/employment_' +
-        Math.floor(Math.random() * 10000) +
-        '.pdf',
-      null, // 20% chance of no contract file
-      null,
-    ];
-    return contractFiles[Math.floor(Math.random() * contractFiles.length)];
-  }
+  // Valid dummy PDF for testing
+  private readonly VALID_CONTRACT_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
 
   /**
    * Get random contract status

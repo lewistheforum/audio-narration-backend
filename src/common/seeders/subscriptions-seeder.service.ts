@@ -52,6 +52,13 @@ export class SubscriptionsSeederService {
    * Seed clinic subscriptions and subscription history
    *
    * This method is called by SeederOrchestratorService during application bootstrap.
+   *
+   * 10 Admin Scenarios:
+   * - Admins 1 & 2: Fully ACTIVE subscriptions
+   * - Admins 3 & 4: ACTIVE subscriptions with RECENT subscription history showing PENDING_PAYMENT (buying more)
+   * - Admins 5 & 6: EXPIRED subscriptions (backdated expiration - tests Staff/Doctor login blocks)
+   * - Admins 7 & 8: First-time registration (PENDING status, no active subscription)
+   * - Admins 9 & 10: PENDING_MANAGER_SETUP (in flow of adding Clinic Manager accounts)
    */
   async seed(): Promise<void> {
     try {
@@ -81,28 +88,143 @@ export class SubscriptionsSeederService {
         `Found ${clinicAdmins.length} CLINIC_ADMIN accounts and ${subscriptionServices.length} subscription services`,
       );
 
-      // Seed ClinicSubscription records
-      await this.seedClinicSubscriptions(clinicAdmins, subscriptionServices);
+      // Seed ClinicSubscription records based on admin scenario
+      await this.seedClinicSubscriptionsByScenario(clinicAdmins, subscriptionServices);
 
-      // Seed ClinicSubscriptionHistory records
-      await this.seedClinicSubscriptionHistory(
-        clinicAdmins,
-        subscriptionServices,
-      );
-
-      // Seed Hanging (Pending) ClinicSubscription records (backdated 6-12 months)
-      await this.seedHangingSubscriptions(clinicAdmins, subscriptionServices);
-
-      // Seed Hanging SubscriptionHistory records
-      await this.seedHangingSubscriptionHistory(
-        clinicAdmins,
-        subscriptionServices,
-      );
+      // Seed ClinicSubscriptionHistory records for admins 3 & 4 (buying more)
+      await this.seedBuyingMoreHistory(clinicAdmins, subscriptionServices);
 
       this.logger.log('✅ Clinic subscriptions seeding completed');
     } catch (error) {
       this.logger.error('Failed to seed clinic subscriptions', error.stack);
       throw error;
+    }
+  }
+
+  /**
+   * Seed subscriptions based on 10 admin scenarios
+   */
+  private async seedClinicSubscriptionsByScenario(
+    clinicAdmins: Account[],
+    subscriptionServices: SubscriptionService[],
+  ): Promise<void> {
+    let createdCount = 0;
+
+    for (let i = 0; i < clinicAdmins.length; i++) {
+      const clinicAdmin = clinicAdmins[i];
+      const adminIndex = i + 1; // 1-10
+
+      // Check if subscription already exists
+      const existing = await this.clinicSubscriptionRepository.existsByClinicId(
+        clinicAdmin._id,
+      );
+
+      if (existing) {
+        this.logger.log(`Subscription for admin ${adminIndex} already exists, skipping`);
+        continue;
+      }
+
+      // Get subscription service
+      const service = subscriptionServices[i % subscriptionServices.length];
+
+      let subscriptionStatus: RegistrationStatus;
+      let subscriptionDate: Date;
+      let expirationDate: Date | null;
+
+      // Determine scenario based on admin index
+      if (adminIndex <= 2) {
+        // Admins 1 & 2: ACTIVE
+        subscriptionStatus = RegistrationStatus.ACTIVE;
+        subscriptionDate = getCurrentVietnamTime();
+        expirationDate = addToDate(subscriptionDate, 1, 'year');
+      } else if (adminIndex <= 4) {
+        // Admins 3 & 4: ACTIVE (buying more - main sub is active, history shows pending)
+        subscriptionStatus = RegistrationStatus.ACTIVE;
+        subscriptionDate = getCurrentVietnamTime();
+        expirationDate = addToDate(subscriptionDate, 1, 'year');
+      } else if (adminIndex <= 6) {
+        // Admins 5 & 6: EXPIRED (backdated to test Staff/Doctor login blocks)
+        subscriptionStatus = RegistrationStatus.EXPIRED;
+        // Backdate 2 months ago
+        subscriptionDate = subtractFromVietnamTime(14, 'month');
+        expirationDate = subtractFromVietnamTime(2, 'month');
+      } else if (adminIndex <= 8) {
+        // Admins 7 & 8: First-time registration (PENDING status)
+        const pendingStatuses = [
+          RegistrationStatus.PENDING_LEGAL_SETUP,
+          RegistrationStatus.PENDING_APPROVAL,
+          RegistrationStatus.PENDING_PAYMENT,
+        ];
+        subscriptionStatus = pendingStatuses[adminIndex % pendingStatuses.length];
+        subscriptionDate = getCurrentVietnamTime();
+        expirationDate = null;
+      } else {
+        // Admins 9 & 10: PENDING_MANAGER_SETUP (adding manager accounts)
+        subscriptionStatus = RegistrationStatus.PENDING_MANAGER_SETUP;
+        subscriptionDate = getCurrentVietnamTime();
+        expirationDate = null;
+      }
+
+      const clinicSubscription = this.clinicSubscriptionRepository.create({
+        clinicId: clinicAdmin._id,
+        serviceId: service._id,
+        subscriptionDate,
+        expirationDate,
+        subscriptionStatus,
+      });
+
+      await this.clinicSubscriptionRepository.save(clinicSubscription);
+      createdCount++;
+
+      this.logger.log(
+        `Admin ${adminIndex}: Created subscription with status ${subscriptionStatus}`,
+      );
+    }
+
+    this.logger.log(`✅ Created ${createdCount} clinic subscriptions by scenario`);
+  }
+
+  /**
+   * Seed subscription history for admins 3 & 4 who are buying more subscriptions
+   */
+  private async seedBuyingMoreHistory(
+    clinicAdmins: Account[],
+    subscriptionServices: SubscriptionService[],
+  ): Promise<void> {
+    // Admins 3 & 4 (indices 2 & 3) have ACTIVE but are buying more
+    const buyingMoreAdminIndices = [2, 3]; // 0-based index for admins 3 & 4
+
+    for (const adminIndex of buyingMoreAdminIndices) {
+      const clinicAdmin = clinicAdmins[adminIndex];
+
+      // Check if history already exists
+      const existingHistoryCount =
+        await this.clinicSubscriptionHistoryRepository.count({
+          where: { clinicId: clinicAdmin._id },
+        });
+
+      if (existingHistoryCount > 0) {
+        continue;
+      }
+
+      // Create one history record showing PENDING_PAYMENT (recent purchase attempt)
+      const service = subscriptionServices[Math.floor(Math.random() * subscriptionServices.length)];
+      const daysAgo = this.getRandomInt(3, 10); // Recent (3-10 days ago)
+      const historyDate = subtractFromVietnamTime(daysAgo, 'day');
+
+      const historyRecord = this.clinicSubscriptionHistoryRepository.create({
+        clinicId: clinicAdmin._id,
+        serviceId: service._id,
+        subscriptionDate: historyDate,
+        expirationDate: addToDate(historyDate, 1, 'year'),
+        subscriptionStatus: RegistrationStatus.PENDING_PAYMENT,
+      });
+
+      await this.clinicSubscriptionHistoryRepository.save(historyRecord);
+
+      this.logger.log(
+        `Admin ${adminIndex + 1}: Created PENDING_PAYMENT history (buying more)`,
+      );
     }
   }
 
