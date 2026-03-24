@@ -41,6 +41,12 @@ export interface ClientToServerEvents {
   startTyping: (conversationId: string) => void;
   stopTyping: (conversationId: string) => void;
   joinClinicRoom: (clinicManagerId: string) => void;
+  appointmentCreated: (data: {
+    clinicManagerId: string;
+    appointmentId: string;
+    status: string;
+    message: string;
+  }) => void;
 }
 
 // Message and Conversation Event Types

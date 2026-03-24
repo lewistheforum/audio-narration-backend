@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { GeneralAccount } from '../../modules/accounts/entities/general_accounts.entity';
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
@@ -121,7 +121,12 @@ export class GeneralAccountSeederService {
     const year = getCurrentVietnamTime().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return dayjs
+      .tz(
+        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        VIETNAM_TIMEZONE,
+      )
+      .toDate();
   }
 
   /**

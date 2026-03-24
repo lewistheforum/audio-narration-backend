@@ -394,6 +394,46 @@ export class SocketGatewayService
     }
   }
 
+  @SubscribeMessage('appointmentCreated')
+  async handleAppointmentCreated(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      clinicManagerId: string;
+      appointmentId: string;
+      status: string;
+      message: string;
+    },
+  ): Promise<void> {
+    try {
+      if (!payload?.clinicManagerId || !payload?.appointmentId) {
+        client.emit('error', {
+          message: 'Invalid appointmentCreated payload',
+          code: 'APPOINTMENT_CREATED_INVALID',
+        });
+        return;
+      }
+
+      this.server
+        .to(`clinic-${payload.clinicManagerId}`)
+        .emit('appointmentStatusChanged', {
+          appointmentId: payload.appointmentId,
+          status: payload.status,
+          message: payload.message,
+        });
+
+      console.log(
+        `Broadcasted appointmentStatusChanged (created) to clinic-${payload.clinicManagerId} for appointment ${payload.appointmentId}`,
+      );
+    } catch (error) {
+      console.error('Error handling appointmentCreated:', error);
+      client.emit('error', {
+        message: 'Error broadcasting appointment created event',
+        code: 'APPOINTMENT_CREATED_ERROR',
+      });
+    }
+  }
+
   public broadcastAppointmentStatusChange(
     clinicManagerId: string,
     payload: { appointmentId: string; status: string; message: string },

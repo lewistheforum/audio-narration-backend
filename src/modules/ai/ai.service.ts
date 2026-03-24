@@ -9,7 +9,7 @@ import { AiChatImvFeedbackRequestDto } from './dto/ai-chat-imv-feedback-request.
 import { PatientAppointmentRecommendationRequestDto } from './dto/patient-appointment-recommendation-request.dto';
 import { FractureDetectionRequestDto } from './dto/fracture-detection-request.dto';
 import { HttpService } from '@nestjs/axios';
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import { firstValueFrom } from 'rxjs';
 import { API } from '../../common/utils/ai-api';
 import { getCurrentVietnamTime } from '../../common/utils/date.util';
@@ -162,7 +162,9 @@ export class AiService {
         clinicIds: Array.from(adminIds),
       };
 
-      const response = await firstValueFrom(this.httpService.post(url, payload));
+      const response = await firstValueFrom(
+        this.httpService.post(url, payload),
+      );
       return response.data;
     } catch (error) {
       throw new BadRequestException(

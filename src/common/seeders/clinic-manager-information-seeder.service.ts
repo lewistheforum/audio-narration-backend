@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { ClinicManagerInformation } from '../../modules/accounts/entities/clinic_manager_information.entity';
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
@@ -122,10 +122,7 @@ export class ClinicManagerInformationSeederService {
    * Get random English name based on gender
    */
   private getRandomName(gender: Gender): string {
-    const names =
-      gender === Gender.MALE
-        ? this.NAMES.male
-        : this.NAMES.female;
+    const names = gender === Gender.MALE ? this.NAMES.male : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 
@@ -138,7 +135,12 @@ export class ClinicManagerInformationSeederService {
     const year = getCurrentVietnamTime().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return dayjs
+      .tz(
+        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        VIETNAM_TIMEZONE,
+      )
+      .toDate();
   }
 
   /**
