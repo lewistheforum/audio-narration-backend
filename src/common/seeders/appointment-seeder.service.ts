@@ -4,7 +4,11 @@ import { In, Like, Repository } from 'typeorm';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
 import { AppointmentPackage } from '../../modules/appointments/entities/appointment-package.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
-import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from '../../modules/appointments/enums';
+import {
+  AppointmentStatus,
+  AppointmentPackageStatus,
+  PaymentType,
+} from '../../modules/appointments/enums';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
@@ -12,8 +16,15 @@ import { ClinicServiceConfigRepository } from '../../modules/service-configs/rep
 import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
 import { ClinicRoomRepository } from '../../modules/schedules/repositories/clinic-room.repository';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
-import { Transaction, PaymentStatus, PaymentDirection } from '../../modules/transactions/entities/transaction.entity';
-import { TransactionType, TransactionTypeCode } from '../../modules/transactions/entities/transaction-type.entity';
+import {
+  Transaction,
+  PaymentStatus,
+  PaymentDirection,
+} from '../../modules/transactions/entities/transaction.entity';
+import {
+  TransactionType,
+  TransactionTypeCode,
+} from '../../modules/transactions/entities/transaction-type.entity';
 import {
   APPOINTMENTS_PER_PATIENT,
   APPOINTMENT_STATUS,
@@ -31,7 +42,7 @@ import {
   APPOINTMENT_DIAGNOSES,
 } from '../constants/appointment-seeder-data';
 import { getVietnamTimestamp, VIETNAM_TIMEZONE } from '../utils/date.util';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 type ShiftHourAssignment = {
   clinicShiftHourId: string;
@@ -82,7 +93,7 @@ export class AppointmentSeederService {
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
     private readonly clinicRoomRepository: ClinicRoomRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
-  ) { }
+  ) {}
 
   /**
    * Seed all appointment-related data
@@ -212,15 +223,16 @@ export class AppointmentSeederService {
         );
         appointmentsCreated.push(...patientAppointments);
 
-        const overtimeAppointments = await this.seedOvertimeAppointmentsForPatient(
-          patient,
-          clinicsWithOvertimeCapacity,
-          doctors,
-          shiftAssignmentsByClinicDoctor,
-          clinicRoomsByClinic,
-          serviceConfigs,
-          txTypes,
-        );
+        const overtimeAppointments =
+          await this.seedOvertimeAppointmentsForPatient(
+            patient,
+            clinicsWithOvertimeCapacity,
+            doctors,
+            shiftAssignmentsByClinicDoctor,
+            clinicRoomsByClinic,
+            serviceConfigs,
+            txTypes,
+          );
         overtimeAppointmentsCreated += overtimeAppointments.length;
         appointmentsCreated.push(...overtimeAppointments);
       }
@@ -479,7 +491,10 @@ export class AppointmentSeederService {
     const overtimeAppointments: Appointment[] = [];
 
     for (let i = 0; i < this.OVERTIME_APPOINTMENTS_PER_PATIENT; i++) {
-      const existing = await this.findExistingOvertimeAppointment(patient._id, i);
+      const existing = await this.findExistingOvertimeAppointment(
+        patient._id,
+        i,
+      );
       if (existing) {
         overtimeAppointments.push(existing);
         continue;
@@ -539,9 +554,8 @@ export class AppointmentSeederService {
         diagnosis: null, // PENDING appointments do not have a diagnosis yet
       });
 
-      const savedAppointment = await this.appointmentRepository.save(
-        overtimeAppointment,
-      );
+      const savedAppointment =
+        await this.appointmentRepository.save(overtimeAppointment);
       overtimeAppointments.push(savedAppointment);
 
       // Create appointment package and services for overtime appointment
@@ -590,7 +604,10 @@ export class AppointmentSeederService {
 
     const startInMinutes = startHour * 60 + startMinute;
     const endInMinutes = endHour * 60 + endMinute;
-    const quarterSlots = Math.max(1, Math.floor((endInMinutes - startInMinutes) / 15));
+    const quarterSlots = Math.max(
+      1,
+      Math.floor((endInMinutes - startInMinutes) / 15),
+    );
     const quarterOffset = getRandomInt(0, quarterSlots - 1);
     const totalMinutes = startInMinutes + quarterOffset * 15;
 
@@ -710,8 +727,13 @@ export class AppointmentSeederService {
     const paymentType = getRandomItem(PAYMENT_TYPES);
     let transactionId = null;
 
-    if (status === AppointmentPackageStatus.PAID && txTypes.online && txTypes.cash) {
-      const txType = paymentType === PaymentType.ONLINE ? txTypes.online : txTypes.cash;
+    if (
+      status === AppointmentPackageStatus.PAID &&
+      txTypes.online &&
+      txTypes.cash
+    ) {
+      const txType =
+        paymentType === PaymentType.ONLINE ? txTypes.online : txTypes.cash;
       const transaction = this.transactionRepository.create({
         clinicId: clinic._id,
         transactionTypeId: txType._id,
@@ -725,7 +747,8 @@ export class AppointmentSeederService {
         gateway: paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH',
         appointmentId: appointment._id,
       });
-      const savedTransaction = await this.transactionRepository.save(transaction);
+      const savedTransaction =
+        await this.transactionRepository.save(transaction);
       transactionId = savedTransaction.id;
     }
 

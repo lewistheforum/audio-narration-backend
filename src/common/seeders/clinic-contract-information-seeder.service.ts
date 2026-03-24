@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
@@ -64,7 +64,7 @@ export class ClinicContractInformationSeederService {
     private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
-  ) { }
+  ) {}
 
   /**
    * Seed clinic contract information for CLINIC_STAFF and DOCTOR accounts
@@ -171,7 +171,10 @@ export class ClinicContractInformationSeederService {
           partyBSignerName: this.getRandomPartyBSignerName(),
           contractFile: this.getRandomContractFile(),
           contractStatus: status,
-          rejectionReason: status === ContractStatus.REJECTED ? this.getRandomRejectionReason() : null,
+          rejectionReason:
+            status === ContractStatus.REJECTED
+              ? this.getRandomRejectionReason()
+              : null,
         });
 
         await this.clinicContractInfoRepository.save(contractInfo);
@@ -231,7 +234,10 @@ export class ClinicContractInformationSeederService {
    */
   private getRandomContractStartDate(): Date {
     const now = getCurrentVietnamTime();
-    const sixMonthsAgo = dayjs(now).tz(VIETNAM_TIMEZONE).subtract(6, 'month').toDate();
+    const sixMonthsAgo = dayjs(now)
+      .tz(VIETNAM_TIMEZONE)
+      .subtract(6, 'month')
+      .toDate();
     const randomTime =
       sixMonthsAgo.getTime() +
       Math.random() * (now.getTime() - sixMonthsAgo.getTime());
@@ -244,7 +250,10 @@ export class ClinicContractInformationSeederService {
   private getRandomContractEndDate(): Date {
     const startDate = this.getRandomContractStartDate();
     const monthsToAdd = 12 + Math.floor(Math.random() * 12); // 12-24 months
-    const endDate = dayjs(startDate).tz(VIETNAM_TIMEZONE).add(monthsToAdd, 'month').toDate();
+    const endDate = dayjs(startDate)
+      .tz(VIETNAM_TIMEZONE)
+      .add(monthsToAdd, 'month')
+      .toDate();
     return endDate;
   }
 
@@ -381,14 +390,14 @@ export class ClinicContractInformationSeederService {
     const contractFiles = [
       '/contracts/contract_' + Math.floor(Math.random() * 10000) + '.pdf',
       '/contracts/employment_agreement_' +
-      Math.floor(Math.random() * 10000) +
-      '.pdf',
+        Math.floor(Math.random() * 10000) +
+        '.pdf',
       'https://storage.Bonix.vn/contracts/contract_' +
-      Math.floor(Math.random() * 10000) +
-      '.pdf',
+        Math.floor(Math.random() * 10000) +
+        '.pdf',
       'https://s3.Bonix.vn/contracts/employment_' +
-      Math.floor(Math.random() * 10000) +
-      '.pdf',
+        Math.floor(Math.random() * 10000) +
+        '.pdf',
       null, // 20% chance of no contract file
       null,
     ];
