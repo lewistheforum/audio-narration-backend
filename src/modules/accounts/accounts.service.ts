@@ -677,11 +677,14 @@ export class AccountsService {
       throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
     }
 
-    // Step 2: Hash password (even though it won't be used for OAuth login)
-    const hashedPassword = await bcrypt.hash(
-      dto.password,
-      this.BCRYPT_SALT_ROUNDS,
-    );
+    // Step 2: Hash password only if provided (OAuth may not provide password)
+    let hashedPassword = null;
+    if (dto.password) {
+      hashedPassword = await bcrypt.hash(
+        dto.password,
+        this.BCRYPT_SALT_ROUNDS,
+      );
+    }
 
     // Step 3: Create and save Account entity with OAuth flags
     const account = this.accountRepository.createAccount({
