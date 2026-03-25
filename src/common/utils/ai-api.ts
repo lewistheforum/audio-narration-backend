@@ -28,6 +28,7 @@ const AI = {
     `${BASE_URL}/rag/conversations/${conversation_id}`,
 
   SYNC_DATA: `${BASE_URL}/rag/knowledge-base/sync`,
+  SYNC_DATA_MEDICINE: `${BASE_URL}/rag/knowledge-base/sync-medicines`,
 
   FRACTURE_DETECTION: `${BASE_URL}/fracture-detection/detect`,
 };
