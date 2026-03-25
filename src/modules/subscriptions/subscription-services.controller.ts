@@ -75,9 +75,10 @@ export class SubscriptionServicesController {
   /**
    * Get All Subscription Services
    *
-   * Retrieves a list of all subscription services in the system.
-   * Returns all services ordered by newest first (createdAt DESC).
+   * Retrieves a list of all ACTIVE subscription services in the system.
+   * Returns ACTIVE services ordered by newest first (createdAt DESC).
    * Excludes soft-deleted records (deletedAt IS NULL).
+   * Excludes INACTIVE, archived, or deleted services.
    * No pagination, search, or filters.
    *
    * Response Format:
@@ -98,7 +99,7 @@ export class SubscriptionServicesController {
    * @response 200 - Successfully retrieved subscription services
    */
   @Get('services')
-  @ApiOperation({ summary: 'Get all subscription services' })
+  @ApiOperation({ summary: 'Get all ACTIVE subscription services' })
   @ApiResponseData({
     type: SubscriptionServiceResponseDto,
     status: MESSAGES.statusCode.success,
