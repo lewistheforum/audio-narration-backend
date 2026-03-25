@@ -1384,4 +1384,58 @@ describe('AccountsService - Registration Flow', () => {
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
     });
   });
+
+  // ============================================================================
+  // findAllClinicsAdmin
+  // ============================================================================
+  describe('findAllClinicsAdmin', () => {
+    it('should retrieve and map clinic admin data correctly using joined relations', async () => {
+      const mockClinic = createMockAccount({ _id: 'clinic-1' });
+      const mockClinicAdminInfo = createMockClinicAdminInfo({ _id: 'info-1', accountId: 'clinic-1' });
+      const mockAddress = { _id: 'addr-1', provinceName: 'Ho Chi Minh' };
+
+      // Mock joined relations
+      (mockClinic as any).clinicAdminInformation = mockClinicAdminInfo;
+      (mockClinic as any).address = mockAddress;
+
+      accountRepository.findClinicsAdminWithFilters = jest.fn().mockResolvedValue([[mockClinic], 1]);
+      dataSource.query = jest.fn().mockResolvedValue([{ avg_rating: '4.50' }]);
+
+      const result = await service.findAllClinicsAdmin(1, 10, 'search', 'province', 'specialty');
+
+      // Verify repository call with simplified arguments
+      expect(accountRepository.findClinicsAdminWithFilters).toHaveBeenCalledWith(
+        AccountRole.CLINIC_ADMIN,
+        0,
+        10,
+        'search',
+        'province',
+        'specialty',
+      );
+
+      // Verify redundant calls are NOT made
+      expect(clinicAdminInfoRepository.findByAccountId).not.toHaveBeenCalled();
+      expect(addressRepository.findByAccountId).not.toHaveBeenCalled();
+
+      // Verify mapping
+      expect(result.clinics).toHaveLength(1);
+      const item = result.clinics[0];
+      expect(item.id).toBe('clinic-1');
+      expect(item.clinicInfo.clinicBranchName).toBe(mockClinicAdminInfo.clinicName);
+      expect(item.averageRating).toBe(4.5);
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it('should skip clinics without clinicAdminInformation', async () => {
+      const mockClinic = createMockAccount({ _id: 'clinic-1' });
+      // No clinicAdminInformation joined
+      (mockClinic as any).clinicAdminInformation = null;
+
+      accountRepository.findClinicsAdminWithFilters = jest.fn().mockResolvedValue([[mockClinic], 1]);
+
+      const result = await service.findAllClinicsAdmin();
+
+      expect(result.clinics).toHaveLength(0);
+    });
+  });
 });

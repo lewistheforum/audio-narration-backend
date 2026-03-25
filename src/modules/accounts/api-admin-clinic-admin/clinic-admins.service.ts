@@ -99,7 +99,7 @@ export class ClinicAdminsService {
   async findOne(id: string): Promise<ClinicAdminDetailResponseDto> {
     const account = await this.accountRepository.findOne({
       where: { _id: id, role: AccountRole.CLINIC_ADMIN },
-      relations: ['clinicAdminInformation', 'address'],
+      relations: ['clinicAdminInformation', 'address', 'address.googleIframe'],
     });
 
     if (!account) {
@@ -178,6 +178,14 @@ export class ClinicAdminsService {
         districtName: account.address.districtName,
         provinceName: account.address.provinceName,
       };
+
+      if (account.address.googleIframe) {
+        dto.address.googleIframe = {
+          _id: account.address.googleIframe._id,
+          location: account.address.googleIframe.location,
+          googleMapIframe: account.address.googleIframe.googleMapIframe,
+        };
+      }
     }
 
     return dto;

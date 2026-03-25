@@ -489,6 +489,43 @@ export class AdminService {
     }
   }
 
+  async syncKnowledgeBaseMedicine(): Promise<any> {
+    // Step 1: Delete all current records in table knowledge base
+    await this.dataSource.query('DELETE FROM knowledge_base_medicines');
+
+    // Step 2: call api localhost:8080/api/v1/rag/knowledge-base/sync-medicines
+    try {
+      const response = await fetch(API.AI.SYNC_DATA_MEDICINE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clear_existing: false, // Already deleted above
+        }),
+      });
+
+      if (!response.ok) {
+        throw new BadRequestException(
+          `Failed to sync knowledge base: ${response.statusText}`,
+        );
+      }
+
+      const responseData = (await response.json()) as any;
+      const syncData = responseData.data;
+
+      return {
+        statusCode: 0,
+        message: 'Knowledge base synced successfully',
+        data: syncData,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        'Error calling AI sync API: ' + error.message,
+      );
+    }
+  }
+
   /**
    * Cleanup stale pending registrations
    *

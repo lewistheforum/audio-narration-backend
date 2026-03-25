@@ -108,9 +108,7 @@ export class AdminStatisticsRepository {
    *
    * Returns number of unique clinics and total subscriptions per service
    */
-  async getClinicCountByServiceYear(
-    year: number,
-  ): Promise<
+  async getClinicCountByServiceYear(year: number): Promise<
     {
       service_name: string;
       chart_color: string;
@@ -491,7 +489,7 @@ export class AdminStatisticsRepository {
       FROM
         transactions t
       JOIN
-        clinic_subcriptions_history csh ON t.subcription_id = csh._id
+        clinic_subcriptions_history csh ON t._id = csh.transaction_id
       JOIN
         subcription_services ss ON csh.service_id = ss._id
       WHERE
