@@ -85,7 +85,7 @@ export class SubscriptionServicesService {
   async findAll(): Promise<SubscriptionServiceResponseDto[]> {
     const services = await this.subscriptionServiceRepository.findAll(
       false,
-      // SubscriptionServiceStatus.ACTIVE,
+      SubscriptionServiceStatus.ACTIVE,
     );
     return services.map((service) => this.toResponseDto(service));
   }

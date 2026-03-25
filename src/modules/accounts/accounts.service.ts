@@ -574,10 +574,12 @@ export class AccountsService {
   async createPatient(
     createAccountDto: CreateAccountDto,
   ): Promise<{ user: AccountResponseDto }> {
-    // Step 1: Validate email uniqueness
+    // Step 1: Validate email uniqueness - Patient email must be unique (no sharing allowed)
     const existingAccount = await this.findByEmail(createAccountDto.email);
     if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+      throw new ConflictException(
+        'This email is already registered in the system and cannot be used for this role.',
+      );
     }
 
     // Step 2: Hash password for secure storage
@@ -671,10 +673,12 @@ export class AccountsService {
     fullName?: string;
     profilePicture?: string;
   }): Promise<AccountResponseDto> {
-    // Step 1: Validate email uniqueness
+    // Step 1: Validate email uniqueness - Patient email must be unique (no sharing allowed)
     const existingAccount = await this.findByEmail(dto.email);
     if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+      throw new ConflictException(
+        'This email is already registered in the system and cannot be used for this role.',
+      );
     }
 
     // Step 2: Hash password only if provided (OAuth may not provide password)
@@ -3097,10 +3101,12 @@ export class AccountsService {
     // Step 1.5: Validate manager status allows staff creation
     await this.validateManagerStatus(managerId, 'CREATE_STAFF');
 
-    // Step 2: Validate email uniqueness
+    // Step 2: Validate email uniqueness - Staff email must be unique (no sharing allowed)
     const existingAccount = await this.findByEmail(dto.email);
     if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+      throw new ConflictException(
+        'This email is already registered in the system and cannot be used for this role.',
+      );
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -3200,10 +3206,12 @@ export class AccountsService {
     // Step 1.5: Validate manager status allows doctor creation
     await this.validateManagerStatus(managerId, 'CREATE_STAFF');
 
-    // Step 2: Validate email uniqueness
+    // Step 2: Validate email uniqueness - Doctor email must be unique (no sharing allowed)
     const existingAccount = await this.findByEmail(dto.email);
     if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+      throw new ConflictException(
+        'This email is already registered in the system and cannot be used for this role.',
+      );
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -4221,20 +4229,25 @@ export class AccountsService {
   async registerClinicAdmin(
     dto: RegisterClinicAdminDto,
   ): Promise<AccountResponseDto> {
-    // Step 1: Validate email uniqueness and policy (max 2 uses: 1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
-    const existingAccount = await this.findByEmail(dto.email);
+    // Step 1: Validate email uniqueness with business rule:
+    // - Email must be unique across the system
+    // - EXCEPTION: Email CAN be shared once between CLINIC_ADMIN and CLINIC_MANAGER
+    const existingAccounts = await this.accountRepository.findAccounts({
+      where: { email: dto.email },
+    });
 
-    if (existingAccount) {
-      // Check if existing account is CLINIC_ADMIN or CLINIC_MANAGER
+    if (existingAccounts.length > 0) {
+      // Allow sharing ONLY with exactly one CLINIC_MANAGER
       if (
-        existingAccount.role === AccountRole.CLINIC_ADMIN ||
-        existingAccount.role === AccountRole.CLINIC_MANAGER
+        existingAccounts.length === 1 &&
+        existingAccounts[0].role === AccountRole.CLINIC_MANAGER
       ) {
+        // Allow - this is the exception case
+      } else {
         throw new ConflictException(
-          MESSAGES.failMessage.emailUsageLimitExceeded,
+          'This email is already registered in the system and cannot be used for this role.',
         );
       }
-      // Email exists but with different role - allow registration
     }
 
     // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
@@ -4400,10 +4413,25 @@ export class AccountsService {
       );
     }
 
-    // Step 4: Validate email uniqueness
-    const existingAccount = await this.findByEmail(dto.email);
-    if (existingAccount) {
-      throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
+    // Step 4: Validate email uniqueness with business rule:
+    // - Email must be unique across the system
+    // - EXCEPTION: Email CAN be shared once between CLINIC_ADMIN and CLINIC_MANAGER
+    const existingAccounts = await this.accountRepository.findAccounts({
+      where: { email: dto.email },
+    });
+
+    if (existingAccounts.length > 0) {
+      // Allow sharing ONLY with exactly one CLINIC_ADMIN
+      if (
+        existingAccounts.length === 1 &&
+        existingAccounts[0].role === AccountRole.CLINIC_ADMIN
+      ) {
+        // Allow - this is the exception case
+      } else {
+        throw new ConflictException(
+          'This email is already registered in the system and cannot be used for this role.',
+        );
+      }
     }
 
     // Step 5: Create all entities in a transaction

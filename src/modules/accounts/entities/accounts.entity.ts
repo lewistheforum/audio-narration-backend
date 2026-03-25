@@ -141,7 +141,7 @@ export class Account {
   @Column({ name: 'username', type: 'varchar', length: 100 })
   username: string;
 
-  @Column({ name: 'email', type: 'varchar', length: 255, unique: true })
+  @Column({ name: 'email', type: 'varchar', length: 255 })
   email: string;
 
   @Column({ name: 'phone', type: 'varchar', length: 20, nullable: true })
