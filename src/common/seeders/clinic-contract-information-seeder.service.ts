@@ -9,6 +9,7 @@ import { ClinicContractInformation } from '../../modules/contracts/entities/clin
 import { ClinicContractInformationRepository } from '../../modules/contracts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { CLINIC_LOCATIONS } from '../constants/locations';
 import {
   DOCTOR_SPECIALTIES,
   NATIONALITIES,
@@ -23,7 +24,7 @@ import {
   PARTY_B_SIGNERS,
   REJECTION_REASONS,
 } from '../constants/medical-terms';
-import { PROVINCES } from '../constants/locations';
+// Extract province names from CLINIC_LOCATIONS for contract seeding
 import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
@@ -48,7 +49,8 @@ export class ClinicContractInformationSeederService {
   // Orthopedics clinic-specific contract data
   private readonly DOCTOR_SPECIALTIES = DOCTOR_SPECIALTIES;
   private readonly NATIONALITIES = NATIONALITIES;
-  private readonly CURRENT_LIVING = PROVINCES.map((p) => p.name);
+  // Extract province names from CLINIC_LOCATIONS for contract seeding
+  private readonly CURRENT_LIVING = [...new Set(CLINIC_LOCATIONS.map(loc => loc.province))];
   private readonly WORK_SPECIALTY_AT_CLINIC = WORK_SPECIALTIES;
   private readonly JOB_DESCRIPTIONS = JOB_DESCRIPTIONS;
   private readonly REST_POLICIES = REST_POLICIES;
