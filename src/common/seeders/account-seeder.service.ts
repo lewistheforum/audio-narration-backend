@@ -11,12 +11,7 @@ import { AccountRepository } from '../../modules/accounts/repositories/account.r
 import { AddressRepository } from '../../modules/accounts/repositories/address.repository';
 import { GoogleIframeRepository } from '../../modules/accounts/repositories/google-iframe.repository';
 import { ENGLISH_NAMES } from '../constants/names';
-import {
-  PROVINCES,
-  WARDS_D1_HCMC,
-  STREET_NAMES,
-  BUILDING_TYPES,
-} from '../constants/locations';
+import { CLINIC_LOCATIONS } from '../constants/locations';
 
 /**
  * Account Seeder Service
@@ -46,39 +41,23 @@ export class AccountSeederService {
   // English names for realistic data
   private readonly NAMES = ENGLISH_NAMES;
 
-  // Vietnamese location constants for address generation
-  private readonly PROVINCES = PROVINCES;
-  private readonly WARDS = WARDS_D1_HCMC;
-  private readonly STREET_NAMES = STREET_NAMES;
-  private readonly BUILDING_TYPES = BUILDING_TYPES;
+  private readonly CLINIC_LOCATIONS = CLINIC_LOCATIONS;
 
-  // Google Maps iframe templates for Vietnamese cities
-  private readonly MAP_IFRAME_TEMPLATES = [
-    {
-      city: 'Ha Noi',
-      center: '21.0285,105.8542',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.8542!2d21.0285!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sHa+Noi!5e0!3m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
-    },
-    {
-      city: 'Ho Chi Minh',
-      center: '10.8231,106.6297',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d106.6297!2d10.8231!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
-    },
-    {
-      city: 'Da Nang',
-      center: '16.0544,108.2022',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d108.2022!2d16.0544!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
-    },
-    {
-      city: 'Can Tho',
-      center: '10.0452,105.7469',
-      placeholder:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d105.7469!2d10.0452!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1svi!2svi!4s2023-01-01" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
-    },
-  ];
+  private readonly MANAGER_ADDRESS_MAPPING: Record<number, number> = {
+    0: 0,
+    1: 1,
+    2: 2,
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+    7: 0,
+    8: 1,
+    9: 2,
+  };
+
+  // Map admin index to address index (repeats for admins 8, 9, 10)
+  private readonly ADMIN_ADDRESS_MAPPING = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2];
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -86,27 +65,18 @@ export class AccountSeederService {
     private readonly googleIframeRepository: GoogleIframeRepository,
   ) {}
 
-
-
   async seedBaseAccounts(): Promise<void> {
     try {
       this.logger.log(
         'Starting to seed base accounts (Admins, Managers, Patients)...',
       );
 
-      // Step 1: Seed CLINIC_ADMIN accounts
       const clinicAdmins = await this.seedClinicAdmins();
-
-      // Step 2: Seed CLINIC_MANAGER accounts
       await this.seedClinicManagers(clinicAdmins);
-
-      // Step 5: Seed PATIENT accounts
       await this.seedPatients();
-
-      // Step 6: Ensure all accounts have addresses and google iframes
       await this.ensureAddressesAndGoogleIframes();
 
-      this.logger.log('✅ Base Account seeding completed successfully');
+      this.logger.log('Base Account seeding completed successfully');
     } catch (error) {
       this.logger.error('Failed to seed base accounts', error.stack);
       throw error;
@@ -120,9 +90,6 @@ export class AccountSeederService {
     try {
       this.logger.log('Starting to seed employee accounts (Staff, Doctors)...');
 
-      // Only get clinic managers belonging to ACTIVE clinics
-      // For simplicity, since the first 5 are active, we just get their managers.
-      // But we can also be explicit: only the first 5 clinic admins
       const clinicAdmins = await this.accountRepository
         .findAllAccounts()
         .then((accounts) =>
@@ -136,8 +103,8 @@ export class AccountSeederService {
           accounts.filter((acc) => acc.role === AccountRole.CLINIC_MANAGER),
         );
 
-      // Filter managers whose parentId is in the first 5 clinic admins (which are ACTIVE)
-      const activeClinicAdminIds = clinicAdmins.slice(0, 5).map((a) => a._id);
+      // Filter managers whose parentId is in the first 10 clinic admins (which are ACTIVE)
+      const activeClinicAdminIds = clinicAdmins.slice(0, 10).map((a) => a._id);
       const activeManagers = allManagers.filter((m) =>
         activeClinicAdminIds.includes(m.parentId),
       );
@@ -167,10 +134,10 @@ export class AccountSeederService {
 
   /**
    * Seed CLINIC_ADMIN accounts
-   * Creates exactly 5 CLINIC_ADMIN accounts
+   * Creates exactly 10 CLINIC_ADMIN accounts with specific locations
    */
   private async seedClinicAdmins(): Promise<Account[]> {
-    const CLINIC_ADMIN_COUNT = 8; // 5 Active, 3 Pending
+    const CLINIC_ADMIN_COUNT = 10; // 10 admins with distributed scenarios
     const existingCount = await this.accountRepository.countByRole(
       AccountRole.CLINIC_ADMIN,
     );
@@ -450,13 +417,16 @@ export class AccountSeederService {
    * This method is idempotent and applies to ALL roles:
    * - PATIENT, ADMIN, CLINIC_ADMIN, CLINIC_MANAGER, CLINIC_STAFF, DOCTOR
    *
+   * For CLINIC_ADMIN accounts, use the 7 predefined real addresses
+   * For other accounts, generate random addresses
+   *
    * For each account:
    * 1. Check if address exists, if not create one with Vietnamese format
    * 2. Check if google_iframe exists for that address, if not create one
    */
   private async ensureAddressesAndGoogleIframes(): Promise<void> {
     this.logger.log(
-      'Ensuring all accounts have addresses and Google iframes...',
+      'Ensuring CLINIC_MANAGER accounts have addresses and Google iframes...',
     );
 
     // Get all accounts from database
@@ -472,30 +442,38 @@ export class AccountSeederService {
     let iframesCreated = 0;
     let iframesSkipped = 0;
 
-    for (const account of allAccounts) {
+    // Process only CLINIC_MANAGER accounts for address assignment
+    const clinicManagers = allAccounts.filter(
+      (account) => account.role === AccountRole.CLINIC_MANAGER,
+    );
+
+    this.logger.log(`Found ${clinicManagers.length} CLINIC_MANAGER accounts`);
+
+    for (const manager of clinicManagers) {
       // Step 1: Check and create address if needed
-      let address = await this.addressRepository.findByAccountId(account._id);
+      let address = await this.addressRepository.findByAccountId(manager._id);
 
       if (!address) {
-        // Generate Vietnamese-style address
-        const location = this.getRandomLocation();
-        const streetAddress = this.generateStreetAddress();
+        // Use predefined addresses for clinic managers
+        const managerIndex = clinicManagers.indexOf(manager);
+        const locationIndex = this.MANAGER_ADDRESS_MAPPING[managerIndex] ?? managerIndex % 7;
+        const location = this.CLINIC_LOCATIONS[locationIndex];
 
         address = this.addressRepository.create({
-          accountId: account._id,
-          address: streetAddress,
+          accountId: manager._id,
+          address: location.address,
           ward: location.wardCode,
           district: location.districtCode,
           province: location.provinceCode,
-          provinceName: location.provinceName,
-          districtName: location.districtName,
-          wardName: location.wardName,
+          provinceName: location.province,
+          districtName: location.district,
+          wardName: location.ward,
         });
 
         address = await this.addressRepository.save(address);
         addressesCreated++;
         this.logger.debug(
-          `Created address for account ${account.email} (${account.role})`,
+          `Created address for manager ${manager.email}`,
         );
       } else {
         addressesSkipped++;
@@ -507,99 +485,53 @@ export class AccountSeederService {
       );
 
       if (!iframeExists) {
-        // Generate Google Maps iframe
-        const mapTemplate = this.getMapTemplateForProvince(
-          address.provinceName,
-        );
-        const fullAddress = `${address.address}, ${address.wardName}, ${address.districtName}, ${address.provinceName}`;
+        // Use predefined iframe for clinic managers
+        const managerIndex = clinicManagers.indexOf(manager);
+        const locationIndex = this.MANAGER_ADDRESS_MAPPING[managerIndex] ?? managerIndex % 7;
+        const location = this.CLINIC_LOCATIONS[locationIndex];
 
         const googleIframe = this.googleIframeRepository.create({
           addressId: address._id,
-          location: fullAddress,
+          location: location.address,
           zoomLevel: 14,
           responsive: true,
-          googleMapIframe: mapTemplate.placeholder,
+          googleMapIframe: location.googleIframe,
         });
 
         await this.googleIframeRepository.save(googleIframe);
         iframesCreated++;
-        this.logger.debug(`Created Google iframe for address ${address._id}`);
+        this.logger.debug(`Created Google iframe for manager ${manager.email}`);
       } else {
         iframesSkipped++;
       }
     }
 
+    // For CLINIC_ADMIN accounts, ensure addresses and iframes are NULL
+    const clinicAdmins = allAccounts.filter(
+      (account) => account.role === AccountRole.CLINIC_ADMIN,
+    );
+
+    for (const admin of clinicAdmins) {
+      const existingAddress = await this.addressRepository.findByAccountId(admin._id);
+      if (existingAddress) {
+        await this.addressRepository.deleteByAccountId(admin._id);
+        this.logger.debug(`Removed address for admin ${admin.email}`);
+      }
+
+      const existingIframe = await this.googleIframeRepository.existsByAddressId(existingAddress?._id);
+      if (existingIframe) {
+        // This would be handled by cascade removal from address
+      }
+    }
+
     this.logger.log(
       `✅ Address and Google iframe seeding completed: ` +
-        `Addresses: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
+        `Managers: ${addressesCreated} created, ${addressesSkipped} skipped | ` +
         `Iframes: ${iframesCreated} created, ${iframesSkipped} skipped`,
     );
   }
 
-  /**
-   * Generate random street address in Vietnamese format
-   */
-  private generateStreetAddress(): string {
-    const buildingType =
-      this.BUILDING_TYPES[
-        Math.floor(Math.random() * this.BUILDING_TYPES.length)
-      ];
-    const buildingNumber = Math.floor(Math.random() * 500) + 1;
-    const streetName =
-      this.STREET_NAMES[Math.floor(Math.random() * this.STREET_NAMES.length)];
-    return `${buildingType} ${buildingNumber}, ${streetName}`;
-  }
 
-  /**
-   * Get random cohesive location details
-   */
-  private getRandomLocation() {
-    const province =
-      this.PROVINCES[Math.floor(Math.random() * this.PROVINCES.length)];
-    const district =
-      province.districts[Math.floor(Math.random() * province.districts.length)];
-    const ward = this.WARDS[Math.floor(Math.random() * this.WARDS.length)];
-
-    return {
-      provinceCode: String(province.code),
-      provinceName: province.name,
-      districtCode: String(district.code),
-      districtName: district.name,
-      wardCode: String(ward.code),
-      wardName: ward.name,
-    };
-  }
-
-  /**
-   * Get map template based on province name for Vietnamese cities
-   */
-  private getMapTemplateForProvince(provinceName: string): {
-    city: string;
-    center: string;
-    placeholder: string;
-  } {
-    const lowerProvinceName = provinceName.toLowerCase();
-
-    // Match Vietnamese city names
-    if (
-      lowerProvinceName.includes('hanoi') ||
-      lowerProvinceName.includes('ha noi')
-    ) {
-      return this.MAP_IFRAME_TEMPLATES[0];
-    }
-    if (lowerProvinceName.includes('ho chi minh')) {
-      return this.MAP_IFRAME_TEMPLATES[1];
-    }
-    if (lowerProvinceName.includes('da nang')) {
-      return this.MAP_IFRAME_TEMPLATES[2];
-    }
-    if (lowerProvinceName.includes('can tho')) {
-      return this.MAP_IFRAME_TEMPLATES[3];
-    }
-
-    // Default to Ho Chi Minh City template
-    return this.MAP_IFRAME_TEMPLATES[1];
-  }
 
   /**
    * Generate random Vietnamese local phone number

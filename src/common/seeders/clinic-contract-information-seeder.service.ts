@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRole } from '../../modules/accounts/enums/account-role.enum';
 import { ContractType } from '../../modules/contracts/enums/contract-type.enum';
@@ -9,6 +9,7 @@ import { ClinicContractInformation } from '../../modules/contracts/entities/clin
 import { ClinicContractInformationRepository } from '../../modules/contracts/repositories/clinic-contract-information.repository';
 import { ContractPackageRepository } from '../../modules/contracts/repositories/contract-package.repository';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
+import { CLINIC_LOCATIONS } from '../constants/locations';
 import {
   DOCTOR_SPECIALTIES,
   NATIONALITIES,
@@ -23,7 +24,7 @@ import {
   PARTY_B_SIGNERS,
   REJECTION_REASONS,
 } from '../constants/medical-terms';
-import { PROVINCES } from '../constants/locations';
+// Extract province names from CLINIC_LOCATIONS for contract seeding
 import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
@@ -48,7 +49,8 @@ export class ClinicContractInformationSeederService {
   // Orthopedics clinic-specific contract data
   private readonly DOCTOR_SPECIALTIES = DOCTOR_SPECIALTIES;
   private readonly NATIONALITIES = NATIONALITIES;
-  private readonly CURRENT_LIVING = PROVINCES.map((p) => p.name);
+  // Extract province names from CLINIC_LOCATIONS for contract seeding
+  private readonly CURRENT_LIVING = [...new Set(CLINIC_LOCATIONS.map(loc => loc.province))];
   private readonly WORK_SPECIALTY_AT_CLINIC = WORK_SPECIALTIES;
   private readonly JOB_DESCRIPTIONS = JOB_DESCRIPTIONS;
   private readonly REST_POLICIES = REST_POLICIES;
@@ -64,7 +66,7 @@ export class ClinicContractInformationSeederService {
     private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
     private readonly contractPackageRepository: ContractPackageRepository,
     private readonly accountRepository: AccountRepository,
-  ) { }
+  ) {}
 
   /**
    * Seed clinic contract information for CLINIC_STAFF and DOCTOR accounts
@@ -169,9 +171,12 @@ export class ClinicContractInformationSeederService {
           effectiveTo: this.getRandomEffectiveTo(),
           partyASignerName: this.getRandomPartyASignerName(),
           partyBSignerName: this.getRandomPartyBSignerName(),
-          contractFile: this.getRandomContractFile(),
+          contractFile: this.VALID_CONTRACT_PDF,
           contractStatus: status,
-          rejectionReason: status === ContractStatus.REJECTED ? this.getRandomRejectionReason() : null,
+          rejectionReason:
+            status === ContractStatus.REJECTED
+              ? this.getRandomRejectionReason()
+              : null,
         });
 
         await this.clinicContractInfoRepository.save(contractInfo);
@@ -231,7 +236,10 @@ export class ClinicContractInformationSeederService {
    */
   private getRandomContractStartDate(): Date {
     const now = getCurrentVietnamTime();
-    const sixMonthsAgo = dayjs(now).tz(VIETNAM_TIMEZONE).subtract(6, 'month').toDate();
+    const sixMonthsAgo = dayjs(now)
+      .tz(VIETNAM_TIMEZONE)
+      .subtract(6, 'month')
+      .toDate();
     const randomTime =
       sixMonthsAgo.getTime() +
       Math.random() * (now.getTime() - sixMonthsAgo.getTime());
@@ -244,7 +252,10 @@ export class ClinicContractInformationSeederService {
   private getRandomContractEndDate(): Date {
     const startDate = this.getRandomContractStartDate();
     const monthsToAdd = 12 + Math.floor(Math.random() * 12); // 12-24 months
-    const endDate = dayjs(startDate).tz(VIETNAM_TIMEZONE).add(monthsToAdd, 'month').toDate();
+    const endDate = dayjs(startDate)
+      .tz(VIETNAM_TIMEZONE)
+      .add(monthsToAdd, 'month')
+      .toDate();
     return endDate;
   }
 
@@ -374,26 +385,8 @@ export class ClinicContractInformationSeederService {
     ];
   }
 
-  /**
-   * Get random contract file path or URL (nullable)
-   */
-  private getRandomContractFile(): string | null {
-    const contractFiles = [
-      '/contracts/contract_' + Math.floor(Math.random() * 10000) + '.pdf',
-      '/contracts/employment_agreement_' +
-      Math.floor(Math.random() * 10000) +
-      '.pdf',
-      'https://storage.Bonix.vn/contracts/contract_' +
-      Math.floor(Math.random() * 10000) +
-      '.pdf',
-      'https://s3.Bonix.vn/contracts/employment_' +
-      Math.floor(Math.random() * 10000) +
-      '.pdf',
-      null, // 20% chance of no contract file
-      null,
-    ];
-    return contractFiles[Math.floor(Math.random() * contractFiles.length)];
-  }
+  // Valid dummy PDF for testing
+  private readonly VALID_CONTRACT_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
 
   /**
    * Get random contract status

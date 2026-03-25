@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { DataSource, In } from 'typeorm';
 import Redis from 'ioredis';
-import { v4 as uuidv4 } from 'uuid';
 import { REDIS_CLIENT } from 'src/config/redis.config';
 import {
   CreateBookingSessionDto,
@@ -30,6 +29,12 @@ import {
   startOfDay,
 } from 'src/common/utils/date.util';
 
+let uuidv4: () => string;
+(async () => {
+  const uuid = await import('uuid');
+  uuidv4 = uuid.v4;
+})();
+
 /**
  * Booking Session Interface
  *
@@ -38,7 +43,7 @@ import {
 export interface BookingSession {
   sessionId: string;
   patientId: string;
-  
+
   // Data accumulated across steps
   /** V5.0: Multi-service booking - replaces single clinicServiceConfigId */
   serviceIds?: string[]; // Array of clinic_service_config IDs
@@ -54,7 +59,7 @@ export interface BookingSession {
   patientNote?: string;
   appointmentHour?: string;
   workHistoryId?: string;
-  
+
   // Metadata
   bookingOption: BookingOption;
   createdAt: Date;
@@ -97,7 +102,10 @@ export class BookingSessionService {
     createDto: CreateBookingSessionDto,
   ): Promise<BookingSessionResponseDto> {
     // Validate initial data based on booking option
-    await this.validateInitialData(createDto.booking_option, createDto.initial_data);
+    await this.validateInitialData(
+      createDto.booking_option,
+      createDto.initial_data,
+    );
 
     // Generate session ID
     const sessionId = uuidv4();
@@ -140,7 +148,11 @@ export class BookingSessionService {
 
     // Save to Redis with TTL
     const key = this.getSessionKey(sessionId);
-    await this.redisClient.setex(key, this.SESSION_TTL, JSON.stringify(session));
+    await this.redisClient.setex(
+      key,
+      this.SESSION_TTL,
+      JSON.stringify(session),
+    );
 
     // Build response
     return this.buildSessionResponse(session);
@@ -167,11 +179,17 @@ export class BookingSessionService {
 
     // Verify ownership
     if (session.patientId !== patientId) {
-      throw new ForbiddenException('You do not have permission to access this session');
+      throw new ForbiddenException(
+        'You do not have permission to access this session',
+      );
     }
 
     // Validate step sequence (pass bookingOption for proper validation)
-    this.validateStepSequence(session.currentStep, updateDto.step, session.bookingOption);
+    this.validateStepSequence(
+      session.currentStep,
+      updateDto.step,
+      session.bookingOption,
+    );
 
     // Update session based on booking option and step (VERSION 4.6)
     // FIX: Use Object.assign to explicitly merge new data while preserving all existing fields
@@ -184,12 +202,12 @@ export class BookingSessionService {
       // Step 5: Add payment_method + patient_note
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        
+
         // Validate clinic_id is required
         if (!data.clinic_id) {
           throw new BadRequestException('Clinic ID is required in step 2');
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           clinicId: data.clinic_id,
@@ -197,37 +215,45 @@ export class BookingSessionService {
         });
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        
+
         // VERSION 4.6: Step 3 now handles clinic_shift_hour_id + doctor_id
         // Validate required fields
         if (!data.clinic_shift_hour_id) {
-          throw new BadRequestException('Clinic shift hour ID is required in step 3');
+          throw new BadRequestException(
+            'Clinic shift hour ID is required in step 3',
+          );
         }
         if (!data.doctor_id) {
           throw new BadRequestException('Doctor ID is required in step 3');
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
           clinicShiftHourId: data.clinic_shift_hour_id,
           doctorId: data.doctor_id,
           currentStep: 3,
         };
-        
+
         // ADDED VERSION 4.0: Save appointment hour
         if (data.appointment_hour) {
           updateFields.appointmentHour = data.appointment_hour;
         }
-        
+
         Object.assign(session, updateFields);
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        
+
         // VERSION 5.0: Step 4 now handles service_ids (multi-service array)
-        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
-          throw new BadRequestException('service_ids (array) is required in step 4');
+        if (
+          !data.service_ids ||
+          !Array.isArray(data.service_ids) ||
+          data.service_ids.length === 0
+        ) {
+          throw new BadRequestException(
+            'service_ids (array) is required in step 4',
+          );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           serviceIds: data.service_ids,
@@ -235,23 +261,23 @@ export class BookingSessionService {
         });
       } else if (updateDto.step === 5) {
         const data = updateDto.data as any;
-        
+
         // Payment method is REQUIRED
         if (!data.payment_method) {
           throw new BadRequestException('Payment method is required in step 5');
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
           paymentMethod: data.payment_method,
           currentStep: 5,
         };
-        
+
         // Patient note is optional
         if (data.patient_note !== undefined) {
           updateFields.patientNote = data.patient_note;
         }
-        
+
         Object.assign(session, updateFields);
       }
     } else if (session.bookingOption === BookingOption.DOCTOR) {
@@ -263,37 +289,47 @@ export class BookingSessionService {
       // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        
+
         // Validate required fields for Step 2
         if (!data.appointment_date) {
-          throw new BadRequestException('Appointment date is required in step 2');
+          throw new BadRequestException(
+            'Appointment date is required in step 2',
+          );
         }
         if (!data.clinic_shift_hour_id) {
-          throw new BadRequestException('Clinic shift hour ID is required in step 2');
+          throw new BadRequestException(
+            'Clinic shift hour ID is required in step 2',
+          );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
           appointmentDate: data.appointment_date,
           clinicShiftHourId: data.clinic_shift_hour_id,
           currentStep: 2,
         };
-        
+
         // ADDED VERSION 4.0: Save appointment hour
         if (data.appointment_hour) {
           updateFields.appointmentHour = data.appointment_hour;
         }
-        
+
         // MISSING Object.assign FIXXED:
         Object.assign(session, updateFields);
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        
+
         // V5.0: Accept service_ids (multi-service array) instead of single ID
-        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
-          throw new BadRequestException('service_ids (array) is required in step 3');
+        if (
+          !data.service_ids ||
+          !Array.isArray(data.service_ids) ||
+          data.service_ids.length === 0
+        ) {
+          throw new BadRequestException(
+            'service_ids (array) is required in step 3',
+          );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           serviceIds: data.service_ids,
@@ -301,12 +337,12 @@ export class BookingSessionService {
         });
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        
+
         // Payment method is REQUIRED in step 4
         if (!data.payment_method) {
           throw new BadRequestException('Payment method is required in step 4');
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           paymentMethod: data.payment_method,
@@ -314,16 +350,16 @@ export class BookingSessionService {
         });
       } else if (updateDto.step === 5) {
         const data = updateDto.data as any;
-        
+
         // Patient note is optional in step 5
         const updateFields: any = {
           currentStep: 5,
         };
-        
+
         if (data.patient_note !== undefined) {
           updateFields.patientNote = data.patient_note;
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, updateFields);
       }
@@ -334,41 +370,45 @@ export class BookingSessionService {
       // Step 4: Add patient_note (OPTIONAL)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        
+
         // Validate required fields for Step 2
         if (!data.appointment_date) {
-          throw new BadRequestException('Appointment date is required in step 2');
+          throw new BadRequestException(
+            'Appointment date is required in step 2',
+          );
         }
         if (!data.clinic_shift_hour_id) {
-          throw new BadRequestException('Clinic shift hour ID is required in step 2');
+          throw new BadRequestException(
+            'Clinic shift hour ID is required in step 2',
+          );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
           appointmentDate: data.appointment_date,
           clinicShiftHourId: data.clinic_shift_hour_id,
           currentStep: 2,
         };
-        
+
         // ADDED VERSION 4.0: Save appointment hour
         if (data.appointment_hour) {
           updateFields.appointmentHour = data.appointment_hour;
         }
-        
+
         // For service-first flow (Option 1): doctor_id is provided
         if (data.doctor_id) {
           updateFields.doctorId = data.doctor_id;
         }
-        
+
         Object.assign(session, updateFields);
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        
+
         // Payment method is REQUIRED in step 3
         if (!data.payment_method) {
           throw new BadRequestException('Payment method is required in step 3');
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           paymentMethod: data.payment_method,
@@ -377,16 +417,16 @@ export class BookingSessionService {
       } else if (updateDto.step === 4) {
         // Step 4: Add patient_note (OPTIONAL)
         const data = updateDto.data as any;
-        
+
         // Patient note is optional - can be empty string or any text
         const updateFields: any = {
           currentStep: 4,
         };
-        
+
         if (data.patient_note !== undefined) {
           updateFields.patientNote = data.patient_note;
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, updateFields);
       }
@@ -399,37 +439,53 @@ export class BookingSessionService {
       // Step 5: Add patient_note (optional)
       if (updateDto.step === 2) {
         const data = updateDto.data as any;
-        
+
         // Validate extra_hour is required
         if (!data.extra_hour) {
-          throw new BadRequestException('Extra hour is required in step 2 for out-of-hours booking');
+          throw new BadRequestException(
+            'Extra hour is required in step 2 for out-of-hours booking',
+          );
         }
-        
+
         // Convert extra_hour to Date and validate format
         const extraHourDate = new Date(data.extra_hour);
         if (isNaN(extraHourDate.getTime())) {
-          throw new BadRequestException('Invalid extra hour format. Must be a valid ISO 8601 timestamp');
+          throw new BadRequestException(
+            'Invalid extra hour format. Must be a valid ISO 8601 timestamp',
+          );
         }
-        
+
         // Validate extra_hour must be in the future (use Vietnam timezone)
         if (isInPast(extraHourDate)) {
           throw new BadRequestException('Extra hour must be in the future');
         }
-        
+
         // Validate appointment_date is required
         if (!data.appointment_date) {
-          throw new BadRequestException('Appointment date is required in step 2 for out-of-hours booking');
+          throw new BadRequestException(
+            'Appointment date is required in step 2 for out-of-hours booking',
+          );
         }
-        
+
         // Validate appointment_date matches the date part of extra_hour
         const appointmentDate = new Date(data.appointment_date);
-        const extraHourDateOnly = new Date(extraHourDate.getFullYear(), extraHourDate.getMonth(), extraHourDate.getDate());
-        const appointmentDateOnly = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), appointmentDate.getDate());
-        
+        const extraHourDateOnly = new Date(
+          extraHourDate.getFullYear(),
+          extraHourDate.getMonth(),
+          extraHourDate.getDate(),
+        );
+        const appointmentDateOnly = new Date(
+          appointmentDate.getFullYear(),
+          appointmentDate.getMonth(),
+          appointmentDate.getDate(),
+        );
+
         if (extraHourDateOnly.getTime() !== appointmentDateOnly.getTime()) {
-          throw new BadRequestException('Appointment date must match the date part of extra hour');
+          throw new BadRequestException(
+            'Appointment date must match the date part of extra hour',
+          );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         // SPECIAL: Hardcode clinicShiftHourId = null for out-of-hours
         const updateFields: any = {
@@ -438,21 +494,27 @@ export class BookingSessionService {
           clinicShiftHourId: null,
           currentStep: 2,
         };
-        
+
         // Extract doctor_id for out-of-hours (REQUIRED)
         if (data.doctor_id) {
           updateFields.doctorId = data.doctor_id;
         }
-        
+
         Object.assign(session, updateFields);
       } else if (updateDto.step === 3) {
         const data = updateDto.data as any;
-        
+
         // V5.0: Accept service_ids (multi-service array) for out-of-hours
-        if (!data.service_ids || !Array.isArray(data.service_ids) || data.service_ids.length === 0) {
-          throw new BadRequestException('service_ids (array) is required in step 3 for out-of-hours booking');
+        if (
+          !data.service_ids ||
+          !Array.isArray(data.service_ids) ||
+          data.service_ids.length === 0
+        ) {
+          throw new BadRequestException(
+            'service_ids (array) is required in step 3 for out-of-hours booking',
+          );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           serviceIds: data.service_ids,
@@ -460,10 +522,12 @@ export class BookingSessionService {
         });
       } else if (updateDto.step === 4) {
         const data = updateDto.data as any;
-        
+
         // Payment method is REQUIRED in step 4 for out-of-hours
         if (!data.payment_method) {
-          throw new BadRequestException('Payment method is required in step 4 for out-of-hours booking');
+          throw new BadRequestException(
+            'Payment method is required in step 4 for out-of-hours booking',
+          );
         }
 
         // BUSINESS RULE: Out-of-hours appointments ONLY accept COD payment
@@ -472,7 +536,7 @@ export class BookingSessionService {
             'Out-of-hours appointments strictly require COD payment method. Online payment is not supported.',
           );
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, {
           paymentMethod: data.payment_method,
@@ -480,16 +544,16 @@ export class BookingSessionService {
         });
       } else if (updateDto.step === 5) {
         const data = updateDto.data as any;
-        
+
         // Patient note is optional in step 5 for out-of-hours
         const updateFields: any = {
           currentStep: 5,
         };
-        
+
         if (data.patient_note !== undefined) {
           updateFields.patientNote = data.patient_note;
         }
-        
+
         // MERGE: Explicitly preserve all existing fields
         Object.assign(session, updateFields);
       }
@@ -498,7 +562,11 @@ export class BookingSessionService {
     // Save updated session to Redis (keep original TTL)
     const key = this.getSessionKey(sessionId);
     const ttl = await this.redisClient.ttl(key);
-    await this.redisClient.setex(key, ttl > 0 ? ttl : this.SESSION_TTL, JSON.stringify(session));
+    await this.redisClient.setex(
+      key,
+      ttl > 0 ? ttl : this.SESSION_TTL,
+      JSON.stringify(session),
+    );
 
     return this.buildSessionResponse(session);
   }
@@ -515,7 +583,9 @@ export class BookingSessionService {
     const data = await this.redisClient.get(key);
 
     if (!data) {
-      throw new NotFoundException('Booking session not found or expired. Please start a new booking.');
+      throw new NotFoundException(
+        'Booking session not found or expired. Please start a new booking.',
+      );
     }
 
     return JSON.parse(data);
@@ -542,32 +612,46 @@ export class BookingSessionService {
    */
   private async validateInitialData(
     option: BookingOption,
-    data: ServiceInitialDataDto | DoctorInitialDataDto | DateInitialDataDto | OutOfHoursInitialDataDto,
+    data:
+      | ServiceInitialDataDto
+      | DoctorInitialDataDto
+      | DateInitialDataDto
+      | OutOfHoursInitialDataDto,
   ): Promise<void> {
     if (option === BookingOption.SERVICE) {
       const serviceData = data as ServiceInitialDataDto;
-      
+
       // Verify service_ids is a valid array (prevent TypeError: parameterValue.value is not iterable)
-      if (!serviceData.service_ids || !Array.isArray(serviceData.service_ids) || serviceData.service_ids.length === 0) {
+      if (
+        !serviceData.service_ids ||
+        !Array.isArray(serviceData.service_ids) ||
+        serviceData.service_ids.length === 0
+      ) {
         throw new BadRequestException('service_ids must be a non-empty array');
       }
 
       // Verify all clinic service configs exist and are active (V5.0 - Multi-Service)
-      const serviceConfigs = await this.dataSource.getRepository(ClinicServiceConfig).find({
-        where: { 
-          _id: In(serviceData.service_ids),
-          clinicId: serviceData.clinic_id,
-        },
-        relations: ['service'],
-      });
+      const serviceConfigs = await this.dataSource
+        .getRepository(ClinicServiceConfig)
+        .find({
+          where: {
+            _id: In(serviceData.service_ids),
+            clinicId: serviceData.clinic_id,
+          },
+          relations: ['service'],
+        });
 
       if (serviceConfigs.length !== serviceData.service_ids.length) {
-        throw new BadRequestException('One or more clinic service configurations not found');
+        throw new BadRequestException(
+          'One or more clinic service configurations not found',
+        );
       }
 
-      const inactiveServices = serviceConfigs.filter(sc => !sc.isActive);
+      const inactiveServices = serviceConfigs.filter((sc) => !sc.isActive);
       if (inactiveServices.length > 0) {
-        throw new BadRequestException('One or more services are currently not available');
+        throw new BadRequestException(
+          'One or more services are currently not available',
+        );
       }
 
       // Verify clinic exists and is active (can be CLINIC_ADMIN or CLINIC_MANAGER)
@@ -583,7 +667,7 @@ export class BookingSessionService {
       }
     } else if (option === BookingOption.DOCTOR) {
       const doctorData = data as DoctorInitialDataDto;
-      
+
       // Verify doctor exists and is active
       const doctor = await this.dataSource.getRepository(Account).findOne({
         where: { _id: doctorData.doctor_id, role: AccountRole.DOCTOR },
@@ -608,24 +692,28 @@ export class BookingSessionService {
       }
     } else if (option === BookingOption.DATE) {
       const dateData = data as DateInitialDataDto;
-      
+
       // Validate date is in future (at least today) - use Vietnam timezone
       const appointmentDate = new Date(dateData.appointment_date);
       const todayStart = startOfDay();
 
       if (appointmentDate < todayStart) {
-        throw new BadRequestException('Appointment date must be today or in the future');
+        throw new BadRequestException(
+          'Appointment date must be today or in the future',
+        );
       }
 
       // Validate date is within 60 days
       const maxDate = addToVietnamTime(60, 'day');
 
       if (appointmentDate > maxDate) {
-        throw new BadRequestException('Appointment date cannot be more than 60 days in the future');
+        throw new BadRequestException(
+          'Appointment date cannot be more than 60 days in the future',
+        );
       }
     } else if (option === BookingOption.OUT_OF_HOURS) {
       const outOfHoursData = data as OutOfHoursInitialDataDto;
-      
+
       // If clinic_id provided, verify it exists and is active
       if (outOfHoursData.clinic_id) {
         const clinic = await this.dataSource.getRepository(Account).findOne({
@@ -644,19 +732,23 @@ export class BookingSessionService {
 
   /**
    * Validate step sequence (VERSION 4.7)
-   * 
+   *
    * CHANGES:
    * - Option 1 (service-first): Step range is 2-4 (unchanged)
    * - Option 2 (doctor-first): Step range is 2-5 (changed since 4.3)
    * - Option 3 (date-first): Step range is 2-5 (unchanged)
    * - Option 4 (out-of-hours): Step range is 2-5 (added in 4.7)
-   * 
+   *
    * @param currentStep - Current step number
    * @param nextStep - Next step number
    * @param bookingOption - Booking option type
    * @throws BadRequestException if step sequence is invalid
    */
-  private validateStepSequence(currentStep: number, nextStep: number, bookingOption?: BookingOption): void {
+  private validateStepSequence(
+    currentStep: number,
+    nextStep: number,
+    bookingOption?: BookingOption,
+  ): void {
     if (nextStep !== currentStep + 1) {
       throw new BadRequestException(
         `Invalid step sequence. Current step: ${currentStep}, expected next step: ${currentStep + 1}`,
@@ -664,7 +756,11 @@ export class BookingSessionService {
     }
 
     // Different step ranges for different booking options (VERSION 4.7)
-    if (bookingOption === BookingOption.DATE || bookingOption === BookingOption.DOCTOR || bookingOption === BookingOption.OUT_OF_HOURS) {
+    if (
+      bookingOption === BookingOption.DATE ||
+      bookingOption === BookingOption.DOCTOR ||
+      bookingOption === BookingOption.OUT_OF_HOURS
+    ) {
       // Option 2, 3 & 4: Doctor-first, Date-first, or Out-of-hours - up to step 5
       if (nextStep < 2 || nextStep > 5) {
         throw new BadRequestException(
@@ -674,7 +770,9 @@ export class BookingSessionService {
     } else {
       // Option 1: Service-first - step 2-4
       if (nextStep < 2 || nextStep > 4) {
-        throw new BadRequestException('Step must be between 2 and 4 for service-first booking');
+        throw new BadRequestException(
+          'Step must be between 2 and 4 for service-first booking',
+        );
       }
     }
   }
@@ -684,10 +782,12 @@ export class BookingSessionService {
    *
    * @param session - Booking session object
    * @returns Formatted response DTO
-   * 
+   *
    * FIX: Always return ALL fields (even if undefined/null) so Frontend can see complete state
    */
-  private buildSessionResponse(session: BookingSession): BookingSessionResponseDto {
+  private buildSessionResponse(
+    session: BookingSession,
+  ): BookingSessionResponseDto {
     const bookingData: Record<string, any> = {};
 
     // FIX v4.5: Always include ALL possible fields to prevent data loss visibility

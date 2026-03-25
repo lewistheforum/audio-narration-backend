@@ -4,7 +4,11 @@ import { In, Like, Repository } from 'typeorm';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
 import { AppointmentPackage } from '../../modules/appointments/entities/appointment-package.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
-import { AppointmentStatus, AppointmentPackageStatus, PaymentType } from '../../modules/appointments/enums';
+import {
+  AppointmentStatus,
+  AppointmentPackageStatus,
+  PaymentType,
+} from '../../modules/appointments/enums';
 import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
@@ -12,8 +16,15 @@ import { ClinicServiceConfigRepository } from '../../modules/service-configs/rep
 import { EmployeeScheduleRepository } from '../../modules/schedules/repositories/employee-schedule.repository';
 import { ClinicRoomRepository } from '../../modules/schedules/repositories/clinic-room.repository';
 import { ClinicSubscriptionRepository } from '../../modules/subscriptions/repositories/clinic-subscription.repository';
-import { Transaction, PaymentStatus, PaymentDirection } from '../../modules/transactions/entities/transaction.entity';
-import { TransactionType, TransactionTypeCode } from '../../modules/transactions/entities/transaction-type.entity';
+import {
+  Transaction,
+  PaymentStatus,
+  PaymentDirection,
+} from '../../modules/transactions/entities/transaction.entity';
+import {
+  TransactionType,
+  TransactionTypeCode,
+} from '../../modules/transactions/entities/transaction-type.entity';
 import {
   APPOINTMENTS_PER_PATIENT,
   APPOINTMENT_STATUS,
@@ -28,9 +39,10 @@ import {
   PATIENT_NOTES,
   APPOINTMENT_PACKAGE_STATUSES,
   PAYMENT_TYPES,
+  APPOINTMENT_DIAGNOSES,
 } from '../constants/appointment-seeder-data';
 import { getVietnamTimestamp, VIETNAM_TIMEZONE } from '../utils/date.util';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 type ShiftHourAssignment = {
   clinicShiftHourId: string;
@@ -81,7 +93,7 @@ export class AppointmentSeederService {
     private readonly employeeScheduleRepository: EmployeeScheduleRepository,
     private readonly clinicRoomRepository: ClinicRoomRepository,
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
-  ) { }
+  ) {}
 
   /**
    * Seed all appointment-related data
@@ -98,6 +110,19 @@ export class AppointmentSeederService {
         .then((accounts) =>
           accounts.filter((acc) => acc.role === AccountRole.PATIENT),
         );
+
+      // Get all CLINIC_ADMIN accounts (sorted by creation - first one is Admin 1)
+      const clinicAdmins = await this.accountRepository
+        .findAllAccounts()
+        .then((accounts) =>
+          accounts
+            .filter((acc) => acc.role === AccountRole.CLINIC_ADMIN)
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+        );
+      
+      // Get Admin 1's ID for SEPAY transactions
+      const admin1Id = clinicAdmins.length > 0 ? clinicAdmins[0]._id : null;
+      const clinicAdminIds = clinicAdmins.map(admin => admin._id);
 
       // Get active subscriptions
       const activeClinicIds =
@@ -208,18 +233,21 @@ export class AppointmentSeederService {
           serviceConfigs,
           shiftAssignmentsByClinicDoctor,
           txTypes,
+          clinicAdminIds,
         );
         appointmentsCreated.push(...patientAppointments);
 
-        const overtimeAppointments = await this.seedOvertimeAppointmentsForPatient(
-          patient,
-          clinicsWithOvertimeCapacity,
-          doctors,
-          shiftAssignmentsByClinicDoctor,
-          clinicRoomsByClinic,
-          serviceConfigs,
-          txTypes,
-        );
+        const overtimeAppointments =
+          await this.seedOvertimeAppointmentsForPatient(
+            patient,
+            clinicsWithOvertimeCapacity,
+            doctors,
+            shiftAssignmentsByClinicDoctor,
+            clinicRoomsByClinic,
+            serviceConfigs,
+            txTypes,
+            clinicAdminIds,
+          );
         overtimeAppointmentsCreated += overtimeAppointments.length;
         appointmentsCreated.push(...overtimeAppointments);
       }
@@ -242,6 +270,7 @@ export class AppointmentSeederService {
    * @param clinics - Available clinic accounts
    * @param doctors - Available doctor accounts
    * @param serviceConfigs - Available service configs
+   * @param clinicAdminIds - Array of CLINIC_ADMIN IDs to check if clinic belongs to Admin 1
    * @returns Array of created appointments
    */
   private async seedAppointmentsForPatient(
@@ -251,6 +280,7 @@ export class AppointmentSeederService {
     serviceConfigs: any[],
     shiftAssignmentsByClinicDoctor: Map<string, ShiftHourAssignment[]>,
     txTypes: { online: TransactionType; cash: TransactionType },
+    clinicAdminIds: string[],
   ): Promise<Appointment[]> {
     const appointments: Appointment[] = [];
     const numAppointments = APPOINTMENTS_PER_PATIENT;
@@ -328,7 +358,8 @@ export class AppointmentSeederService {
         status: APPOINTMENT_STATUS,
         isRemider: getRandomInt(0, 1) === 1,
         patientNote: getRandomItem(PATIENT_NOTES),
-        rejectReason: null, // Must be null for COMPLETED appointments
+        rejectReason: null,
+        diagnosis: getRandomItem(APPOINTMENT_DIAGNOSES),
       });
 
       const savedAppointment =
@@ -341,10 +372,151 @@ export class AppointmentSeederService {
         clinic,
         serviceConfigs,
         txTypes,
+        clinicAdminIds,
       );
     }
 
     return appointments;
+  }
+
+  private async ensureAppointmentShiftHour(
+    appointment: Appointment,
+    shiftAssignmentsByClinicDoctor: Map<string, ShiftHourAssignment[]>,
+  ): Promise<Appointment> {
+    if (appointment.clinicShiftHourId) {
+      return appointment;
+    }
+
+    if (!appointment.doctorId) {
+      throw new Error(
+        `Appointment ${appointment._id} has no doctor assigned. Cannot derive clinic_shift_hour_id consistently.`,
+      );
+    }
+
+    const shiftAssignments = shiftAssignmentsByClinicDoctor.get(
+      this.getClinicDoctorKey(appointment.clinicId, appointment.doctorId),
+    );
+
+    if (!shiftAssignments || shiftAssignments.length === 0) {
+      throw new Error(
+        `No shift hour assignment found for appointment ${appointment._id} (clinic ${appointment.clinicId}, doctor ${appointment.doctorId}).`,
+      );
+    }
+
+    const shiftAssignment = getRandomItem(shiftAssignments);
+    appointment.clinicShiftHourId = shiftAssignment.clinicShiftHourId;
+    appointment.appointmentHour = this.buildAppointmentHourForShift(
+      appointment.appointmentDate,
+      shiftAssignment,
+    );
+
+    return this.appointmentRepository.save(appointment);
+  }
+
+  private async seedOvertimeAppointmentsForPatient(
+    patient: Account,
+    clinics: Account[],
+    doctors: Account[],
+    shiftAssignmentsByClinicDoctor: Map<string, ShiftHourAssignment[]>,
+    clinicRoomsByClinic: Map<string, ClinicRoomAssignment[]>,
+    serviceConfigs: any[],
+    txTypes: { online: TransactionType | null; cash: TransactionType | null },
+    clinicAdminIds: string[],
+  ): Promise<Appointment[]> {
+    const overtimeAppointments: Appointment[] = [];
+
+    for (let i = 0; i < this.OVERTIME_APPOINTMENTS_PER_PATIENT; i++) {
+      const existing = await this.findExistingOvertimeAppointment(
+        patient._id,
+        i,
+      );
+      if (existing) {
+        overtimeAppointments.push(existing);
+        continue;
+      }
+
+      const clinicOptions = clinics
+        .map((clinic) => {
+          const clinicDoctors = doctors.filter(
+            (doc) =>
+              doc.parentId === clinic._id &&
+              shiftAssignmentsByClinicDoctor.has(
+                this.getClinicDoctorKey(clinic._id, doc._id),
+              ),
+          );
+
+          return {
+            clinic,
+            clinicDoctors,
+            clinicRooms: clinicRoomsByClinic.get(clinic._id) || [],
+          };
+        })
+        .filter(
+          (option) =>
+            option.clinicDoctors.length > 0 && option.clinicRooms.length > 0,
+        );
+
+      if (clinicOptions.length === 0) {
+        throw new Error(
+          'No clinic/doctor/room combinations with clinic_room records were found for overtime appointment seeding.',
+        );
+      }
+
+      const selectedClinicOption = getRandomItem(clinicOptions);
+      const clinic = selectedClinicOption.clinic;
+      const doctor = getRandomItem(selectedClinicOption.clinicDoctors);
+      const room = getRandomItem(selectedClinicOption.clinicRooms);
+      const extraHour = this.buildOvertimeExtraHour();
+      const appointmentDate = dayjs(extraHour)
+        .tz(VIETNAM_TIMEZONE)
+        .startOf('day')
+        .toDate();
+
+      const overtimeAppointment = this.appointmentRepository.create({
+        patientId: patient._id,
+        clinicId: clinic._id,
+        doctorId: doctor._id,
+        clinicShiftHourId: null,
+        appointmentDate,
+        appointmentHour: null as unknown as Date,
+        extraHour,
+        extraRoomId: room.roomId,
+        total: getRandomPackageAmount() / 100,
+        status: AppointmentStatus.PENDING,
+        isRemider: getRandomInt(0, 1) === 1,
+        patientNote: `${getRandomItem(PATIENT_NOTES)} ${this.getOvertimeSeedMarker(i)}`,
+        rejectReason: null,
+        diagnosis: null, // PENDING appointments do not have a diagnosis yet
+      });
+
+      const savedAppointment =
+        await this.appointmentRepository.save(overtimeAppointment);
+      overtimeAppointments.push(savedAppointment);
+
+      // Create appointment package and services for overtime appointment
+      await this.createAppointmentPackageAndServices(
+        savedAppointment,
+        clinic,
+        serviceConfigs,
+        txTypes,
+        clinicAdminIds,
+      );
+
+      // Update the appointment total with the calculated package amount
+      const pkg = await this.appointmentPackageRepository.findOne({
+        where: { appointmentId: savedAppointment._id },
+      });
+      if (pkg) {
+        savedAppointment.total = pkg.amount;
+        await this.appointmentRepository.save(savedAppointment);
+      }
+
+      this.logger.log(
+        `Created overtime appointment ${savedAppointment._id} for patient ${patient._id} in clinic ${clinic._id} using extra room ${room.roomName} (${room.roomId})`,
+      );
+    }
+
+    return overtimeAppointments;
   }
 
   private async buildShiftAssignmentsByClinicDoctor(
@@ -431,141 +603,6 @@ export class AppointmentSeederService {
     return roomsByClinic;
   }
 
-  private async ensureAppointmentShiftHour(
-    appointment: Appointment,
-    shiftAssignmentsByClinicDoctor: Map<string, ShiftHourAssignment[]>,
-  ): Promise<Appointment> {
-    if (appointment.clinicShiftHourId) {
-      return appointment;
-    }
-
-    if (!appointment.doctorId) {
-      throw new Error(
-        `Appointment ${appointment._id} has no doctor assigned. Cannot derive clinic_shift_hour_id consistently.`,
-      );
-    }
-
-    const shiftAssignments = shiftAssignmentsByClinicDoctor.get(
-      this.getClinicDoctorKey(appointment.clinicId, appointment.doctorId),
-    );
-
-    if (!shiftAssignments || shiftAssignments.length === 0) {
-      throw new Error(
-        `No shift hour assignment found for appointment ${appointment._id} (clinic ${appointment.clinicId}, doctor ${appointment.doctorId}).`,
-      );
-    }
-
-    const shiftAssignment = getRandomItem(shiftAssignments);
-    appointment.clinicShiftHourId = shiftAssignment.clinicShiftHourId;
-    appointment.appointmentHour = this.buildAppointmentHourForShift(
-      appointment.appointmentDate,
-      shiftAssignment,
-    );
-
-    return this.appointmentRepository.save(appointment);
-  }
-
-  private async seedOvertimeAppointmentsForPatient(
-    patient: Account,
-    clinics: Account[],
-    doctors: Account[],
-    shiftAssignmentsByClinicDoctor: Map<string, ShiftHourAssignment[]>,
-    clinicRoomsByClinic: Map<string, ClinicRoomAssignment[]>,
-    serviceConfigs: any[],
-    txTypes: { online: TransactionType | null; cash: TransactionType | null },
-  ): Promise<Appointment[]> {
-    const overtimeAppointments: Appointment[] = [];
-
-    for (let i = 0; i < this.OVERTIME_APPOINTMENTS_PER_PATIENT; i++) {
-      const existing = await this.findExistingOvertimeAppointment(patient._id, i);
-      if (existing) {
-        overtimeAppointments.push(existing);
-        continue;
-      }
-
-      const clinicOptions = clinics
-        .map((clinic) => {
-          const clinicDoctors = doctors.filter(
-            (doc) =>
-              doc.parentId === clinic._id &&
-              shiftAssignmentsByClinicDoctor.has(
-                this.getClinicDoctorKey(clinic._id, doc._id),
-              ),
-          );
-
-          return {
-            clinic,
-            clinicDoctors,
-            clinicRooms: clinicRoomsByClinic.get(clinic._id) || [],
-          };
-        })
-        .filter(
-          (option) =>
-            option.clinicDoctors.length > 0 && option.clinicRooms.length > 0,
-        );
-
-      if (clinicOptions.length === 0) {
-        throw new Error(
-          'No clinic/doctor/room combinations with clinic_room records were found for overtime appointment seeding.',
-        );
-      }
-
-      const selectedClinicOption = getRandomItem(clinicOptions);
-      const clinic = selectedClinicOption.clinic;
-      const doctor = getRandomItem(selectedClinicOption.clinicDoctors);
-      const room = getRandomItem(selectedClinicOption.clinicRooms);
-      const extraHour = this.buildOvertimeExtraHour();
-      const appointmentDate = dayjs(extraHour)
-        .tz(VIETNAM_TIMEZONE)
-        .startOf('day')
-        .toDate();
-
-      const overtimeAppointment = this.appointmentRepository.create({
-        patientId: patient._id,
-        clinicId: clinic._id,
-        doctorId: doctor._id,
-        clinicShiftHourId: null,
-        appointmentDate,
-        appointmentHour: null as unknown as Date,
-        extraHour,
-        extraRoomId: room.roomId,
-        total: getRandomPackageAmount() / 100,
-        status: AppointmentStatus.PENDING,
-        isRemider: getRandomInt(0, 1) === 1,
-        patientNote: `${getRandomItem(PATIENT_NOTES)} ${this.getOvertimeSeedMarker(i)}`,
-        rejectReason: null,
-      });
-
-      const savedAppointment = await this.appointmentRepository.save(
-        overtimeAppointment,
-      );
-      overtimeAppointments.push(savedAppointment);
-
-      // Create appointment package and services for overtime appointment
-      await this.createAppointmentPackageAndServices(
-        savedAppointment,
-        clinic,
-        serviceConfigs,
-        txTypes,
-      );
-
-      // Update the appointment total with the calculated package amount
-      const pkg = await this.appointmentPackageRepository.findOne({
-        where: { appointmentId: savedAppointment._id },
-      });
-      if (pkg) {
-        savedAppointment.total = pkg.amount;
-        await this.appointmentRepository.save(savedAppointment);
-      }
-
-      this.logger.log(
-        `Created overtime appointment ${savedAppointment._id} for patient ${patient._id} in clinic ${clinic._id} using extra room ${room.roomName} (${room.roomId})`,
-      );
-    }
-
-    return overtimeAppointments;
-  }
-
   private getClinicDoctorKey(clinicId: string, doctorId: string): string {
     return `${clinicId}:${doctorId}`;
   }
@@ -587,7 +624,10 @@ export class AppointmentSeederService {
 
     const startInMinutes = startHour * 60 + startMinute;
     const endInMinutes = endHour * 60 + endMinute;
-    const quarterSlots = Math.max(1, Math.floor((endInMinutes - startInMinutes) / 15));
+    const quarterSlots = Math.max(
+      1,
+      Math.floor((endInMinutes - startInMinutes) / 15),
+    );
     const quarterOffset = getRandomInt(0, quarterSlots - 1);
     const totalMinutes = startInMinutes + quarterOffset * 15;
 
@@ -668,12 +708,14 @@ export class AppointmentSeederService {
    * @param appointment - The appointment to create package for
    * @param clinic - The clinic account
    * @param serviceConfigs - Available service configs
+   * @param clinicAdminIds - Array of CLINIC_ADMIN IDs to check if clinic belongs to Admin 1
    */
   private async createAppointmentPackageAndServices(
     appointment: Appointment,
     clinic: any,
     serviceConfigs: any[],
     txTypes: { online: TransactionType; cash: TransactionType },
+    clinicAdminIds?: string[],
   ): Promise<void> {
     // Check if package already exists
     const existingPackage = await this.appointmentPackageRepository.findOne({
@@ -696,6 +738,9 @@ export class AppointmentSeederService {
       return;
     }
 
+    // Determine if this clinic belongs to Admin 1 (first CLINIC_ADMIN)
+    const isAdmin1Clinic = clinicAdminIds && clinicAdminIds.length > 0 && clinic.parentId === clinicAdminIds[0];
+
     // Determine number of services
     const numServices = getRandomInt(
       SERVICES_PER_APPOINTMENT_MIN,
@@ -707,8 +752,15 @@ export class AppointmentSeederService {
     const paymentType = getRandomItem(PAYMENT_TYPES);
     let transactionId = null;
 
-    if (status === AppointmentPackageStatus.PAID && txTypes.online && txTypes.cash) {
-      const txType = paymentType === PaymentType.ONLINE ? txTypes.online : txTypes.cash;
+    if (
+      status === AppointmentPackageStatus.PAID &&
+      txTypes.online &&
+      txTypes.cash
+    ) {
+      const txType =
+        paymentType === PaymentType.ONLINE ? txTypes.online : txTypes.cash;
+      // Use SEPAY for Admin 1 clinics, otherwise use ONLINE/CASH based on payment type
+      const gateway = isAdmin1Clinic ? 'SEPAY' : (paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH');
       const transaction = this.transactionRepository.create({
         clinicId: clinic._id,
         transactionTypeId: txType._id,
@@ -719,10 +771,11 @@ export class AppointmentSeederService {
         code: `TRANS-${getVietnamTimestamp()}-${Math.floor(Math.random() * 10000)}`,
         description: `Payment for appointment ${appointment._id} (${paymentType})`,
         transferType: PaymentDirection.IN,
-        gateway: paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH',
+        gateway,
         appointmentId: appointment._id,
       });
-      const savedTransaction = await this.transactionRepository.save(transaction);
+      const savedTransaction =
+        await this.transactionRepository.save(transaction);
       transactionId = savedTransaction.id;
     }
 

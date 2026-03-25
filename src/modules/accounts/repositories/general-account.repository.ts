@@ -60,13 +60,13 @@ export class GeneralAccountRepository {
    * @param {string} userId - Account UUID (matches accountId in GeneralAccount)
    * @returns {Promise<GeneralAccount | null>} GeneralAccount entity or null if not found
    *
-   * @example
-   * ```typescript
-   * const generalAccount = await repository.findGeneralAccountByUserId('uuid');
-   * if (generalAccount) {
-   *   console.log(generalAccount.fullName, generalAccount.gender);
-   * }
-   * ```
+    * @example
+    * ```typescript
+    * const generalAccount = await repository.findGeneralAccountByUserId('uuid');
+    * if (generalAccount) {
+    *   // Access generalAccount.fullName and generalAccount.gender
+    * }
+    * ```
    */
   async findGeneralAccountByUserId(
     userId: string,
@@ -100,11 +100,11 @@ export class GeneralAccountRepository {
    * @param {string} fullName - Full name to search for (partial match)
    * @returns {Promise<GeneralAccount | null>} GeneralAccount entity or null if not found
    *
-   * @example
-   * ```typescript
-   * const generalAccount = await repository.findByFullNameFuzzy('nguyễn văn');
-   * // Matches: "Nguyễn Văn A", "Nguyễn Văn B", etc.
-   * ```
+    * @example
+    * ```typescript
+    * const generalAccount = await repository.findByFullNameFuzzy('john');
+    * // Matches: "John Doe", "Johnny Smith", etc.
+    * ```
    */
   async findByFullNameFuzzy(fullName: string): Promise<GeneralAccount | null> {
     return this.generalAccountRepository

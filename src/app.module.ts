@@ -35,26 +35,21 @@ import { ClinicSubscriptionGuard } from './common/guards/clinic-subscription.gua
 
 @Module({
   imports: [
-    // config environment variables
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
 
-    // PostgreSQL database configuration
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => buildTypeOrmOptions(config),
     }),
 
-    // TypeORM feature for seeder access to Account repository
     TypeOrmModule.forFeature([Account]),
 
-    // Redis for session management
     RedisModule,
 
-    // import modules
     AuthModule,
     AccountsModule,
     HealthModule,

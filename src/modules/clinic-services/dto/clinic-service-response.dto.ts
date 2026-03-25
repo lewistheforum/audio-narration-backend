@@ -63,8 +63,6 @@ export class ClinicServiceResponseDto {
             this.discount = Number(config.discount);
             this.durationMin = config.durationMin;
             this.noteForPatient = config.noteForPatient;
-            // The service's active status takes precedence, but if you want config to override, you can handle it here.
-            // Wait, the API manages both isActive at the same time, so they should be sync.
         }
     }
 }

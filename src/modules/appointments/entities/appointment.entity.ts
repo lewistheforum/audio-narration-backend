@@ -104,6 +104,13 @@ export class Appointment {
   @Column({ name: 'reject_reason', type: 'text', nullable: true })
   rejectReason?: string | null;
 
+  /**
+   * Final diagnosis from the doctor after consultation
+   * Only populated for COMPLETED appointments
+   */
+  @Column({ type: 'text', nullable: true })
+  diagnosis?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

@@ -16,8 +16,8 @@ import {
   ForgotPasswordDto,
   VerifyResetPasswordDto,
   SetNewPasswordDto,
+  SetInitialPasswordDto,
 } from './dto';
-import { randomBytes } from 'crypto';
 import { CodeVerificationRepository } from '../accounts/repositories';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
 import { Account } from '../accounts/entities/accounts.entity';
@@ -68,7 +68,12 @@ export class AuthService {
     const { email, password } = loginDto;
     const user = await this.AccountsService.findByEmail(email);
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    // Block pure OAuth users without a password - they must use Google login
+    if (!user || (user.isOAuthUser && !user.password)) {
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
+    }
+
+    if (!(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
@@ -163,8 +168,8 @@ export class AuthService {
       userId = user._id;
       userEmail = user.email;
     } else {
-        // Create new patient account via Google OAuth
-        const randomPassword = randomBytes(16).toString('hex');
+      // Create new patient account via Google OAuth - require initial password setup
+      // Password is explicitly set to null for OAuth-only users
 
         // Construct fullName from first and last name
         const fullName =
@@ -172,7 +177,7 @@ export class AuthService {
 
         const createdUser = await this.AccountsService.createPatientViaOAuth({
           email,
-          password: randomPassword,
+          password: null,
           username: email.split('@')[0],
           fullName,
           profilePicture: picture,
@@ -183,6 +188,19 @@ export class AuthService {
         generalAccount = await this.AccountsService.findGeneralAccountByUserId(
           userId,
         );
+
+        // Generate temporary setup token for new OAuth user
+        const setupToken = this.jwtService.sign(
+          { userId, email: userEmail, type: 'INITIAL_PWD_SETUP' },
+          { expiresIn: '15m' },
+        );
+
+        return {
+          requirePasswordSetup: true,
+          setupToken: setupToken,
+          userId: userId,
+          email: userEmail,
+        };
       }
 
       user = await this.AccountsService.findAccountEntityById(userId);
@@ -229,11 +247,97 @@ export class AuthService {
       throw new BadRequestException('Verification code has expired');
     }
 
-    // await this.codeVerificationRepository.markAsUsed(record._id);
-
     return {
       message: 'Verification code validated successfully. You can now set a new password.',
     };
   }
 
+  /**
+   * Set Initial Password for New OAuth User
+   *
+   * Completes the forced password setup flow for new Google OAuth users.
+   * Validates the temporary setup token, hashes the provided password,
+   * updates the user entity, and returns full access tokens.
+   *
+   * Security Features:
+   * - Temporary token expires after 15 minutes
+   * - Token type must be 'INITIAL_PWD_SETUP'
+   * - User must be OAuth user with no password set
+   * - Password is hashed with bcrypt before storage
+   *
+   * @param {SetInitialPasswordDto} dto - Contains temporary token and new password
+   * @returns {Promise<{accessToken: string, userId: string, user: AccountResponseDto}>} Full auth tokens
+   * @throws {UnauthorizedException} If token is invalid or expired
+   * @throws {BadRequestException} If user is not OAuth-only or already has password
+   *
+   * @example
+   * ```typescript
+   * const result = await authService.setInitialPasswordForOAuthUser({
+   *   token: 'eyJhbGciOiJIUzI1NiIs...',
+   *   password: 'SecureP@ss123'
+   * });
+   * // Returns full access token and user data
+   * ```
+   */
+  async setInitialPasswordForOAuthUser(dto: SetInitialPasswordDto): Promise<{
+    data: {
+      accessToken: string;
+      userId: string;
+      user: AccountResponseDto;
+    };
+    message: string;
+  }> {
+    let decoded: any;
+    try {
+      decoded = this.jwtService.verify(dto.token);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired setup token');
+    }
+
+    if (decoded.type !== 'INITIAL_PWD_SETUP') {
+      throw new UnauthorizedException('Invalid token type');
+    }
+
+    const user = await this.AccountsService.findAccountEntityById(decoded.userId);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (user.password !== null) {
+      throw new BadRequestException(
+        'This account already has a password set.',
+      );
+    }
+
+    if (!user.isOAuthUser) {
+      throw new BadRequestException(
+        'This account does not require initial password setup',
+      );
+    }
+
+    user.password = await bcrypt.hash(dto.password, 10);
+    await this.AccountsService.updateAccountEntity(user);
+
+    const generalAccount = await this.AccountsService.findGeneralAccountByUserId(
+      user._id,
+    );
+
+    this.AccountsService.validateAccountAccess(user);
+    await this.AccountsService.validateClinicSubscription(user);
+
+    const payload = await this.buildJwtPayload(user);
+    const accessToken = this.jwtService.sign(payload);
+
+    this.socketGatewayService.markUserOnline(String(user._id));
+
+    return {
+      data: {
+        accessToken: accessToken,
+        userId: user._id,
+        user: new AccountResponseDto(user, generalAccount),
+      },
+      message: 'Password set successfully. You can now login with email/password or Google.',
+    };
   }
+
+}

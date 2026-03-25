@@ -14,36 +14,30 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Bật tính năng nhận diện proxy từ Nginx
   app.set('trust proxy', 1);
 
-  // Increase payload size limit to 50MB (for PDF uploads)
   app.useBodyParser('json', { limit: '50mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '50mb' });
 
-  // config CORS
   app.enableCors({
-    origin: true, // Allows any origin
+    origin: true,
     credentials: true,
   });
 
-  // Global validation pipe with enhanced settings
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strip properties that don't have decorators
-      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties exist
-      transform: true, // Auto-transform payloads to DTO instances
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
       transformOptions: {
-        enableImplicitConversion: true, // Auto-convert primitive types
+        enableImplicitConversion: true,
       },
-      disableErrorMessages: false, // Show detailed validation messages
+      disableErrorMessages: false,
     }),
   );
 
-  // prefix API
   app.setGlobalPrefix('api');
 
-  // config Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('Bonix API')
     .setDescription(
@@ -84,13 +78,11 @@ async function bootstrap(): Promise<void> {
     )
     .build();
 
-  //config interceptors
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
 
-  // check connection database
   const databaseHealthService = app.get(DatabaseHealthService);
   await databaseHealthService.checkAllConnections();
 

@@ -6,7 +6,6 @@ export enum RegistrationStatus {
    */
   PENDING_SEPAY_SETUP = 'PENDING_SEPAY_SETUP',
 
-  //accounts, clinic admin information, address, iframe, clinic subcription, clinic legal documents, code verification, clinic manager information
 
   /**
    * STEP 3 START: Account created (Step 2 completed).

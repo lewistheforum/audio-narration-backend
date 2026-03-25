@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import 'dotenv/config';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { join } from 'path';
 import { TransactionHistorySeederService } from '../seeders/transaction-history-seeder.service';
 import { ClinicSubscription } from '../../modules/subscriptions/entities/clinic-subscription.entity';
@@ -9,6 +9,8 @@ import { Transaction } from '../../modules/transactions/entities/transaction.ent
 import { TransactionType } from '../../modules/transactions/entities/transaction-type.entity';
 import { SubscriptionService } from '../../modules/subscriptions/entities/subscription-service.entity';
 import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
+import { Account } from '../../modules/accounts/entities/accounts.entity';
+import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 
 async function runAndVerify() {
   console.log('Connecting to database...');
@@ -29,6 +31,7 @@ async function runAndVerify() {
     console.log('✓ Connected successfully');
 
     // Instantiate Seeder Service
+    const accountRepo = new AccountRepository(dataSource.getRepository(Account));
     const seeder = new TransactionHistorySeederService(
       dataSource.getRepository(ClinicSubscription),
       dataSource.getRepository(ClinicSubscriptionHistory),
@@ -36,6 +39,7 @@ async function runAndVerify() {
       dataSource.getRepository(TransactionType),
       dataSource.getRepository(SubscriptionService),
       dataSource.getRepository(ClinicAdminInformation),
+      accountRepo,
     );
 
     console.log('Running TransactionHistorySeederService.seed()...');

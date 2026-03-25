@@ -42,16 +42,16 @@ export class ClinicLegalDocumentsController {
   @ApiResponseData({
     type: ClinicsLegalDocuments,
     status: HttpStatus.CREATED,
-    message: 'Tạo hồ sơ pháp lý thành công',
+    message: 'Clinic legal document created successfully',
   })
   async create(@Body() dto: CreateClinicLegalDocumentDto) {
     const doc = await this.clinicLegalDocumentsService.create(dto);
     return {
       statusCode: HttpStatus.CREATED,
-      message: 'Tạo hồ sơ pháp lý thành công',
-      data: doc,
-    };
-  }
+    message: 'Clinic legal document created successfully',
+    data: doc,
+  };
+}
 
   // ============================================
   // Admin Management Endpoints
@@ -217,32 +217,32 @@ export class ClinicLegalDocumentsController {
   @ApiResponseData({
     type: ClinicsLegalDocuments,
     status: HttpStatus.OK,
-    message: 'Lấy hồ sơ pháp lý thành công',
+    message: 'Clinic legal document retrieved successfully',
   })
   async getMyLegalDocuments(@Req() req: any) {
     const accountId = req.user._id;
     const doc = await this.clinicLegalDocumentsService.findDocumentByAccountId(accountId);
     return {
       statusCode: HttpStatus.OK,
-      message: 'Lấy hồ sơ pháp lý thành công',
-      data: doc,
-    };
-  }
+    message: 'Clinic legal document retrieved successfully',
+    data: doc,
+  };
+}
 
-  @Get(':id')
+@Get(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get a clinic legal document by id' })
   @ApiResponseData({
     type: ClinicsLegalDocuments,
     status: HttpStatus.OK,
-    message: 'Lấy hồ sơ pháp lý thành công',
+    message: 'Clinic legal document retrieved successfully',
   })
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const doc = await this.clinicLegalDocumentsService.findOne(id);
     return {
       statusCode: HttpStatus.OK,
-      message: 'Lấy hồ sơ pháp lý thành công',
-      data: doc,
-    };
-  }
+    message: 'Clinic legal document retrieved successfully',
+    data: doc,
+  };
+}
 }

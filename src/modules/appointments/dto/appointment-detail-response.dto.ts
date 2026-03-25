@@ -243,6 +243,9 @@ export class AppointmentDetailResponseDto {
   @ApiProperty({ description: 'Reject/Cancel reason', required: false })
   rejectReason?: string | null;
 
+  @ApiProperty({ description: 'Final diagnosis from doctor (COMPLETED appointments only)', required: false })
+  diagnosis?: string | null;
+
   // Package & Services
   @ApiProperty({
     description: 'Payment package with services',

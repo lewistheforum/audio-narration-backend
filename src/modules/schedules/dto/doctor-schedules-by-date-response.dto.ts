@@ -36,7 +36,7 @@ export class TimeSlotByDateDto {
 
     @ApiProperty({
         description: 'Patient name (for booked slots)',
-        example: 'Nguyễn Văn A',
+        example: 'John Doe',
         required: false,
     })
     bookedBy?: string;
@@ -61,7 +61,7 @@ export class RoomByDateDto {
 
     @ApiProperty({
         description: 'Room name',
-        example: 'Phòng khám 101',
+        example: 'Room 101',
     })
     roomName: string;
 }
@@ -149,13 +149,13 @@ export class DoctorByDateDto {
 
     @ApiProperty({
         description: 'Doctor full name',
-        example: 'BS. Nguyễn Văn F',
+        example: 'Dr. Jane Doe',
     })
     doctorFullName: string;
 
     @ApiProperty({
         description: 'Doctor specialty',
-        example: 'Nội khoa tổng quát',
+        example: 'General Internal Medicine',
     })
     doctorSpecialty: string;
 

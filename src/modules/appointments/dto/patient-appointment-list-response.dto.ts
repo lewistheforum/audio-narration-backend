@@ -92,6 +92,9 @@ export class PatientAppointmentListItemDto {
   @ApiProperty({ description: 'Total amount for the appointment', example: 270000 })
   total: number;
 
+  @ApiPropertyOptional({ description: 'Final diagnosis from doctor (COMPLETED appointments only)', example: 'Mild muscle strain in lumbar region' })
+  diagnosis?: string | null;
+
   @ApiPropertyOptional({ description: 'Payment method', enum: PaymentType, example: PaymentType.COD })
   payment_type?: PaymentType;
 

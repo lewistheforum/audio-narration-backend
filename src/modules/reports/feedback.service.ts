@@ -229,7 +229,6 @@ export class FeedbackService {
           ? this.labelImages(feedback.feedbackImages)
           : Promise.resolve(null);
 
-      console.log('imagesLabelPromise', feedback.feedbackImages);
 
       const [descriptionLabel, feedbackImagesLabel] = await Promise.all([
         descriptionLabelPromise,
@@ -322,7 +321,6 @@ export class FeedbackService {
         });
 
         imageLabels.push({
-          // url: imageUrl,
           description: response.data.data.description,
         });
       } catch (error) {
@@ -431,7 +429,8 @@ export class FeedbackService {
   }
 
   async findAllFeedbacksById(id: string) {
-    return this.feedbackRepository.findFeedbacksByClinicId(id);
+    const feedback = await this.feedbackRepository.findFeedbackById(id);
+    return feedback ? [feedback] : [];
   }
 
   async findFeedbacksByDoctorId(doctorId: string) {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { DoctorInformation } from '../../modules/accounts/entities/doctor_information.entity';
 import { AccountRole, Gender } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
@@ -62,7 +62,7 @@ export class DoctorInformationSeederService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly doctorInfoRepository: DoctorInformationRepository,
-  ) { }
+  ) {}
 
   /**
    * Seed DoctorInformation records for all DOCTOR accounts
@@ -89,7 +89,9 @@ export class DoctorInformationSeederService {
       let createdCount = 0;
 
       for (const account of doctors) {
-        const existing = await this.doctorInfoRepository.findByAccountId(account._id);
+        const existing = await this.doctorInfoRepository.findByAccountId(
+          account._id,
+        );
 
         if (existing) {
           continue;
@@ -115,7 +117,8 @@ export class DoctorInformationSeederService {
           papers6: this.generatePapers(doctorIndex),
           introductionImage: this.getRandomIntroductionImage(doctorIndex),
           professionalLicense: this.generateProfessionalLicense(doctorIndex),
-          certificatePracticalTraining: this.generateCertificatePracticalTraining(doctorIndex),
+          certificatePracticalTraining:
+            this.generateCertificatePracticalTraining(doctorIndex),
           medicalLicense: this.generateMedicalLicense(doctorIndex),
           identityNumber: this.generateIdentityNumber(doctorIndex),
           placeIdentityCard: this.generatePlaceIdentityCard(doctorIndex),
@@ -148,10 +151,7 @@ export class DoctorInformationSeederService {
    * Get random Vietnamese name without diacritics based on gender
    */
   private getRandomName(gender: Gender): string {
-    const names =
-      gender === Gender.MALE
-        ? this.NAMES.male
-        : this.NAMES.female;
+    const names = gender === Gender.MALE ? this.NAMES.male : this.NAMES.female;
     return names[Math.floor(Math.random() * names.length)];
   }
 
@@ -176,14 +176,18 @@ export class DoctorInformationSeederService {
    * Get random position
    */
   private getRandomPosition(): string {
-    return this.POSITIONS_TEMPLATES[Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)];
+    return this.POSITIONS_TEMPLATES[
+      Math.floor(Math.random() * this.POSITIONS_TEMPLATES.length)
+    ];
   }
 
   /**
    * Get random introduction (orthopedics-focused)
    */
   private getRandomIntroduction(): string {
-    return this.INTRODUCTIONS_TEMPLATES[Math.floor(Math.random() * this.INTRODUCTIONS_TEMPLATES.length)];
+    return this.INTRODUCTIONS_TEMPLATES[
+      Math.floor(Math.random() * this.INTRODUCTIONS_TEMPLATES.length)
+    ];
   }
 
   /**
@@ -195,7 +199,12 @@ export class DoctorInformationSeederService {
     const year = getCurrentVietnamTime().getFullYear() - age;
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return dayjs
+      .tz(
+        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        VIETNAM_TIMEZONE,
+      )
+      .toDate();
   }
 
   /**
@@ -213,7 +222,8 @@ export class DoctorInformationSeederService {
     return {
       current: {
         hospital: this.getRandomClinicName(index),
-        position: this.POSITIONS_TEMPLATES[index % this.POSITIONS_TEMPLATES.length],
+        position:
+          this.POSITIONS_TEMPLATES[index % this.POSITIONS_TEMPLATES.length],
         startYear: startYear,
       },
       previous: [
@@ -240,7 +250,10 @@ export class DoctorInformationSeederService {
       },
       postgraduate: {
         university: 'University of Medicine and Pharmacy',
-        degree: this.ACADEMIC_DEGREES_TEMPLATES[index % this.ACADEMIC_DEGREES_TEMPLATES.length],
+        degree:
+          this.ACADEMIC_DEGREES_TEMPLATES[
+            index % this.ACADEMIC_DEGREES_TEMPLATES.length
+          ],
         startYear: 2007 + (index % 10),
         endYear: 2010 + (index % 10),
       },
@@ -308,14 +321,18 @@ export class DoctorInformationSeederService {
       licenseNumber: `PL-${20200000 + index}`,
       issuedBy: 'Ministry of Health',
       issuedDate: this.generateIdentityDate(index),
-      expiryDate: dayjs.tz(`${2030 + (index % 10)}-01-01`, VIETNAM_TIMEZONE).toDate(),
+      expiryDate: dayjs
+        .tz(`${2030 + (index % 10)}-01-01`, VIETNAM_TIMEZONE)
+        .toDate(),
     };
   }
 
   /**
    * Generate certificate of practical training (deterministic based on index)
    */
-  private generateCertificatePracticalTraining(index: number): Record<string, any> {
+  private generateCertificatePracticalTraining(
+    index: number,
+  ): Record<string, any> {
     return {
       certificateNumber: `CPT-${20210000 + index}`,
       institution: 'Hanoi Medical University Hospital',
@@ -330,10 +347,13 @@ export class DoctorInformationSeederService {
   private generateMedicalLicense(index: number): Record<string, any> {
     return {
       licenseNumber: `ML-${20220000 + index}`,
-      specialization: MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length],
+      specialization:
+        MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length],
       issuedBy: 'Ministry of Health',
       issuedDate: this.generateIdentityDate(index),
-      validUntil: dayjs.tz(`${2035 + (index % 10)}-01-01`, VIETNAM_TIMEZONE).toDate(),
+      validUntil: dayjs
+        .tz(`${2035 + (index % 10)}-01-01`, VIETNAM_TIMEZONE)
+        .toDate(),
     };
   }
 
@@ -348,7 +368,13 @@ export class DoctorInformationSeederService {
    * Generate place of identity card (deterministic based on index)
    */
   private generatePlaceIdentityCard(index: number): string {
-    const provinces = ['Hanoi', 'Ho Chi Minh City', 'Da Nang', 'Hai Phong', 'Can Tho'];
+    const provinces = [
+      'Hanoi',
+      'Ho Chi Minh City',
+      'Da Nang',
+      'Hai Phong',
+      'Can Tho',
+    ];
     return `${provinces[index % provinces.length]} Police Department`;
   }
 
@@ -359,7 +385,12 @@ export class DoctorInformationSeederService {
     const year = 2015 + (index % 10);
     const month = 1 + (index % 12);
     const day = 1 + (index % 28);
-    return dayjs.tz(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, VIETNAM_TIMEZONE).toDate();
+    return dayjs
+      .tz(
+        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        VIETNAM_TIMEZONE,
+      )
+      .toDate();
   }
 
   /**
@@ -382,7 +413,9 @@ export class DoctorInformationSeederService {
    * Get random bank branch
    */
   private getRandomBankBranch(): string {
-    return this.BANK_BRANCHES[Math.floor(Math.random() * this.BANK_BRANCHES.length)];
+    return this.BANK_BRANCHES[
+      Math.floor(Math.random() * this.BANK_BRANCHES.length)
+    ];
   }
 
   /**

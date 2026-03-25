@@ -5,6 +5,17 @@ import { AccountStatus } from '../../enums';
 import { RegistrationStatus } from '../../../subscriptions/enums';
 import { formatToVietnamTime } from '../../../../common/utils/date.util';
 
+export class clinicAdminGoogleIframeDto {
+  @ApiProperty()
+  _id: string;
+
+  @ApiProperty({ required: false })
+  location?: string;
+
+  @ApiProperty({ required: false })
+  googleMapIframe?: string;
+}
+
 export class ClinicAdminAddressDto {
   @ApiProperty()
   _id: string;
@@ -29,6 +40,9 @@ export class ClinicAdminAddressDto {
 
   @ApiProperty()
   provinceName: string;
+
+  @ApiProperty({ type: clinicAdminGoogleIframeDto, required: false })
+  googleIframe?: clinicAdminGoogleIframeDto;
 }
 
 /**

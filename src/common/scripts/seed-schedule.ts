@@ -119,12 +119,6 @@ async function seedSchedule() {
                         clinicShiftId: randomShift._id,
                         workDate: date,
                         weekDay: weekDay,
-                        // Note: Depending on entity relation, we might need to save relation separately if ManyToMany context,
-                        // but logic proposed was to simplify. Here we just create the object.
-                        // However, since we haven't refactored the ManyToMany relation to ManyToOne in entity as user didn't confirm final refactor code,
-                        // we must respect current ManyToMany "rooms" definition if we want data to show up.
-                        // BUT, earlier we discussed simpler Single Room logic.
-                        // Let's try to save `rooms` relation as array.
                         rooms: [randomRoom],
                     });
 

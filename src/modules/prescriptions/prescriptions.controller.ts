@@ -294,6 +294,4 @@ export class PrescriptionsController {
   async restore(@Param('id') id: string): Promise<void> {
     return await this.prescriptionsService.restore(id);
   }
-
-
 }

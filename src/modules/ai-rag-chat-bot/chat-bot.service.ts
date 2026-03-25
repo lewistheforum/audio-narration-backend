@@ -381,7 +381,7 @@ export class AiRagChatBotService {
     if (existingAppointments.length > 0) {
       throw new ConflictException(
         MESSAGES.failMessage.appointmentTimeConflict ||
-          'Thß╗¥i gian hß║╣n n├áy ─æ├ú c├│ ng╞░ß╗¥i ─æß║╖t. Vui l├▓ng chß╗ìn thß╗¥i gian kh├íc.',
+          'This appointment time is already booked. Please choose another time.',
       );
     }
 

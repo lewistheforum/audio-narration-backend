@@ -174,8 +174,6 @@ export class AccountsService {
     private readonly zaloWebhookService: ZaloWebhookService,
   ) {}
 
-
-
   async generateUserKeys(
     userId: string,
   ): Promise<{ publicKey: string; encryptedPrivateKey: string }> {
@@ -307,9 +305,9 @@ export class AccountsService {
    * ```typescript
    * const result = await accountsService.searchPatientByPhone({ phone: '0912345678' });
    * if (result.found) {
-   *   console.log('Patient found:', result.patient);
+   *   // Use result.patient data
    * } else {
-   *   console.log('Create new account suggested');
+   *   // Trigger new account creation flow
    * }
    * ```
    */
@@ -372,7 +370,7 @@ export class AccountsService {
     if (!account) {
       return {
         found: false,
-        message: 'Không tìm thấy bệnh nhân với thông tin này',
+        message: 'Patient not found with the provided information',
         suggestedAction: 'CREATE_NEW_ACCOUNT',
       };
     }
@@ -599,7 +597,10 @@ export class AccountsService {
     const savedAccount = await this.accountRepository.saveAccount(account);
 
     // Call Zalo webhook to send friend request
-    await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Patient Registration');
+    await this.zaloWebhookService.sendFriendRequest(
+      savedAccount.phone,
+      'Patient Registration',
+    );
 
     // Step 4: Create and save GeneralAccount entity with the Account ID
     let generalAccount: GeneralAccount | null = null;
@@ -677,11 +678,11 @@ export class AccountsService {
       throw new ConflictException(MESSAGES.failMessage.userEmailAlreadyExists);
     }
 
-    // Step 2: Hash password (even though it won't be used for OAuth login)
-    const hashedPassword = await bcrypt.hash(
-      dto.password,
-      this.BCRYPT_SALT_ROUNDS,
-    );
+    // Step 2: Hash password only if provided (OAuth may not provide password)
+    let hashedPassword = null;
+    if (dto.password) {
+      hashedPassword = await bcrypt.hash(dto.password, this.BCRYPT_SALT_ROUNDS);
+    }
 
     // Step 3: Create and save Account entity with OAuth flags
     const account = this.accountRepository.createAccount({
@@ -697,7 +698,10 @@ export class AccountsService {
     const savedAccount = await this.accountRepository.saveAccount(account);
 
     // Call Zalo webhook to send friend request
-    await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'OAuth Registration');
+    await this.zaloWebhookService.sendFriendRequest(
+      savedAccount.phone,
+      'OAuth Registration',
+    );
 
     // Step 4: Create GeneralAccount with fullName and profilePicture if provided
     let generalAccount: GeneralAccount | null = null;
@@ -780,21 +784,7 @@ export class AccountsService {
     let emailChanged = false;
     const oldPhone = account.phone;
 
-    // Validate email change permission - only PATIENT can change their own email
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
-      // if (account.role !== AccountRole.PATIENT) {
-      //   throw new ForbiddenException(
-      //     'Only PATIENT accounts can change their email address. Other roles must contact administrator.',
-      //   );
-      // }
-
-      // const existingAccountWithEmail = await this.findByEmail(
-      //   updateAccountDto.email,
-      // );
-      // if (existingAccountWithEmail && existingAccountWithEmail._id !== id) {
-      //   throw new ConflictException(MESSAGES.failMessage.emailAlreadyExists);
-      // }
-
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
       account.status = AccountStatus.ACTIVE; // Keep account active
@@ -921,7 +911,10 @@ export class AccountsService {
 
     // If phone number changed, call Zalo webhook
     if (updateAccountDto.phone && updateAccountDto.phone !== oldPhone) {
-      await this.zaloWebhookService.sendFriendRequest(updateAccountDto.phone, 'Profile Update (Phone Change)');
+      await this.zaloWebhookService.sendFriendRequest(
+        updateAccountDto.phone,
+        'Profile Update (Phone Change)',
+      );
     }
 
     return {
@@ -1643,7 +1636,6 @@ export class AccountsService {
   async delete(id: string): Promise<void> {
     const account = await this.findAccountEntityById(id);
     await this.accountRepository.softDeleteAccount(id);
-    // Also soft delete the general account
     await this.generalAccountRepository.softDeleteGeneralAccount(id);
   }
 
@@ -1672,36 +1664,12 @@ export class AccountsService {
     if (!requestor)
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
 
-    // Simplified Security Check: employee's parentId must strictly match the requestor's ID
     if (employee.parentId !== requestorId) {
-      console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
-      console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-      console.log(
-        `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
-      );
-      console.log(
-        `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
-      );
-      console.log(`[RESULT] Access Denied because IDs do NOT match!`);
-      console.log('-------------------------------------\n');
-
       throw new ForbiddenException(
         'You only have permission to delete employees that were created under your account (matching Parent ID).',
       );
     }
 
-    console.log('\n--- [DEBUG] DELETE EMPLOYEE LOGIC ---');
-    console.log(`[REQUESTOR ID] (Manager): ${requestorId}`);
-    console.log(
-      `[EMPLOYEE PARENT ID] (Boss of this Staff): ${employee.parentId}`,
-    );
-    console.log(
-      `[CHECK] Do they match? -> ${employee.parentId === requestorId}`,
-    );
-    console.log(`[RESULT] Approved! Executing soft delete...`);
-    console.log('-------------------------------------\n');
-
-    // Pass access check, perform soft delete natively
     await this.accountRepository.softDeleteAccount(id);
     await this.generalAccountRepository.softDeleteGeneralAccount(id);
   }
@@ -1911,7 +1879,7 @@ export class AccountsService {
   /**
    * Update Account Status
    *
-   * Directly updates the status of an account. 
+   * Directly updates the status of an account.
    * This is used for security incidents like contract tampering.
    *
    * @param accountId - UUID of the account
@@ -2044,56 +2012,165 @@ export class AccountsService {
   /**
    * Validate Parent Manager Status for Login
    *
-   * Ensures Staff/Doctor cannot login if their parent Manager is disabled.
-   * Implements cascading access control based on account hierarchy.
+   * Ensures Staff/Doctor/Manager cannot login if their parent is disabled.
+   * Implements cascading access control based on account hierarchy:
+   *
+   * 1. Direct Ban: If account itself is banned/inactive, block login
+   * 2. Admin Ban Cascade: If CLINIC_ADMIN is banned, all children (Manager/Staff/Doctor) are blocked
+   * 3. Manager Ban Cascade: If CLINIC_MANAGER is banned, all children (Staff/Doctor) are blocked
+   * 4. Legal Document Rule: If CLINIC_MANAGER's legal docs are not APPROVED, block all children
+   *
+   * Hierarchy Flow:
+   * - CLINIC_ADMIN (parentId = null, is root)
+   *   └── CLINIC_MANAGER (parentId = CLINIC_ADMIN._id)
+   *       └── CLINIC_STAFF (parentId = CLINIC_MANAGER._id)
+   *       └── DOCTOR (parentId = CLINIC_MANAGER._id)
    *
    * @param account - Account attempting to login
-   * @throws {ForbiddenException} If parent manager is disabled or pending approval
+   * @throws {ForbiddenException} If parent hierarchy blocks login
    */
   async validateParentManagerStatus(account: Account): Promise<void> {
-    // Only check for Staff and Doctor roles
+    // PATIENT, ADMIN, and CLINIC_ADMIN skip hierarchical checks
     if (
-      account.role !== AccountRole.CLINIC_STAFF &&
-      account.role !== AccountRole.DOCTOR
+      account.role === AccountRole.PATIENT ||
+      account.role === AccountRole.ADMIN ||
+      account.role === AccountRole.CLINIC_ADMIN
     ) {
       return;
     }
 
-    // Verify parentId exists
-    if (!account.parentId) {
-      throw new ForbiddenException(
-        'Account hierarchy error. No parent manager found.',
+    // === CLINIC_MANAGER: Check parent CLINIC_ADMIN status ===
+    if (account.role === AccountRole.CLINIC_MANAGER) {
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No parent admin found.',
+        );
+      }
+
+      const parentAdmin = await this.accountRepository.findAccountById(
+        account.parentId,
       );
+
+      if (!parentAdmin) {
+        throw new ForbiddenException(
+          'Parent admin not found. Please contact support.',
+        );
+      }
+
+      // Check if parent CLINIC_ADMIN is banned
+      if (parentAdmin.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'The clinic network has been suspended. Please contact support for assistance.',
+        );
+      }
+
+      if (parentAdmin.status === AccountStatus.DELETED) {
+        throw new ForbiddenException(
+          'The clinic network has been deleted. Please contact support.',
+        );
+      }
+
+      // Check CLINIC_MANAGER's own legal documents status
+      const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        account._id,
+      );
+
+      if (
+        !legalDocs ||
+        legalDocs.verificationStatus !==
+          LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          "Your clinic branch's legal documents are pending approval or rejected. " +
+            'Login is currently disabled. Please contact your administrator.',
+        );
+      }
+
+      return;
     }
 
-    // Fetch parent Manager account
-    const parentManager = await this.accountRepository.findAccountById(
-      account.parentId,
-    );
+    // === CLINIC_STAFF and DOCTOR: Check parent CLINIC_MANAGER status ===
+    if (
+      account.role === AccountRole.CLINIC_STAFF ||
+      account.role === AccountRole.DOCTOR
+    ) {
+      if (!account.parentId) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No parent manager found.',
+        );
+      }
 
-    if (!parentManager) {
-      throw new ForbiddenException(
-        'Parent manager not found. Please contact support.',
+      const parentManager = await this.accountRepository.findAccountById(
+        account.parentId,
       );
-    }
 
-    // Block login if parent Manager is MANAGER_DISABLED
-    if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
-      throw new ForbiddenException(
-        'Your clinic branch has been temporarily disabled. ' +
-          'Please contact your clinic administrator for assistance.',
+      if (!parentManager) {
+        throw new ForbiddenException(
+          'Parent manager not found. Please contact support.',
+        );
+      }
+
+      // Check if parent CLINIC_MANAGER is banned/disabled
+      if (parentManager.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'Your clinic branch has been suspended. Please contact support.',
+        );
+      }
+
+      if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
+        throw new ForbiddenException(
+          'Your clinic branch has been temporarily disabled. ' +
+            'Please contact your clinic administrator for assistance.',
+        );
+      }
+
+      if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
+        throw new ForbiddenException(
+          'Your clinic branch is pending legal document approval. ' +
+            'You will be able to login once verification is complete.',
+        );
+      }
+
+      // Trace up to check grandparent CLINIC_ADMIN status
+      if (parentManager.parentId) {
+        const grandParentAdmin = await this.accountRepository.findAccountById(
+          parentManager.parentId,
+        );
+
+        if (grandParentAdmin && grandParentAdmin.status === AccountStatus.BAN) {
+          throw new ForbiddenException(
+            'The clinic network has been suspended. Please contact support for assistance.',
+          );
+        }
+
+        if (
+          grandParentAdmin &&
+          grandParentAdmin.status === AccountStatus.DELETED
+        ) {
+          throw new ForbiddenException(
+            'The clinic network has been deleted. Please contact support.',
+          );
+        }
+      }
+
+      // Check CLINIC_MANAGER's legal documents status
+      const legalDocs = await this.clinicLegalDocsRepository.findByAccountId(
+        parentManager._id,
       );
-    }
 
-    // Block login if parent Manager is PENDING_APPROVAL
-    if (parentManager.status === AccountStatus.PENDING_APPROVAL) {
-      throw new ForbiddenException(
-        'Your clinic branch is pending legal document approval. ' +
-          'You will be able to login once verification is complete.',
-      );
-    }
+      if (
+        !legalDocs ||
+        legalDocs.verificationStatus !==
+          LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          "The clinic branch's legal documents are pending approval or rejected. " +
+            'Login is currently disabled. Please contact your administrator.',
+        );
+      }
 
-    // Allow login if parent is ACTIVE
+      return;
+    }
   }
 
   /**
@@ -2185,7 +2262,7 @@ export class AccountsService {
 
     // Role-specific validation logic
     if (account.role === AccountRole.CLINIC_ADMIN) {
-      // CLINIC_ADMIN: Allow login even if subscription is EXPIRED 
+      // CLINIC_ADMIN: Allow login even if subscription is EXPIRED
       // to allow them to pay/renew.
       // Fine-grained access control is handled by ClinicSubscriptionGuard.
       return;
@@ -2242,7 +2319,7 @@ export class AccountsService {
   /**
    * Resolve the root CLINIC_ADMIN ID for any clinic-related account.
    * Handles multi-level hierarchy (Doctor/Staff -> Manager -> Admin).
-   * 
+   *
    * @param account The account to resolve
    * @returns The account ID of the root Clinic Admin
    */
@@ -2253,19 +2330,27 @@ export class AccountsService {
 
     if (account.role === AccountRole.CLINIC_MANAGER) {
       if (!account.parentId) {
-        throw new ForbiddenException('No parent clinic admin found for this manager.');
+        throw new ForbiddenException(
+          'No parent clinic admin found for this manager.',
+        );
       }
       return account.parentId;
     }
 
     // DOCTOR or STAFF: parent is Manager
     if (!account.parentId) {
-      throw new ForbiddenException('No parent clinic manager found for this account.');
+      throw new ForbiddenException(
+        'No parent clinic manager found for this account.',
+      );
     }
 
-    const parentAccount = await this.accountRepository.findAccountById(account.parentId);
+    const parentAccount = await this.accountRepository.findAccountById(
+      account.parentId,
+    );
     if (!parentAccount || !parentAccount.parentId) {
-      throw new ForbiddenException('Invalid account hierarchy: Clinic owner not found.');
+      throw new ForbiddenException(
+        'Invalid account hierarchy: Clinic owner not found.',
+      );
     }
 
     return parentAccount.parentId;
@@ -2273,7 +2358,7 @@ export class AccountsService {
 
   /**
    * Retrieves the current subscription for a clinic.
-   * 
+   *
    * @param clinicId The account ID of the Clinic Admin
    * @returns Subscription entity or null if not found
    */
@@ -2591,13 +2676,21 @@ export class AccountsService {
    * - Type: RESET verification
    *
    * Business Rules:
-   * - OAuth-only accounts (no password set) cannot reset password
+  /**
+   * Initiate Password Reset Process
+   *
+   * Generates a verification code for password reset workflow.
+   * This method is the first step in the password reset flow.
+   *
+   * Security Rules:
+   * - Pure OAuth accounts (isOAuthUser=true, password=NULL) cannot reset password
+   * - Hybrid accounts (isOAuthUser=true, password!=NULL) ARE allowed to reset password
    * - Code expires after 15 minutes for security
    *
    * @param {string} email - Account email address
    * @returns {Promise<{code: string, user: Account}>} Generated reset code and account data
    * @throws {NotFoundException} If account does not exist
-   * @throws {BadRequestException} If account is OAuth-only
+   * @throws {BadRequestException} If account is pure OAuth (no password set)
    *
    * @example
    * ```typescript
@@ -2617,7 +2710,7 @@ export class AccountsService {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
 
-    // OAuth users cannot reset password (they don't have one)
+    // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
     if (account.isOAuthUser && !account.password) {
       throw new BadRequestException(
         MESSAGES.failMessage.oauthUserCannotResetPassword,
@@ -2662,7 +2755,7 @@ export class AccountsService {
    *
    * Workflow:
    * 1. Find account by email
-   * 2. Validate account is not OAuth-only
+   * 2. Validate account is not pure OAuth (has password)
    * 3. Find most recent unused RESET code
    * 4. Validate code hasn't expired (15 minutes)
    * 5. Mark code as used
@@ -2672,13 +2765,13 @@ export class AccountsService {
    * - Code expires after 15 minutes
    * - One-time use (prevents code reuse)
    * - Password is hashed with bcrypt before storage
-   * - OAuth-only accounts are blocked
+   * - Pure OAuth accounts (no password) are blocked, hybrid accounts are allowed
    *
    * @param {string} email - Account email address
    * @param {string} newPassword - New password (validated by DTO)
    * @returns {Promise<void>} No return value
    * @throws {NotFoundException} If account does not exist
-   * @throws {BadRequestException} If account is OAuth-only
+   * @throws {BadRequestException} If account is pure OAuth (no password set)
    * @throws {UnauthorizedException} If code is invalid or expired
    *
    * @example
@@ -2701,8 +2794,8 @@ export class AccountsService {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
 
-    // OAuth users cannot reset password
-    if (account.isOAuthUser) {
+    // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
+    if (account.isOAuthUser && !account.password) {
       throw new BadRequestException(
         MESSAGES.failMessage.oauthUserCannotResetPassword,
       );
@@ -2894,7 +2987,10 @@ export class AccountsService {
       await queryRunner.commitTransaction();
 
       // Call Zalo webhook to send friend request
-      await this.zaloWebhookService.sendFriendRequest(savedAccount.phone, 'Patient Registration (Manual)');
+      await this.zaloWebhookService.sendFriendRequest(
+        savedAccount.phone,
+        'Patient Registration (Manual)',
+      );
 
       // Generate new 6-digit code
       const code = generateVerificationCode();
@@ -3037,7 +3133,8 @@ export class AccountsService {
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } =
+        generateRSAKeyPair();
 
       // Step 4: Create Account entity with CLINIC_STAFF role
       // Following 2-step registration pattern: Create ACTIVE account first
@@ -3140,7 +3237,8 @@ export class AccountsService {
         dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } =
+        generateRSAKeyPair();
 
       // Step 4: Create Account entity with DOCTOR role
       // Following 2-step registration pattern: Create PENDING account first
@@ -3249,21 +3347,32 @@ export class AccountsService {
       // Calculate average rating for this clinic
       let averageRating: number | undefined;
       try {
-        const ratingResult = await this.dataSource.query(`
+        const ratingResult = await this.dataSource.query(
+          `
           SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
           FROM feedbacks f
           WHERE f.clinic_id = $1
             AND f.type = 'CLINIC'
             AND f.deleted_at IS NULL
-        `, [clinic._id]);
-        averageRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+        `,
+          [clinic._id],
+        );
+        averageRating = ratingResult[0]?.avg_rating
+          ? parseFloat(ratingResult[0].avg_rating)
+          : 0;
       } catch {
         averageRating = 0;
       }
 
       if (clinicInfo && address) {
         clinicItems.push(
-          new ClinicItemDto(clinic, clinicInfo, address, clinicAdminInfo, averageRating),
+          new ClinicItemDto(
+            clinic,
+            clinicInfo,
+            address,
+            clinicAdminInfo,
+            averageRating,
+          ),
         );
       }
     }
@@ -3315,47 +3424,45 @@ export class AccountsService {
     province?: string,
     specialty?: string,
   ): Promise<ClinicListResponseDto> {
-    // Get clinic admin accounts with ACTIVE status and filters
     const [clinics, total] =
       await this.accountRepository.findClinicsAdminWithFilters(
         AccountRole.CLINIC_ADMIN,
-        AccountStatus.ACTIVE,
         (page - 1) * limit,
         limit,
         search,
         province,
         specialty,
-        RegistrationStatus.ACTIVE ||
-          RegistrationStatus.NON_RENEWING ||
-          RegistrationStatus.EXPIRED,
       );
 
     const clinicItems: ClinicItemDto[] = [];
 
     for (const clinic of clinics) {
-      // Get clinic admin information
-      const clinicAdminInfo =
-        await this.clinicAdminInfoRepository.findByAccountId(clinic._id);
+      // Use clinicAdminInformation and address from joined data (already fetched by repository)
+      const clinicAdminInfo = clinic.clinicAdminInformation;
+      const address = clinic.address;
 
-      // Get primary address (first address)
-      const address = await this.addressRepository.findByAccountId(clinic._id);
+      if (!clinicAdminInfo) continue;
 
       // Calculate average rating for this clinic
-      let averageRating: number | undefined;
+      let averageRating = 0;
       try {
-        const ratingResult = await this.dataSource.query(`
+        const ratingResult = await this.dataSource.query(
+          `
           SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
           FROM feedbacks f
           WHERE f.clinic_id = $1
             AND f.type = 'CLINIC'
             AND f.deleted_at IS NULL
-        `, [clinic._id]);
-        averageRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+        `,
+          [clinic._id],
+        );
+        averageRating = ratingResult[0]?.avg_rating
+          ? parseFloat(ratingResult[0].avg_rating)
+          : 0;
       } catch {
         averageRating = 0;
       }
 
-      // if (clinicAdminInfo && address) {
       // Adapt ClinicAdminInformation to match ClinicItemDto's expected clinicInfo structure
       const adaptedClinicInfo = {
         _id: clinicAdminInfo._id,
@@ -3369,9 +3476,14 @@ export class AccountsService {
       // Pass adapted info as clinicInfo (2nd arg) for display compatibility.
       // Pass original clinicAdminInfo as 4th arg for full details.
       clinicItems.push(
-        new ClinicItemDto(clinic, adaptedClinicInfo, address, clinicAdminInfo, averageRating),
+        new ClinicItemDto(
+          clinic,
+          adaptedClinicInfo,
+          address,
+          clinicAdminInfo,
+          averageRating,
+        ),
       );
-      // }
     }
 
     const totalPages = Math.ceil(total / limit);
@@ -3450,22 +3562,27 @@ export class AccountsService {
       const doctorInfo = await this.doctorInfoRepository.findByAccountId(
         doctor._id,
       );
-      
+
       // Calculate average rating for this doctor
       let doctorAvgRating: number | undefined;
       try {
-        const ratingResult = await this.dataSource.query(`
+        const ratingResult = await this.dataSource.query(
+          `
           SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
           FROM feedbacks f
           WHERE f.doctor_id = $1
             AND f.type = 'DOCTOR'
             AND f.deleted_at IS NULL
-        `, [doctor._id]);
-        doctorAvgRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+        `,
+          [doctor._id],
+        );
+        doctorAvgRating = ratingResult[0]?.avg_rating
+          ? parseFloat(ratingResult[0].avg_rating)
+          : 0;
       } catch {
         doctorAvgRating = 0;
       }
-      
+
       doctors.push(new DoctorSummaryDto(doctor, doctorInfo, doctorAvgRating));
     }
 
@@ -3522,14 +3639,19 @@ export class AccountsService {
     // Calculate clinic average rating
     let clinicAvgRating: number | undefined;
     try {
-      const ratingResult = await this.dataSource.query(`
+      const ratingResult = await this.dataSource.query(
+        `
         SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
         FROM feedbacks f
         WHERE f.clinic_id = $1
           AND f.type = 'CLINIC'
           AND f.deleted_at IS NULL
-      `, [clinic._id]);
-      clinicAvgRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+      `,
+        [clinic._id],
+      );
+      clinicAvgRating = ratingResult[0]?.avg_rating
+        ? parseFloat(ratingResult[0].avg_rating)
+        : 0;
     } catch {
       clinicAvgRating = 0;
     }
@@ -3537,7 +3659,8 @@ export class AccountsService {
     // Fetch clinic feedbacks
     let feedbacks: any[] = [];
     try {
-      const feedbacksData = await this.dataSource.query(`
+      const feedbacksData = await this.dataSource.query(
+        `
         SELECT 
           f._id,
           f.rating,
@@ -3557,8 +3680,10 @@ export class AccountsService {
           AND f.deleted_at IS NULL
         ORDER BY f.created_at DESC
         LIMIT 10
-      `, [clinic._id]);
-      
+      `,
+        [clinic._id],
+      );
+
       feedbacks = feedbacksData.map((fb: any) => ({
         _id: fb._id,
         rating: fb.rating,
@@ -3761,14 +3886,19 @@ export class AccountsService {
     // Calculate doctor average rating
     let averageRating: number | undefined;
     try {
-      const ratingResult = await this.dataSource.query(`
+      const ratingResult = await this.dataSource.query(
+        `
         SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
         FROM feedbacks f
         WHERE f.doctor_id = $1
           AND f.type = 'DOCTOR'
           AND f.deleted_at IS NULL
-      `, [id]);
-      averageRating = ratingResult[0]?.avg_rating ? parseFloat(ratingResult[0].avg_rating) : 0;
+      `,
+        [id],
+      );
+      averageRating = ratingResult[0]?.avg_rating
+        ? parseFloat(ratingResult[0].avg_rating)
+        : 0;
     } catch {
       averageRating = 0;
     }
@@ -3776,7 +3906,8 @@ export class AccountsService {
     // Fetch doctor feedbacks
     let feedbacks: any[] = [];
     try {
-      const feedbacksData = await this.dataSource.query(`
+      const feedbacksData = await this.dataSource.query(
+        `
         SELECT 
           f._id,
           f.rating,
@@ -3796,8 +3927,10 @@ export class AccountsService {
           AND f.deleted_at IS NULL
         ORDER BY f.created_at DESC
         LIMIT 10
-      `, [id]);
-      
+      `,
+        [id],
+      );
+
       feedbacks = feedbacksData.map((fb: any) => ({
         _id: fb._id,
         rating: fb.rating,
@@ -4169,7 +4302,7 @@ export class AccountsService {
       );
       if (existingSepay) {
         throw new ConflictException(
-          'Số tài khoản ảo SePay này đã được liên kết với một phòng khám khác.',
+          'This SePay virtual account number is already linked to another clinic.',
         );
       }
     }
@@ -4186,7 +4319,8 @@ export class AccountsService {
     await queryRunner.startTransaction();
 
     try {
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } =
+        generateRSAKeyPair();
 
       // Create Account entity with CLINIC_ADMIN role and PENDING status
       const account = this.accountRepository.createAccount({
@@ -4345,7 +4479,8 @@ export class AccountsService {
       );
 
       // Generate digital signature keys
-      const { publicKey, privateKey: encryptedPrivateKey } = generateRSAKeyPair();
+      const { publicKey, privateKey: encryptedPrivateKey } =
+        generateRSAKeyPair();
 
       // Create Account entity with CLINIC_MANAGER role and ACTIVE status
       const managerAccount = this.accountRepository.createAccount({

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { ClinicAdminInformation } from '../../modules/accounts/entities/clinic-admin-information.entity';
 import { AccountRole } from '../../modules/accounts/enums';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
@@ -29,8 +29,18 @@ export class ClinicAdminInformationSeederService {
     ClinicAdminInformationSeederService.name,
   );
 
-  // Orthopedics-focused English clinic names
-  private readonly CLINIC_NAMES = CLINIC_NAMES;
+  // Clinic names based on location - mapped to the 7 real addresses
+  private readonly CLINIC_NAMES_BY_LOCATION = [
+    'Bonix Ho Chi Minh - D1',
+    'Bonix Ho Chi Minh - D4',
+    'Bonix Hanoi - Dong Da',
+    'Bonix Hanoi - Hoan Kiem',
+    'Bonix Nha Trang',
+    'Bonix Da Nang',
+    'Bonix Can Tho',
+  ];
+
+  private readonly ADMIN_CLINIC_MAPPING = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2];
 
   // Orthopedics-only clinic specializations
   private readonly SPECIALIZATIONS = SPECIALIZATIONS;
@@ -102,10 +112,30 @@ export class ClinicAdminInformationSeederService {
         }
 
         const adminIndex = clinicAdmins.indexOf(account);
+
+        // Special Seepay config for Admin 1 (index 0) - Clinic Manager 1
+        let bankName: string;
+        let bankNumber: string;
+        let sepayVa: string;
+        let sepayKey: string;
+
+        if (adminIndex === 0) {
+          // Admin 1 gets specific Seepay configuration for testing booking flow
+          bankName = 'MBbank';
+          bankNumber = '0779822327';
+          sepayVa = 'VQRQAFHMW1685';
+          sepayKey = 'MEDICARE_TEST';
+        } else {
+          bankName = this.getRandomBankName();
+          bankNumber = this.randomBankNumber();
+          sepayVa = this.randomSePayVa();
+          sepayKey = this.randomSepayKey();
+        }
+
         const clinicAdminInfo = this.clinicAdminInfoRepository.create({
           _id: randomUUID(),
           accountId: account._id,
-          clinicName: this.getRandomClinicName(),
+          clinicName: this.getClinicNameByIndex(adminIndex),
           clinicPhone: this.randomVietnamPhone(),
           description: this.getRandomDescription(),
           specializedIn: this.getRandomSpecializations(),
@@ -113,11 +143,11 @@ export class ClinicAdminInformationSeederService {
           paraclinical: this.getRandomParaclinical(),
           dob: this.generateDob(adminIndex),
           profilePicture: this.getRandomProfilePicture(adminIndex),
-          bankName: this.getRandomBankName(),
-          bankNumber: this.randomBankNumber(),
+          bankName,
+          bankNumber,
           bankBranch: this.getRandomBankBranch(),
-          sepayVa: this.randomSePayVa(),
-          sepayKey: this.randomSepayKey(),
+          sepayVa,
+          sepayKey,
           isVerify: true,
         });
 
@@ -135,12 +165,11 @@ export class ClinicAdminInformationSeederService {
   }
 
   /**
-   * Get random clinic name
+   * Get clinic name based on admin index (location-based)
    */
-  private getRandomClinicName(): string {
-    return this.CLINIC_NAMES[
-      Math.floor(Math.random() * this.CLINIC_NAMES.length)
-    ];
+  private getClinicNameByIndex(adminIndex: number): string {
+    const locationIndex = this.ADMIN_CLINIC_MAPPING[adminIndex] || 0;
+    return this.CLINIC_NAMES_BY_LOCATION[locationIndex];
   }
 
   /**

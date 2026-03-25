@@ -40,6 +40,13 @@ export interface ClientToServerEvents {
   deleteConversation: (conversationId: string) => void;
   startTyping: (conversationId: string) => void;
   stopTyping: (conversationId: string) => void;
+  joinClinicRoom: (clinicManagerId: string) => void;
+  appointmentCreated: (data: {
+    clinicManagerId: string;
+    appointmentId: string;
+    status: string;
+    message: string;
+  }) => void;
 }
 
 // Message and Conversation Event Types
@@ -128,5 +135,10 @@ export interface ServerToClientEvents {
   [key: `onNewMessageChat-${string}`]: (data: {
     message: string;
     data: any;
+  }) => void;
+  appointmentStatusChanged: (data: {
+    appointmentId: string;
+    status: string;
+    message: string;
   }) => void;
 }

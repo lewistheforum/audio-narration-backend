@@ -7,7 +7,7 @@ export class FeedbackPatientInfoDto {
   @ApiProperty({ description: 'Patient UUID', example: '123e4567-e89b-12d3-a456-426614174000' })
   patient_id: string;
 
-  @ApiProperty({ description: 'Patient full name', example: 'Nguyễn Văn A' })
+  @ApiProperty({ description: 'Patient full name', example: 'John Doe' })
   full_name: string;
 
   @ApiProperty({ description: 'Patient profile image URL', example: 'https://...', nullable: true })
@@ -27,7 +27,7 @@ export class FeedbackAppointmentInfoDto {
   @ApiProperty({ description: 'Appointment date', example: '2026-03-08' })
   appointment_date: string;
 
-  @ApiProperty({ description: 'Clinic name', example: 'Phòng khám ABC' })
+  @ApiProperty({ description: 'Clinic name', example: 'ABC Clinic' })
   clinic_name: string;
 }
 
@@ -41,7 +41,7 @@ export class DoctorFeedbackItemDto {
   @ApiProperty({ description: 'Rating (1-5)', example: 5 })
   rating: number;
 
-  @ApiProperty({ description: 'Feedback description', example: 'Bác sĩ rất tận tâm', nullable: true })
+  @ApiProperty({ description: 'Feedback description', example: 'Very dedicated doctor', nullable: true })
   description: string | null;
 
   @ApiProperty({ description: 'AI-labeled description', nullable: true })

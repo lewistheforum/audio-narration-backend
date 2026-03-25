@@ -5,10 +5,14 @@
  * This file contains all configurable values for generating realistic test data.
  */
 
-import { AppointmentStatus, PaymentType, AppointmentPackageStatus } from '../../modules/appointments/enums';
+import {
+  AppointmentStatus,
+  PaymentType,
+  AppointmentPackageStatus,
+} from '../../modules/appointments/enums';
 import { ERMRecordType, ERMStatus } from '../../modules/prescriptions/enums';
 import { subtractFromVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -243,6 +247,43 @@ export const PAYMENT_TYPES: PaymentType[] = [
   PaymentType.COD,
 ];
 
+/**
+ * Realistic English medical diagnoses for COMPLETED appointments
+ * Used by appointment seeder to generate doctor final diagnoses
+ */
+export const APPOINTMENT_DIAGNOSES = [
+  'Mild muscle strain in lumbar region',
+  'Lumbar sprain with muscle spasm',
+  'Early-stage osteoarthritis of the knee',
+  'Rotator cuff tendinitis',
+  'Patellofemoral pain syndrome',
+  'Plantar fasciitis',
+  'Lateral epicondylitis (tennis elbow)',
+  'Carpal tunnel syndrome',
+  'Mild cervical spondylosis',
+  'Acute low back pain',
+  'Ankle sprain (Grade I)',
+  'Shoulder impingement syndrome',
+  'Trochanteric bursitis',
+  'Meniscal tear (degenerative)',
+  'Degenerative disc disease of lumbar spine',
+  'Glenohumeral joint osteoarthritis',
+  'Achilles tendinitis',
+  'Trigger finger',
+  'De Quervain tenosynovitis',
+  'Hip osteoarthritis',
+  'Wrist contusion',
+  'Knee ligament sprain',
+  'Fibromyalgia',
+  'Osteoporosis',
+  'Scoliosis with chronic back pain',
+  'Herniated disc (L4-L5)',
+  'Frozen shoulder (adhesive capsulitis)',
+  'Bursitis of the elbow',
+  'Shin splints',
+  'Tendonitis',
+];
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -448,12 +489,22 @@ export const ULTRASOUND_CONCLUSIONS = [
 /**
  * Lab panel names for orthopedic-relevant tests
  */
-export const LAB_PANEL_NAMES = ['INFLAMMATION', 'GOUT', 'METABOLIC', 'AUTOIMMUNE'];
+export const LAB_PANEL_NAMES = [
+  'INFLAMMATION',
+  'GOUT',
+  'METABOLIC',
+  'AUTOIMMUNE',
+];
 
 /**
  * Specimen types for lab tests
  */
-export const SPECIMEN_TYPES = ['Serum', 'Plasma', 'Whole blood', 'Synovial fluid'];
+export const SPECIMEN_TYPES = [
+  'Serum',
+  'Plasma',
+  'Whole blood',
+  'Synovial fluid',
+];
 
 /**
  * Lab conclusions
@@ -485,7 +536,12 @@ export const LAB_RECOMMENDATIONS = [
 /**
  * Bone density sites
  */
-export const BONE_DENSITY_SITES = ['LUMBAR_SPINE', 'TOTAL_HIP', 'FEMORAL_NECK', 'FOREARM'];
+export const BONE_DENSITY_SITES = [
+  'LUMBAR_SPINE',
+  'TOTAL_HIP',
+  'FEMORAL_NECK',
+  'FOREARM',
+];
 
 /**
  * WHO categories for bone density
@@ -697,7 +753,14 @@ export const EDUCATION_ADVICE = [
 /**
  * Visit types
  */
-export const VISIT_TYPES = ['FIRST_VISIT', 'FOLLOW_UP', 'POST_PROCEDURE', 'ROUTINE', 'ONLINE', 'EMERGENCY'];
+export const VISIT_TYPES = [
+  'FIRST_VISIT',
+  'FOLLOW_UP',
+  'POST_PROCEDURE',
+  'ROUTINE',
+  'ONLINE',
+  'EMERGENCY',
+];
 
 /**
  * Severity levels

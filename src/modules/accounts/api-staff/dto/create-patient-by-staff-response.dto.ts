@@ -33,7 +33,7 @@ export class CreatePatientByStaffResponseDto {
 
   @ApiProperty({
     description: 'Patient full name',
-    example: 'Nguyễn Thị B',
+    example: 'Jane Doe',
   })
   fullName: string;
 
@@ -66,7 +66,7 @@ export class CreatePatientByStaffResponseDto {
   @ApiProperty({
     description: 'Response message',
     example:
-      'Tài khoản đã được tạo thành công. Email chứa mật khẩu đã được gửi đến nguyenthib@gmail.com',
+      'Account created successfully. Email containing the password has been sent to nguyenthib@gmail.com',
   })
   message: string;
 }

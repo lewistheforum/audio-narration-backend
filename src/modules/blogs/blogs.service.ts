@@ -15,7 +15,6 @@ import {
 } from './dto';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole, AccountStatus } from '../accounts/enums';
-import { ac } from '@faker-js/faker/dist/airline-CWrCIUHH';
 import { AccountsService } from '../accounts/accounts.service';
 import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 
@@ -167,7 +166,6 @@ export class BlogsService {
       savedBlog._id,
     );
 
-    // Fetch all active patients
     const [patients] = await this.accountsService.findByRoleAndStatus(
       AccountRole.PATIENT,
       AccountStatus.ACTIVE,
@@ -176,7 +174,6 @@ export class BlogsService {
     );
 
     if (patients.length > 0) {
-      // 1. Bulk create notifications
       const notificationsToSave = patients.map((patient) => ({
         patientId: patient._id,
         blogId: fullBlog!._id,
@@ -184,7 +181,6 @@ export class BlogsService {
       }));
       await this.blogRepository.saveBlogNotifications(notificationsToSave);
 
-      // 2. Map and emit socket events to online patients
       const responseDto = new BlogResponseDto(fullBlog!);
       patients.forEach((patient) => {
         const userSocketId = this.socketGatewayService.getUserSocket(
@@ -235,12 +231,10 @@ export class BlogsService {
       throw new ForbiddenException('You can only update your own blogs');
     }
 
-    // Merge updates
     Object.assign(blog, updateBlogDto);
 
     await this.blogRepository.saveBlog(blog);
 
-    // Return full details
     return this.findOne(id);
   }
 

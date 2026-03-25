@@ -46,7 +46,6 @@ async function bootstrap() {
   }
 }
 
-// Hàm đệ quy sinh dữ liệu
 async function recursiveSeed(
   dataSource: DataSource,
   metadata: EntityMetadata,
@@ -60,29 +59,23 @@ async function recursiveSeed(
 
   const data: any = {};
 
-  // 1. Xử lý các cột thường (Regular Columns)
   for (const column of metadata.columns) {
     if (column.isGenerated || column.isPrimary) continue;
     if (column.isCreateDate || column.isUpdateDate || column.isDeleteDate)
       continue;
 
-    // Bỏ qua nếu là cột quan hệ (sẽ xử lý ở bước 2)
     if (column.relationMetadata) continue;
 
-    // Chỉ sinh dữ liệu nếu bắt buộc (nullable = false) HOẶC ngẫu nhiên 50/50
     if (!column.isNullable || Math.random() > 0.5) {
       data[column.propertyName] = generateFakeData(column);
     }
   }
 
-  // 2. Xử lý quan hệ (Relations - Foreign Keys)
   for (const relation of metadata.relations) {
-    // Chỉ quan tâm ManyToOne hoặc OneToOne (Owning side)
     if (!relation.isManyToOne && !relation.isOneToOne) continue;
 
     const relatedRepo = dataSource.getRepository(relation.type);
 
-    // Chiến thuật: "Pick Existing" (Lấy random 1 dòng có sẵn)
     const existing = await relatedRepo
       .createQueryBuilder('e')
       .orderBy('RANDOM()')
@@ -92,9 +85,8 @@ async function recursiveSeed(
     if (existing) {
       data[relation.propertyName] = existing;
     } else {
-      // Chiến thuật: "Create New" (Đệ quy tạo mới)
       console.log(
-        `   ⚠️ Table '${relation.inverseEntityMetadata.tableName}' empty. Recursively creating dependency...`,
+        `   Warning: Table '${relation.inverseEntityMetadata.tableName}' empty. Recursively creating dependency...`,
       );
       const newData = await recursiveSeed(
         dataSource,
@@ -114,7 +106,6 @@ function generateFakeData(column: any): any {
   const propName = column.propertyName;
   const name = propName.toLowerCase();
 
-  // Logic đoán kiểu dữ liệu dựa trên tên cột
   if (name.includes('email')) return faker.internet.email();
   if (name.includes('phone')) return generateVietnamPhone();
   if (name.includes('name')) return faker.person.fullName();
