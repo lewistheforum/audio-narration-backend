@@ -8,7 +8,8 @@ import { ContractPackageRepository } from '../../modules/contracts/repositories/
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { CLINIC_REPRESENTATIVES } from '../constants/names';
 import { CLINIC_POSITIONS } from '../constants/medical-terms';
-import { HEADER_ADDRESSES } from '../constants/locations';
+// Use first clinic location as header address equivalent
+import { CLINIC_LOCATIONS } from '../constants/locations';
 import { getCurrentVietnamTime, VIETNAM_TIMEZONE } from '../utils/date.util';
 
 /**
@@ -31,7 +32,7 @@ export class ContractPackageSeederService {
   // Orthopedics clinic-specific contract header data
   private readonly CLINIC_REPRESENTATIVES_TEMPLATES = CLINIC_REPRESENTATIVES;
   private readonly POSITIONS_TEMPLATES = CLINIC_POSITIONS;
-  private readonly HEADER_ADDRESSES_TEMPLATES = HEADER_ADDRESSES;
+  private readonly HEADER_ADDRESSES_TEMPLATES = CLINIC_LOCATIONS;
 
   constructor(
     private readonly contractPackageRepository: ContractPackageRepository,
@@ -137,9 +138,10 @@ export class ContractPackageSeederService {
    * Get random header address
    */
   private getRandomHeaderAddress(): string {
-    return this.HEADER_ADDRESSES_TEMPLATES[
+    const location = this.HEADER_ADDRESSES_TEMPLATES[
       Math.floor(Math.random() * this.HEADER_ADDRESSES_TEMPLATES.length)
     ];
+    return location.address;
   }
 
   /**
