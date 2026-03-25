@@ -23,6 +23,7 @@ export class AdminSeederService {
     username: 'admin',
     email: 'admin@bonix.com',
     password: 'Admin@123456',
+    phone: '0901234567',
     fullName: 'System Administrator',
     role: AccountRole.ADMIN,
   };
@@ -63,6 +64,7 @@ export class AdminSeederService {
         username: this.DEFAULT_ADMIN.username,
         email: this.DEFAULT_ADMIN.email,
         password: hashedPassword,
+        phone: this.DEFAULT_ADMIN.phone,
         role: this.DEFAULT_ADMIN.role,
         status: AccountStatus.ACTIVE,
         isEmailVerified: true,

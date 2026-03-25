@@ -63,7 +63,7 @@ export class AccountSeederService {
       districtCode: '760',
       provinceCode: '79',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3723.867128869523!2d106.692877!3d10.790093!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f3a5a5d5a5d%3A0x0!2s135%20Nam%20Ky%20Khoi%20Nghia!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=135%20Nam%20K%E1%BB%B3%20Kh%E1%BB%9Fi%20Ngh%C4%A9a%2C%20Ph%C6%B0%E1%BB%9Dng%20B%E1%BA%BFn%20Th%C3%A0nh%2C%20Qu%E1%BA%ADn%201%2C%20H%E1%BB%93%20Ch%C3%AD%20Minh.&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Ho Chi Minh - D1',
     },
     {
@@ -75,7 +75,7 @@ export class AccountSeederService {
       districtCode: '764',
       provinceCode: '79',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.567823456789!2d106.707678!3d10.781234!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f4c4c4c4c4c%3A0x0!2s534%20Vinh%20Khanh!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=534%20V%C4%A9nh%20Kh%C3%A1nh%2C%20Ph%C6%B0%E1%BB%9Dng%208%2C%20Qu%E1%BA%ADn%204%2C%20%2C%20H%E1%BB%93%20Ch%C3%AD%20Minh.&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Ho Chi Minh - D4',
     },
     {
@@ -87,7 +87,7 @@ export class AccountSeederService {
       districtCode: '105',
       provinceCode: '01',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.123456789012!2d105.845678!3d21.028512!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135a5e5e5e5e5e5%3A0x0!2s58%20Quoc%20Tu%20Giam!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=%2058%20Qu%E1%BB%91c%20T%E1%BB%AD%20Gi%C3%A1m%2C%20Qu%E1%BA%ADn%20%C4%90%E1%BB%91ng%20%C4%90a&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Hanoi - Dong Da',
     },
     {
@@ -99,7 +99,7 @@ export class AccountSeederService {
       districtCode: '104',
       provinceCode: '01',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.234567890123!2d105.856789!3d21.028123!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135a5d5d5d5d5d5%3A0x0!2s10%20Ly%20Quoc%20Su!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=10%20L%C3%BD%20Qu%E1%BB%91c%20S%C6%B0%2C%20Qu%E1%BA%ADn%20Ho%C3%A0n%20Ki%E1%BA%BFm&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Hanoi - Hoan Kiem',
     },
     {
@@ -111,7 +111,7 @@ export class AccountSeederService {
       districtCode: '931',
       provinceCode: '56',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3725.345678901234!2d109.196789!3d12.245678!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31706e6e6e6e6e6e6%3A0x0!2s61%20Hai%20Thang%20Tu!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=61%20Hai%20Th%C3%A1ng%20T%C6%B0%2C%20Ph%C6%B0%E1%BB%9Dng%20V%C4%A9nh%20Ph%C6%B0%E1%BB%9Cc&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Nha Trang',
     },
     {
@@ -123,19 +123,19 @@ export class AccountSeederService {
       districtCode: '488',
       provinceCode: '48',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3726.456789012345!2d108.245678!3d16.054123!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31420e7e7e7e7e7e7%3A0x0!2s81%20Huyen%20Tran%20Cong%20Chua!5e0!3m2!1en!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=81%20Huy%E1%BB%81n%20Tr%C3%A2n%20C%C3%B4ng%20Ch%C3%BAa%2C%20Qu%E1%BA%ADn%20Ng%C5%A5%20H%C3%A0nh%20S%C6%A1n&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Da Nang',
     },
     {
-      address: '46 Hai Ba Trung Street, Ninh Kieu District, Can Tho',
-      ward: 'Ninh Kieu District',
-      district: 'Can Tho',
+      address: '46 Hai Ba Trung Street, Tan An Ward, Ninh Kieu District, Can Tho',
+      ward: 'Tan An Ward',
+      district: 'Ninh Kieu District',
       province: 'Can Tho',
       wardCode: '95018',
       districtCode: '956',
       provinceCode: '92',
       googleIframe:
-        '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3727.567890123456!2d105.756789!3d10.045678!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x319e8f8f8f8f8f8f8%3A0x0!2s46%20Hai%20Ba%20Trung!5e0!3m2!1sen!2s!4v1609459200000" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
+        '<iframe src="https://maps.google.com/maps?width=600&height=400&hl=en&q=S%E1%BB%91%2046%20%C4%91%C6%B0%E1%BB%9Dng%20Hai%20B%C3%A0%20Tr%C6%B0ng%2C%20T%C3%A2n%20An&t=&z=14&ie=UTF8&iwloc=B&output=embed" width="600" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>',
       clinicName: 'Bonix Can Tho',
     },
   ];
