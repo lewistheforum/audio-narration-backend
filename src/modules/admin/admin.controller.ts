@@ -607,6 +607,13 @@ export class AdminController {
     return await this.adminService.syncKnowledgeBase();
   }
 
+  @Post('knowledge-base/sync-medicines')
+  @Roles(AccountRole.ADMIN)
+  @ApiOperation({ summary: 'Sync Knowledge Base Medicines' })
+  async syncKnowledgeBaseMedicines(): Promise<any> {
+    return await this.adminService.syncKnowledgeBaseMedicine();
+  }
+
   /**
    * Cleanup stale pending registrations
    *

@@ -4,6 +4,17 @@ import { Account } from '../../entities/accounts.entity';
 import { AccountStatus, Gender } from '../../enums';
 import { formatToVietnamTime } from '../../../../common/utils/date.util';
 
+export class GoogleIframeDto {
+  @ApiProperty()
+  _id: string;
+
+  @ApiProperty({ required: false })
+  location?: string;
+
+  @ApiProperty({ required: false })
+  googleMapIframe?: string;
+}
+
 export class PatientAddressDto {
   @ApiProperty()
   _id: string;
@@ -28,6 +39,9 @@ export class PatientAddressDto {
 
   @ApiProperty()
   provinceName: string;
+
+  @ApiProperty({ type: GoogleIframeDto, required: false })
+  googleIframe?: GoogleIframeDto;
 }
 
 export class PatientResponseDto {
@@ -100,6 +114,14 @@ export class PatientResponseDto {
         districtName: account.address.districtName,
         provinceName: account.address.provinceName,
       };
+
+      if (account.address.googleIframe) {
+        this.address.googleIframe = {
+          _id: account.address.googleIframe._id,
+          location: account.address.googleIframe.location,
+          googleMapIframe: account.address.googleIframe.googleMapIframe,
+        };
+      }
     }
   }
 }

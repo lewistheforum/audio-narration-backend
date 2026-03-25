@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DeepPartial, FindOptionsWhere, IsNull } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import { AccountRole, AccountStatus, LegalDocumentVerificationStatus } from '../enums';
+import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 
 /**
  * Account Repository
@@ -530,13 +531,11 @@ export class AccountRepository {
 
   async findClinicsAdminWithFilters(
     role: AccountRole,
-    status: AccountStatus,
     skip: number = 0,
     take: number = 10,
     search?: string,
     province?: string,
     specialty?: string,
-    subscriptionStatus?: string,
   ): Promise<[Account[], number]> {
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
@@ -544,22 +543,18 @@ export class AccountRepository {
       .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
-      .andWhere('account.status = :status', { status })
-      .andWhere(`EXISTS (
-        SELECT 1 FROM accounts branch 
-        INNER JOIN clinics_legal_documents legalDoc ON legalDoc.account_id = branch._id 
-        WHERE branch.parent_id = account._id 
-          AND branch.role = :branchRole
-          AND branch.status = :branchStatus
-          AND branch.deleted_at IS NULL
-          AND legalDoc.verification_status = :verifiedStatus
-          AND legalDoc.deleted_at IS NULL
-      )`)
-      .setParameters({
-        branchRole: AccountRole.CLINIC_MANAGER,
-        branchStatus: AccountStatus.ACTIVE,
-        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
-      });
+      .andWhere(
+        'subscription.subscriptionStatus NOT IN (:...excludedStatuses)',
+        {
+          excludedStatuses: [
+            RegistrationStatus.PENDING_SEPAY_SETUP,
+            RegistrationStatus.PENDING_MANAGER_SETUP,
+            RegistrationStatus.PENDING_LEGAL_SETUP,
+            RegistrationStatus.PENDING_APPROVAL,
+            RegistrationStatus.PENDING_PAYMENT,
+          ],
+        },
+      );
 
     // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
     if (search) {
@@ -582,16 +577,6 @@ export class AccountRepository {
       queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
         specialty: JSON.stringify([specialty]),
       });
-    }
-
-    // Apply subscription status filter
-    if (subscriptionStatus) {
-      queryBuilder.andWhere(
-        'subscription.subscriptionStatus = :subscriptionStatus',
-        {
-          subscriptionStatus,
-        },
-      );
     }
 
     // Apply pagination and ordering

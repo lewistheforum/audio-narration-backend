@@ -1,4 +1,5 @@
-const BASE_URL = 'http://0.0.0.0:8080/api/v1';
+// const BASE_URL = 'http://0.0.0.0:8080/api/v1';
+const BASE_URL = 'https://api.ai.bonix.io.vn/api/v1';
 
 const AI = {
   RECOMMENDATION_GET_CLINIC_BY_ID: (clinic_id: string) =>
@@ -28,6 +29,7 @@ const AI = {
     `${BASE_URL}/rag/conversations/${conversation_id}`,
 
   SYNC_DATA: `${BASE_URL}/rag/knowledge-base/sync`,
+  SYNC_DATA_MEDICINE: `${BASE_URL}/rag/knowledge-base/sync-medicines`,
 
   FRACTURE_DETECTION: `${BASE_URL}/fracture-detection/detect`,
 };
