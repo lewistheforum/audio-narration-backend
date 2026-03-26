@@ -132,7 +132,7 @@ export class AppointmentPackageRepository {
         'clinicService',
         'clinicService._id = clinicServiceConfig.service_id',
       )
-      .where('package.appointment_id IN (:...appointmentIds)', {
+      .where('package.appointment_id = ANY(:appointmentIds)', {
         appointmentIds,
       })
       .andWhere('package.deleted_at IS NULL')

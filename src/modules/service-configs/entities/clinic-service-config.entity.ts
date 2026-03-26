@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ClinicService } from '../../clinic-services/entities/clinic-service.entity';
@@ -17,6 +18,8 @@ import { ClinicService } from '../../clinic-services/entities/clinic-service.ent
  * Stores configuration for clinic services including pricing and duration
  */
 @Entity('clinic_service_config')
+@Index('idx_clinic_service_config_clinic', ['clinicId'])
+@Index('idx_clinic_service_config_service', ['serviceId'])
 export class ClinicServiceConfig {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Param, UseGuards, Req, Body, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
+import { Express } from 'express';
 import { ContractsService } from './contracts.service';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth, ApiResponse, ApiConsumes, ApiQuery } from '@nestjs/swagger';
@@ -204,7 +205,7 @@ export class ContractsController {
     })
     async uploadContractFile(
         @Param('id') id: string,
-        @UploadedFile() file: any
+        @UploadedFile() file: Express.Multer.File
     ) {
         return this.contractsService.uploadContractFile(id, file);
     }

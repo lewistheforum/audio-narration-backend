@@ -502,23 +502,17 @@ export class SubscriptionServicesService {
   ): Promise<SubscriptionHistoryResponseDto> {
     const skip = (page - 1) * limit;
 
-    // Get total count
+    // Get history records with services joined (single query - no N+1)
     const [historyRecords, total] =
-      await this.clinicSubscriptionHistoryRepository.findAndCount({
-        where: { clinicId },
-        order: { createdAt: 'DESC' },
+      await this.clinicSubscriptionHistoryRepository.findWithServicesByClinicId(
+        clinicId,
         skip,
-        take: limit,
-      });
+        limit,
+      );
 
-    // Fetch service details for each history record
-    const historyWithServices = await Promise.all(
-      historyRecords.map(async (record) => {
-        const service = await this.subscriptionServiceRepository.findById(
-          record.serviceId,
-        );
-        return this.toSubscriptionHistoryItemDto(record, service);
-      }),
+    // Map to DTOs
+    const historyWithServices = historyRecords.map((record) =>
+      this.toSubscriptionHistoryItemDto(record, record.service),
     );
 
     const totalPages = Math.ceil(total / limit);

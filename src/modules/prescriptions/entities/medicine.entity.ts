@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 
 /**
@@ -22,6 +23,7 @@ import {
  * - Soft delete support (deletedAt)
  */
 @Entity('medicines')
+@Index('idx_medicine_name', ['name'])
 export class Medicine {
   /**
    * Primary Key - UUID

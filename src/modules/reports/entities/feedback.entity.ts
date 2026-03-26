@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { FeedbackType } from '../enums';
@@ -17,6 +18,11 @@ import { FeedbackType } from '../enums';
  * Stores feedback from patients about doctors and clinics
  */
 @Entity('feedbacks')
+@Index('idx_feedback_clinic_id', ['clinicId'])
+@Index('idx_feedback_doctor_id', ['doctorId'])
+@Index('idx_feedback_appointment_id', ['appointmentId'])
+@Index('idx_feedback_type', ['type'])
+@Index('idx_feedback_created_at', ['createdAt'])
 export class Feedback {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

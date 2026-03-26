@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
 import { PatientAppointmentStatisticsDto } from './dto/patient-appointment-statistics.dto';
@@ -21,6 +21,7 @@ export class PatientsService {
     @InjectRepository(BanHistory)
     private readonly banHistoryRepository: Repository<BanHistory>,
     private readonly mailerService: MailerService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async getAppointmentStatistics(
@@ -50,7 +51,7 @@ export class PatientsService {
         'appointment.clinicId AS "clinicId"',
         'clinicManagerInformation.clinicBranchName AS "branchName"',
         'clinicAdminInformation.clinicName AS "clinicAdminName"',
-        'COUNT(appointment._id) AS "appointmentCount"',
+        'COUNT(appointment._id)::int AS "appointmentCount"',
         'MAX(appointment.createdAt) AS "latestAppointmentDate"',
       ])
       .where('appointment.patientId = :patientId', { patientId })
@@ -63,7 +64,7 @@ export class PatientsService {
       clinicId: stat.clinicId,
       branchName: stat.branchName || 'Unknown Branch',
       clinicAdminName: stat.clinicAdminName || 'Unknown Brand',
-      appointmentCount: parseInt(stat.appointmentCount, 10),
+      appointmentCount: Number(stat.appointmentCount),
       latestAppointmentDate: stat.latestAppointmentDate,
     }));
 
@@ -119,83 +120,112 @@ export class PatientsService {
     id: string,
     banDescription?: string,
   ): Promise<PatientResponseDto> {
-    const account = await this.accountRepository.findOne({
-      where: { _id: id, role: AccountRole.PATIENT },
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (!account) {
-      throw new NotFoundException(`Patient with ID ${id} not found.`);
-    }
+    try {
+      const account = await this.accountRepository.findOne({
+        where: { _id: id, role: AccountRole.PATIENT },
+      });
 
-    account.banCounts += 1;
-    account.banDescription = banDescription;
+      if (!account) {
+        throw new NotFoundException(`Patient with ID ${id} not found.`);
+      }
 
-    const patientName =
-      account.generalAccount?.fullName || account.username || 'Patient';
-
-    if (account.banCounts >= 3) {
-      account.status = AccountStatus.BAN;
-      await this.mailerService.sendAccountBannedEmail(
-        account.email,
-        patientName,
-        banDescription || 'Multiple violations of terms of service.',
-      );
-    } else {
-      await this.mailerService.sendAccountWarningEmail(
-        account.email,
-        patientName,
-        banDescription || 'Violation of terms of service.',
-        account.banCounts,
-      );
-    }
-
-    const savedAccount = await this.accountRepository.save(account);
-
-    // Create Ban History
-    const banHistory = this.banHistoryRepository.create({
-      accountId: savedAccount._id,
-      banCounts: savedAccount.banCounts,
-      type: savedAccount.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
-      banDescription: banDescription,
-    });
-    await this.banHistoryRepository.save(banHistory);
-
-    return new PatientResponseDto(savedAccount);
-  }
-
-  async unbanPatient(id: string): Promise<PatientResponseDto> {
-    const account = await this.accountRepository.findOne({
-      where: { _id: id, role: AccountRole.PATIENT },
-    });
-
-    if (!account) {
-      throw new NotFoundException(`Patient with ID ${id} not found.`);
-    }
-
-    if (account.status === AccountStatus.BAN) {
-      account.status = AccountStatus.ACTIVE;
-      account.banCounts = 0;
-      account.banDescription = null;
+      account.banCounts += 1;
+      account.banDescription = banDescription;
 
       const patientName =
         account.generalAccount?.fullName || account.username || 'Patient';
-      await this.mailerService.sendAccountUnbannedEmail(
-        account.email,
-        patientName,
-      );
+
+      if (account.banCounts >= 3) {
+        account.status = AccountStatus.BAN;
+      }
+
+      await queryRunner.manager.save(Account, account);
+
+      const banHistory = this.banHistoryRepository.create({
+        accountId: account._id,
+        banCounts: account.banCounts,
+        type: account.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
+        banDescription: banDescription,
+      });
+      await queryRunner.manager.save(BanHistory, banHistory);
+
+      await queryRunner.commitTransaction();
+
+      if (account.banCounts >= 3) {
+        await this.mailerService.sendAccountBannedEmail(
+          account.email,
+          patientName,
+          banDescription || 'Multiple violations of terms of service.',
+        );
+      } else {
+        await this.mailerService.sendAccountWarningEmail(
+          account.email,
+          patientName,
+          banDescription || 'Violation of terms of service.',
+          account.banCounts,
+        );
+      }
+
+      return new PatientResponseDto(account);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
+  }
 
-    const savedAccount = await this.accountRepository.save(account);
+  async unbanPatient(id: string): Promise<PatientResponseDto> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Create Unban History
-    const banHistory = this.banHistoryRepository.create({
-      accountId: savedAccount._id,
-      banCounts: 0,
-      type: BanType.UNBANNED,
-    });
-    await this.banHistoryRepository.save(banHistory);
+    try {
+      const account = await this.accountRepository.findOne({
+        where: { _id: id, role: AccountRole.PATIENT },
+      });
 
-    return new PatientResponseDto(savedAccount);
+      if (!account) {
+        throw new NotFoundException(`Patient with ID ${id} not found.`);
+      }
+
+      if (account.status === AccountStatus.BAN) {
+        account.status = AccountStatus.ACTIVE;
+        account.banCounts = 0;
+        account.banDescription = null;
+
+        await queryRunner.manager.save(Account, account);
+
+        const banHistory = this.banHistoryRepository.create({
+          accountId: account._id,
+          banCounts: 0,
+          type: BanType.UNBANNED,
+        });
+        await queryRunner.manager.save(BanHistory, banHistory);
+
+        await queryRunner.commitTransaction();
+
+        const patientName =
+          account.generalAccount?.fullName || account.username || 'Patient';
+        await this.mailerService.sendAccountUnbannedEmail(
+          account.email,
+          patientName,
+        );
+      } else {
+        await queryRunner.rollbackTransaction();
+      }
+
+      return new PatientResponseDto(account);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async getBanHistory(patientId: string): Promise<BanHistory[]> {

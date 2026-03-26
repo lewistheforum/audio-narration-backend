@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { PanelName } from '../enums';
@@ -17,6 +18,7 @@ import { PanelName } from '../enums';
  * Stores laboratory test results for patient ERM records
  */
 @Entity('erm_labs')
+@Index('idx_erm_lab_erm_id', ['ermId'])
 export class ERMLab {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

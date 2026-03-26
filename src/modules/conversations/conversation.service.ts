@@ -4,6 +4,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import {
   CreateConversationDto,
   UpdateConversationDto,
@@ -18,6 +19,7 @@ import { MessagesService } from '../messages/messages.service';
 export class ConversationService {
   constructor(
     private readonly conversationRepository: ConversationRepository,
+    private readonly dataSource: DataSource,
     @Inject(forwardRef(() => AccountsService))
     private AccountsService: AccountsService,
     @Inject(forwardRef(() => MessagesService))
@@ -26,66 +28,63 @@ export class ConversationService {
 
   async create(
     createConversationDto: CreateConversationDto,
-  ): Promise<ConversationResponseDto> {
-    // Check if conversation already exists with exact same participants
+  ): Promise<any> {
     const existingConversation = await this.findExactConversationByParticipants(
       createConversationDto.participants,
     );
 
     if (existingConversation) {
-      // Check if createdUserId is in the deletedBy array
       if (
         createConversationDto.createdUserId &&
         existingConversation.deletedBy?.includes(
           createConversationDto.createdUserId,
         )
       ) {
-        // Remove the user ID from deletedBy array
-        const updatedDeletedBy = existingConversation.deletedBy.filter(
-          (id) => id !== createConversationDto.createdUserId,
-        );
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
 
-        // Update the conversation
-        await this.conversationRepository.updateConversation(
-          existingConversation._id,
-          { deletedBy: updatedDeletedBy },
-        );
+        try {
+          const updatedDeletedBy = existingConversation.deletedBy.filter(
+            (id: string) => id !== createConversationDto.createdUserId,
+          );
 
-        // Return the updated conversation
-        const updatedConversation = await this.findConversationEntityById(
+          await queryRunner.manager.update(
+            'conversations',
+            { _id: existingConversation._id },
+            { deletedBy: updatedDeletedBy },
+          );
+
+          await queryRunner.commitTransaction();
+        } catch (error) {
+          await queryRunner.rollbackTransaction();
+          throw error;
+        } finally {
+          await queryRunner.release();
+        }
+
+        return this.conversationRepository.findConversationByIdWithParticipants(
           existingConversation._id,
-        );
-        return ConversationResponseDto.createWithParticipants(
-          updatedConversation,
-          this.AccountsService,
-          this.messagesService,
         );
       }
 
-      // If conversation exists but user is not in deletedBy, return existing conversation
-      return ConversationResponseDto.createWithParticipants(
-        existingConversation,
-        this.AccountsService,
-        this.messagesService,
+      return this.conversationRepository.findConversationByIdWithParticipants(
+        existingConversation._id,
       );
     }
 
-    // Create new conversation if none exists
     const savedConversation =
       await this.conversationRepository.createConversation(
         createConversationDto,
       );
-    return ConversationResponseDto.createWithParticipants(
-      savedConversation,
-      this.AccountsService,
-      this.messagesService,
+    return this.conversationRepository.findConversationByIdWithParticipants(
+      savedConversation._id,
     );
   }
 
   private async findExactConversationByParticipants(
     participants: string[],
   ): Promise<Conversation | null> {
-    // Sort participants to ensure consistent comparison
     const sortedParticipants = [...participants].sort();
 
     const conversations =
@@ -93,7 +92,6 @@ export class ConversationService {
         sortedParticipants,
       );
 
-    // Find conversation with exact same participants (same length and same elements)
     return (
       conversations.find(
         (conv) =>
@@ -107,79 +105,63 @@ export class ConversationService {
     );
   }
 
-  async findAll(): Promise<ConversationResponseDto[]> {
-    const conversations =
-      await this.conversationRepository.findAllConversations();
-    return Promise.all(
-      conversations.map((conversation) =>
-        ConversationResponseDto.createWithParticipants(
-          conversation,
-          this.AccountsService,
-          this.messagesService,
-        ),
-      ),
-    );
+  async findAll(): Promise<any[]> {
+    return this.conversationRepository.findAllConversationsOptimized();
   }
 
-  async findOne(id: string): Promise<ConversationResponseDto> {
-    const conversation = await this.findConversationEntityById(id);
-    return ConversationResponseDto.createWithParticipants(
-      conversation,
-      this.AccountsService,
-      this.messagesService,
-    );
+  async findOne(id: string): Promise<any> {
+    const conversation = await this.conversationRepository.findConversationByIdWithParticipants(id);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+    return conversation;
   }
 
   async findByParticipants(
     participants: string[],
-  ): Promise<ConversationResponseDto[]> {
-    // Get all conversations with these participants
-    const conversations =
-      await this.conversationRepository.findConversationsByParticipants(
-        participants,
-      );
-
-    // Filter out conversations where all participants are in deletedBy
-    const filteredConversations = conversations.filter((conv) => {
-      return !participants.every((p) => conv.deletedBy?.includes(p));
-    });
-
-    return Promise.all(
-      filteredConversations.map((conversation) =>
-        ConversationResponseDto.createWithParticipants(
-          conversation,
-          this.AccountsService,
-          this.messagesService,
-        ),
-      ),
+  ): Promise<any[]> {
+    return this.conversationRepository.findConversationsWithParticipantsAndMessages(
+      participants,
+      true,
     );
   }
 
   async update(
     id: string,
     updateConversationDto: UpdateConversationDto,
-  ): Promise<ConversationResponseDto> {
-    const updatedConversation =
-      await this.conversationRepository.updateConversation(
-        id,
-        updateConversationDto,
-      );
-
-    return ConversationResponseDto.createWithParticipants(
-      updatedConversation,
-      this.AccountsService,
+  ): Promise<any> {
+    await this.conversationRepository.updateConversation(
+      id,
+      updateConversationDto,
     );
+
+    return this.conversationRepository.findConversationByIdWithParticipants(id);
   }
 
   async delete(conversationId: string, userId: string): Promise<void> {
-    await this.conversationRepository.addUserToDeletedBy(
-      conversationId,
-      userId,
-    );
-    await this.messagesService.updateLastMessageDeletedBy(
-      conversationId,
-      userId,
-    );
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.update(
+        'conversations',
+        { _id: conversationId },
+        {
+          deletedBy: () => `array_append(deleted_by, '${userId}')`,
+        },
+      );
+      await this.messagesService.updateLastMessageDeletedBy(
+        conversationId,
+        userId,
+      );
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async clearDeletedBy(conversationId: string): Promise<void> {
@@ -202,135 +184,113 @@ export class ConversationService {
   // --- Account Fetching for Chat ---
 
   async getAdminChatlist(): Promise<any[]> {
-    const accounts = await this.AccountsService[
-      'accountRepository'
-    ].findAccounts({
-      where: [{ role: 'ADMIN' as any }, { role: 'CLINIC_ADMIN' as any }],
-      relations: ['generalAccount', 'clinicAdminInformation'],
-    });
-
-    return this.mapAccountsToResponse(accounts);
+    const accounts = await this.conversationRepository.findAdminChatlist();
+    return this.mapRawAccountsToResponse(accounts);
   }
 
   async getClinicAdminChatlist(clinicAdminId: string): Promise<any[]> {
-    const accounts = await this.AccountsService[
-      'accountRepository'
-    ].findAccounts({
-      where: [
-        { role: 'ADMIN' as any }, // The system admin
-        { parentId: clinicAdminId }, // The Clinic Managers under this admin
-      ],
-      relations: ['generalAccount', 'clinicManagerInformation'],
-    });
-
-    return this.mapAccountsToResponse(accounts);
+    const accounts = await this.conversationRepository.findClinicAdminChatlist(
+      clinicAdminId,
+    );
+    return this.mapRawAccountsToResponse(accounts);
   }
 
   async getClinicManagerRelatedAccounts(managerId: string): Promise<any[]> {
-    const managerAccount =
-      await this.AccountsService.findAccountEntityById(managerId);
-
-    // Admin is the parent of the manager
-    const adminId = managerAccount.parentId;
-
-    // Find admin, and all staff/doctors whose parent is this manager
-    const accounts = await this.AccountsService[
-      'accountRepository'
-    ].findAccounts({
-      where: [
-        { _id: adminId }, // The Clinic Admin
-        { parentId: managerId }, // Staff and Doctors
-      ],
-      relations: [
-        'clinicAdminInformation',
-        'clinicManagerInformation',
-        'clinicStaffInformation',
-        'doctorInformation',
-      ],
-    });
-
-    return this.mapAccountsToResponse(accounts);
+    const accounts =
+      await this.conversationRepository.findClinicManagerRelatedAccounts(managerId);
+    return this.mapRawAccountsToResponse(accounts);
   }
 
   async getStaffRelatedAccounts(staffId: string): Promise<any[]> {
-    const staffAccount =
-      await this.AccountsService.findAccountEntityById(staffId);
-
-    // Manager is the parent of the staff
-    const managerId = staffAccount.parentId;
-    if (!managerId) {
-      return [];
-    }
-
-    const managerAccount =
-      await this.AccountsService.findAccountEntityById(managerId);
-    const adminId = managerAccount.parentId;
-
-    // Find the admin, the manager, and all other staff/doctors with the same manager
-    const accounts = await this.AccountsService[
-      'accountRepository'
-    ].findAccounts({
-      where: [
-        ...(adminId ? [{ _id: adminId }] : []), // The Clinic Admin
-        { _id: managerId }, // The Clinic Manager
-        { parentId: managerId }, // Other Staff and Doctors
-      ],
-      relations: [
-        'clinicAdminInformation',
-        'clinicManagerInformation',
-        'clinicStaffInformation',
-        'doctorInformation',
-      ],
-    });
-
-    // Optionally filter out the requesting staff itself
-    const filteredAccounts = accounts.filter((acc) => acc._id !== staffId);
-
-    return this.mapAccountsToResponse(filteredAccounts);
+    const accounts = await this.conversationRepository.findStaffRelatedAccounts(
+      staffId,
+    );
+    return this.mapRawAccountsToResponse(accounts);
   }
 
   async getDoctorChatlist(doctorId: string): Promise<any[]> {
-    // 1. Get staff/doctors with the same manager
-    const staffAccounts = await this.getStaffRelatedAccounts(doctorId);
+    const hierarchy = await this.conversationRepository.findStaffRelatedAccounts(doctorId);
 
-    // 2. Get patients examined by this doctor
-    const patients = await this.AccountsService['accountRepository']
+    if (!hierarchy || hierarchy.length === 0) {
+      return [];
+    }
+
+    const patientIds = new Set<string>();
+    const staffAccountIds = new Set<string>();
+
+    for (const acc of hierarchy) {
+      if (acc.role === 'PATIENT') {
+        patientIds.add(acc.id);
+      } else if (acc.role !== 'ADMIN' && acc.role !== 'CLINIC_ADMIN' && acc.role !== 'CLINIC_MANAGER') {
+        staffAccountIds.add(acc.id);
+      }
+    }
+
+    const appointmentPatients = await this.AccountsService['accountRepository']
       .createQueryBuilder('account')
-      .innerJoinAndSelect('account.generalAccount', 'generalAccount')
       .innerJoin('appointments', 'appt', 'appt.patient_id = account._id')
-      .leftJoin(
-        'clinic_shift_hour',
-        'csh',
-        'csh._id = appt.clinic_shift_hour_id',
-      )
-      .leftJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
-      .leftJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
-      .where('(appt.doctor_id = :doctorId OR es.employee_id = :doctorId)', {
+      .leftJoin('account.generalAccount', 'generalAccount')
+      .where('(appt.doctor_id = :doctorId OR EXISTS (SELECT 1 FROM employee_schedule es JOIN clinic_shift cs ON es.clinic_shift_id = cs._id WHERE es.employee_id = :doctorId AND es.clinic_shift_id = cs._id AND cs._id = (SELECT csh.shift_id FROM clinic_shift_hour csh WHERE csh._id = appt.clinic_shift_hour_id)))', {
         doctorId,
       })
-      .getMany();
+      .andWhere('account.role = :patientRole', {
+        patientRole: 'PATIENT',
+      })
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id as id',
+        'account.email as email',
+        'account.username as username',
+        'account.role as role',
+        'account.status as status',
+        'account.is_email_verified as isEmailVerified',
+        'account.created_at as createdAt',
+        'account.updated_at as updatedAt',
+      ])
+      .getRawMany();
 
-    const formattedPatients = patients.map((p) => {
-      const { _id, generalAccount, ...rest } = p;
-      return {
-        id: _id,
-        ...rest,
-        profileInformation: generalAccount || null,
-      };
-    });
+    for (const patient of appointmentPatients) {
+      patientIds.add(patient.id);
+    }
 
-    const combined = [...staffAccounts, ...formattedPatients];
-    const uniqueIds = new Set();
+    if (patientIds.size === 0) {
+      return [];
+    }
+
+    const patients = await this.AccountsService['accountRepository']
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where('account._id = ANY(:patientIds)', { patientIds: Array.from(patientIds) })
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id as id',
+        'account.email as email',
+        'account.username as username',
+        'account.role as role',
+        'account.status as status',
+        'account.isEmailVerified as isEmailVerified',
+        'account.createdAt as createdAt',
+        'account.updatedAt as updatedAt',
+      ])
+      .getRawMany();
+
+    const combined = [...hierarchy.filter(a => a.role === 'PATIENT' || (a.role !== 'ADMIN' && a.role !== 'CLINIC_ADMIN' && a.role !== 'CLINIC_MANAGER')), ...patients];
+    const uniqueIds = new Set<string>();
     const result = [];
     for (const acc of combined) {
-      if (
-        !uniqueIds.has(acc.id) &&
-        acc.role !== 'ADMIN' &&
-        acc.role !== 'CLINIC_ADMIN' &&
-        acc.role !== 'CLINIC_MANAGER'
-      ) {
+      if (!uniqueIds.has(acc.id)) {
         uniqueIds.add(acc.id);
-        result.push(acc);
+        result.push({
+          id: acc.id,
+          email: acc.email,
+          username: acc.username,
+          role: acc.role,
+          status: acc.status,
+          isEmailVerified: acc.isEmailVerified,
+          createdAt: acc.createdAt,
+          updatedAt: acc.updatedAt,
+          profileInformation: acc.generalAccount || acc.general_account || null,
+        });
       }
     }
     return result;
@@ -340,23 +300,25 @@ export class ConversationService {
     const doctors = await this.AccountsService['accountRepository']
       .createQueryBuilder('account')
       .innerJoinAndSelect('account.doctorInformation', 'doctorInformation')
-      .leftJoin('employee_schedule', 'es', 'es.employee_id = account._id')
-      .leftJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-      .leftJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-      .innerJoin(
-        'appointments',
-        'appt',
-        '(appt.clinic_shift_hour_id = csh._id OR appt.doctor_id = account._id)',
-      )
+      .innerJoin('employee_schedule', 'es', 'es.employee_id = account._id')
+      .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+      .innerJoin('appointments', 'appt', 'appt.clinic_shift_hour_id = cs._id')
       .where('appt.patient_id = :patientId', { patientId })
+      .andWhere('account.role = :doctorRole', { doctorRole: 'DOCTOR' })
+      .andWhere('account.deletedAt IS NULL')
       .getMany();
 
     return doctors.map((d: any) => {
-      const { _id, doctorInformation, ...rest } = d;
       return {
-        id: _id,
-        ...rest,
-        profileInformation: doctorInformation || null,
+        id: d._id,
+        email: d.email,
+        username: d.username,
+        role: d.role,
+        status: d.status,
+        isEmailVerified: d.isEmailVerified,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+        profileInformation: d.doctorInformation || null,
       };
     });
   }
@@ -380,6 +342,46 @@ export class ConversationService {
           clinicManagerInformation ||
           clinicStaffInformation ||
           doctorInformation ||
+          null,
+      };
+    });
+  }
+
+  private mapRawAccountsToResponse(accounts: any[]): any[] {
+    return accounts.map((account) => {
+      const {
+        id,
+        email,
+        username,
+        role,
+        status,
+        parentId,
+        isEmailVerified,
+        createdAt,
+        updatedAt,
+        general_account,
+        clinic_admin_information,
+        clinic_manager_information,
+        clinic_staff_information,
+        doctor_information,
+      } = account;
+
+      return {
+        id,
+        email,
+        username,
+        role,
+        status,
+        parentId,
+        isEmailVerified,
+        createdAt,
+        updatedAt,
+        profileInformation:
+          clinic_admin_information ||
+          clinic_manager_information ||
+          clinic_staff_information ||
+          doctor_information ||
+          general_account ||
           null,
       };
     });

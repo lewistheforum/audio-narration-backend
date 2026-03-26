@@ -8,6 +8,7 @@ import {
   OneToOne,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { SubscriptionService } from './subscription-service.entity';
@@ -19,6 +20,10 @@ import { RegistrationStatus } from '../enums';
  * Stores current subscription information for clinics
  */
 @Entity('clinic_subcriptions')
+@Index('idx_clinic_subscription_clinic_id', ['clinicId'])
+@Index('idx_clinic_subscription_service_id', ['serviceId'])
+@Index('idx_clinic_subscription_status', ['subscriptionStatus'])
+@Index('idx_clinic_subscription_expiration_date', ['expirationDate'])
 export class ClinicSubscription {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

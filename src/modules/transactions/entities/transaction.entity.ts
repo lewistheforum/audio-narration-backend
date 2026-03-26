@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { TransactionType } from './transaction-type.entity';
@@ -30,6 +31,15 @@ export enum PaymentDirection {
  * Stores payment transactions for subscriptions
  */
 @Entity('transactions')
+@Index('idx_transactions_clinic_id', ['clinicId'])
+@Index('idx_transactions_appointment_id', ['appointmentId'])
+@Index('idx_transactions_subscription_id', ['subscriptionId'])
+@Index('idx_transactions_status', ['status'])
+@Index('idx_transactions_created_at', ['createdAt'])
+@Index('idx_transactions_reference_code', ['referenceCode'])
+@Index('idx_transactions_seepay_transaction_id', ['seepayTransactionId'])
+@Index('idx_transactions_transaction_date', ['transactionDate'])
+@Index('idx_transactions_clinic_date_status', ['clinicId', 'transactionDate', 'status'])
 export class Transaction {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;

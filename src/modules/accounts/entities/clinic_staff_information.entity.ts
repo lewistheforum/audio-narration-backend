@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { Gender, ClinicRole } from '../enums';
@@ -17,6 +18,9 @@ import { Gender, ClinicRole } from '../enums';
  * Stores information about clinic staff members
  */
 @Entity('clinic_staff_information')
+@Index('idx_clinic_staff_account_id', ['accountId'])
+@Index('idx_clinic_staff_full_name', ['fullName'])
+@Index('idx_clinic_staff_clinic_role', ['clinicRole'])
 export class ClinicStaffInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

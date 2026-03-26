@@ -1,4 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ContractPackageRepository } from './repositories/contract-package.repository';
 import { ClinicContractInformationRepository } from './repositories/clinic-contract-information.repository';
 import { AccountsService } from '../accounts/accounts.service';
@@ -19,6 +21,8 @@ import { AccountRole } from '../accounts/enums/account-role.enum';
 import { ContractRole } from './enums/contract-role.enum';
 import { ContractStatus } from './enums/contract-status.enum';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
+import { Account } from '../accounts/entities/accounts.entity';
+import { Express } from 'express';
 
 /**
  * Contracts Service
@@ -28,13 +32,13 @@ import { AccountStatus } from '../accounts/enums/account-status.enum';
  */
 @Injectable()
 export class ContractsService {
-
     constructor(
         private readonly contractPackageRepository: ContractPackageRepository,
         private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
         private readonly accountsService: AccountsService,
         private readonly mailerService: MailerService,
         private readonly codeVerificationRepository: CodeVerificationRepository,
+        @InjectDataSource() private readonly dataSource: DataSource,
     ) { }
 
     /**
@@ -98,25 +102,25 @@ export class ContractsService {
      * @throws BadRequestException if contract flow order is violated
      */
     async sendSigningOtp(contractId: string, userId: string): Promise<void> {
-        const contractPackage = await this.contractPackageRepository.findById(contractId);
-        if (!contractPackage) throw new NotFoundException('Contract package not found');
+        const [contractPackage, contractInfo, user] = await Promise.all([
+            this.contractPackageRepository.findById(contractId),
+            this.clinicContractInfoRepository.findByContractId(contractId),
+            this.accountsService.findAccountEntityById(userId),
+        ]);
 
-        // Verify user is part of the contract
+        if (!contractPackage) throw new NotFoundException('Contract package not found');
+        if (!contractInfo) throw new NotFoundException('Contract info not found');
+        if (!user) throw new NotFoundException('User not found');
+
         if (contractPackage.clinicManagerId !== userId && contractPackage.employeeId !== userId) {
             throw new UnauthorizedException('User is not a party in this contract');
         }
 
-        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
-        if (!contractInfo) throw new NotFoundException('Contract info not found');
-
-        // Check Flow Order
         if (contractPackage.employeeId === userId) {
-            // Employee can only sign if status is PENDING_SIGNATURE
             if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
                 throw new BadRequestException('Not your turn to sign or contract not ready');
             }
         } else if (contractPackage.clinicManagerId === userId) {
-            // Manager can only sign if status is PENDING_MANAGER_SIGNATURE
             if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
                 if (contractInfo.contractStatus === ContractStatus.PENDING_SIGNATURE) {
                     throw new BadRequestException('Waiting for employee to sign first');
@@ -128,14 +132,9 @@ export class ContractsService {
             }
         }
 
-        const user = await this.accountsService.findAccountEntityById(userId);
-        if (!user) throw new NotFoundException('User not found');
-
-        // Generate OTP
         const code = generateVerificationCode();
-        const expirationTime = addToVietnamTime(15, 'minute'); // 15 mins expiry
+        const expirationTime = addToVietnamTime(15, 'minute');
 
-        // Save OTP
         const verification = this.codeVerificationRepository.create({
             accountId: userId,
             code: code,
@@ -144,11 +143,10 @@ export class ContractsService {
         });
         await this.codeVerificationRepository.save(verification);
 
-        // Send Email
         await this.mailerService.sendContractSigningCode(
             user.email,
             code,
-            contractId.substring(0, 8).toUpperCase(), // Use partial ID as contract code equivalent
+            contractId.substring(0, 8).toUpperCase(),
             user.username || 'User'
         );
     }
@@ -267,14 +265,21 @@ export class ContractsService {
      * @returns Generated signature (Base64)
      */
     async signContract(contractId: string, userId: string, otp: string): Promise<string> {
-        const contractPackage = await this.contractPackageRepository.findById(contractId);
-        if (!contractPackage) throw new NotFoundException('Contract package not found');
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
 
-        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
-        if (!contractInfo) throw new NotFoundException('Contract information not found');
-
-        // 1. Verify OTP
         try {
+            const [contractPackage, contractInfo, userAccount] = await Promise.all([
+                this.contractPackageRepository.findById(contractId),
+                this.clinicContractInfoRepository.findByContractId(contractId),
+                this.accountsService.findAccountEntityById(userId),
+            ]);
+
+            if (!contractPackage) throw new NotFoundException('Contract package not found');
+            if (!contractInfo) throw new NotFoundException('Contract information not found');
+            if (!userAccount) throw new NotFoundException('User not found');
+
             const verification = await this.codeVerificationRepository.findValidByUserIdAndCode(
                 userId,
                 otp,
@@ -284,122 +289,105 @@ export class ContractsService {
             if (!verification) {
                 throw new BadRequestException('Invalid or expired OTP');
             }
-
-            // Mark OTP as used
             await this.codeVerificationRepository.markAsUsed(verification._id);
-        } catch (error) {
-            if (error instanceof BadRequestException) throw error;
-            console.error('OTP Check Error:', error);
-            throw new BadRequestException('OTP verification failed: ' + error.message);
-        }
 
-        const userAccount = await this.accountsService.findAccountEntityById(userId);
-        // Determine which Private Key to use
-        let privateKey: string;
-
-        if (contractPackage.clinicManagerId === userId) {
-            // If Manager is signing, use their own Private Key
-            if (!userAccount.encryptedPrivateKey) {
-                throw new BadRequestException('Clinic Manager does not have digital keys generated');
-            }
-            privateKey = userAccount.encryptedPrivateKey;
-        } else {
-            // If Employee is signing, use their own Private Key
-            if (!userAccount.encryptedPrivateKey) {
-                throw new BadRequestException('User does not have digital keys generated');
-            }
-            privateKey = userAccount.encryptedPrivateKey;
-        }
-
-        let fileHash: string;
-        // Re-using internal calculateFileHash logic or calling it if available.
-        // Since I cannot easy verify if I broke calculateFileHash, I will assume it exists and I am calling it.
-        fileHash = await this.calculateFileHash(contractInfo.contractFile);
-
-        const sign = crypto.createSign('SHA256');
-        sign.update(fileHash);
-        sign.end();
-        const signature = sign.sign(privateKey, 'base64');
-
-        if (contractPackage.employeeId === userId) {
-            // --- EMPLOYEE SIGNING ---
-
-            // Check flow status
-            if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
-                throw new BadRequestException('It is not your turn to sign or contract is not in valid state');
-            }
-
-            contractPackage.employeeSignature = signature;
-            // Update Status to PENDING_MANAGER_SIGNATURE
-            contractInfo.contractStatus = ContractStatus.PENDING_MANAGER_SIGNATURE;
-            await this.clinicContractInfoRepository.save(contractInfo);
-
-            // Notify Manager
-            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
-            if (manager && manager.email) {
-                await this.mailerService.sendContractSignedNotificationToManager(
-                    manager.email,
-                    userAccount.username || 'Employee',
-                    contractId
-                );
-            }
-
-        } else if (contractPackage.clinicManagerId === userId) {
-            // --- MANAGER SIGNING ---
-
-            if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
-                throw new BadRequestException('Employee must sign first before Manager');
-            }
-
-            // Verify Employee's signature validity first (Integrity Check)
-            const employeeAccount = await this.accountsService.findAccountEntityById(contractPackage.employeeId);
-            if (!employeeAccount || !employeeAccount.publicKey) throw new BadRequestException('Employee public key verification failed');
-
-            const verify = crypto.createVerify('SHA256');
-            verify.update(fileHash);
-            verify.end();
-
-            try {
-                const sanitizedKey = employeeAccount.publicKey.replace(/\\n/g, '\n');
-                const employeePublicKey = crypto.createPublicKey(sanitizedKey);
-                // We re-verify the stored employee signature against the current file hash
-                // If file changed or signature is bad, this fails.
-                const isEmployeeSignatureValid = verify.verify(employeePublicKey, contractPackage.employeeSignature, 'base64');
-
-                if (!isEmployeeSignatureValid) {
-                    throw new BadRequestException('Contract integrity check failed: Employee signature invalid or file modified');
+            let privateKey: string;
+            if (contractPackage.clinicManagerId === userId) {
+                if (!userAccount.encryptedPrivateKey) {
+                    throw new BadRequestException('Clinic Manager does not have digital keys generated');
                 }
-            } catch (e) {
-                console.error('Integrity Check Error:', e);
-                throw new BadRequestException('Contract integrity check failed');
+                privateKey = userAccount.encryptedPrivateKey;
+            } else {
+                if (!userAccount.encryptedPrivateKey) {
+                    throw new BadRequestException('User does not have digital keys generated');
+                }
+                privateKey = userAccount.encryptedPrivateKey;
             }
 
-            contractPackage.managerSignature = signature;
-            // Final Status
-            contractInfo.contractStatus = ContractStatus.CURRENT;
-            await this.clinicContractInfoRepository.save(contractInfo);
+            const fileHash = await this.calculateFileHash(contractInfo.contractFile);
 
-            // Activate employee account after contract is fully signed
-            if (employeeAccount) {
-                employeeAccount.status = AccountStatus.ACTIVE;
-                employeeAccount.isEmailVerified = true;
-                await this.accountsService.updateAccountEntity(employeeAccount);
+            const sign = crypto.createSign('SHA256');
+            sign.update(fileHash);
+            sign.end();
+            const signature = sign.sign(privateKey, 'base64');
+
+            if (contractPackage.employeeId === userId) {
+                if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
+                    throw new BadRequestException('It is not your turn to sign or contract is not in valid state');
+                }
+
+                contractPackage.employeeSignature = signature;
+                contractInfo.contractStatus = ContractStatus.PENDING_MANAGER_SIGNATURE;
+                await queryRunner.manager.save(contractInfo);
+                await queryRunner.manager.save(contractPackage);
+
+                const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
+                if (manager && manager.email) {
+                    await this.mailerService.sendContractSignedNotificationToManager(
+                        manager.email,
+                        userAccount.username || 'Employee',
+                        contractId
+                    );
+                }
+
+            } else if (contractPackage.clinicManagerId === userId) {
+                if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
+                    throw new BadRequestException('Employee must sign first before Manager');
+                }
+
+                const employeeAccount = await this.accountsService.findAccountEntityById(contractPackage.employeeId);
+                if (!employeeAccount || !employeeAccount.publicKey) {
+                    throw new BadRequestException('Employee public key verification failed');
+                }
+
+                const verify = crypto.createVerify('SHA256');
+                verify.update(fileHash);
+                verify.end();
+
+                try {
+                    const sanitizedKey = employeeAccount.publicKey.replace(/\\n/g, '\n');
+                    const employeePublicKey = crypto.createPublicKey(sanitizedKey);
+                    const isEmployeeSignatureValid = verify.verify(employeePublicKey, contractPackage.employeeSignature, 'base64');
+
+                    if (!isEmployeeSignatureValid) {
+                        throw new BadRequestException('Contract integrity check failed: Employee signature invalid or file modified');
+                    }
+                } catch (e) {
+                    console.error('Integrity Check Error:', e);
+                    throw new BadRequestException('Contract integrity check failed');
+                }
+
+                contractPackage.managerSignature = signature;
+                contractInfo.contractStatus = ContractStatus.CURRENT;
+                await queryRunner.manager.save(contractInfo);
+                await queryRunner.manager.save(contractPackage);
+
+                if (employeeAccount) {
+                    employeeAccount.status = AccountStatus.ACTIVE;
+                    employeeAccount.isEmailVerified = true;
+                    await this.accountsService.updateAccountEntity(employeeAccount);
+                }
+
+                if (employeeAccount && employeeAccount.email) {
+                    await this.mailerService.sendContractCompletedNotificationToEmployee(
+                        employeeAccount.email,
+                        userAccount.username || 'Manager',
+                        contractId
+                    );
+                }
+            } else {
+                throw new UnauthorizedException('User is not a party in this contract');
             }
 
-            // Notify Employee
-            if (employeeAccount && employeeAccount.email) {
-                await this.mailerService.sendContractCompletedNotificationToEmployee(
-                    employeeAccount.email,
-                    userAccount.username || 'Manager',
-                    contractId
-                );
-            }
-        } else {
-            throw new UnauthorizedException('User is not a party in this contract');
+            await queryRunner.commitTransaction();
+            return signature;
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
         }
-
-        await this.contractPackageRepository.save(contractPackage);
-        return signature;
     }
 
     async verifyContract(contractId: string): Promise<{
@@ -407,10 +395,12 @@ export class ContractsService {
         employeeValid: boolean,
         integrity: boolean
     }> {
-        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
-        if (!contractInfo) throw new NotFoundException('Contract info not found');
+        const [contractInfo, contractPackage] = await Promise.all([
+            this.clinicContractInfoRepository.findByContractId(contractId),
+            this.contractPackageRepository.findById(contractId),
+        ]);
 
-        const contractPackage = await this.contractPackageRepository.findById(contractId);
+        if (!contractInfo) throw new NotFoundException('Contract info not found');
         if (!contractPackage) throw new NotFoundException('Contract package not found');
 
         const fileHash = await this.calculateFileHash(contractInfo.contractFile || 'default_content');
@@ -418,46 +408,47 @@ export class ContractsService {
         let managerValid = false;
         let employeeValid = false;
 
-        // Verify Manager
-        if (contractPackage.managerSignature) {
-            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
-            if (manager && manager.publicKey) {
-                const verify = crypto.createVerify('SHA256');
-                verify.update(fileHash);
-                verify.end();
-                try {
-                    const sanitizedKey = manager.publicKey.replace(/\\n/g, '\n');
-                    const managerPublicKey = crypto.createPublicKey(sanitizedKey);
-                    managerValid = verify.verify(managerPublicKey, contractPackage.managerSignature, 'base64');
-                } catch (e) {
-                    console.error('Verify Manager Key Error:', e);
-                    managerValid = false;
-                }
+        const [manager, employee] = await Promise.all([
+            contractPackage.managerSignature
+                ? this.accountsService.findAccountEntityById(contractPackage.clinicManagerId)
+                : Promise.resolve(null),
+            contractPackage.employeeSignature
+                ? this.accountsService.findAccountEntityById(contractPackage.employeeId)
+                : Promise.resolve(null),
+        ]);
+
+        if (contractPackage.managerSignature && manager?.publicKey) {
+            const verify = crypto.createVerify('SHA256');
+            verify.update(fileHash);
+            verify.end();
+            try {
+                const sanitizedKey = manager.publicKey.replace(/\\n/g, '\n');
+                const managerPublicKey = crypto.createPublicKey(sanitizedKey);
+                managerValid = verify.verify(managerPublicKey, contractPackage.managerSignature, 'base64');
+            } catch (e) {
+                console.error('Verify Manager Key Error:', e);
+                managerValid = false;
             }
         }
 
-        // Verify Employee
-        if (contractPackage.employeeSignature) {
-            const employee = await this.accountsService.findAccountEntityById(contractPackage.employeeId);
-            if (employee && employee.publicKey) {
-                const verify = crypto.createVerify('SHA256');
-                verify.update(fileHash);
-                verify.end();
-                try {
-                    const sanitizedKey = employee.publicKey.replace(/\\n/g, '\n');
-                    const employeePublicKey = crypto.createPublicKey(sanitizedKey);
-                    employeeValid = verify.verify(employeePublicKey, contractPackage.employeeSignature, 'base64');
-                } catch (e) {
-                    console.error('Verify Employee Key Error:', e);
-                    employeeValid = false;
-                }
+        if (contractPackage.employeeSignature && employee?.publicKey) {
+            const verify = crypto.createVerify('SHA256');
+            verify.update(fileHash);
+            verify.end();
+            try {
+                const sanitizedKey = employee.publicKey.replace(/\\n/g, '\n');
+                const employeePublicKey = crypto.createPublicKey(sanitizedKey);
+                employeeValid = verify.verify(employeePublicKey, contractPackage.employeeSignature, 'base64');
+            } catch (e) {
+                console.error('Verify Employee Key Error:', e);
+                employeeValid = false;
             }
         }
 
         return {
             managerValid,
             employeeValid,
-            integrity: managerValid || employeeValid // If signatures match current file hash, integrity is OK
+            integrity: managerValid || employeeValid
         };
     }
 
@@ -465,25 +456,37 @@ export class ContractsService {
         const contractId = contractPackage._id;
         console.warn(`[SECURITY] Tampered contract detected: ${contractId}. Cancelling contract and deactivating employee: ${contractPackage.employeeId}`);
 
-        // 1. Update contract status to CANCELLED
-        if (contractPackage.clinicContractInformation) {
-            contractPackage.clinicContractInformation.contractStatus = ContractStatus.CANCELLED;
-            await this.clinicContractInfoRepository.save(contractPackage.clinicContractInformation);
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            if (contractPackage.clinicContractInformation) {
+                contractPackage.clinicContractInformation.contractStatus = ContractStatus.CANCELLED;
+                await queryRunner.manager.save(contractPackage.clinicContractInformation);
+            }
+
+            await this.accountsService.updateStatus(contractPackage.employeeId, AccountStatus.PENDING_APPROVAL);
+
+            await queryRunner.commitTransaction();
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            console.error('Failed to handle tampered contract:', error);
+        } finally {
+            await queryRunner.release();
         }
 
-        // 2. Deactivate employee (AccountStatus.PENDING_APPROVAL)
-        await this.accountsService.updateStatus(contractPackage.employeeId, AccountStatus.PENDING_APPROVAL);
-
-        // 3. Send Email Notifications to both parties
         try {
-            const manager = await this.accountsService.findAccountEntityById(contractPackage.clinicManagerId);
-            const employee = await this.accountsService.findAccountEntityById(contractPackage.employeeId);
+            const [manager, employee] = await Promise.all([
+                this.accountsService.findAccountEntityById(contractPackage.clinicManagerId),
+                this.accountsService.findAccountEntityById(contractPackage.employeeId),
+            ]);
             const reason = 'Contract file hash mismatch or digital signature invalid (Integrity Check Failed).';
 
-            if (manager && manager.email) {
+            if (manager?.email) {
                 await this.mailerService.sendContractCancelledNotification(manager.email, contractId, reason);
             }
-            if (employee && employee.email) {
+            if (employee?.email) {
                 await this.mailerService.sendContractCancelledNotification(employee.email, contractId, reason);
             }
         } catch (error) {
@@ -491,22 +494,22 @@ export class ContractsService {
         }
     }
 
-    async uploadContractFile(contractId: string, file: any): Promise<any> {
-        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
-        if (!contractInfo) throw new NotFoundException('Contract info not found');
+    async uploadContractFile(contractId: string, file: Express.Multer.File): Promise<{ message: string; fileUrl: string }> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
 
-        // Absolute Lock: Only allow upload if status is DRAFT
-        if (contractInfo.contractStatus !== ContractStatus.DRAFT) {
-            throw new BadRequestException(`Cannot upload file when contract status is ${contractInfo.contractStatus}. Only DRAFT contracts can have files uploaded.`);
-        }
-
-        // Cloudinary Upload Logic
         try {
-            // Convert buffer to data URI for upload
+            const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
+            if (!contractInfo) throw new NotFoundException('Contract info not found');
+
+            if (contractInfo.contractStatus !== ContractStatus.DRAFT) {
+                throw new BadRequestException(`Cannot upload file when contract status is ${contractInfo.contractStatus}. Only DRAFT contracts can have files uploaded.`);
+            }
+
             const base64Content = file.buffer.toString('base64');
             const fileDataUri = `data:application/pdf;base64,${base64Content}`;
 
-            /* eslint-disable @typescript-eslint/no-var-requires */
             const FormData = require('form-data');
             const formData = new FormData();
             formData.append('file', fileDataUri);
@@ -524,20 +527,22 @@ export class ContractsService {
                 throw new Error('Cloudinary did not return secure_url');
             }
 
-            // Save Cloud URL to DB
             contractInfo.contractFile = secureUrl;
             contractInfo.contractStatus = ContractStatus.PENDING_SIGNATURE;
+            await queryRunner.manager.save(contractInfo);
 
-            await this.clinicContractInfoRepository.save(contractInfo);
+            await queryRunner.commitTransaction();
 
             return {
                 message: 'File uploaded to Cloudinary successfully',
                 fileUrl: secureUrl
             };
-
         } catch (error) {
+            await queryRunner.rollbackTransaction();
             console.error('Cloudinary Upload Error:', error.response?.data || error.message);
             throw new BadRequestException(`Failed to upload file to Cloudinary: ${error.message}`);
+        } finally {
+            await queryRunner.release();
         }
     }
 
@@ -554,17 +559,24 @@ export class ContractsService {
             limit,
         );
 
-        // Verification check
-        for (const pkg of packages) {
-            if ([ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(pkg.clinicContractInformation?.contractStatus)) {
-                const hasSignature = !!(pkg.managerSignature || pkg.employeeSignature);
-                if (hasSignature) {
-                    const verification = await this.verifyContract(pkg._id);
+        const packagesToVerify = packages.filter(
+            (pkg) =>
+                [ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(pkg.clinicContractInformation?.contractStatus) &&
+                !!(pkg.managerSignature || pkg.employeeSignature)
+        );
+
+        if (packagesToVerify.length > 0) {
+            const verificationResults = await Promise.all(
+                packagesToVerify.map((pkg) => this.verifyContract(pkg._id))
+            );
+
+            await Promise.all(
+                verificationResults.map(async (verification, index) => {
                     if (!verification.integrity) {
-                        await this.handleTamperedContract(pkg);
+                        await this.handleTamperedContract(packagesToVerify[index]);
                     }
-                }
-            }
+                })
+            );
         }
 
         return {
@@ -591,17 +603,24 @@ export class ContractsService {
             limit,
         );
 
-        // Verification check
-        for (const pkg of packages) {
-            if ([ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(pkg.clinicContractInformation?.contractStatus)) {
-                const hasSignature = !!(pkg.managerSignature || pkg.employeeSignature);
-                if (hasSignature) {
-                    const verification = await this.verifyContract(pkg._id);
+        const packagesToVerify = packages.filter(
+            (pkg) =>
+                [ContractStatus.PENDING_SIGNATURE, ContractStatus.PENDING_MANAGER_SIGNATURE, ContractStatus.CURRENT].includes(pkg.clinicContractInformation?.contractStatus) &&
+                !!(pkg.managerSignature || pkg.employeeSignature)
+        );
+
+        if (packagesToVerify.length > 0) {
+            const verificationResults = await Promise.all(
+                packagesToVerify.map((pkg) => this.verifyContract(pkg._id))
+            );
+
+            await Promise.all(
+                verificationResults.map(async (verification, index) => {
                     if (!verification.integrity) {
-                        await this.handleTamperedContract(pkg);
+                        await this.handleTamperedContract(packagesToVerify[index]);
                     }
-                }
-            }
+                })
+            );
         }
 
         return {
@@ -649,19 +668,14 @@ export class ContractsService {
      * Uses Asia/Ho_Chi_Minh timezone
      */
     async updateExpiredContractsToOld(): Promise<number> {
-        // Get start of today in Vietnam timezone
         const today = getStartOfDay();
-
-        // Find expired DB records
         const expiredContracts = await this.clinicContractInfoRepository.findExpiredCurrentContracts(today);
 
         if (expiredContracts.length === 0) {
-            return 0; // Nothing to update
+            return 0;
         }
 
-        const ids = expiredContracts.map((info: any) => info._id);
-
-        // Update DB
+        const ids = expiredContracts.map((info) => info._id);
         return await this.clinicContractInfoRepository.updateStatusBulk(ids, ContractStatus.OLD);
     }
 
@@ -675,47 +689,58 @@ export class ContractsService {
      * @param reason - Rejection reason
      */
     async rejectContract(contractId: string, userId: string, reason: string): Promise<void> {
-        const contractPackage = await this.contractPackageRepository.findById(contractId);
-        if (!contractPackage) throw new NotFoundException('Contract package not found');
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
 
-        // Verify user is part of the contract
-        if (contractPackage.clinicManagerId !== userId && contractPackage.employeeId !== userId) {
-            throw new UnauthorizedException('User is not a party in this contract');
-        }
+        try {
+            const [contractPackage, contractInfo] = await Promise.all([
+                this.contractPackageRepository.findById(contractId),
+                this.clinicContractInfoRepository.findByContractId(contractId),
+            ]);
 
-        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
-        if (!contractInfo) throw new NotFoundException('Contract information not found');
+            if (!contractPackage) throw new NotFoundException('Contract package not found');
+            if (!contractInfo) throw new NotFoundException('Contract information not found');
 
-        // Validate Rejection Logic
-        if (contractPackage.employeeId === userId) {
-            // Employee can reject if it's PENDING_SIGNATURE
-            if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
-                throw new BadRequestException('Cannot reject at this stage');
+            if (contractPackage.clinicManagerId !== userId && contractPackage.employeeId !== userId) {
+                throw new UnauthorizedException('User is not a party in this contract');
             }
-        } else if (contractPackage.clinicManagerId === userId) {
-            // Manager can reject if it's PENDING_MANAGER_SIGNATURE
-            if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
-                throw new BadRequestException('Cannot reject at this stage');
+
+            if (contractPackage.employeeId === userId) {
+                if (contractInfo.contractStatus !== ContractStatus.PENDING_SIGNATURE) {
+                    throw new BadRequestException('Cannot reject at this stage');
+                }
+            } else if (contractPackage.clinicManagerId === userId) {
+                if (contractInfo.contractStatus !== ContractStatus.PENDING_MANAGER_SIGNATURE) {
+                    throw new BadRequestException('Cannot reject at this stage');
+                }
             }
-        }
 
-        // Update Status and Reason
-        contractInfo.contractStatus = ContractStatus.REJECTED;
-        contractInfo.rejectionReason = reason;
-        await this.clinicContractInfoRepository.save(contractInfo);
+            contractInfo.contractStatus = ContractStatus.REJECTED;
+            contractInfo.rejectionReason = reason;
+            await queryRunner.manager.save(contractInfo);
 
-        // Notify other party
-        const otherUserId = contractPackage.employeeId === userId ? contractPackage.clinicManagerId : contractPackage.employeeId;
-        const otherUser = await this.accountsService.findAccountEntityById(otherUserId);
-        const currentUser = await this.accountsService.findAccountEntityById(userId);
+            const otherUserId = contractPackage.employeeId === userId ? contractPackage.clinicManagerId : contractPackage.employeeId;
+            const [otherUser, currentUser] = await Promise.all([
+                this.accountsService.findAccountEntityById(otherUserId),
+                this.accountsService.findAccountEntityById(userId),
+            ]);
 
-        if (otherUser && otherUser.email) {
-            await this.mailerService.sendContractRejectNotification(
-                otherUser.email,
-                currentUser.username || 'User',
-                contractId,
-                reason
-            );
+            if (otherUser && otherUser.email) {
+                await this.mailerService.sendContractRejectNotification(
+                    otherUser.email,
+                    currentUser.username || 'User',
+                    contractId,
+                    reason
+                );
+            }
+
+            await queryRunner.commitTransaction();
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
         }
     }
 
@@ -729,25 +754,35 @@ export class ContractsService {
      * @param userId - ID of manager requesting deletion
      */
     async deletePackage(id: string, userId: string): Promise<void> {
-        const contractPackage = await this.contractPackageRepository.findById(id);
-        if (!contractPackage) throw new NotFoundException('Contract package not found');
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
 
-        // Only Manager can cancel/delete
-        if (contractPackage.clinicManagerId !== userId) {
-            throw new UnauthorizedException('Only clinic manager can cancel this contract');
-        }
+        try {
+            const contractPackage = await this.contractPackageRepository.findById(id);
+            if (!contractPackage) throw new NotFoundException('Contract package not found');
 
-        const contractInfo = await this.clinicContractInfoRepository.findByContractId(id);
-        
-        // Cannot delete if already CURRENT
-        if (contractInfo && contractInfo.contractStatus === ContractStatus.CURRENT) {
-            throw new BadRequestException('Cannot cancel a contract that is already in effect');
-        }
+            if (contractPackage.clinicManagerId !== userId) {
+                throw new UnauthorizedException('Only clinic manager can cancel this contract');
+            }
 
-        // Soft delete 
-        if (contractInfo) {
-            await this.clinicContractInfoRepository.softDelete(contractInfo._id);
+            const contractInfo = await this.clinicContractInfoRepository.findByContractId(id);
+
+            if (contractInfo && contractInfo.contractStatus === ContractStatus.CURRENT) {
+                throw new BadRequestException('Cannot cancel a contract that is already in effect');
+            }
+
+            if (contractInfo) {
+                await queryRunner.manager.softDelete(ClinicContractInformation, contractInfo._id);
+            }
+            await queryRunner.manager.softDelete(ContractPackage, id);
+
+            await queryRunner.commitTransaction();
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
         }
-        await this.contractPackageRepository.softDelete(id);
     }
 }

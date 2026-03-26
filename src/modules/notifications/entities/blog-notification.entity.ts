@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { Blog } from '../../blogs/entities/blog.entity';
@@ -17,6 +18,9 @@ import { Blog } from '../../blogs/entities/blog.entity';
  * Stores notifications for patients about blog posts
  */
 @Entity('blog_notification')
+@Index('idx_blog_notification_patient_id', ['patientId'])
+@Index('idx_blog_notification_blog_id', ['blogId'])
+@Index('idx_blog_notification_is_read', ['isRead'])
 export class BlogNotification {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

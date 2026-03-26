@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { ServiceCategoryType } from '../enums';
 
@@ -14,6 +15,7 @@ import { ServiceCategoryType } from '../enums';
  * Stores categories for clinic services
  */
 @Entity('clinic_service_category')
+@Index('idx_clinic_service_category_type', ['type'])
 export class ClinicServiceCategory {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

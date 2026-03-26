@@ -8,6 +8,7 @@ import {
   OneToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
@@ -19,6 +20,7 @@ import { DetailEPrescription } from './detail-e-prescription.entity';
  * Stores electronic prescriptions
  */
 @Entity('e_prescriptions')
+@Index('idx_e_prescription_appointment_id', ['appointmentId'])
 export class EPrescription {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

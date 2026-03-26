@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { SubscriptionService } from './subscription-service.entity';
@@ -19,6 +20,11 @@ import { RegistrationStatus } from '../enums';
  * Stores historical subscription records for clinics
  */
 @Entity('clinic_subcriptions_history')
+@Index('idx_subscription_history_clinic_id', ['clinicId'])
+@Index('idx_subscription_history_service_id', ['serviceId'])
+@Index('idx_subscription_history_status', ['subscriptionStatus'])
+@Index('idx_subscription_history_created_at', ['createdAt'])
+@Index('idx_subscription_history_date', ['subscriptionDate'])
 export class ClinicSubscriptionHistory {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

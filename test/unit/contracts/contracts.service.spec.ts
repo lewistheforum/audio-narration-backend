@@ -10,6 +10,7 @@ import { ContractStatus } from '../../../src/modules/contracts/enums/contract-st
 import { AccountStatus } from '../../../src/modules/accounts/enums/account-status.enum';
 import { CreateContractInfoDto } from '../../../src/modules/contracts/dto/create-contract-info.dto';
 import { VerificationType } from '../../../src/modules/accounts/enums';
+import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 
 describe('ContractsService', () => {
@@ -19,8 +20,9 @@ describe('ContractsService', () => {
     let accountsService: any;
     let mailerService: any;
     let codeVerificationRepo: any;
+    let dataSource: any;
+    let queryRunner: any;
 
-    // Helpers for crypto mocking
     const mockKeyPair = crypto.generateKeyPairSync('rsa', {
         modulusLength: 2048,
         publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -28,6 +30,22 @@ describe('ContractsService', () => {
     });
 
     beforeEach(async () => {
+        queryRunner = {
+            connect: jest.fn(),
+            startTransaction: jest.fn(),
+            commitTransaction: jest.fn(),
+            rollbackTransaction: jest.fn(),
+            release: jest.fn(),
+            manager: {
+                save: jest.fn(),
+                softDelete: jest.fn(),
+            },
+        };
+
+        dataSource = {
+            createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+        };
+
         contractPackageRepo = {
             findById: jest.fn(),
             save: jest.fn(),
@@ -45,6 +63,7 @@ describe('ContractsService', () => {
         accountsService = {
             findAccountEntityById: jest.fn(),
             updateAccountEntity: jest.fn(),
+            updateStatus: jest.fn(),
         };
 
         mailerService = {
@@ -70,6 +89,7 @@ describe('ContractsService', () => {
                 { provide: AccountsService, useValue: accountsService },
                 { provide: MailerService, useValue: mailerService },
                 { provide: CodeVerificationRepository, useValue: codeVerificationRepo },
+                { provide: DataSource, useValue: dataSource },
             ],
         }).compile();
 
@@ -553,13 +573,15 @@ describe('ContractsService', () => {
                 contractStatus: ContractStatus.REJECTED,
             });
 
-            await expect(service.uploadContractFile(contractId, {}))
+            const mockFile = { buffer: Buffer.from('test') } as Express.Multer.File;
+            await expect(service.uploadContractFile(contractId, mockFile))
                 .rejects.toThrow(BadRequestException);
         });
 
         it('should throw NotFoundException if contract info not found', async () => {
             contractInfoRepo.findByContractId.mockResolvedValue(null);
-            await expect(service.uploadContractFile(contractId, {}))
+            const mockFile = { buffer: Buffer.from('test') } as Express.Multer.File;
+            await expect(service.uploadContractFile(contractId, mockFile))
                 .rejects.toThrow(NotFoundException);
         });
     });

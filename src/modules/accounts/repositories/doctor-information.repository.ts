@@ -46,6 +46,21 @@ export class DoctorInformationRepository {
   }
 
   /**
+   * Find multiple doctor information records by doctor account IDs (batch query for N+1 prevention)
+   */
+  async findByAccountIds(
+    accountIds: string[],
+  ): Promise<DoctorInformation[]> {
+    if (!accountIds || accountIds.length === 0) {
+      return [];
+    }
+    return this.repository
+      .createQueryBuilder('doctor_info')
+      .where('doctor_info.accountId = ANY(:accountIds)', { accountIds })
+      .getMany();
+  }
+
+  /**
    * Find doctor information by doctor account ID including soft-deleted
    */
   async findByDoctorAccountIdWithDeleted(

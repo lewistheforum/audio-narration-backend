@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { LegalDocumentVerificationStatus } from '../enums';
@@ -28,6 +29,8 @@ import { encryptionTransformer } from '../../../common/transformers/encryption.t
  * for any existing data in these columns.
  */
 @Entity('clinics_legal_documents')
+@Index('idx_legal_docs_account_id', ['accountId'])
+@Index('idx_legal_docs_verification_status', ['verificationStatus'])
 export class ClinicsLegalDocuments {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

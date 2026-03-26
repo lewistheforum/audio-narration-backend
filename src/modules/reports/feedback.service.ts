@@ -439,48 +439,75 @@ export class FeedbackService {
 
   /**
    * Get clinic manager list by clinic admin id and all feedback in each clinic manager
+   * OPTIMIZED: Uses single LEFT JOIN query instead of N+1 Promise.all
    *
    * @param adminId - Clinic Admin UUID
    */
   async getClinicManagersFeedbacksByAdminId(adminId: string) {
-    // 1. Find all clinic managers under this admin
-    const managers = await this.accountRepository.findAccounts({
-      where: {
-        parentId: adminId,
-        role: AccountRole.CLINIC_MANAGER,
-      },
-      relations: ['clinicManagerInformation'],
-    });
+    // Fetch managers with their feedbacks in a single query using LEFT JOIN
+    const rawData = await this.dataSource.query(`
+      SELECT 
+        m._id AS manager_id,
+        m.email AS manager_email,
+        cmi.full_name AS manager_name,
+        cmi.clinic_branch_name AS clinic_branch_name,
+        f._id AS feedback_id,
+        f.rating,
+        f.description,
+        f.created_at AS feedback_created_at,
+        f.type AS feedback_type
+      FROM accounts m
+      LEFT JOIN clinic_manager_information cmi ON cmi.account_id = m._id AND cmi.deleted_at IS NULL
+      LEFT JOIN feedbacks f ON f.clinic_id = m._id AND f.deleted_at IS NULL
+      WHERE m.parent_id = $1
+        AND m.role = $2
+        AND m.deleted_at IS NULL
+      ORDER BY m._id, f.created_at DESC
+    `, [adminId, AccountRole.CLINIC_MANAGER]);
 
-    if (!managers || managers.length === 0) {
+    if (!rawData || rawData.length === 0) {
       return [];
     }
 
-    // 2. Map through managers to fetch feedbacks (empty array if none)
-    const result = await Promise.all(
-      managers.map(async (manager) => {
-        let feedbacks = [];
-        try {
-          feedbacks = await this.feedbackRepository.findFeedbacksByClinicId(
-            manager._id,
-          );
-        } catch {
-          feedbacks = [];
-        }
+    // Group feedbacks by manager in memory
+    const managerMap = new Map<string, {
+      clinicManagerId: string;
+      clinicManagerEmail: string | null;
+      clinicManagerName: string;
+      clinicBranchName: string;
+      feedbacks: Array<{
+        feedback_id: string;
+        rating: number;
+        description: string | null;
+        created_at: Date;
+        feedback_type: string;
+      }>;
+    }>();
 
-        return {
-          clinicManagerId: manager._id,
-          clinicManagerEmail: manager.email,
-          clinicManagerName:
-            manager.clinicManagerInformation?.fullName || manager.username,
-          clinicBranchName:
-            manager.clinicManagerInformation?.clinicBranchName || '',
-          feedbacks: feedbacks || [],
-        };
-      }),
-    );
+    for (const row of rawData) {
+      if (!managerMap.has(row.manager_id)) {
+        managerMap.set(row.manager_id, {
+          clinicManagerId: row.manager_id,
+          clinicManagerEmail: row.manager_email,
+          clinicManagerName: row.manager_name || row.manager_email || 'Unknown',
+          clinicBranchName: row.clinic_branch_name || '',
+          feedbacks: [],
+        });
+      }
 
-    return result;
+      // Only add feedback if it exists (LEFT JOIN can return NULL for feedback fields)
+      if (row.feedback_id) {
+        managerMap.get(row.manager_id)!.feedbacks.push({
+          feedback_id: row.feedback_id,
+          rating: row.rating,
+          description: row.description,
+          created_at: row.feedback_created_at,
+          feedback_type: row.feedback_type,
+        });
+      }
+    }
+
+    return Array.from(managerMap.values());
   }
 
   /**

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ClinicContractInformation } from '../entities/clinic-contract-information.entity';
+import { ContractStatus } from '../enums/contract-status.enum';
 
 /**
  * ClinicContractInformation Repository
@@ -139,17 +140,17 @@ export class ClinicContractInformationRepository {
   /**
    * Bulk update contract status
    */
-  async updateStatusBulk(ids: string[], status: string): Promise<number> {
-    if (!ids || ids.length === 0) return 0;
+async updateStatusBulk(ids: string[], status: string): Promise<number> {
+        if (!ids || ids.length === 0) return 0;
 
-    const result = await this.repository
-      .createQueryBuilder()
-      .update(ClinicContractInformation)
-      .set({ contractStatus: status as any })
-      .whereInIds(ids)
-      .execute();
+        const result = await this.repository
+          .createQueryBuilder()
+          .update(ClinicContractInformation)
+          .set({ contractStatus: status as ContractStatus })
+          .where('_id = ANY(:ids)', { ids })
+          .execute();
 
-    return result.affected || 0;
-  }
+        return result.affected || 0;
+    }
 }
 

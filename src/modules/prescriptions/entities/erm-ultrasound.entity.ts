@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { BodySide } from '../enums';
@@ -17,6 +18,7 @@ import { BodySide } from '../enums';
  * Stores ultrasound examination records
  */
 @Entity('erm_ultrasounds')
+@Index('idx_erm_ultrasound_erm_id', ['ermId'])
 export class ERMUltrasound {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

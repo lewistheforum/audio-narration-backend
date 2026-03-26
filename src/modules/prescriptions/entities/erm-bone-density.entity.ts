@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { BoneSite, WHOCategory } from '../enums';
@@ -17,6 +18,7 @@ import { BoneSite, WHOCategory } from '../enums';
  * Stores bone density scan records (DEXA scan)
  */
 @Entity('erm_bone_density')
+@Index('idx_erm_bone_density_erm_id', ['ermId'])
 export class ERMBoneDensity {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

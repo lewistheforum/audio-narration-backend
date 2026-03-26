@@ -4,9 +4,14 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('conversations')
+@Index('idx_conversations_participants', ['participants'])
+@Index('idx_conversations_updated', ['updatedAt'])
+@Index('idx_conversations_deleted_by', ['deletedBy'])
+@Index('idx_conversations_participants_updated', ['participants', 'updatedAt'])
 export class Conversation {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

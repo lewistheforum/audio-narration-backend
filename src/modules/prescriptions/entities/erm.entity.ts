@@ -8,6 +8,7 @@ import {
   ManyToOne,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ServiceAppointment } from '../../appointments/entities/service-appointment.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
@@ -19,6 +20,10 @@ import { ERMRecordType, ERMStatus } from '../enums';
  * Stores electronic medical records for patient visits
  */
 @Entity('erms')
+@Index('idx_erm_appointment', ['appointmentId'])
+@Index('idx_erm_service_appt', ['serviceAppointmentsId'])
+@Index('idx_erm_status', ['status'])
+@Index('idx_erm_created_by', ['createdBy'])
 export class ERM {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

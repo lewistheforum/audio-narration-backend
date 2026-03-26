@@ -18,6 +18,7 @@ import {
   OneToMany,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
@@ -36,6 +37,14 @@ import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
  * - Account ban management
  */
 @Entity('accounts')
+@Index('idx_accounts_email', ['email'], { unique: true })
+@Index('idx_accounts_username', ['username'])
+@Index('idx_accounts_status_role', ['status', 'role'])
+@Index('idx_accounts_parent_role', ['parentId', 'role'])
+@Index('idx_accounts_phone', ['phone'])
+@Index('idx_accounts_deleted_at', ['deletedAt'])
+@Index('idx_accounts_parent_id', ['parentId'])
+@Index('idx_accounts_role', ['role'])
 export class Account {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
