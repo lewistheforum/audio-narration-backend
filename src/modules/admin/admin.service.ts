@@ -54,10 +54,12 @@ export class AdminService {
    */
   async getRegistrationById(
     clinicAdminId: string,
+    managerId: string,
   ): Promise<RegistrationDetailResponseDto> {
     const registration =
       await this.adminRegistrationRepository.findRegistrationById(
         clinicAdminId,
+        managerId,
       );
 
     if (!registration) {

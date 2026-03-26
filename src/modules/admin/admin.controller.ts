@@ -190,7 +190,7 @@ export class AdminController {
    *
    * Returns full registration details for a specific clinic
    */
-  @Get('/registrations-legal-documents/:id')
+  @Get('/registrations-legal-documents/:id/:managerId')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get registration details by clinic admin ID' })
   @ApiResponseData({
@@ -200,8 +200,9 @@ export class AdminController {
   })
   async getRegistrationById(
     @Param('id') id: string,
+    @Param('managerId') managerId: string,
   ): Promise<{ data: RegistrationDetailResponseDto; message: string }> {
-    const result = await this.adminService.getRegistrationById(id);
+    const result = await this.adminService.getRegistrationById(id, managerId);
     return {
       data: result,
       message: 'Registration details retrieved successfully',

@@ -1,8 +1,25 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import { MailerService } from './mailer.service';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { MESSAGES } from 'src/common/message';
-import { CreateMailerDto, SendMailDataDto, SendAccountCredentialsDto } from './dto';
+import {
+  CreateMailerDto,
+  SendMailDataDto,
+  SendAccountCredentialsDto,
+} from './dto';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { ForgotPasswordDto, ResendVerificationDto } from '../auth/dto';
 import { AccountsService } from '../accounts/accounts.service';
@@ -139,7 +156,8 @@ export class MailerController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Send account credentials to user email',
-    description: 'Notifies a new user about their account and provides login details (fullName, username, password, phone, dob).',
+    description:
+      'Notifies a new user about their account and provides login details (fullName, username, password, phone, dob).',
   })
   @ApiBody({ type: SendAccountCredentialsDto })
   @ApiResponse({

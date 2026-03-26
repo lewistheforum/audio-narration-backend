@@ -14,7 +14,7 @@ export const buildTypeOrmOptions = (
   database: config.get('POSTGRES_DATABASE') || '',
   entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
   synchronize: false, // Set to false to avoid hang on startup
-  logging: config.get('NODE_ENV') === 'development',
+  logging: false,
   extra: {
     timezone: config.get('TZ') || 'Asia/Ho_Chi_Minh',
     max: 8, // Limit pool size to 8 to avoid "remaining connection slots" error on Aiven
@@ -38,7 +38,7 @@ export const AppDataSource = new DataSource({
   entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
   migrations: [join(__dirname, '../database/migrations/*{.ts,.js}')],
   synchronize: false, // Set to false to avoid hang
-  logging: process.env.NODE_ENV === 'development',
+  logging: false,
   // Store timestamps with Vietnam timezone (GMT+7)
   extra: {
     timezone: process.env.TZ || 'Asia/Ho_Chi_Minh',

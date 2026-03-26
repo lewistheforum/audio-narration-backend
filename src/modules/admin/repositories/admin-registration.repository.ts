@@ -45,6 +45,7 @@ export class AdminRegistrationRepository {
    */
   async findRegistrationById(
     clinicAdminId: string,
+    managerId: string,
   ): Promise<RegistrationDetailResponseDto | null> {
     // Find clinic admin account with all related data
     const account = await this.accountRepository
@@ -77,7 +78,7 @@ export class AdminRegistrationRepository {
 
     // Find the clinic manager (child account)
     const clinicManagerAccount = account.children?.find(
-      (child) => child.role === AccountRole.CLINIC_MANAGER,
+      (child) => child._id === managerId,
     );
 
     if (!clinicManagerAccount) {
@@ -120,18 +121,17 @@ export class AdminRegistrationRepository {
       isVerify: account.clinicAdminInformation?.isVerify,
       pros: account.clinicAdminInformation?.pros,
       paraclinical: account.clinicAdminInformation?.paraclinical,
-      address:
-        account.address
-          ? {
-              address: account.address.address,
-              ward: account.address.ward,
-              wardName: account.address.wardName,
-              district: account.address.district,
-              districtName: account.address.districtName,
-              province: account.address.province,
-              provinceName: account.address.provinceName,
-            }
-          : undefined,
+      address: account.address
+        ? {
+            address: account.address.address,
+            ward: account.address.ward,
+            wardName: account.address.wardName,
+            district: account.address.district,
+            districtName: account.address.districtName,
+            province: account.address.province,
+            provinceName: account.address.provinceName,
+          }
+        : undefined,
     };
 
     const clinicManager: ClinicManagerInfoDto = {
@@ -141,18 +141,17 @@ export class AdminRegistrationRepository {
       phone: clinicManagerAccount.phone || '',
       clinicBranchName:
         clinicManagerAccount.clinicManagerInformation?.clinicBranchName || '',
-      address:
-        clinicManagerAccount.address
-          ? {
-              address: clinicManagerAccount.address.address,
-              ward: clinicManagerAccount.address.ward,
-              wardName: clinicManagerAccount.address.wardName,
-              district: clinicManagerAccount.address.district,
-              districtName: clinicManagerAccount.address.districtName,
-              province: clinicManagerAccount.address.province,
-              provinceName: clinicManagerAccount.address.provinceName,
-            }
-          : undefined,
+      address: clinicManagerAccount.address
+        ? {
+            address: clinicManagerAccount.address.address,
+            ward: clinicManagerAccount.address.ward,
+            wardName: clinicManagerAccount.address.wardName,
+            district: clinicManagerAccount.address.district,
+            districtName: clinicManagerAccount.address.districtName,
+            province: clinicManagerAccount.address.province,
+            provinceName: clinicManagerAccount.address.provinceName,
+          }
+        : undefined,
     };
 
     const legalDocuments: LegalDocumentsInfoDto = {
@@ -258,6 +257,7 @@ export class AdminRegistrationRepository {
         'legalDocs._id as "legalDocumentId"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
+        'managerAccount._id as "clinicManagerId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.operating_license as "operatingLicense"',
@@ -310,6 +310,7 @@ export class AdminRegistrationRepository {
         'legalDocs._id as "legalDocumentId"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
+        'managerAccount._id as "clinicManagerId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.updated_at as "approvedAt"',
@@ -373,6 +374,7 @@ export class AdminRegistrationRepository {
         'legalDocs._id as "legalDocumentId"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
+        'managerAccount._id as "clinicManagerId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.rejection_reason as "rejectionReason"',
@@ -430,6 +432,7 @@ export class AdminRegistrationRepository {
         'adminAccount._id as "id"',
         'clinicInfo.clinic_name as "clinicName"',
         'adminAccount.email as "adminEmail"',
+        'managerAccount._id as "clinicManagerId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.created_at as "registrationDate"',
         'subscription.subscription_status as "currentStatus"',
