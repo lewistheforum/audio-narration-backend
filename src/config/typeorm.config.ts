@@ -17,6 +17,7 @@ export const buildTypeOrmOptions = (
   logging: false,
   extra: {
     timezone: config.get('TZ') || 'Asia/Ho_Chi_Minh',
+    max: 8, // Limit pool size to 8 to avoid "remaining connection slots" error on Aiven
   },
   ssl:
     config.get('POSTGRES_SSL') === 'true'
@@ -40,5 +41,6 @@ export const AppDataSource = new DataSource({
   // Store timestamps with Vietnam timezone (GMT+7)
   extra: {
     timezone: process.env.TZ || 'Asia/Ho_Chi_Minh',
+    max: 8, // Limit pool size to 8 to avoid "remaining connection slots" error on Aiven
   },
 });
