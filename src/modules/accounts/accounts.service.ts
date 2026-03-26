@@ -212,18 +212,11 @@ export class AccountsService {
     includeDeleted: boolean = false,
   ): Promise<AccountResponseDto[]> {
     const accounts =
-      await this.accountRepository.findAllAccounts(includeDeleted);
+      await this.accountRepository.findAllAccountsWithGeneralAccount(includeDeleted);
 
-    const result: AccountResponseDto[] = [];
-    for (const account of accounts) {
-      const generalAccount =
-        await this.generalAccountRepository.findGeneralAccountByUserId(
-          account._id,
-        );
-      result.push(new AccountResponseDto(account, generalAccount));
-    }
-
-    return result;
+    return accounts.map(
+      (account) => new AccountResponseDto(account, account.generalAccount),
+    );
   }
 
   /**
@@ -572,7 +565,6 @@ export class AccountsService {
   async createPatient(
     createAccountDto: CreateAccountDto,
   ): Promise<{ user: AccountResponseDto }> {
-    // Step 1: Validate email uniqueness - Patient email must be unique (no sharing allowed)
     const existingAccount = await this.findByEmail(createAccountDto.email);
     if (existingAccount) {
       throw new ConflictException(
@@ -580,49 +572,59 @@ export class AccountsService {
       );
     }
 
-    // Step 2: Hash password for secure storage
     const hashedPassword = await bcrypt.hash(
       createAccountDto.password,
       this.BCRYPT_SALT_ROUNDS,
     );
 
-    // Step 3: Create and save Account entity
-    const account = this.accountRepository.createAccount({
-      username: createAccountDto.username,
-      email: createAccountDto.email,
-      password: hashedPassword,
-      phone: createAccountDto.phone,
-      role: AccountRole.PATIENT,
-      status: AccountStatus.UNVERIFIED,
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedAccount = await this.accountRepository.saveAccount(account);
+    let savedAccount: Account;
+    let generalAccount: GeneralAccount | null = null;
 
-    // Call Zalo webhook to send friend request
+    try {
+      const account = this.accountRepository.createAccount({
+        username: createAccountDto.username,
+        email: createAccountDto.email,
+        password: hashedPassword,
+        phone: createAccountDto.phone,
+        role: AccountRole.PATIENT,
+        status: AccountStatus.UNVERIFIED,
+      });
+
+      savedAccount = await queryRunner.manager.save(account);
+
+      if (
+        createAccountDto.fullName ||
+        createAccountDto.gender ||
+        createAccountDto.dob ||
+        createAccountDto.profilePicture
+      ) {
+        generalAccount = this.generalAccountRepository.createGeneralAccount({
+          accountId: savedAccount._id,
+          fullName: createAccountDto.fullName,
+          gender: createAccountDto.gender,
+          dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
+          profilePicture: createAccountDto.profilePicture,
+        });
+        await queryRunner.manager.save(generalAccount);
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
     await this.zaloWebhookService.sendFriendRequest(
       savedAccount.phone,
       'Patient Registration',
     );
 
-    // Step 4: Create and save GeneralAccount entity with the Account ID
-    let generalAccount: GeneralAccount | null = null;
-    if (
-      createAccountDto.fullName ||
-      createAccountDto.gender ||
-      createAccountDto.dob ||
-      createAccountDto.profilePicture
-    ) {
-      generalAccount = this.generalAccountRepository.createGeneralAccount({
-        accountId: savedAccount._id,
-        fullName: createAccountDto.fullName,
-        gender: createAccountDto.gender,
-        dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
-        profilePicture: createAccountDto.profilePicture,
-      });
-      await this.generalAccountRepository.saveGeneralAccount(generalAccount);
-    }
-
-    // Step 5: Return combined DTO
     return {
       user: new AccountResponseDto(savedAccount, generalAccount),
     };
@@ -674,7 +676,6 @@ export class AccountsService {
     fullName?: string;
     profilePicture?: string;
   }): Promise<AccountResponseDto> {
-    // Step 1: Validate email uniqueness - Patient email must be unique (no sharing allowed)
     const existingAccount = await this.findByEmail(dto.email);
     if (existingAccount) {
       throw new ConflictException(
@@ -682,40 +683,53 @@ export class AccountsService {
       );
     }
 
-    // Step 2: Hash password only if provided (OAuth may not provide password)
     let hashedPassword = null;
     if (dto.password) {
       hashedPassword = await bcrypt.hash(dto.password, this.BCRYPT_SALT_ROUNDS);
     }
 
-    // Step 3: Create and save Account entity with OAuth flags
-    const account = this.accountRepository.createAccount({
-      username: dto.username || dto.email.split('@')[0], // Use email prefix as default username
-      email: dto.email,
-      password: hashedPassword,
-      role: AccountRole.PATIENT,
-      status: AccountStatus.ACTIVE, // OAuth accounts are immediately active
-      isOAuthUser: true,
-      isEmailVerified: true, // Email pre-verified by OAuth provider
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedAccount = await this.accountRepository.saveAccount(account);
-
-    // Call Zalo webhook to send friend request
-    await this.zaloWebhookService.sendFriendRequest(
-      savedAccount.phone,
-      'OAuth Registration',
-    );
-
-    // Step 4: Create GeneralAccount with fullName and profilePicture if provided
+    let savedAccount: Account;
     let generalAccount: GeneralAccount | null = null;
-    if (dto.fullName || dto.profilePicture) {
-      generalAccount = this.generalAccountRepository.createGeneralAccount({
-        accountId: savedAccount._id,
-        fullName: dto.fullName,
-        profilePicture: dto.profilePicture,
+
+    try {
+      const account = this.accountRepository.createAccount({
+        username: dto.username || dto.email.split('@')[0],
+        email: dto.email,
+        password: hashedPassword,
+        role: AccountRole.PATIENT,
+        status: AccountStatus.ACTIVE,
+        isOAuthUser: true,
+        isEmailVerified: true,
       });
-      await this.generalAccountRepository.saveGeneralAccount(generalAccount);
+
+      savedAccount = await queryRunner.manager.save(account);
+
+      if (dto.fullName || dto.profilePicture) {
+        generalAccount = this.generalAccountRepository.createGeneralAccount({
+          accountId: savedAccount._id,
+          fullName: dto.fullName,
+          profilePicture: dto.profilePicture,
+        });
+        await queryRunner.manager.save(generalAccount);
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    if (savedAccount.phone) {
+      this.zaloWebhookService.sendFriendRequest(
+        savedAccount.phone,
+        'OAuth Registration',
+      ).catch(() => {});
     }
 
     return new AccountResponseDto(savedAccount, generalAccount);
@@ -739,6 +753,10 @@ export class AccountsService {
    * ```
    */
   async updateAccountEntity(account: Account): Promise<Account> {
+    return this.accountRepository.saveAccount(account);
+  }
+
+  async saveAccount(account: Account): Promise<Account> {
     return this.accountRepository.saveAccount(account);
   }
 
@@ -1638,9 +1656,22 @@ export class AccountsService {
    * ```
    */
   async delete(id: string): Promise<void> {
-    const account = await this.findAccountEntityById(id);
-    await this.accountRepository.softDeleteAccount(id);
-    await this.generalAccountRepository.softDeleteGeneralAccount(id);
+    await this.findAccountEntityById(id);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.softDelete(Account, { _id: id });
+      await queryRunner.manager.softDelete(GeneralAccount, { accountId: id });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
@@ -1674,8 +1705,20 @@ export class AccountsService {
       );
     }
 
-    await this.accountRepository.softDeleteAccount(id);
-    await this.generalAccountRepository.softDeleteGeneralAccount(id);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.softDelete(Account, { _id: id });
+      await queryRunner.manager.softDelete(GeneralAccount, { accountId: id });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
@@ -1720,8 +1763,20 @@ export class AccountsService {
       throw new BadRequestException(MESSAGES.failMessage.userNotDeleted);
     }
 
-    await this.accountRepository.restoreAccount(id);
-    await this.generalAccountRepository.restoreGeneralAccount(id);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.restore(Account, { _id: id });
+      await queryRunner.manager.restore(GeneralAccount, { accountId: id });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
 
     const restoredAccount = await this.findAccountEntityById(id);
     const generalAccount = await this.findGeneralAccountByUserId(id);
@@ -2465,6 +2520,22 @@ export class AccountsService {
     return this.accountRepository.findAccountByEmail(email);
   }
 
+  async findAccountWithGeneralByEmail(email: string): Promise<Account | null> {
+    return this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where('account.email = :email', { email })
+      .getOne();
+  }
+
+  async findAccountWithGeneralById(id: string): Promise<Account | null> {
+    return this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where('account._id = :id', { id })
+      .getOne();
+  }
+
   /**
    * Find Multiple Accounts by IDs
    *
@@ -2538,7 +2609,7 @@ export class AccountsService {
     email: string,
     code: string,
   ): Promise<Account & { firstName?: string; lastName?: string }> {
-    const account = await this.findByEmail(email);
+    const account = await this.findAccountWithGeneralByEmail(email);
     if (!account) {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
@@ -2547,7 +2618,6 @@ export class AccountsService {
       throw new ConflictException(MESSAGES.failMessage.emailAlreadyVerified);
     }
 
-    // Find the verification code in the database
     const storedCode =
       await this.codeVerificationRepository.findValidByUserIdAndCode(
         account._id,
@@ -2561,26 +2631,21 @@ export class AccountsService {
       );
     }
 
-    // Check if code has expired
     if (getCurrentVietnamTime() > storedCode.expiredAt) {
       throw new UnauthorizedException(
         MESSAGES.failMessage.verificationCodeExpired,
       );
     }
 
-    // Mark code as used (prevent reuse)
     await this.codeVerificationRepository.markAsUsed(storedCode._id);
 
-    // Mark email as verified and activate account
     account.isEmailVerified = true;
-    // Update account status from UNVERIFIED to ACTIVE
     if (account.status === AccountStatus.UNVERIFIED) {
       account.status = AccountStatus.ACTIVE;
     }
     await this.accountRepository.saveAccount(account);
 
-    // Get general account for firstName/lastName (split fullName)
-    const generalAccount = await this.findGeneralAccountByUserId(account._id);
+    const generalAccount = account.generalAccount;
     const names = generalAccount?.fullName?.split(' ') || [];
 
     return {
@@ -3322,8 +3387,6 @@ export class AccountsService {
     province?: string,
     specialty?: string,
   ): Promise<ClinicListResponseDto> {
-    // Get clinic manager accounts with ACTIVE status and filters
-    // The query now includes parent account (CLINIC_ADMIN) and clinic_admin_information
     const [clinics, total] =
       await this.accountRepository.findClinicsWithFilters(
         AccountRole.CLINIC_MANAGER,
@@ -3335,42 +3398,44 @@ export class AccountsService {
         specialty,
       );
 
+    if (clinics.length === 0) {
+      return {
+        clinics: [],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const clinicIds = clinics.map((c) => c._id);
+
+    const ratingResults = await this.dataSource.query(
+      `
+      SELECT f.clinic_id, AVG(f.rating)::NUMERIC(3,2) as avg_rating
+      FROM feedbacks f
+      WHERE f.clinic_id = ANY($1)
+        AND f.type = 'CLINIC'
+        AND f.deleted_at IS NULL
+      GROUP BY f.clinic_id
+    `,
+      [clinicIds],
+    );
+
+    const ratingMap = new Map<string, number>();
+    for (const row of ratingResults) {
+      ratingMap.set(row.clinic_id, parseFloat(row.avg_rating) || 0);
+    }
+
     const clinicItems: ClinicItemDto[] = [];
 
     for (const clinic of clinics) {
-      // Get clinic manager information
-      const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(
-        clinic._id,
-      );
-
-      // Get primary address (first address)
-      const address = await this.addressRepository.findByAccountId(clinic._id);
-
-      // Get clinic admin information from parent account
-      let clinicAdminInfo = null;
-      if (clinic.parent && clinic.parent.clinicAdminInformation) {
-        clinicAdminInfo = clinic.parent.clinicAdminInformation;
-      }
-
-      // Calculate average rating for this clinic
-      let averageRating: number | undefined;
-      try {
-        const ratingResult = await this.dataSource.query(
-          `
-          SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
-          FROM feedbacks f
-          WHERE f.clinic_id = $1
-            AND f.type = 'CLINIC'
-            AND f.deleted_at IS NULL
-        `,
-          [clinic._id],
-        );
-        averageRating = ratingResult[0]?.avg_rating
-          ? parseFloat(ratingResult[0].avg_rating)
-          : 0;
-      } catch {
-        averageRating = 0;
-      }
+      const clinicInfo = (clinic as any).clinicManagerInformation;
+      const address = (clinic as any).address;
+      const clinicAdminInfo = (clinic as any).parent?.clinicAdminInformation;
+      const averageRating = ratingMap.get(clinic._id) || 0;
 
       if (clinicInfo && address) {
         clinicItems.push(
@@ -3566,32 +3631,38 @@ export class AccountsService {
     );
 
     const doctors: DoctorSummaryDto[] = [];
-    for (const doctor of doctorAccounts) {
-      const doctorInfo = await this.doctorInfoRepository.findByAccountId(
-        doctor._id,
+    if (doctorAccounts.length > 0) {
+      const doctorIds = doctorAccounts.map((d) => d._id);
+
+      const doctorInfos = await this.doctorInfoRepository.findByAccountIds(doctorIds);
+
+      const ratingResults = await this.dataSource.query(
+        `
+        SELECT f.doctor_id, AVG(f.rating)::NUMERIC(3,2) as avg_rating
+        FROM feedbacks f
+        WHERE f.doctor_id = ANY($1)
+          AND f.type = 'DOCTOR'
+          AND f.deleted_at IS NULL
+        GROUP BY f.doctor_id
+      `,
+        [doctorIds],
       );
 
-      // Calculate average rating for this doctor
-      let doctorAvgRating: number | undefined;
-      try {
-        const ratingResult = await this.dataSource.query(
-          `
-          SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
-          FROM feedbacks f
-          WHERE f.doctor_id = $1
-            AND f.type = 'DOCTOR'
-            AND f.deleted_at IS NULL
-        `,
-          [doctor._id],
-        );
-        doctorAvgRating = ratingResult[0]?.avg_rating
-          ? parseFloat(ratingResult[0].avg_rating)
-          : 0;
-      } catch {
-        doctorAvgRating = 0;
+      const ratingMap = new Map<string, number>();
+      for (const row of ratingResults) {
+        ratingMap.set(row.doctor_id, parseFloat(row.avg_rating) || 0);
       }
 
-      doctors.push(new DoctorSummaryDto(doctor, doctorInfo, doctorAvgRating));
+      const doctorInfoMap = new Map<string, any>();
+      for (const info of doctorInfos) {
+        doctorInfoMap.set(info.accountId, info);
+      }
+
+      for (const doctor of doctorAccounts) {
+        const doctorInfo = doctorInfoMap.get(doctor._id);
+        const doctorAvgRating = ratingMap.get(doctor._id) || 0;
+        doctors.push(new DoctorSummaryDto(doctor, doctorInfo, doctorAvgRating));
+      }
     }
 
     // Get subscription information
@@ -4140,13 +4211,26 @@ export class AccountsService {
       };
     }
 
-    // Get clinic subscription to check registration status
-    const subscription = await this.clinicSubscriptionRepository.findByClinicId(
-      account._id,
-    );
+    // Get clinic subscription and manager account in a single optimized query
+    const subscriptionData = await this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.subscription', 'subscription')
+      .leftJoin(
+        Account,
+        'manager',
+        'manager.parent_id = account._id AND manager.role = :managerRole',
+        { managerRole: AccountRole.CLINIC_MANAGER },
+      )
+      .select([
+        'account._id as account_id',
+        'subscription.subscriptionStatus as subscription_status',
+        'subscription.expirationDate as subscription_expiration',
+        'manager._id as manager_account_id',
+      ])
+      .where('account._id = :accountId', { accountId: account._id })
+      .getRawOne();
 
-    if (!subscription) {
-      // Account exists but no subscription
+    if (!subscriptionData) {
       return {
         message: 'No subscription found',
         canResume: false,
@@ -4155,14 +4239,23 @@ export class AccountsService {
       };
     }
 
-    // Query for manager account (linked via parentId)
-    const managerAccounts = await this.accountRepository.findByParentIdAndRole(
-      account._id,
-      AccountRole.CLINIC_MANAGER,
-    );
-    const managerAccount =
-      managerAccounts.length > 0 ? managerAccounts[0] : null;
-    const managerAccountId = managerAccount?._id || null;
+    const subscription = {
+      subscriptionStatus: subscriptionData.subscription_status,
+      expirationDate: subscriptionData.subscription_expiration
+        ? new Date(subscriptionData.subscription_expiration)
+        : null,
+    };
+
+    if (!subscription.subscriptionStatus) {
+      return {
+        message: 'No subscription found',
+        canResume: false,
+        currentStep: null,
+        nextAction: null,
+      };
+    }
+
+    const managerAccountId = subscriptionData.manager_account_id || null;
 
     // Map registration status to step information
     const status = subscription.subscriptionStatus;
@@ -5139,6 +5232,7 @@ export class AccountsService {
         limit,
         search,
         role,
+        undefined,
         fromDate,
         toDate,
       );
@@ -5198,7 +5292,7 @@ export class AccountsService {
     const [accounts, total] =
       await this.accountRepository.findDoctorsWithFilters(
         AccountRole.DOCTOR,
-        AccountStatus.ACTIVE,
+        undefined,
         (page - 1) * limit,
         limit,
         validParentIds,

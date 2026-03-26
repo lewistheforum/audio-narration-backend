@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn, ManyToMany, JoinTable } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn, ManyToMany, JoinTable, Index } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { EmployeeSchedule } from './employee-schedule.entity';
 
 @Entity('clinic_room')
+@Index('idx_clinic_room_clinic_id', ['clinicId'])
 export class ClinicRoom {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { BlogType } from '../enums';
@@ -17,6 +18,8 @@ import { BlogType } from '../enums';
  * Stores blog posts created by clinics
  */
 @Entity('blogs')
+@Index('idx_blog_clinic_id', ['clinicId'])
+@Index('idx_blog_created_at', ['createdAt'])
 export class Blog {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { VisitType, Severity } from '../enums';
@@ -17,6 +18,7 @@ import { VisitType, Severity } from '../enums';
  * Stores consultation records for patient visits
  */
 @Entity('erm_consultations')
+@Index('idx_erm_consultation_erm_id', ['ermId'])
 export class ERMConsultation {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

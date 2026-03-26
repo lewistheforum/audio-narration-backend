@@ -4,13 +4,26 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import { AccountRole } from '../enums/account-role.enum';
 import { AccountStatus } from '../enums/account-status.enum';
 import { BanType } from '../enums/ban-type.enum';
 import { BanHistory } from '../entities/ban-history.entity';
 import { MailerService } from '../../mailer/mailer.service';
+
+export interface BanClinicManagerResultDto {
+  message: string;
+  managerId: string;
+  banCounts: number;
+  status: AccountStatus;
+}
+
+export interface UnbanClinicManagerResultDto {
+  message: string;
+  managerId: string;
+  status: AccountStatus;
+}
 
 @Injectable()
 export class ClinicManagersService {
@@ -22,9 +35,6 @@ export class ClinicManagersService {
     private readonly mailerService: MailerService,
   ) {}
 
-  /**
-   * Helper to find a clinic manager and verify it belongs to the given clinic admin
-   */
   private async findAndVerifyManager(
     adminId: string,
     managerId: string,
@@ -49,15 +59,11 @@ export class ClinicManagersService {
     return manager;
   }
 
-  /**
-   * Ban a clinic manager
-   * Increments ban counts. If >= 3, bans manager and linked doctors/staff.
-   */
   async banClinicManager(
     adminId: string,
     managerId: string,
     banDescription?: string,
-  ): Promise<any> {
+  ): Promise<BanClinicManagerResultDto> {
     const manager = await this.findAndVerifyManager(adminId, managerId);
 
     manager.banCounts += 1;
@@ -71,23 +77,27 @@ export class ClinicManagersService {
     if (manager.banCounts >= 3) {
       manager.status = AccountStatus.BAN;
 
-      // Find Doctors & Staff (Children of this Manager)
-      const children = await this.accountRepository.find({
-        where: {
-          parentId: managerId,
-          role: In([AccountRole.DOCTOR, AccountRole.CLINIC_STAFF]),
-        },
-        select: ['_id'],
-      });
+      const children = await this.accountRepository
+        .createQueryBuilder('account')
+        .where('account.parentId = :managerId', { managerId })
+        .andWhere('account.role = ANY(:roles)', {
+          roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+        })
+        .select(['account._id'])
+        .getMany();
 
       const childrenIds = children.map((c) => c._id);
 
       if (childrenIds.length > 0) {
-        await this.accountRepository.update(
-          { _id: In(childrenIds) },
-          { status: AccountStatus.BAN },
-        );
+        await this.accountRepository
+          .createQueryBuilder()
+          .update(Account)
+          .set({ status: AccountStatus.BAN })
+          .where('_id = ANY(:childrenIds)', { childrenIds })
+          .execute();
       }
+
+      await this.accountRepository.save(manager);
 
       await this.mailerService.sendAccountBannedEmail(
         manager.email,
@@ -95,6 +105,8 @@ export class ClinicManagersService {
         banDescription || 'Multiple violations of terms or clinic policies.',
       );
     } else {
+      await this.accountRepository.save(manager);
+
       await this.mailerService.sendAccountWarningEmail(
         manager.email,
         managerName,
@@ -103,32 +115,29 @@ export class ClinicManagersService {
       );
     }
 
-    const savedManager = await this.accountRepository.save(manager);
-
     const banHistory = this.banHistoryRepository.create({
-      accountId: savedManager._id,
-      banCounts: savedManager.banCounts,
-      type: savedManager.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
+      accountId: manager._id,
+      banCounts: manager.banCounts,
+      type: manager.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
       banDescription: banDescription,
     });
     await this.banHistoryRepository.save(banHistory);
 
     return {
       message:
-        savedManager.banCounts >= 3
+        manager.banCounts >= 3
           ? 'Clinic manager and associated accounts banned'
           : 'Warning issued to clinic manager',
-      managerId: savedManager._id,
-      banCounts: savedManager.banCounts,
-      status: savedManager.status,
+      managerId: manager._id,
+      banCounts: manager.banCounts,
+      status: manager.status,
     };
   }
 
-  /**
-   * Unban a clinic manager
-   * Resets status to ACTIVE and ban counts to 0. Also restores linked doctors/staff.
-   */
-  async unbanClinicManager(adminId: string, managerId: string): Promise<any> {
+  async unbanClinicManager(
+    adminId: string,
+    managerId: string,
+  ): Promise<UnbanClinicManagerResultDto> {
     const manager = await this.findAndVerifyManager(adminId, managerId);
 
     if (manager.status === AccountStatus.BAN) {
@@ -136,23 +145,27 @@ export class ClinicManagersService {
       manager.banCounts = 0;
       manager.banDescription = null;
 
-      // Find Doctors & Staff and restore
-      const children = await this.accountRepository.find({
-        where: {
-          parentId: managerId,
-          role: In([AccountRole.DOCTOR, AccountRole.CLINIC_STAFF]),
-        },
-        select: ['_id'],
-      });
+      const children = await this.accountRepository
+        .createQueryBuilder('account')
+        .where('account.parentId = :managerId', { managerId })
+        .andWhere('account.role = ANY(:roles)', {
+          roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+        })
+        .select(['account._id'])
+        .getMany();
 
       const childrenIds = children.map((c) => c._id);
 
       if (childrenIds.length > 0) {
-        await this.accountRepository.update(
-          { _id: In(childrenIds) },
-          { status: AccountStatus.ACTIVE },
-        );
+        await this.accountRepository
+          .createQueryBuilder()
+          .update(Account)
+          .set({ status: AccountStatus.ACTIVE })
+          .where('_id = ANY(:childrenIds)', { childrenIds })
+          .execute();
       }
+
+      await this.accountRepository.save(manager);
 
       const managerName =
         manager.clinicManagerInformation?.clinicBranchName ||
@@ -164,10 +177,8 @@ export class ClinicManagersService {
       );
     }
 
-    const savedManager = await this.accountRepository.save(manager);
-
     const banHistory = this.banHistoryRepository.create({
-      accountId: savedManager._id,
+      accountId: manager._id,
       banCounts: 0,
       type: BanType.UNBANNED,
     });
@@ -175,14 +186,11 @@ export class ClinicManagersService {
 
     return {
       message: 'Clinic manager and associated accounts unbanned',
-      managerId: savedManager._id,
-      status: savedManager.status,
+      managerId: manager._id,
+      status: manager.status,
     };
   }
 
-  /**
-   * Get ban history for a clinic manager
-   */
   async getBanHistory(
     adminId: string,
     managerId: string,

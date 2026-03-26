@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ContractPackage } from './contract-package.entity';
 import { ContractType } from '../enums/contract-type.enum';
@@ -14,6 +15,9 @@ import { SalaryPaymentMethod } from '../enums/salary-payment-method.enum';
 import { ContractStatus } from '../enums/contract-status.enum';
 
 @Entity('clinic_contract_information')
+@Index('idx_contract_status', ['contractStatus'])
+@Index('idx_contract_type', ['contractType'])
+@Index('idx_contract_id', ['contractId'])
 export class ClinicContractInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

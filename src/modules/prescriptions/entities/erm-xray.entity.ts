@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { BodySide } from '../enums';
@@ -17,6 +18,7 @@ import { BodySide } from '../enums';
  * Stores X-ray examination records
  */
 @Entity('erm_xrays')
+@Index('idx_erm_xray_erm_id', ['ermId'])
 export class ERMXray {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

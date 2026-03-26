@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DeepPartial, FindOptionsWhere, IsNull } from 'typeorm';
+import { Repository, DeepPartial, IsNull } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
-import { AccountRole, AccountStatus, LegalDocumentVerificationStatus } from '../enums';
+import { AccountRole, AccountStatus, ClinicRole, LegalDocumentVerificationStatus } from '../enums';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 
 /**
@@ -71,6 +71,30 @@ export class AccountRepository {
     return this.accountRepository.find({
       withDeleted: includeDeleted,
     });
+  }
+
+  /**
+   * Find All Accounts with GeneralAccount (Optimized for N+1 Prevention)
+   *
+   * Retrieves all accounts with their associated GeneralAccount in a single query.
+   * Uses LEFT JOIN to fetch related data efficiently.
+   *
+   * @param {boolean} includeDeleted - Include soft-deleted accounts
+   * @returns {Promise<Account[]>} Array of accounts with generalAccount relation loaded
+   */
+  async findAllAccountsWithGeneralAccount(
+    includeDeleted: boolean = false,
+  ): Promise<Account[]> {
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .orderBy('account.createdAt', 'DESC');
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    }
+
+    return queryBuilder.getMany();
   }
 
   /**
@@ -183,9 +207,9 @@ export class AccountRepository {
   }
 
   /**
-   * Find Multiple Accounts by IDs
+   * Find Multiple Accounts by IDs using PostgreSQL ANY()
    *
-   * Batch retrieval of accounts using SQL IN clause.
+   * Batch retrieval of accounts using SQL ANY() for type safety.
    * Efficient for loading multiple accounts at once.
    *
    * Performance:
@@ -206,16 +230,15 @@ export class AccountRepository {
     if (!ids || ids.length === 0) {
       return [];
     }
-    return this.accountRepository.find({
-      where: { _id: In(ids) },
-      relations: [
-        'clinicAdminInformation',
-        'clinicManagerInformation',
-        'doctorInformation',
-        'clinicStaffInformation',
-        'generalAccount',
-      ],
-    });
+    return this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInformation')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInformation')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInformation')
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInformation')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where('account._id = ANY(:ids)', { ids })
+      .getMany();
   }
 
   /**
@@ -544,7 +567,7 @@ export class AccountRepository {
       .leftJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
       .andWhere(
-        'subscription.subscriptionStatus NOT IN (:...excludedStatuses)',
+        'NOT subscription.subscriptionStatus = ANY(:excludedStatuses)',
         {
           excludedStatuses: [
             RegistrationStatus.PENDING_SEPAY_SETUP,
@@ -671,7 +694,7 @@ export class AccountRepository {
    */
   async findDoctorsWithFilters(
     role: AccountRole,
-    status: AccountStatus,
+    status: AccountStatus | undefined,
     skip: number = 0,
     take: number = 10,
     clinicId?: string | string[],
@@ -686,14 +709,17 @@ export class AccountRepository {
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .where('account.role = :role', { role })
-      .andWhere('account.status = :status', { status })
       .andWhere('account.deletedAt IS NULL');
+
+    if (status) {
+      queryBuilder.andWhere('account.status = :status', { status });
+    }
 
     // Apply clinicId filter
     if (clinicId) {
       if (Array.isArray(clinicId)) {
         if (clinicId.length > 0) {
-          queryBuilder.andWhere('account.parentId IN (:...clinicId)', { clinicId });
+          queryBuilder.andWhere('account.parentId = ANY(:clinicId)', { clinicId });
         } else {
           queryBuilder.andWhere('1 = 0');
         }
@@ -755,7 +781,8 @@ export class AccountRepository {
     skip: number = 0,
     take: number = 10,
     search?: string,
-    role?: any, // Use any to avoid circular dependency if needed, or import ClinicRole
+    role?: ClinicRole,
+    status?: AccountStatus,
     fromDate?: string,
     toDate?: string,
   ): Promise<[Account[], number]> {
@@ -766,7 +793,7 @@ export class AccountRepository {
 
     if (Array.isArray(clinicId)) {
       if (clinicId.length > 0) {
-        queryBuilder.where('account.parentId IN (:...clinicId)', { clinicId });
+        queryBuilder.where('account.parentId = ANY(:clinicId)', { clinicId });
       } else {
         queryBuilder.where('1 = 0'); // Empty result if no parent IDs
       }
@@ -775,8 +802,12 @@ export class AccountRepository {
     }
 
     queryBuilder
-      .andWhere('account.role = :accountRole', { accountRole: AccountRole.CLINIC_STAFF })
-      .andWhere('account.deletedAt IS NULL');
+      .andWhere('account.role = :accountRole', { accountRole: AccountRole.CLINIC_STAFF });
+
+    if (status) {
+      queryBuilder.andWhere('account.status = :status', { status });
+    }
+    queryBuilder.andWhere('account.deletedAt IS NULL');
 
     // Apply search filter
     if (search) {
@@ -836,7 +867,7 @@ export class AccountRepository {
     if (role) {
       queryBuilder.andWhere('account.role = :role', { role });
     } else {
-      queryBuilder.andWhere('account.role IN (:...roles)', {
+      queryBuilder.andWhere('account.role = ANY(:roles)', {
         roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
       });
     }
@@ -865,15 +896,17 @@ export class AccountRepository {
     clinicAdminId: string,
     statuses: AccountStatus[],
   ): Promise<Account[]> {
-    return this.accountRepository.find({
-      where: {
-        parentId: clinicAdminId,
-        role: AccountRole.CLINIC_MANAGER,
-        status: In(statuses),
-        deletedAt: IsNull(),
-      },
-      relations: ['clinicManagerInformation'],
-    });
+    if (!statuses || statuses.length === 0) {
+      return [];
+    }
+    return this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInformation')
+      .where('account.parentId = :clinicAdminId', { clinicAdminId })
+      .andWhere('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
+      .andWhere('account.status = ANY(:statuses)', { statuses })
+      .andWhere('account.deletedAt IS NULL')
+      .getMany();
   }
 
   /**

@@ -277,7 +277,7 @@ export class PrescriptionsService {
     const validMedicines = await this.dataSource
       .getRepository(Medicine)
       .createQueryBuilder('medicine')
-      .where('medicine.id IN (:...medicineIds)', { medicineIds })
+      .where('medicine.id = ANY(:medicineIds)', { medicineIds })
       .andWhere('medicine.deleted_at IS NULL')
       .getMany();
 
@@ -309,51 +309,50 @@ export class PrescriptionsService {
 
     let prescription: EPrescription;
 
-    if (existingPrescription) {
-      // UPDATE logic: Soft delete old details
-      await this.dataSource
-        .getRepository(DetailEPrescription)
-        .createQueryBuilder()
-        .softDelete()
-        .where('e_prescription_id = :prescriptionId', {
-          prescriptionId: existingPrescription._id,
-        })
-        .execute();
+    // Use transaction for atomicity: delete old details + create/update prescription + insert new details
+    prescription = await this.dataSource.transaction(async (manager) => {
+      if (existingPrescription) {
+        // UPDATE logic: Soft delete old details
+        await manager
+          .createQueryBuilder()
+          .softDelete()
+          .from(DetailEPrescription)
+          .where('e_prescription_id = :prescriptionId', {
+            prescriptionId: existingPrescription._id,
+          })
+          .execute();
 
-      // Update prescription (updatedAt will be set automatically by @UpdateDateColumn)
-      existingPrescription.doctorNote = doctorNote;
-      prescription = await this.dataSource
-        .getRepository(EPrescription)
-        .save(existingPrescription);
-    } else {
-      // CREATE logic: Generate reference ID and create new prescription
-      const referenceId = await this.generateReferenceId();
+        // Update prescription (updatedAt will be set automatically by @UpdateDateColumn)
+        existingPrescription.doctorNote = doctorNote;
+        return manager.save(EPrescription, existingPrescription);
+      } else {
+        // CREATE logic: Generate reference ID and create new prescription
+        const referenceId = await this.generateReferenceId();
 
-      const newPrescription = this.dataSource
-        .getRepository(EPrescription)
-        .create({
+        const newPrescription = manager.create(EPrescription, {
           appointmentId,
           referenceId,
           doctorNote,
         });
 
-      prescription = await this.dataSource
-        .getRepository(EPrescription)
-        .save(newPrescription);
-    }
+        const savedPrescription = await manager.save(EPrescription, newPrescription);
 
-    // Create new detail records
-    const detailRecords = medicines.map((med) => ({
-      ePrescriptionId: prescription._id,
-      medicineId: med.medicineId,
-      quantity: med.quantity,
-      note: med.note,
-      checkOut: med.checkOut,
-    }));
+        // Create new detail records within transaction
+        const detailRecords = medicines.map((med) =>
+          manager.create(DetailEPrescription, {
+            ePrescriptionId: savedPrescription._id,
+            medicineId: med.medicineId,
+            quantity: med.quantity,
+            note: med.note,
+            checkOut: med.checkOut,
+          }),
+        );
 
-    await this.dataSource
-      .getRepository(DetailEPrescription)
-      .save(detailRecords);
+        await manager.save(DetailEPrescription, detailRecords);
+
+        return savedPrescription;
+      }
+    });
 
     // Fetch complete prescription with details
     return this.getPrescription(appointmentId, doctorId);

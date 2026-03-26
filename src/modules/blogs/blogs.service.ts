@@ -4,8 +4,9 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Blog } from './entities/blog.entity';
+import { BlogNotification } from '../notifications/entities/blog-notification.entity';
 import { BlogRepository } from './repositories/blog.repository';
 import {
   BlogResponseDto,
@@ -51,6 +52,7 @@ export class BlogsService {
     private readonly accountRepository: Repository<Account>,
     private readonly accountsService: AccountsService,
     private readonly socketGatewayService: SocketGatewayService,
+    private readonly dataSource: DataSource,
   ) { }
 
   /**
@@ -154,18 +156,7 @@ export class BlogsService {
     createBlogDto: CreateBlogDto,
     user: Account,
   ): Promise<BlogResponseDto> {
-    const blog = this.blogRepository.create({
-      ...createBlogDto,
-      clinicId: user.parentId,
-    });
-
-    const savedBlog = await this.blogRepository.saveBlog(blog);
-
-    // Fetch full blog with clinic info to return complete response
-    const fullBlog = await this.blogRepository.findByIdWithClinic(
-      savedBlog._id,
-    );
-
+    // Fetch patients first (read-only, outside transaction)
     const [patients] = await this.accountsService.findByRoleAndStatus(
       AccountRole.PATIENT,
       AccountStatus.ACTIVE,
@@ -173,14 +164,34 @@ export class BlogsService {
       100000, // Fetch up to 100k patients to notify
     );
 
-    if (patients.length > 0) {
-      const notificationsToSave = patients.map((patient) => ({
-        patientId: patient._id,
-        blogId: fullBlog!._id,
-        isRead: false,
-      }));
-      await this.blogRepository.saveBlogNotifications(notificationsToSave);
+    // Use transaction for blog + notifications creation
+    const savedBlog = await this.dataSource.transaction(async (manager) => {
+      const blog = manager.create(Blog, {
+        ...createBlogDto,
+        clinicId: user.parentId,
+      });
 
+      const newBlog = await manager.save(Blog, blog);
+
+      if (patients.length > 0) {
+        const notifications = patients.map((patient) =>
+          manager.create(BlogNotification, {
+            patientId: patient._id,
+            blogId: newBlog._id,
+            isRead: false,
+          }),
+        );
+        await manager.save(BlogNotification, notifications);
+      }
+
+      return newBlog;
+    });
+
+    // Fetch full blog with clinic info to return complete response
+    const fullBlog = await this.blogRepository.findByIdWithClinic(savedBlog._id);
+
+    // Send socket notifications (outside transaction - fire and forget)
+    if (patients.length > 0) {
       const responseDto = new BlogResponseDto(fullBlog!);
       patients.forEach((patient) => {
         const userSocketId = this.socketGatewayService.getUserSocket(

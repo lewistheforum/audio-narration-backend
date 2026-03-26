@@ -87,7 +87,7 @@ export class AppointmentWebhookService {
       const clinicAddress = clinic?.address;
       const fullClinicAddress = clinicAddress 
         ? `${clinicAddress.address}, ${clinicAddress.wardName}, ${clinicAddress.districtName}, ${clinicAddress.provinceName}`
-        : clinic?.address_text || 'N/A';
+        : clinic?.username || 'N/A';
 
       // Refined Clinic Name: [Admin Name] - [Branch Name]
       const adminName = clinicAdminInfo?.clinicName || '';

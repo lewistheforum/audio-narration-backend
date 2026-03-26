@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ClinicServiceCategory } from './clinic-service-category.entity';
 
@@ -16,6 +17,8 @@ import { ClinicServiceCategory } from './clinic-service-category.entity';
  * Stores services offered by clinics
  */
 @Entity('clinic_services')
+@Index('idx_clinic_service_category_id', ['categoryId'])
+@Index('idx_clinic_service_code', ['serviceCode'])
 export class ClinicService {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

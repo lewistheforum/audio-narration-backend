@@ -14,3 +14,7 @@ export * from './not-submitted-legal-documents-response.dto';
 export * from './reject-registration.dto';
 export * from './approval-success-response.dto';
 export * from './rejection-success-response.dto';
+export * from './cleanup-response.dto';
+export * from './active-clinic-admin.dto';
+export * from './admin-account.dto';
+export * from './knowledge-base-sync.dto';
