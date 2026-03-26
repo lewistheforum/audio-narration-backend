@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DeepPartial, FindOptionsWhere, IsNull } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
-import { AccountRole, AccountStatus, LegalDocumentVerificationStatus } from '../enums';
+import { AccountRole, AccountStatus, ClinicRole, LegalDocumentVerificationStatus } from '../enums';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 
 /**
@@ -671,7 +671,7 @@ export class AccountRepository {
    */
   async findDoctorsWithFilters(
     role: AccountRole,
-    status: AccountStatus,
+    status: AccountStatus | undefined,
     skip: number = 0,
     take: number = 10,
     clinicId?: string | string[],
@@ -686,8 +686,11 @@ export class AccountRepository {
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .where('account.role = :role', { role })
-      .andWhere('account.status = :status', { status })
       .andWhere('account.deletedAt IS NULL');
+
+    if (status) {
+      queryBuilder.andWhere('account.status = :status', { status });
+    }
 
     // Apply clinicId filter
     if (clinicId) {
@@ -755,7 +758,8 @@ export class AccountRepository {
     skip: number = 0,
     take: number = 10,
     search?: string,
-    role?: any, // Use any to avoid circular dependency if needed, or import ClinicRole
+    role?: ClinicRole,
+    status?: AccountStatus,
     fromDate?: string,
     toDate?: string,
   ): Promise<[Account[], number]> {
@@ -775,8 +779,12 @@ export class AccountRepository {
     }
 
     queryBuilder
-      .andWhere('account.role = :accountRole', { accountRole: AccountRole.CLINIC_STAFF })
-      .andWhere('account.deletedAt IS NULL');
+      .andWhere('account.role = :accountRole', { accountRole: AccountRole.CLINIC_STAFF });
+
+    if (status) {
+      queryBuilder.andWhere('account.status = :status', { status });
+    }
+    queryBuilder.andWhere('account.deletedAt IS NULL');
 
     // Apply search filter
     if (search) {

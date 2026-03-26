@@ -5139,6 +5139,7 @@ export class AccountsService {
         limit,
         search,
         role,
+        undefined,
         fromDate,
         toDate,
       );
@@ -5198,7 +5199,7 @@ export class AccountsService {
     const [accounts, total] =
       await this.accountRepository.findDoctorsWithFilters(
         AccountRole.DOCTOR,
-        AccountStatus.ACTIVE,
+        undefined,
         (page - 1) * limit,
         limit,
         validParentIds,
