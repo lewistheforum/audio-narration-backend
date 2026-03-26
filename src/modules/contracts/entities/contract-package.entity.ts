@@ -8,12 +8,16 @@ import {
   ManyToOne,
   JoinColumn,
   OneToOne,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ContractRole } from '../enums/contract-role.enum';
 import { ClinicContractInformation } from './clinic-contract-information.entity';
 
 @Entity('contract_package')
+@Index('idx_contract_package_employee', ['employeeId'])
+@Index('idx_contract_package_clinic_manager', ['clinicManagerId'])
+@Index('idx_contract_package_role', ['role'])
 export class ContractPackage {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -15,7 +15,20 @@ import {
   RevenueGroupBy,
   OverallRevenueReportResponseDto,
   BranchRevenueReportResponseDto,
+  RevenueSummaryDto,
+  PaymentMethodBreakdownDto,
+  ServiceCategoryRevenueDto,
+  RevenueTrendDataPointDto,
+  TransactionStatusBreakdownDto,
+  BranchRevenueSummaryDto,
 } from './dto';
+
+interface TopServiceItem {
+  serviceName: string;
+  serviceCode: string;
+  revenue: number;
+  count: number;
+}
 import { formatToVietnamTime, parseVietnamTime } from 'src/common/utils/date.util';
 
 /**
@@ -287,12 +300,17 @@ export class ClinicRevenueService {
     return manager;
   }
 
-  /**
-   * Get Branch Information
-   *
-   * Extracts display information for a branch from manager account
-   */
-  private async getBranchInformation(manager: Account): Promise<any> {
+/**
+ * Get Branch Information
+ *
+ * Extracts display information for a branch from manager account
+ */
+  private async getBranchInformation(manager: Account): Promise<{
+    managerId: string;
+    branchName: string;
+    managerName: string;
+    branchStatus: string;
+  }> {
     return {
       managerId: manager._id,
       branchName:
@@ -317,7 +335,7 @@ export class ClinicRevenueService {
     branchIds: string[],
     startDate: string,
     endDate: string,
-  ): Promise<any> {
+  ): Promise<RevenueSummaryDto> {
     const result = await this.transactionRepository
       .createQueryBuilder('t')
       .select('SUM(t.amount)', 'totalRevenue')
@@ -325,7 +343,7 @@ export class ClinicRevenueService {
       .addSelect('COUNT(DISTINCT a.patient_id)', 'uniquePatients')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
       .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -355,7 +373,7 @@ export class ClinicRevenueService {
     branchIds: string[],
     startDate: string,
     endDate: string,
-  ): Promise<any> {
+  ): Promise<PaymentMethodBreakdownDto> {
     // Online payments (have gateway)
     const onlineResult = await this.transactionRepository
       .createQueryBuilder('t')
@@ -363,7 +381,7 @@ export class ClinicRevenueService {
       .addSelect('COUNT(t._id)', 'transactionCount')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
       .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -378,7 +396,7 @@ export class ClinicRevenueService {
       .addSelect('COUNT(t._id)', 'transactionCount')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
       .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -422,7 +440,7 @@ export class ClinicRevenueService {
     branchIds: string[],
     startDate: string,
     endDate: string,
-  ): Promise<any[]> {
+  ): Promise<ServiceCategoryRevenueDto[]> {
     const results = await this.transactionRepository
       .createQueryBuilder('t')
       .select('csc.category_name', 'categoryName')
@@ -446,7 +464,7 @@ export class ClinicRevenueService {
         'csc',
         'csc._id = cs.category_id',
       )
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -487,7 +505,7 @@ export class ClinicRevenueService {
     startDate: string,
     endDate: string,
     groupBy: RevenueGroupBy = RevenueGroupBy.DAY,
-  ): Promise<any[]> {
+  ): Promise<RevenueTrendDataPointDto[]> {
     let dateFormat: string;
     switch (groupBy) {
       case RevenueGroupBy.DAY:
@@ -512,7 +530,7 @@ export class ClinicRevenueService {
       .addSelect('MAX(t.transaction_date)', 'periodEnd')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
       .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -540,13 +558,13 @@ export class ClinicRevenueService {
     branchIds: string[],
     startDate: string,
     endDate: string,
-  ): Promise<any> {
+  ): Promise<TransactionStatusBreakdownDto> {
     const statuses = [
       PaymentStatus.SUCCESS,
       PaymentStatus.PENDING,
       PaymentStatus.FAILED,
     ];
-    const breakdown: any = {
+    const breakdown: TransactionStatusBreakdownDto = {
       success: { count: 0, amount: 0 },
       pending: { count: 0, amount: 0 },
       failed: { count: 0, amount: 0 },
@@ -559,7 +577,7 @@ export class ClinicRevenueService {
         .addSelect('SUM(t.amount)', 'amount')
         .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
         .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-        .where('a.clinic_id IN (:...branchIds)', { branchIds })
+        .where('a.clinic_id = ANY(:branchIds)', { branchIds })
         .andWhere('t.status = :status', { status })
         .andWhere('t.transaction_date >= :startDate', { startDate })
         .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -587,7 +605,7 @@ export class ClinicRevenueService {
     startDate: string,
     endDate: string,
     totalRevenue: number,
-  ): Promise<any[]> {
+  ): Promise<BranchRevenueSummaryDto[]> {
     const results = await this.transactionRepository
       .createQueryBuilder('t')
       .select('acc._id', 'managerId')
@@ -604,7 +622,7 @@ export class ClinicRevenueService {
         'cmi',
         'cmi.account_id = acc._id',
       )
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })
@@ -644,7 +662,7 @@ export class ClinicRevenueService {
     startDate: string,
     endDate: string,
     limit: number,
-  ): Promise<any[]> {
+  ): Promise<TopServiceItem[]> {
     const results = await this.transactionRepository
       .createQueryBuilder('t')
       .select('cs.service_name', 'serviceName')
@@ -664,7 +682,7 @@ export class ClinicRevenueService {
         'csc_config._id = sa.clinic_service_id',
       )
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
-      .where('a.clinic_id IN (:...branchIds)', { branchIds })
+      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate', { startDate })
       .andWhere('t.transaction_date <= :endDate', { endDate })

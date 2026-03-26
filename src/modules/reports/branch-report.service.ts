@@ -34,7 +34,7 @@ export class BranchReportService {
       .select(dateGroupBy, 'label')
       .addSelect('COUNT(DISTINCT appointment.patientId)', 'count')
       .where('appointment.clinicId = :managerId', { managerId })
-      .andWhere('appointment.status NOT IN (:...excludedStatuses)', {
+      .andWhere('NOT appointment.status = ANY(:excludedStatuses)', {
         excludedStatuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
       });
 
@@ -50,57 +50,79 @@ export class BranchReportService {
 
   /**
    * Get doctors working on a specific day and their feedback stats
+   * OPTIMIZED: Uses single LEFT JOIN query with aggregation instead of N+1
    */
   async getDoctorsWorkingAndFeedback(managerId: string, date: string) {
-    // Get doctors with appointments at this clinic on this date
-    const doctorsData = await this.dataSource.query(`
-      SELECT DISTINCT 
+    // Single query: Get doctors with stats using LEFT JOINs and aggregation
+    const doctorsWithStats = await this.dataSource.query(`
+      SELECT 
         acc._id as "doctorId",
         ga.full_name as "fullName",
-        ga.profile_picture as "profilePicture"
+        ga.profile_picture as "profilePicture",
+        COALESCE(AVG(fb.rating)::NUMERIC(3,2), 0) as "avgRating",
+        COUNT(fb._id) as "totalFeedback"
       FROM appointments apt
       JOIN accounts acc ON acc._id = apt.doctor_id
       LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+      LEFT JOIN feedbacks fb ON fb.doctor_id = acc._id AND fb.type = 'DOCTOR'
       WHERE apt.clinic_id = $1 
         AND apt.appointment_date = $2
         AND apt.status NOT IN ('CANCELLED', 'ABSENT')
+      GROUP BY acc._id, ga.full_name, ga.profile_picture
+      ORDER BY ga.full_name ASC
     `, [managerId, date]);
 
-    // Calculate average rating and fetch recent feedbacks for each doctor
-    const result = await Promise.all(
-      doctorsData.map(async (doc: any) => {
-        const stats = await this.dataSource.query(`
-          SELECT 
-            AVG(rating)::NUMERIC(3,2) as "avgRating",
-            COUNT(*) as "totalFeedback"
-          FROM feedbacks
-          WHERE doctor_id = $1 AND type = 'DOCTOR'
-        `, [doc.doctorId]);
+    if (doctorsWithStats.length === 0) {
+      return [];
+    }
 
-        const recentFeedbacks = await this.dataSource.query(`
-          SELECT 
-            f.rating,
-            f.description,
-            ga.full_name as "patientName"
-          FROM feedbacks f
-          LEFT JOIN appointments apt ON apt._id = f.appointment_id
-          LEFT JOIN accounts acc ON acc._id = apt.patient_id
-          LEFT JOIN general_accounts ga ON ga.account_id = acc._id
-          WHERE f.doctor_id = $1 AND f.type = 'DOCTOR'
-          ORDER BY f.created_at DESC
-          LIMIT 5
-        `, [doc.doctorId]);
+    // Get all doctor IDs for the recent feedbacks query
+    const doctorIds = doctorsWithStats.map((d: { doctorId: string }) => d.doctorId);
 
-        return {
-          ...doc,
-          avgRating: parseFloat(stats[0]?.avgRating || '0'),
-          totalFeedback: parseInt(stats[0]?.totalFeedback || '0', 10),
-          recentFeedbacks,
-        };
-      })
-    );
+    // Single query for recent feedbacks for all doctors
+    const recentFeedbacksRaw = await this.dataSource.query(`
+      SELECT 
+        fb.doctor_id as "doctorId",
+        fb.rating,
+        fb.description,
+        ga.full_name as "patientName"
+      FROM feedbacks fb
+      LEFT JOIN appointments apt ON apt._id = fb.appointment_id
+      LEFT JOIN accounts acc ON acc._id = apt.patient_id
+      LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+      WHERE fb.doctor_id = ANY($1) AND fb.type = 'DOCTOR'
+      ORDER BY fb.created_at DESC
+    `, [doctorIds]);
 
-    return result;
+    // Group recent feedbacks by doctorId
+    const feedbacksByDoctor = new Map<string, Array<{
+      rating: number;
+      description: string | null;
+      patientName: string | null;
+    }>>();
+
+    for (const fb of recentFeedbacksRaw) {
+      if (!feedbacksByDoctor.has(fb.doctorId)) {
+        feedbacksByDoctor.set(fb.doctorId, []);
+      }
+      if (feedbacksByDoctor.get(fb.doctorId)!.length < 5) {
+        feedbacksByDoctor.get(fb.doctorId)!.push({
+          rating: fb.rating,
+          description: fb.description,
+          patientName: fb.patientName,
+        });
+      }
+    }
+
+    // Map results
+    return doctorsWithStats.map((doc: { doctorId: string; fullName: string | null; profilePicture: string | null; avgRating: string; totalFeedback: string }) => ({
+      doctorId: doc.doctorId,
+      fullName: doc.fullName,
+      profilePicture: doc.profilePicture,
+      avgRating: parseFloat(doc.avgRating || '0'),
+      totalFeedback: parseInt(doc.totalFeedback || '0', 10),
+      recentFeedbacks: feedbacksByDoctor.get(doc.doctorId) || [],
+    }));
   }
 
   /**

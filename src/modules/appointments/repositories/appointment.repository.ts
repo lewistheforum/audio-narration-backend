@@ -173,7 +173,7 @@ export class AppointmentRepository {
    * @param id - Appointment UUID
    * @returns Appointment with all details or null
    */
-  async findByIdWithCompleteDetails(id: string): Promise<any | null> {
+  async findByIdWithCompleteDetails(id: string): Promise<Appointment | null> {
     return this.repository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
@@ -243,7 +243,7 @@ export class AppointmentRepository {
    *
    * Uses raw SQL provided by the user with optimized time logic.
    */
-  async findAppointmentsNeedingReminder(): Promise<any[]> {
+  async findAppointmentsNeedingReminder(): Promise<Array<Record<string, unknown>>> {
     const rawQuery = `
       SELECT
           a._id AS appointment_id,

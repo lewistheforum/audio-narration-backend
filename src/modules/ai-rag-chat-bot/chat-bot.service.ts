@@ -269,25 +269,34 @@ export class AiRagChatBotService {
    * Find All Clinic Managers
    *
    * Retrieves all active clinic manager accounts.
+   * OPTIMIZED: Uses single query with LEFT JOINs instead of N+1 Promise.all
    */
   async findAllClinicManagers() {
-    const [accounts] = await this.accountsService.findByRoleAndStatus(
-      AccountRole.CLINIC_MANAGER,
-      AccountStatus.ACTIVE,
-      0,
-      1000, // Fetch a large enough number to get "all"
-    );
+    const rawData = await this.dataSource.query(`
+      SELECT 
+        m._id as manager_id,
+        m.email as email,
+        m.username as username,
+        cmi.full_name as full_name,
+        cmi.clinic_branch_name as clinic_branch_name,
+        cmi.profile_picture as profile_picture,
+        ga.full_name as general_full_name,
+        ga.profile_picture as general_profile_picture
+      FROM accounts m
+      LEFT JOIN clinic_manager_information cmi ON cmi.account_id = m._id AND cmi.deleted_at IS NULL
+      LEFT JOIN general_accounts ga ON ga.account_id = m._id AND ga.deleted_at IS NULL
+      WHERE m.role = $1 AND m.status = $2 AND m.deleted_at IS NULL
+      ORDER BY cmi.full_name ASC
+    `, [AccountRole.CLINIC_MANAGER, AccountStatus.ACTIVE]);
 
-    // Map to simple response format if needed, or return AccountResponseDto
-    return Promise.all(
-      accounts.map(async (account) => {
-        const generalAccount =
-          await this.accountsService.findGeneralAccountByUserId(account._id);
-        const managerInfo =
-          await this.accountsService.getAccountInformationByRole(account._id);
-        return managerInfo;
-      }),
-    );
+    return rawData.map((row: Record<string, unknown>) => ({
+      accountId: row.manager_id,
+      email: row.email,
+      username: row.username,
+      fullName: row.full_name || row.general_full_name || row.email || 'Unknown',
+      clinicBranchName: row.clinic_branch_name || '',
+      profilePicture: row.profile_picture || row.general_profile_picture || null,
+    }));
   }
 
   /**
@@ -306,27 +315,38 @@ export class AiRagChatBotService {
    * Find Clinic Managers by Work Date
    *
    * Retrieves all clinic managers who have schedules on a specific date.
+   * OPTIMIZED: Uses single query with LEFT JOINs instead of N+1 Promise.all
    *
    * @param date - The work date to search for
    * @returns List of clinic managers
    */
   async findManagersByWorkDate(date: string) {
-    const schedules = await this.scheduleRepository.find({
-      where: { workDate: new Date(date) },
-      select: ['clinicId'],
-    });
+    const rawData = await this.dataSource.query(`
+      SELECT DISTINCT 
+        m._id as manager_id,
+        m.email as email,
+        m.username as username,
+        cmi.full_name as full_name,
+        cmi.clinic_branch_name as clinic_branch_name,
+        cmi.profile_picture as profile_picture,
+        ga.full_name as general_full_name,
+        ga.profile_picture as general_profile_picture
+      FROM employee_schedule es
+      JOIN accounts m ON m._id = es.clinic_id
+      LEFT JOIN clinic_manager_information cmi ON cmi.account_id = m._id AND cmi.deleted_at IS NULL
+      LEFT JOIN general_accounts ga ON ga.account_id = m._id AND ga.deleted_at IS NULL
+      WHERE es.work_date = $1 AND es.deleted_at IS NULL AND m.deleted_at IS NULL
+      ORDER BY cmi.full_name ASC
+    `, [date]);
 
-    const clinicIds = [...new Set(schedules.map((s) => s.clinicId))];
-
-    if (clinicIds.length === 0) {
-      return [];
-    }
-
-    return Promise.all(
-      clinicIds.map(async (id) => {
-        return this.accountsService.getAccountInformationByRole(id);
-      }),
-    );
+    return rawData.map((row: Record<string, unknown>) => ({
+      accountId: row.manager_id,
+      email: row.email,
+      username: row.username,
+      fullName: row.full_name || row.general_full_name || row.email || 'Unknown',
+      clinicBranchName: row.clinic_branch_name || '',
+      profilePicture: row.profile_picture || row.general_profile_picture || null,
+    }));
   }
 
   /**
@@ -398,7 +418,7 @@ export class AiRagChatBotService {
         .addSelect('config.discount', 'discount')
         .from('clinic_service_config', 'config')
         .where(
-          '(config._id IN (:...serviceIds) OR config.service_id IN (:...serviceIds))',
+          '(config._id = ANY(:serviceIds) OR config.service_id = ANY(:serviceIds))',
           { serviceIds },
         )
         .andWhere('config.clinic_id = :clinicId', { clinicId })

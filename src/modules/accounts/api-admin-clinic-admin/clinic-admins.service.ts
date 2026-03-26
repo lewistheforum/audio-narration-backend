@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { ClinicSubscriptionHistory } from '../../subscriptions/entities/clinic-subscription-history.entity';
@@ -55,6 +55,7 @@ export class ClinicAdminsService {
     @InjectRepository(Feedback)
     private readonly feedbackRepository: Repository<Feedback>,
     private readonly mailerService: MailerService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -124,8 +125,8 @@ export class ClinicAdminsService {
         .createQueryBuilder('grandchild')
         .select('grandchild.role', 'role')
         .addSelect('COUNT(grandchild._id)', 'count')
-        .where('grandchild.parentId IN (:...managerIds)', { managerIds })
-        .andWhere('grandchild.role IN (:...roles)', {
+        .where('grandchild.parentId = ANY(:managerIds)', { managerIds })
+        .andWhere('grandchild.role = ANY(:roles)', {
           roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
         })
         .groupBy('grandchild.role')
@@ -324,7 +325,7 @@ export class ClinicAdminsService {
       .leftJoinAndSelect('config.service', 'service')
       .leftJoin('service.category', 'category')
       .addSelect(['category._id', 'category.categoryName', 'category.type'])
-      .where('config.clinicId IN (:...managerIds)', { managerIds });
+      .where('config.clinicId = ANY(:managerIds)', { managerIds });
 
     if (search) {
       query.andWhere(
@@ -345,7 +346,7 @@ export class ClinicAdminsService {
       serviceName: c.service?.serviceName || 'Unknown',
       serviceCode: c.service?.serviceCode || '',
       description: c.service?.description,
-      categoryName: (c.service?.category as any)?.categoryName,
+      categoryName: c.service?.category?.categoryName || '',
       price: c.price,
       discount: c.discount,
       durationMin: c.durationMin,
@@ -368,84 +369,96 @@ export class ClinicAdminsService {
     id: string,
     banDescription?: string,
   ): Promise<ClinicAdminResponseDto> {
-    const account = await this.accountRepository.findOne({
-      where: { _id: id, role: AccountRole.CLINIC_ADMIN },
-      relations: ['clinicAdminInformation'],
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (!account) {
-      throw new NotFoundException(`Clinic admin with ID ${id} not found.`);
-    }
-
-    account.banCounts += 1;
-    account.banDescription = banDescription;
-
-    const clinicName =
-      account.clinicAdminInformation?.clinicName ||
-      account.username ||
-      'Clinic';
-
-    if (account.banCounts >= 3) {
-      // BAN EVERYTHING
-      account.status = AccountStatus.BAN;
-
-      // 1. Find Clinic Managers (Direct Children)
-      const managers = await this.accountRepository.find({
-        where: { parentId: id, role: AccountRole.CLINIC_MANAGER },
-        select: ['_id'],
+    try {
+      const account = await queryRunner.manager.findOne(Account, {
+        where: { _id: id, role: AccountRole.CLINIC_ADMIN },
+        relations: ['clinicAdminInformation'],
       });
-      const managerIds = managers.map((m) => m._id);
 
-      // 2. Find Doctors & Staff (Grandchildren - Children of Managers)
-      let grandChildrenIds: string[] = [];
-      if (managerIds.length > 0) {
-        const grandChildren = await this.accountRepository.find({
-          where: {
-            parentId: In(managerIds),
-            role: In([AccountRole.DOCTOR, AccountRole.CLINIC_STAFF]),
-          },
-          select: ['_id'],
-        });
-        grandChildrenIds = grandChildren.map((gc) => gc._id);
+      if (!account) {
+        throw new NotFoundException(`Clinic admin with ID ${id} not found.`);
       }
 
-      // 3. Update status for all linked accounts
-      const allAccountsToBan = [...managerIds, ...grandChildrenIds];
-      if (allAccountsToBan.length > 0) {
-        await this.accountRepository.update(
-          { _id: In(allAccountsToBan) },
-          { status: AccountStatus.BAN },
+      account.banCounts += 1;
+      account.banDescription = banDescription;
+
+      const clinicName =
+        account.clinicAdminInformation?.clinicName ||
+        account.username ||
+        'Clinic';
+
+      if (account.banCounts >= 3) {
+        account.status = AccountStatus.BAN;
+
+        const managers = await queryRunner.manager.find(Account, {
+          where: { parentId: id, role: AccountRole.CLINIC_MANAGER },
+          select: ['_id'],
+        });
+        const managerIds = managers.map((m) => m._id);
+
+        let grandChildrenIds: string[] = [];
+        if (managerIds.length > 0) {
+          const grandChildren = await queryRunner.manager
+            .createQueryBuilder()
+            .select('account._id', '_id')
+            .from(Account, 'account')
+            .where('account.parentId = ANY(:managerIds)', { managerIds })
+            .andWhere('account.role = ANY(:roles)', {
+              roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+            })
+            .getRawMany();
+          grandChildrenIds = grandChildren.map((gc: { _id: string }) => gc._id);
+        }
+
+        const allAccountsToBan = [...managerIds, ...grandChildrenIds];
+        if (allAccountsToBan.length > 0) {
+          await queryRunner.manager
+            .createQueryBuilder()
+            .update(Account)
+            .set({ status: AccountStatus.BAN })
+            .where('_id = ANY(:ids)', { ids: allAccountsToBan })
+            .execute();
+        }
+
+        await queryRunner.manager.save(Account, account);
+        await queryRunner.commitTransaction();
+
+        await this.mailerService.sendClinicAdminBannedEmail(
+          account.email,
+          clinicName,
+          banDescription || 'Multiple violations of terms of service.',
+        );
+      } else {
+        await queryRunner.manager.save(Account, account);
+        await queryRunner.commitTransaction();
+
+        await this.mailerService.sendClinicAdminWarningEmail(
+          account.email,
+          clinicName,
+          banDescription || 'Violation of terms of service.',
+          account.banCounts,
         );
       }
 
-      // Send Email
-      await this.mailerService.sendClinicAdminBannedEmail(
-        account.email,
-        clinicName,
-        banDescription || 'Multiple violations of terms of service.',
-      );
-    } else {
-      // WARNING only
-      await this.mailerService.sendClinicAdminWarningEmail(
-        account.email,
-        clinicName,
-        banDescription || 'Violation of terms of service.',
-        account.banCounts,
-      );
+      const banHistory = this.banHistoryRepository.create({
+        accountId: account._id,
+        banCounts: account.banCounts,
+        type: account.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
+        banDescription: banDescription,
+      });
+      await this.banHistoryRepository.save(banHistory);
+
+      return new ClinicAdminResponseDto(account);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    const savedAccount = await this.accountRepository.save(account);
-
-    // Create Ban History
-    const banHistory = this.banHistoryRepository.create({
-      accountId: savedAccount._id,
-      banCounts: savedAccount.banCounts,
-      type: savedAccount.banCounts >= 3 ? BanType.BANNED : BanType.WARNING,
-      banDescription: banDescription,
-    });
-    await this.banHistoryRepository.save(banHistory);
-
-    return new ClinicAdminResponseDto(savedAccount);
   }
 
   /**
@@ -456,71 +469,84 @@ export class ClinicAdminsService {
    * Sends unbanned email.
    */
   async unbanClinicAdmin(id: string): Promise<ClinicAdminResponseDto> {
-    const account = await this.accountRepository.findOne({
-      where: { _id: id, role: AccountRole.CLINIC_ADMIN },
-      relations: ['clinicAdminInformation'],
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (!account) {
-      throw new NotFoundException(`Clinic admin with ID ${id} not found.`);
-    }
-
-    if (account.status === AccountStatus.BAN) {
-      account.status = AccountStatus.ACTIVE;
-      account.banCounts = 0;
-      account.banDescription = null;
-
-      // 1. Find Clinic Managers
-      const managers = await this.accountRepository.find({
-        where: { parentId: id, role: AccountRole.CLINIC_MANAGER },
-        select: ['_id'],
+    try {
+      const account = await queryRunner.manager.findOne(Account, {
+        where: { _id: id, role: AccountRole.CLINIC_ADMIN },
+        relations: ['clinicAdminInformation'],
       });
-      const managerIds = managers.map((m) => m._id);
 
-      // 2. Find Doctors & Staff
-      let grandChildrenIds: string[] = [];
-      if (managerIds.length > 0) {
-        const grandChildren = await this.accountRepository.find({
-          where: {
-            parentId: In(managerIds),
-            role: In([AccountRole.DOCTOR, AccountRole.CLINIC_STAFF]),
-          },
+      if (!account) {
+        throw new NotFoundException(`Clinic admin with ID ${id} not found.`);
+      }
+
+      if (account.status === AccountStatus.BAN) {
+        account.status = AccountStatus.ACTIVE;
+        account.banCounts = 0;
+        account.banDescription = null;
+
+        const managers = await queryRunner.manager.find(Account, {
+          where: { parentId: id, role: AccountRole.CLINIC_MANAGER },
           select: ['_id'],
         });
-        grandChildrenIds = grandChildren.map((gc) => gc._id);
-      }
+        const managerIds = managers.map((m) => m._id);
 
-      // 3. Restore status for all linked accounts
-      const allAccountsToUnban = [...managerIds, ...grandChildrenIds];
-      if (allAccountsToUnban.length > 0) {
-        await this.accountRepository.update(
-          { _id: In(allAccountsToUnban) },
-          { status: AccountStatus.ACTIVE },
+        let grandChildrenIds: string[] = [];
+        if (managerIds.length > 0) {
+          const grandChildren = await queryRunner.manager
+            .createQueryBuilder()
+            .select('account._id', '_id')
+            .from(Account, 'account')
+            .where('account.parentId = ANY(:managerIds)', { managerIds })
+            .andWhere('account.role = ANY(:roles)', {
+              roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+            })
+            .getRawMany();
+          grandChildrenIds = grandChildren.map((gc: { _id: string }) => gc._id);
+        }
+
+        const allAccountsToUnban = [...managerIds, ...grandChildrenIds];
+        if (allAccountsToUnban.length > 0) {
+          await queryRunner.manager
+            .createQueryBuilder()
+            .update(Account)
+            .set({ status: AccountStatus.ACTIVE })
+            .where('_id = ANY(:ids)', { ids: allAccountsToUnban })
+            .execute();
+        }
+
+        await queryRunner.manager.save(Account, account);
+        await queryRunner.commitTransaction();
+
+        const clinicName =
+          account.clinicAdminInformation?.clinicName ||
+          account.username ||
+          'Clinic';
+        await this.mailerService.sendClinicAdminUnbannedEmail(
+          account.email,
+          clinicName,
         );
+      } else {
+        await queryRunner.rollbackTransaction();
       }
 
-      // Send Email
-      const clinicName =
-        account.clinicAdminInformation?.clinicName ||
-        account.username ||
-        'Clinic';
-      await this.mailerService.sendClinicAdminUnbannedEmail(
-        account.email,
-        clinicName,
-      );
+      const banHistory = this.banHistoryRepository.create({
+        accountId: account._id,
+        banCounts: 0,
+        type: BanType.UNBANNED,
+      });
+      await this.banHistoryRepository.save(banHistory);
+
+      return new ClinicAdminResponseDto(account);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    const savedAccount = await this.accountRepository.save(account);
-
-    // Create Unban History
-    const banHistory = this.banHistoryRepository.create({
-      accountId: savedAccount._id,
-      banCounts: 0,
-      type: BanType.UNBANNED,
-    });
-    await this.banHistoryRepository.save(banHistory);
-
-    return new ClinicAdminResponseDto(savedAccount);
   }
 
   /**
@@ -569,7 +595,7 @@ export class ClinicAdminsService {
       )
       .leftJoin('appointment.patient', 'patient')
       .leftJoin('patient.generalAccount', 'patientGeneral')
-      .where('feedback.clinicId IN (:...managerIds)', { managerIds });
+      .where('feedback.clinicId = ANY(:managerIds)', { managerIds });
 
     const rawData = await rawQuery
       .select([

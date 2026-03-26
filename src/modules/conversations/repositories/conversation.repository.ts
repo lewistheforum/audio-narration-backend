@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ArrayContains, In } from 'typeorm';
+import { Repository, ArrayContains } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
+import { AccountRole } from '../../accounts/enums';
+import { Account } from '../../accounts/entities/accounts.entity';
 
 /**
  * Conversation Repository
@@ -203,5 +205,447 @@ export class ConversationRepository {
     return allConversations.filter(
       (conv) => conv.deletedBy && conv.deletedBy.includes(userId),
     );
+  }
+
+  async findConversationsWithParticipantsByUserId(
+    userId: string,
+  ): Promise<any[]> {
+    return this.conversationRepository
+      .createQueryBuilder('conv')
+      .leftJoinAndSelect('conv.lastMessage', 'lastMessage')
+      .where('conv.participants @> :userId', { userId: [userId] })
+      .orderBy('conv.updatedAt', 'DESC')
+      .getMany();
+  }
+
+  async findConversationsWithParticipants(
+    participantIds: string[],
+  ): Promise<any[]> {
+    return this.conversationRepository
+      .createQueryBuilder('conv')
+      .leftJoinAndSelect('conv.lastMessage', 'lastMessage')
+      .where('conv.participants @> :participantIds', {
+        participantIds,
+      })
+      .orderBy('conv.updatedAt', 'DESC')
+      .getMany();
+  }
+
+  async findAdminChatlist(): Promise<any[]> {
+    return this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .where('account.role = ANY(:roles)', {
+        roles: [AccountRole.ADMIN, AccountRole.CLINIC_ADMIN],
+      })
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id as id',
+        'account.email as email',
+        'account.username as username',
+        'account.role as role',
+        'account.status as status',
+        'account.isEmailVerified as isEmailVerified',
+        'account.createdAt as createdAt',
+        'account.updatedAt as updatedAt',
+        'generalAccount',
+        'clinicAdminInfo',
+      ])
+      .getRawMany();
+  }
+
+  async findClinicAdminChatlist(clinicAdminId: string): Promise<any[]> {
+    return this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .where(
+        '(account.role = :adminRole AND account._id != :clinicAdminId) OR (account.role = :managerRole AND account.parentId = :clinicAdminId)',
+        {
+          adminRole: AccountRole.ADMIN,
+          clinicAdminId,
+          managerRole: AccountRole.CLINIC_MANAGER,
+        },
+      )
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id as id',
+        'account.email as email',
+        'account.username as username',
+        'account.role as role',
+        'account.status as status',
+        'account.isEmailVerified as isEmailVerified',
+        'account.createdAt as createdAt',
+        'account.updatedAt as updatedAt',
+        'generalAccount',
+        'clinicManagerInfo',
+      ])
+      .getRawMany();
+  }
+
+  async findClinicManagerRelatedAccounts(managerId: string): Promise<any[]> {
+    return this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where(
+        '(account.role = :adminRole) OR (account.role = :managerRole AND account._id = :managerId) OR (account.role = ANY(:staffRoles) AND account.parentId = :managerId)',
+        {
+          adminRole: AccountRole.ADMIN,
+          managerRole: AccountRole.CLINIC_MANAGER,
+          managerId,
+          staffRoles: [AccountRole.CLINIC_STAFF, AccountRole.DOCTOR],
+        },
+      )
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id as id',
+        'account.email as email',
+        'account.username as username',
+        'account.role as role',
+        'account.status as status',
+        'account.parentId as parentId',
+        'account.isEmailVerified as isEmailVerified',
+        'account.createdAt as createdAt',
+        'account.updatedAt as updatedAt',
+        'generalAccount',
+        'clinicAdminInfo',
+        'clinicManagerInfo',
+        'clinicStaffInfo',
+        'doctorInfo',
+      ])
+      .getRawMany();
+  }
+
+  async findStaffRelatedAccounts(staffId: string): Promise<any[]> {
+    const hierarchy = await this.conversationRepository.manager
+      .createQueryBuilder(Account, 'staff')
+      .leftJoin('staff.clinicStaffInformation', 'staffInfo')
+      .leftJoin('clinic_manager_information', 'managerInfo', 'managerInfo._id = staff.parent_id')
+      .leftJoin('clinic_admin_information', 'adminInfo', 'adminInfo._id = managerInfo.clinic_admin_id')
+      .select([
+        'staff._id as staff_id',
+        'staff.parent_id as manager_id',
+        'managerInfo.clinic_admin_id as admin_id',
+      ])
+      .where('staff._id = :staffId', { staffId })
+      .andWhere('staff.deletedAt IS NULL')
+      .getRawOne();
+
+    if (!hierarchy || !hierarchy.manager_id) {
+      return [];
+    }
+
+    const { manager_id, admin_id } = hierarchy;
+
+    return this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .where(
+        '(account.role = :adminRole AND account._id = :adminId) OR (account.role = :managerRole AND account._id = :managerId) OR (account.role = ANY(:staffRoles) AND account.parentId = :managerId AND account._id != :staffId)',
+        {
+          adminRole: AccountRole.ADMIN,
+          adminId: admin_id || '00000000-0000-0000-0000-000000000000',
+          managerRole: AccountRole.CLINIC_MANAGER,
+          managerId: manager_id,
+          staffRoles: [AccountRole.CLINIC_STAFF, AccountRole.DOCTOR],
+          staffId,
+        },
+      )
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id as id',
+        'account.email as email',
+        'account.username as username',
+        'account.role as role',
+        'account.status as status',
+        'account.parentId as parentId',
+        'account.isEmailVerified as isEmailVerified',
+        'account.createdAt as createdAt',
+        'account.updatedAt as updatedAt',
+        'generalAccount',
+        'clinicAdminInfo',
+        'clinicManagerInfo',
+        'clinicStaffInfo',
+        'doctorInfo',
+      ])
+      .getRawMany();
+  }
+
+  async findConversationsWithParticipantsAndMessages(
+    participantIds: string[],
+    excludeDeletedByAll: boolean = true,
+  ): Promise<any[]> {
+    const query = this.conversationRepository
+      .createQueryBuilder('conv')
+      .where('conv.participants @> :participantIds', { participantIds })
+      .orderBy('conv.updatedAt', 'DESC');
+
+    const conversations = await query.getMany();
+
+    if (conversations.length === 0) {
+      return [];
+    }
+
+    const allParticipantIds = new Set<string>();
+    const conversationParticipantMap = new Map<string, string[]>();
+    
+    for (const conv of conversations) {
+      const ids = conv.participants || [];
+      conversationParticipantMap.set(conv._id, ids);
+      ids.forEach((id: string) => allParticipantIds.add(id));
+    }
+
+    const participantIdArray = Array.from(allParticipantIds);
+    const accounts = await this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
+      .where('account._id = ANY(:participantIds)', { participantIds })
+      .andWhere('account.deletedAt IS NULL')
+      .getMany();
+
+    const accountMap = new Map<string, any>();
+    for (const acc of accounts) {
+      accountMap.set(acc._id, acc);
+    }
+
+    const conversationIds = conversations.map((c) => c._id);
+    const lastMessages = await this.conversationRepository.manager
+      .createQueryBuilder('message', 'message')
+      .where('message.conversation_id = ANY(:convIds)', { convIds: conversationIds })
+      .andWhere(
+        'message._id = (SELECT m._id FROM messages m WHERE m.conversation_id = message.conversation_id ORDER BY m.created_at DESC LIMIT 1)',
+      )
+      .getMany();
+
+    const lastMessageMap = new Map<string, any>();
+    for (const msg of lastMessages) {
+      if (!lastMessageMap.has(msg.conversationId)) {
+        lastMessageMap.set(msg.conversationId, msg);
+      }
+    }
+
+    const result = [];
+    for (const conv of conversations) {
+      const participantIds_in_conv = conversationParticipantMap.get(conv._id) || [];
+      
+      if (excludeDeletedByAll && conv.deletedBy) {
+        const allDeleted = participantIds.every((pId) => 
+          conv.deletedBy.includes(pId)
+        );
+        if (allDeleted) continue;
+      }
+
+      const participants = participantIds_in_conv
+        .map((pId: string) => accountMap.get(pId))
+        .filter(Boolean)
+        .map((acc: any) => {
+          const profileInfo =
+            acc.clinicAdminInformation ||
+            acc.clinicManagerInformation ||
+            acc.clinicStaffInformation ||
+            acc.doctorInformation ||
+            acc.generalAccount ||
+            null;
+
+          return {
+            id: acc._id,
+            email: acc.email,
+            username: acc.username,
+            role: acc.role,
+            status: acc.status,
+            isEmailVerified: acc.isEmailVerified,
+            createdAt: acc.createdAt,
+            updatedAt: acc.updatedAt,
+            profileInformation: profileInfo,
+          };
+        });
+
+      result.push({
+        id: conv._id,
+        title: conv.title,
+        description: conv.description,
+        participants,
+        lastMessage: lastMessageMap.get(conv._id) || null,
+        deletedBy: conv.deletedBy || [],
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt,
+      });
+    }
+
+    return result;
+  }
+
+  async findAllConversationsOptimized(): Promise<any[]> {
+    const conversations = await this.conversationRepository.find({
+      order: { updatedAt: 'DESC' },
+    });
+
+    if (conversations.length === 0) {
+      return [];
+    }
+
+    const allParticipantIds = new Set<string>();
+    const conversationParticipantMap = new Map<string, string[]>();
+    
+    for (const conv of conversations) {
+      const ids = conv.participants || [];
+      conversationParticipantMap.set(conv._id, ids);
+      ids.forEach((id: string) => allParticipantIds.add(id));
+    }
+
+    const participantIdArray = Array.from(allParticipantIds);
+    const accounts = await this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
+      .where('account._id = ANY(:participantIds)', { participantIds: participantIdArray })
+      .andWhere('account.deletedAt IS NULL')
+      .getMany();
+
+    const accountMap = new Map<string, any>();
+    for (const acc of accounts) {
+      accountMap.set(acc._id, acc);
+    }
+
+    const conversationIds = conversations.map((c) => c._id);
+    const lastMessages = await this.conversationRepository.manager
+      .createQueryBuilder('message', 'message')
+      .distinctOn(['message.conversation_id'])
+      .where('message.conversation_id = ANY(:convIds)', { convIds: conversationIds })
+      .orderBy('message.conversation_id', 'DESC')
+      .addOrderBy('message.created_at', 'DESC')
+      .getMany();
+
+    const lastMessageMap = new Map<string, any>();
+    for (const msg of lastMessages) {
+      if (!lastMessageMap.has(msg.conversationId)) {
+        lastMessageMap.set(msg.conversationId, msg);
+      }
+    }
+
+    const result = [];
+    for (const conv of conversations) {
+      const participantIds_in_conv = conversationParticipantMap.get(conv._id) || [];
+      
+      const participants = participantIds_in_conv
+        .map((pId: string) => accountMap.get(pId))
+        .filter(Boolean)
+        .map((acc: any) => {
+          const profileInfo =
+            acc.clinicAdminInformation ||
+            acc.clinicManagerInformation ||
+            acc.clinicStaffInformation ||
+            acc.doctorInformation ||
+            acc.generalAccount ||
+            null;
+
+          return {
+            id: acc._id,
+            email: acc.email,
+            username: acc.username,
+            role: acc.role,
+            status: acc.status,
+            isEmailVerified: acc.isEmailVerified,
+            createdAt: acc.createdAt,
+            updatedAt: acc.updatedAt,
+            profileInformation: profileInfo,
+          };
+        });
+
+      result.push({
+        id: conv._id,
+        title: conv.title,
+        description: conv.description,
+        participants,
+        lastMessage: lastMessageMap.get(conv._id) || null,
+        deletedBy: conv.deletedBy || [],
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt,
+      });
+    }
+
+    return result;
+  }
+
+  async findConversationByIdWithParticipants(conversationId: string): Promise<any | null> {
+    const conv = await this.findConversationById(conversationId);
+    if (!conv) return null;
+
+    const participantIds = conv.participants || [];
+    
+    const accounts = await this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
+      .where('account._id = ANY(:participantIds)', { participantIds })
+      .andWhere('account.deletedAt IS NULL')
+      .getMany();
+
+    const accountMap = new Map<string, any>();
+    for (const acc of accounts) {
+      accountMap.set(acc._id, acc);
+    }
+
+    const lastMessage = await this.conversationRepository.manager
+      .createQueryBuilder('message', 'message')
+      .where('message.conversation_id = :convId', { convId: conversationId })
+      .orderBy('message.created_at', 'DESC')
+      .limit(1)
+      .getOne();
+
+    const participants = participantIds
+      .map((pId: string) => accountMap.get(pId))
+      .filter(Boolean)
+      .map((acc: any) => {
+        const profileInfo =
+          acc.clinicAdminInformation ||
+          acc.clinicManagerInformation ||
+          acc.clinicStaffInformation ||
+          acc.doctorInformation ||
+          acc.generalAccount ||
+          null;
+
+        return {
+          id: acc._id,
+          email: acc.email,
+          username: acc.username,
+          role: acc.role,
+          status: acc.status,
+          isEmailVerified: acc.isEmailVerified,
+          createdAt: acc.createdAt,
+          updatedAt: acc.updatedAt,
+          profileInformation: profileInfo,
+        };
+      });
+
+    return {
+      id: conv._id,
+      title: conv.title,
+      description: conv.description,
+      participants,
+      lastMessage,
+      deletedBy: conv.deletedBy || [],
+      createdAt: conv.createdAt,
+      updatedAt: conv.updatedAt,
+    };
   }
 }

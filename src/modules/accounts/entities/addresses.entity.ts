@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { GoogleIframe } from './google_iframe.entity';
@@ -17,6 +18,9 @@ import { GoogleIframe } from './google_iframe.entity';
  * Stores address information for accounts
  */
 @Entity('addresses')
+@Index('idx_addresses_account_id', ['accountId'])
+@Index('idx_addresses_province', ['province'])
+@Index('idx_addresses_district', ['district'])
 export class Address {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -7,6 +7,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ShiftType } from '../enums';
@@ -19,6 +20,7 @@ import { OneToMany } from 'typeorm';
  * Stores shift information for clinics
  */
 @Entity('clinic_shift')
+@Index('idx_clinic_shift_clinic_id', ['clinicId'])
 export class ClinicShift {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

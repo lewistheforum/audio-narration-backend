@@ -8,6 +8,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 
@@ -18,6 +19,8 @@ import { Account } from './accounts.entity';
  * Linked to the main Account entity via account_id
  */
 @Entity('general_accounts')
+@Index('idx_general_accounts_account_id', ['accountId'])
+@Index('idx_general_accounts_full_name', ['fullName'])
 export class GeneralAccount {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

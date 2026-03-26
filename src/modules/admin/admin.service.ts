@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { subtractFromVietnamTime } from 'src/common/utils/date.util';
 import { AdminRegistrationRepository } from './repositories/admin-registration.repository';
 import { ClinicsLegalDocumentsRepository } from '../accounts/repositories/clinics-legal-documents.repository';
@@ -18,6 +18,8 @@ import { RegistrationDetailResponseDto } from './dto';
 import { LegalDocumentVerificationStatus } from '../accounts/enums/legal-document-verification-status.enum';
 import { RegistrationStatus } from '../subscriptions/enums/subscription-status.enum';
 import { ClinicsLegalDocuments } from '../accounts/entities/clinics_legal_documents.entity';
+import { ActiveClinicAdminDto } from './dto/active-clinic-admin.dto';
+import { AdminAccountDto } from './dto/admin-account.dto';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import {
   Address,
@@ -424,7 +426,22 @@ export class AdminService {
    * 1. Delete all records from knowledge_base
    * 2. Trigger sync on AI backend
    */
-  async syncKnowledgeBase(): Promise<any> {
+  async syncKnowledgeBase(): Promise<{
+    statusCode: number;
+    message: string;
+    data: {
+      clinic_services_synced: number;
+      doctor_profiles_synced: number;
+      clinic_info_synced: number;
+      staff_info_synced: number;
+      blogs_synced: number;
+      feedbacks_synced: number;
+      user_info_synced: number;
+      doctor_schedules_synced: number;
+      clinic_working_hours_synced: number;
+      total_synced: number;
+    };
+  }> {
     // Step 1: Delete all current records in table knowledge base
     await this.dataSource.query('DELETE FROM knowledge_base');
 
@@ -491,7 +508,11 @@ export class AdminService {
     }
   }
 
-  async syncKnowledgeBaseMedicine(): Promise<any> {
+  async syncKnowledgeBaseMedicine(): Promise<{
+    statusCode: number;
+    message: string;
+    data: Record<string, unknown>;
+  }> {
     // Step 1: Delete all current records in table knowledge base
     await this.dataSource.query('DELETE FROM knowledge_base_medicines');
 
@@ -660,61 +681,88 @@ export class AdminService {
         const childIds = childAccounts.map((c) => c._id);
         const allAccountIds = [clinicId, ...childIds];
 
-        // 1. Delete google_iframes (via addresses)
+        // 1. Delete google_iframes (via addresses) using = ANY()
         const addresses = await queryRunner.manager.find(Address, {
-          where: { accountId: In(allAccountIds) },
+          where: { accountId: clinicId },
           select: ['_id'],
         });
         if (addresses.length > 0) {
           const addressIds = addresses.map((a) => a._id);
-          await queryRunner.manager.delete(GoogleIframe, {
-            addressId: In(addressIds),
-          });
+          await queryRunner.manager
+            .createQueryBuilder()
+            .delete()
+            .from(GoogleIframe)
+            .where('address_id = ANY(:ids)', { ids: addressIds })
+            .execute();
         }
 
-        // 2. Delete addresses
-        await queryRunner.manager.delete(Address, {
-          accountId: In(allAccountIds),
-        });
+        // 2. Delete addresses using = ANY()
+        await queryRunner.manager
+          .createQueryBuilder()
+          .delete()
+          .from(Address)
+          .where('account_id = ANY(:ids)', { ids: allAccountIds })
+          .execute();
 
         // 3. Delete clinic_admin_information
-        await queryRunner.manager.delete(ClinicAdminInformation, {
-          accountId: clinicId,
-        });
+        await queryRunner.manager
+          .createQueryBuilder()
+          .delete()
+          .from(ClinicAdminInformation)
+          .where('account_id = :id', { id: clinicId })
+          .execute();
 
-        // 4. Delete clinics_legal_documents (for all accounts)
-        await queryRunner.manager.delete(ClinicsLegalDocuments, {
-          accountId: In(allAccountIds),
-        });
+        // 4. Delete clinics_legal_documents (for all accounts) using = ANY()
+        await queryRunner.manager
+          .createQueryBuilder()
+          .delete()
+          .from(ClinicsLegalDocuments)
+          .where('account_id = ANY(:ids)', { ids: allAccountIds })
+          .execute();
 
-        // 5. Delete clinic_manager_information (for child accounts)
+        // 5. Delete clinic_manager_information (for child accounts) using = ANY()
         if (childIds.length > 0) {
-          await queryRunner.manager.delete(ClinicManagerInformation, {
-            accountId: In(childIds),
-          });
+          await queryRunner.manager
+            .createQueryBuilder()
+            .delete()
+            .from(ClinicManagerInformation)
+            .where('account_id = ANY(:ids)', { ids: childIds })
+            .execute();
         }
 
-        // 6. Delete code_verification
-        await queryRunner.manager.delete(CodeVerification, {
-          accountId: In(allAccountIds),
-        });
+        // 6. Delete code_verification using = ANY()
+        await queryRunner.manager
+          .createQueryBuilder()
+          .delete()
+          .from(CodeVerification)
+          .where('account_id = ANY(:ids)', { ids: allAccountIds })
+          .execute();
 
         // 7. Delete clinic_subscription
-        await queryRunner.manager.delete(ClinicSubscription, {
-          clinicId: clinicId,
-        });
+        await queryRunner.manager
+          .createQueryBuilder()
+          .delete()
+          .from(ClinicSubscription)
+          .where('clinic_id = :id', { id: clinicId })
+          .execute();
 
-        // 8. Delete child accounts (managers)
+        // 8. Delete child accounts (managers) using = ANY()
         if (childIds.length > 0) {
-          await queryRunner.manager.delete(Account, {
-            _id: In(childIds),
-          });
+          await queryRunner.manager
+            .createQueryBuilder()
+            .delete()
+            .from(Account)
+            .where('_id = ANY(:ids)', { ids: childIds })
+            .execute();
         }
 
         // 9. Delete the clinic admin account
-        await queryRunner.manager.delete(Account, {
-          _id: clinicId,
-        });
+        await queryRunner.manager
+          .createQueryBuilder()
+          .delete()
+          .from(Account)
+          .where('_id = :id', { id: clinicId })
+          .execute();
 
         await queryRunner.commitTransaction();
         detail.deleted = true;
@@ -741,7 +789,7 @@ export class AdminService {
   /**
    * Get all active clinic admins
    */
-  async getActiveClinicAdmins(): Promise<any[]> {
+  async getActiveClinicAdmins(): Promise<ActiveClinicAdminDto[]> {
     const activeAdmins = await this.accountRepository.find({
       where: {
         role: AccountRole.CLINIC_ADMIN,

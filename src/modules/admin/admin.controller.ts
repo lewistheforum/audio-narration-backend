@@ -46,6 +46,11 @@ import {
   RejectRegistrationDto,
   ApprovalSuccessResponseDto,
   RejectionSuccessResponseDto,
+  CleanupResponseDto,
+  ActiveClinicAdminsResponseDto,
+  AdminAccountsResponseDto,
+  KnowledgeBaseSyncResponseDto,
+  KnowledgeBaseMedicineSyncResponseDto,
 } from './dto';
 
 /**
@@ -604,14 +609,14 @@ export class AdminController {
   @Post('knowledge-base/sync')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Sync Knowledge Base' })
-  async syncKnowledgeBase(): Promise<any> {
+  async syncKnowledgeBase(): Promise<KnowledgeBaseSyncResponseDto> {
     return await this.adminService.syncKnowledgeBase();
   }
 
   @Post('knowledge-base/sync-medicines')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Sync Knowledge Base Medicines' })
-  async syncKnowledgeBaseMedicines(): Promise<any> {
+  async syncKnowledgeBaseMedicines(): Promise<KnowledgeBaseMedicineSyncResponseDto> {
     return await this.adminService.syncKnowledgeBaseMedicine();
   }
 
@@ -626,10 +631,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Cleanup stale pending registrations older than 6 months',
   })
-  async cleanupStaleRegistrations(): Promise<{
-    data: any;
-    message: string;
-  }> {
+  async cleanupStaleRegistrations(): Promise<CleanupResponseDto> {
     const result = await this.adminService.cleanupStaleRegistrations();
     return {
       data: result,
@@ -643,7 +645,7 @@ export class AdminController {
   @Get('clinic-accounts/active-subscriptions')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get all active clinic admin accounts' })
-  async getActiveClinicAdmins(): Promise<{ data: any; message: string }> {
+  async getActiveClinicAdmins(): Promise<ActiveClinicAdminsResponseDto> {
     const result = await this.adminService.getActiveClinicAdmins();
     return {
       data: result,
@@ -657,7 +659,7 @@ export class AdminController {
   @Get('admin-accounts')
   @Roles(AccountRole.ADMIN)
   @ApiOperation({ summary: 'Get all admin accounts with detail information' })
-  async getAdminAccounts(): Promise<{ data: any; message: string }> {
+  async getAdminAccounts(): Promise<AdminAccountsResponseDto> {
     const result = await this.adminService.getAdminAccounts();
     return {
       data: result,

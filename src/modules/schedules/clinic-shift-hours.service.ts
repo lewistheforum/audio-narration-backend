@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { ClinicShiftHour } from './entities/clinic-shift-hour.entity';
 import { ClinicShift } from './entities/clinic-shift.entity';
 
@@ -20,6 +20,7 @@ export class ClinicShiftHoursService {
         private readonly shiftRepository: Repository<ClinicShift>,
         @InjectRepository(Account)
         private readonly accountRepository: Repository<Account>,
+        private readonly dataSource: DataSource,
     ) { }
 
     /**
@@ -71,6 +72,7 @@ export class ClinicShiftHoursService {
 
     /**
      * Apply Configuration (Generate Slots)
+     * Uses transaction to ensure atomicity: soft delete + bulk insert must succeed or rollback together
      */
     async applyConfiguration(user: any, configDto: ConfigureShiftDto) {
         const clinicId = await this.resolveClinicId(user);
@@ -93,9 +95,8 @@ export class ClinicShiftHoursService {
         const stepMins = configDto.step * 60;
         if (stepMins <= 0) throw new BadRequestException('Step must be positive');
 
-        await this.shiftHourRepository.softDelete({ shiftId: configDto.shiftId });
-
-        const newSlots = [];
+        // Generate slot times first (outside transaction - read-only calculation)
+        const newSlots: Array<{ shiftId: string; startHour: string; endHour: string; limit: number }> = [];
         let currentMins = startTotalMins;
 
         while (currentMins + stepMins <= endTotalMins) {
@@ -107,19 +108,27 @@ export class ClinicShiftHoursService {
             const endH = Math.floor(slotEndMins / 60).toString().padStart(2, '0');
             const endM = (slotEndMins % 60).toString().padStart(2, '0');
 
-            newSlots.push(this.shiftHourRepository.create({
+            newSlots.push({
                 shiftId: configDto.shiftId,
                 startHour: `${startH}:${startM}`,
                 endHour: `${endH}:${endM}`,
                 limit: configDto.limit
-            }));
+            });
 
             currentMins += stepMins;
         }
 
-        if (newSlots.length > 0) {
-            await this.shiftHourRepository.save(newSlots);
-        }
+        // Use transaction for atomicity: delete old + insert new
+        await this.dataSource.transaction(async (manager) => {
+            // Soft delete old slots
+            await manager.softDelete(ClinicShiftHour, { shiftId: configDto.shiftId });
+
+            // Insert new slots
+            if (newSlots.length > 0) {
+                const entities = newSlots.map((slot) => manager.create(ClinicShiftHour, slot));
+                await manager.save(ClinicShiftHour, entities);
+            }
+        });
 
         return {
             message: 'Configuration applied successfully',
@@ -146,7 +155,7 @@ export class ClinicShiftHoursService {
         const shiftIds = shifts.map(s => s._id);
 
         const allSlots = await this.shiftHourRepository.createQueryBuilder('hour')
-            .where('hour.shiftId IN (:...ids)', { ids: shiftIds })
+            .where('hour.shiftId = ANY(:ids)', { ids: shiftIds })
             .withDeleted()
             .orderBy('hour.createdAt', 'DESC')
             .getMany();

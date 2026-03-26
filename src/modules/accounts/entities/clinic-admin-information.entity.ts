@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { encryptionTransformer } from '../../../common/transformers/encryption.transformer';
@@ -18,6 +19,8 @@ import { encryptionTransformer } from '../../../common/transformers/encryption.t
  * One-to-one relationship with Account entity
  */
 @Entity('clinic_admin_information')
+@Index('idx_clinic_admin_account_id', ['accountId'])
+@Index('idx_clinic_admin_clinic_name', ['clinicName'])
 export class ClinicAdminInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

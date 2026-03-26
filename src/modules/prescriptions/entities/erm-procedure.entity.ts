@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { BodySide, ImmediateOutcome } from '../enums';
@@ -17,6 +18,7 @@ import { BodySide, ImmediateOutcome } from '../enums';
  * Stores medical procedure records
  */
 @Entity('erm_procedures')
+@Index('idx_erm_procedure_erm_id', ['ermId'])
 export class ERMProcedure {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

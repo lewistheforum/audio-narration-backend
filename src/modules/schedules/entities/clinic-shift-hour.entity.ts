@@ -7,6 +7,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { ClinicShift } from './clinic-shift.entity';
 
@@ -16,6 +17,7 @@ import { ClinicShift } from './clinic-shift.entity';
  * Stores shift hour details for clinic shifts
  */
 @Entity('clinic_shift_hour')
+@Index('idx_clinic_shift_hour_shift_id', ['shiftId'])
 export class ClinicShiftHour {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

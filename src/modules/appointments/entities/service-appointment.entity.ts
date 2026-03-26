@@ -8,6 +8,7 @@ import {
   ManyToOne,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { ClinicServiceConfig } from '../../service-configs/entities/clinic-service-config.entity';
 import { AppointmentPackage } from './appointment-package.entity';
@@ -19,6 +20,8 @@ import { ERM } from '../../prescriptions/entities/erm.entity';
  * Stores services included in appointment packages
  */
 @Entity('service_appointments')
+@Index('idx_service_appt_clinic_service', ['clinicServiceId'])
+@Index('idx_service_appt_package', ['appointmentPackageId'])
 export class ServiceAppointment {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

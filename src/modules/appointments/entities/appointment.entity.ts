@@ -21,6 +21,13 @@ import { AppointmentStatus } from '../enums';
  */
 @Entity('appointments')
 @Index('idx_appointments_shift_date_status', ['clinicShiftHourId', 'appointmentDate', 'status'])
+@Index('idx_appointments_patient_deleted', ['patientId', 'deletedAt'])
+@Index('idx_appointments_clinic_deleted', ['clinicId', 'deletedAt'])
+@Index('idx_appointments_doctor_deleted', ['doctorId', 'deletedAt'])
+@Index('idx_appointments_status_date', ['status', 'appointmentDate'])
+@Index('idx_appointments_created_at', ['createdAt'])
+@Index('idx_appointments_clinic_date', ['clinicId', 'appointmentDate'])
+@Index('idx_appointments_patient_id', ['patientId'])
 export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

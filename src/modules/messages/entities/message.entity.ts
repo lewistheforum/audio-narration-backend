@@ -7,12 +7,22 @@ import {
   ManyToOne,
   JoinColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { Conversation } from '../../conversations/entities/conversation.entity';
 import { MessageType } from '../enums';
 
 @Entity('messages')
+@Index('idx_messages_conversation_id', ['conversationId'])
+@Index('idx_messages_sender_id', ['senderId'])
+@Index('idx_messages_receiver_id', ['receiverId'])
+@Index('idx_messages_created_at', ['createdAt'])
+@Index('idx_messages_conversation_created', ['conversationId', 'createdAt'])
+@Index('idx_messages_sender_receiver', ['senderId', 'receiverId'])
+@Index('idx_messages_deleted_by', ['deletedBy'])
+@Index('idx_messages_conversation_deleted_by', ['conversationId', 'deletedBy'])
+@Index('idx_messages_conversation_sender', ['conversationId', 'senderId'])
 export class Message {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

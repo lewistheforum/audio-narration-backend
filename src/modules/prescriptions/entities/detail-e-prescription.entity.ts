@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { EPrescription } from './e-prescription.entity';
 import { Medicine } from './medicine.entity';
@@ -17,6 +18,8 @@ import { Medicine } from './medicine.entity';
  * Stores detailed medicine information for prescriptions
  */
 @Entity('detail_e_prescriptions')
+@Index('idx_detail_e_prescription_e_prescription_id', ['ePrescriptionId'])
+@Index('idx_detail_e_prescription_medicine_id', ['medicineId'])
 export class DetailEPrescription {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -7,11 +7,14 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { AiConversation } from './ai-conversation.entity';
 import { Account } from 'src/modules/accounts/entities';
 
 @Entity('ai_messages')
+@Index('idx_ai_message_conversation_id', ['conversationId'])
+@Index('idx_ai_message_sender_id', ['senderId'])
 export class AiMessage {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

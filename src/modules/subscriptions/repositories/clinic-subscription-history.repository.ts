@@ -48,4 +48,29 @@ export class ClinicSubscriptionHistoryRepository extends Repository<ClinicSubscr
     const historyRecord = this.create(historyData);
     return this.save(historyRecord);
   }
+
+  /**
+   * Find paginated history with services joined (optimized for N+1 prevention)
+   * Fetches history records and services in a single query using LEFT JOIN
+   *
+   * @param {string} clinicId - Clinic account UUID
+   * @param {number} skip - Number of records to skip
+   * @param {number} take - Number of records to return
+   * @returns {Promise<[ClinicSubscriptionHistory[], number]>} History records with total count
+   */
+  async findWithServicesByClinicId(
+    clinicId: string,
+    skip: number,
+    take: number,
+  ): Promise<[ClinicSubscriptionHistory[], number]> {
+    const queryBuilder = this.createQueryBuilder('history')
+      .leftJoinAndSelect('history.service', 'service')
+      .where('history.clinicId = :clinicId', { clinicId })
+      .andWhere('history.deletedAt IS NULL')
+      .orderBy('history.createdAt', 'DESC')
+      .skip(skip)
+      .take(take);
+
+    return queryBuilder.getManyAndCount();
+  }
 }

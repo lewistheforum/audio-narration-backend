@@ -70,7 +70,7 @@ export class MessagesService {
 
   async findAll(): Promise<MessageResponseDto[]> {
     const messages = await this.messageRepository.findAllMessages();
-    return messages.map((message) => new MessageResponseDto(message as any));
+    return messages.map((message) => new MessageResponseDto(message));
   }
 
   async findOne(id: string): Promise<MessageResponseDto> {

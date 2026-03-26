@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { AiMessage } from './ai-message.entity';
 
 @Entity('ai_conversations')
+@Index('idx_ai_conversation_deleted_by', ['deletedBy'])
 export class AiConversation {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   _id: string;

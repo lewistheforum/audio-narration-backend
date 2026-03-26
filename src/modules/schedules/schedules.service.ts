@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import {
   addToVietnamTime,
   getStartOfDay,
@@ -89,28 +89,32 @@ export class SchedulesService {
       }
     }
 
-    const employees = await this.accountRepository.find({
-      where: {
-        parentId: targetManagerId,
-        role: In([AccountRole.DOCTOR, AccountRole.CLINIC_STAFF]),
-      },
-      select: ['_id', 'username', 'role'], // No relations needed here
-    });
+    const employees = await this.accountRepository
+      .createQueryBuilder('account')
+      .select(['account._id', 'account.username', 'account.role'])
+      .where('account.parent_id = :parentId', { parentId: targetManagerId })
+      .andWhere('account.role = ANY(:roles)', {
+        roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+      })
+      .getMany();
 
     if (!employees.length) return [];
 
     // Manual Fetch DoctorInformation, GeneralAccount, and ClinicStaffInformation
     const employeeIds = employees.map((e) => e._id);
     const [doctorInfos, generalAccounts, staffInfos] = await Promise.all([
-      this.doctorInfoRepository.find({
-        where: { accountId: In(employeeIds) },
-      }),
-      this.generalAccountRepository.find({
-        where: { accountId: In(employeeIds) },
-      }),
-      this.clinicStaffRepository.find({
-        where: { accountId: In(employeeIds) },
-      }),
+      this.doctorInfoRepository
+        .createQueryBuilder('di')
+        .where('di.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+      this.generalAccountRepository
+        .createQueryBuilder('ga')
+        .where('ga.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+      this.clinicStaffRepository
+        .createQueryBuilder('csi')
+        .where('csi.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
     ]);
 
     // Create Maps for quick lookup
@@ -718,7 +722,7 @@ export class SchedulesService {
           'es.clinic_shift_id = csh.shift_id AND es.employee_id = app.doctor_id AND es.work_date = app.appointment_date',
         )
         .where('es._id = :scheduleId', { scheduleId: id })
-        .andWhere('app.status NOT IN (:...statuses)', {
+        .andWhere('NOT app.status = ANY(:statuses)', {
           statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
         })
         .andWhere('app.deleted_at IS NULL');
@@ -829,7 +833,7 @@ export class SchedulesService {
         'es.clinic_shift_id = csh.shift_id AND es.employee_id = app.doctor_id AND es.work_date = app.appointment_date',
       )
       .where('es._id = :scheduleId', { scheduleId: id })
-      .andWhere('app.status NOT IN (:...statuses)', {
+      .andWhere('NOT app.status = ANY(:statuses)', {
         statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
       })
       .andWhere('app.deleted_at IS NULL');
@@ -1229,7 +1233,7 @@ export class SchedulesService {
       .leftJoin(
         'appointments',
         'app',
-        'app.clinic_shift_hour_id = csh._id AND app.appointment_date = es.work_date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
+        'app.clinic_shift_hour_id = csh._id AND app.appointment_date = es.work_date AND NOT app.status = ANY(:cancelledStatuses) AND app.deleted_at IS NULL',
         { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
       )
       .where('es.clinic_id = :clinicId', { clinicId })
@@ -1292,7 +1296,7 @@ export class SchedulesService {
         ])
         .from('clinic_room_employee_schedule', 'cres')
         .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-        .where('cres.employee_schedule_id IN (:...scheduleIds)', {
+        .where('cres.employee_schedule_id = ANY(:scheduleIds)', {
           scheduleIds,
         })
         .andWhere('cr.deleted_at IS NULL')
@@ -1455,7 +1459,7 @@ export class SchedulesService {
       .leftJoin(
         'appointments',
         'app',
-        'app.clinic_shift_hour_id = csh._id AND app.appointment_date = :date AND app.status NOT IN (:...cancelledStatuses) AND app.deleted_at IS NULL',
+        'app.clinic_shift_hour_id = csh._id AND app.appointment_date = :date AND NOT app.status = ANY(:cancelledStatuses) AND app.deleted_at IS NULL',
         { cancelledStatuses: ['CANCELLED', 'ABSENT'] },
       )
       .where('es.clinic_id = :clinicId', { clinicId })
@@ -1554,7 +1558,7 @@ export class SchedulesService {
         ])
         .from('clinic_room_employee_schedule', 'cres')
         .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-        .where('cres.employee_schedule_id IN (:...scheduleIds)', {
+        .where('cres.employee_schedule_id = ANY(:scheduleIds)', {
           scheduleIds,
         })
         .andWhere('cr.deleted_at IS NULL')

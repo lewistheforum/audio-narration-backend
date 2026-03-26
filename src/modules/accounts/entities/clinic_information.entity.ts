@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 
@@ -16,6 +17,8 @@ import { Account } from './accounts.entity';
  * Stores detailed information about clinics
  */
 @Entity('clinic_information')
+@Index('idx_clinic_information_account_id', ['clinicId'])
+@Index('idx_clinic_information_clinic_name', ['clinicName'])
 export class ClinicInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
