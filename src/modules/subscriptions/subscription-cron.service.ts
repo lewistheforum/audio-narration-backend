@@ -269,7 +269,7 @@ export class SubscriptionCronService {
       .leftJoinAndSelect('subscription.clinic', 'clinic')
       .leftJoinAndSelect('clinic.clinicAdminInformation', 'clinicAdminInformation')
       .leftJoinAndSelect('subscription.service', 'service')
-      .where('subscription.subscriptionStatus IN (:...statuses)', {
+      .where('subscription.subscriptionStatus = ANY(:statuses)', {
         statuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
       })
       .andWhere('subscription.expiration_date < :now', { now: getCurrentVietnamTime() });

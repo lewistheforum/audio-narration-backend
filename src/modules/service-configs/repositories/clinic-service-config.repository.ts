@@ -116,7 +116,7 @@ export class ClinicServiceConfigRepository {
       .createQueryBuilder()
       .update(ClinicServiceConfig)
       .set({ isActive })
-      .where('service_id IN (:...serviceIds)', { serviceIds })
+      .where('service_id = ANY(:serviceIds)', { serviceIds })
       .execute();
   }
 

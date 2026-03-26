@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { Gender } from '../enums/gender.enum';
@@ -18,6 +19,8 @@ import { Gender } from '../enums/gender.enum';
  * One-to-one relationship with Account entity
  */
 @Entity('clinic_manager_information')
+@Index('idx_clinic_manager_account_id', ['accountId'])
+@Index('idx_clinic_manager_branch_name', ['clinicBranchName'])
 export class ClinicManagerInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -33,6 +33,7 @@ import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountRole } from '../accounts/enums';
+import { log } from 'console';
 
 /**
  * Feedback Controller
@@ -216,6 +217,7 @@ export class FeedbackController {
     @Param('id') id: string,
   ): Promise<FeedbackAIResponseDto[]> {
     const feedbacks = await this.feedbackService.findAllFeedbacksById(id);
+
     const result = feedbacks.map(
       (feedback) => new FeedbackAIResponseDto(feedback),
     );
@@ -313,6 +315,7 @@ export class FeedbackController {
   ) {
     const result =
       await this.feedbackService.getClinicManagersFeedbacksByAdminId(adminId);
+
     return result; // Depending on frontend needs, this could map feedbacks through FeedbackAIResponseDto
   }
 }

@@ -193,13 +193,19 @@ export class MessageRepository {
   }
 
   /**
-   * Find messages by IDs
+   * Find messages by IDs using PostgreSQL ANY() for type safety
    *
    * @param {string[]} ids - Array of message UUIDs
    * @returns {Promise<Message[]>} Array of messages
    */
   async findMessagesByIds(ids: string[]): Promise<Message[]> {
-    return this.messageRepository.findByIds(ids);
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+    return this.messageRepository
+      .createQueryBuilder('message')
+      .where('message._id = ANY(:ids)', { ids })
+      .getMany();
   }
 
   /**

@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { VerificationType } from '../enums';
@@ -17,6 +18,9 @@ import { VerificationType } from '../enums';
  * Stores verification codes for email verification and password reset
  */
 @Entity('code_verification')
+@Index('idx_code_verification_account_code_type', ['accountId', 'code', 'type'])
+@Index('idx_code_verification_expired', ['expiredAt'])
+@Index('idx_code_verification_account_type_used', ['accountId', 'type', 'used'])
 export class CodeVerification {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

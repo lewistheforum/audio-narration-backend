@@ -411,7 +411,7 @@ export class AppointmentsService {
           appointmentDate,
         })
         .andWhere('appointment.deleted_at IS NULL')
-        .andWhere('appointment.status IN (:...activeStatuses)', {
+        .andWhere('appointment.status = ANY(:activeStatuses)', {
           activeStatuses,
         })
         .getOne();
@@ -430,7 +430,7 @@ export class AppointmentsService {
         .addSelect('config.price', 'price')
         .addSelect('config.discount', 'discount')
         .from('clinic_service_config', 'config')
-        .where('config._id IN (:...serviceIds)', { serviceIds })
+        .where('config._id = ANY(:serviceIds)', { serviceIds })
         .andWhere('config.clinic_id = :clinicId', { clinicId })
         .andWhere('config.is_active = :isActive', { isActive: true })
         .andWhere('config.deleted_at IS NULL')
@@ -1160,7 +1160,7 @@ export class AppointmentsService {
         .andWhere('a.clinic_shift_hour_id = :shiftHourId', {
           shiftHourId: rescheduleDto.clinicShiftHourId,
         })
-        .andWhere('a.status NOT IN (:...statuses)', {
+        .andWhere('NOT a.status = ANY(:statuses)', {
           statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
         })
         .andWhere('a.deleted_at IS NULL')
@@ -1283,7 +1283,7 @@ export class AppointmentsService {
         appointmentDate: newAppointmentDate,
       })
       .andWhere('a.extra_hour = :extraHour', { extraHour: newExtraHour })
-      .andWhere('a.status NOT IN (:...statuses)', {
+      .andWhere('NOT a.status = ANY(:statuses)', {
         statuses: [AppointmentStatus.CANCELLED, AppointmentStatus.ABSENT],
       })
       .andWhere('a.deleted_at IS NULL')
@@ -1508,7 +1508,7 @@ export class AppointmentsService {
           })
           .andWhere('app._id != :appointmentId', { appointmentId })
           .andWhere('app.deleted_at IS NULL')
-          .andWhere('app.status IN (:...activeStatuses)', {
+          .andWhere('app.status = ANY(:activeStatuses)', {
             activeStatuses,
           })
           .getRawOne();
@@ -2591,7 +2591,7 @@ export class AppointmentsService {
         status: queryDto.status,
       });
     } else {
-      queryBuilder.andWhere('appointment.status IN (:...statuses)', {
+      queryBuilder.andWhere('appointment.status = ANY(:statuses)', {
         statuses: [
           AppointmentStatus.CHECKED_IN,
           AppointmentStatus.IN_PROGRESS,
@@ -2680,7 +2680,7 @@ export class AppointmentsService {
       .leftJoinAndSelect('appointment.extraRoom', 'extraRoom')
       .where('appointment.doctor_id = :doctorId', { doctorId })
       .andWhere('appointment.extra_hour IS NOT NULL')
-      .andWhere('appointment.status IN (:...statuses)', {
+      .andWhere('appointment.status = ANY(:statuses)', {
         statuses: [
           AppointmentStatus.PENDING_DOCTOR,
           AppointmentStatus.CONFIRMED,
@@ -3239,7 +3239,7 @@ export class AppointmentsService {
           signedAt: getCurrentVietnamTime(),
           updatedAt: getCurrentVietnamTime(),
         })
-        .where('_id IN (:...ermIds)', { ermIds })
+        .where('_id = ANY(:ermIds)', { ermIds })
         .execute();
     }
 
@@ -3421,7 +3421,7 @@ export class AppointmentsService {
       .createQueryBuilder('config')
       .leftJoinAndSelect('config.service', 'service')
       .leftJoinAndSelect('service.category', 'category')
-      .where('config._id IN (:...clinicServiceIds)', { clinicServiceIds })
+      .where('config._id = ANY(:clinicServiceIds)', { clinicServiceIds })
       .andWhere('config.deleted_at IS NULL')
       .andWhere('config.is_active = true')
       .getMany();
@@ -3446,7 +3446,7 @@ export class AppointmentsService {
       .createQueryBuilder('sa')
       .innerJoin('sa.appointmentPackage', 'pkg')
       .where('pkg.appointment_id = :appointmentId', { appointmentId })
-      .andWhere('sa.clinic_service_id IN (:...clinicServiceIds)', {
+      .andWhere('sa.clinic_service_id = ANY(:clinicServiceIds)', {
         clinicServiceIds,
       })
       .andWhere('sa.deleted_at IS NULL')
@@ -3797,7 +3797,7 @@ export class AppointmentsService {
       );
       const managerIds = managers.map((m) => m._id);
       if (managerIds.length > 0) {
-        query.andWhere('appointment.clinicId IN (:...managerIds)', {
+        query.andWhere('appointment.clinicId = ANY(:managerIds)', {
           managerIds,
         });
       } else {
@@ -4203,7 +4203,7 @@ export class AppointmentsService {
           const serviceConfigs = await manager
             .createQueryBuilder(ClinicServiceConfig, 'csc')
             .leftJoinAndSelect('csc.service', 'service')
-            .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+            .where('csc._id = ANY(:uniqueServiceIds)', { uniqueServiceIds })
             .andWhere('csc.clinic_id = :clinicId', {
               clinicId: session.clinicId,
             })
@@ -4498,7 +4498,7 @@ export class AppointmentsService {
       .getRepository(ClinicServiceConfig)
       .createQueryBuilder('csc')
       .leftJoinAndSelect('csc.service', 'service')
-      .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+      .where('csc._id = ANY(:uniqueServiceIds)', { uniqueServiceIds })
       .andWhere('csc.clinic_id = :clinicId', { clinicId: session.clinicId })
       .andWhere('csc.is_active = true')
       .andWhere('csc.deleted_at IS NULL')
@@ -4660,7 +4660,7 @@ export class AppointmentsService {
       const serviceConfigs = await manager
         .createQueryBuilder(ClinicServiceConfig, 'csc')
         .leftJoinAndSelect('csc.service', 'service')
-        .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+        .where('csc._id = ANY(:uniqueServiceIds)', { uniqueServiceIds })
         .andWhere('csc.is_active = true')
         .getMany();
 
@@ -4851,7 +4851,7 @@ export class AppointmentsService {
           const serviceConfigs = await manager
             .createQueryBuilder(ClinicServiceConfig, 'csc')
             .leftJoinAndSelect('csc.service', 'service')
-            .where('csc._id IN (:...uniqueServiceIds)', { uniqueServiceIds })
+            .where('csc._id = ANY(:uniqueServiceIds)', { uniqueServiceIds })
             .andWhere('csc.clinic_id = :clinicId', {
               clinicId: session.clinicId,
             })
@@ -5107,7 +5107,7 @@ export class AppointmentsService {
         'addr.account_id = clinic._id',
       )
       .leftJoin('clinic_service_category', 'cat', 'cat._id = cs.category_id')
-      .innerJoin(
+      .leftJoin(
         'clinics_legal_documents',
         'cld',
         'cld.account_id = clinic._id',
@@ -5115,7 +5115,7 @@ export class AppointmentsService {
       .where('csc.is_active = :active', { active: true })
       .andWhere('cs.is_active = :active', { active: true })
       .andWhere('clinic.status = :status', { status: 'ACTIVE' })
-      .andWhere('cld.verification_status = :verifiedStatus', {
+      .andWhere('(cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL)', {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       })
       .andWhere('csc.deleted_at IS NULL')
@@ -5160,7 +5160,7 @@ export class AppointmentsService {
         // CRITICAL FIX: Include CLINIC_ADMIN itself in the list
         branchIds.push(clinicId);
 
-        query = query.andWhere('csc.clinic_id IN (:...branchIds)', {
+        query = query.andWhere('csc.clinic_id = ANY(:branchIds)', {
           branchIds,
         });
       } else {
@@ -5281,7 +5281,7 @@ export class AppointmentsService {
       );
       const managerIds = managers.map((m) => m._id);
       if (managerIds.length > 0) {
-        query.andWhere('appointment.clinicId IN (:...managerIds)', {
+        query.andWhere('appointment.clinicId = ANY(:managerIds)', {
           managerIds,
         });
       } else {
@@ -5381,7 +5381,20 @@ export class AppointmentsService {
       ])
       .from('accounts', 'branch')
       .leftJoin('clinic_manager_information', 'cmi', 'cmi.account_id = branch._id')
-      .leftJoin('addresses', 'addr', 'addr.account_id = branch._id')
+      .leftJoin(
+        (qb) =>
+          qb
+            .select([
+              'addr.account_id AS account_id',
+              'MIN(addr.address) AS address',
+              'MIN(addr.district) AS district',
+            ])
+            .from('addresses', 'addr')
+            .where('addr.deleted_at IS NULL')
+            .groupBy('addr.account_id'),
+        'addr',
+        'addr.account_id = branch._id',
+      )
       .where('branch.parent_id = :clinicId', { clinicId })
       .andWhere('branch.role = :role', { role: 'CLINIC_MANAGER' })
       .andWhere('branch.status = :status', { status: 'ACTIVE' })
@@ -5414,7 +5427,7 @@ export class AppointmentsService {
       .leftJoin('doctor_information', 'di', 'di.account_id = doctor._id')
       .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
       .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-      .where('es.clinic_id IN (:...branchIds)', { branchIds })
+      .where('es.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('es.work_date >= :today', { today })
       .andWhere('es.work_date <= :maxDate', { maxDate })
       .andWhere('es.deleted_at IS NULL')
@@ -5587,7 +5600,7 @@ export class AppointmentsService {
         'cres.employee_schedule_id = es._id',
       )
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-      .where('es.clinic_id IN (:...branchIds)', { branchIds })
+      .where('es.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('es.work_date = :date', { date: dateString })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
@@ -5613,7 +5626,7 @@ export class AppointmentsService {
       .from('clinic_service_config', 'csc')
       .innerJoin('clinic_services', 'cs', 'cs._id = csc.service_id')
       .leftJoin('clinic_service_category', 'cat', 'cat._id = cs.category_id')
-      .where('csc.clinic_id IN (:...branchIds)', { branchIds })
+      .where('csc.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('csc.is_active = :active', { active: true })
       .andWhere('cs.is_active = :active', { active: true })
       .andWhere('csc.deleted_at IS NULL')
@@ -5842,7 +5855,7 @@ export class AppointmentsService {
       if (tab === 'UPCOMING') {
         // UPCOMING: Active statuses AND future/today appointments
         query.andWhere(
-          `(a.status IN (:...upcomingStatuses) AND a.appointment_date >= :today)`,
+          `(a.status = ANY(:upcomingStatuses) AND a.appointment_date >= :today)`,
           {
             upcomingStatuses: [
               AppointmentStatus.PENDING,
@@ -5856,8 +5869,8 @@ export class AppointmentsService {
       } else if (tab === 'HISTORY') {
         // HISTORY: Completed/Cancelled/Absent OR past appointments with unfinished status
         query.andWhere(
-          `(a.status IN (:...completedStatuses) OR 
-           (a.status IN (:...unfinishedStatuses) AND a.appointment_date < :today))`,
+          `(a.status = ANY(:completedStatuses) OR 
+           (a.status = ANY(:unfinishedStatuses) AND a.appointment_date < :today))`,
           {
             completedStatuses: [
               AppointmentStatus.COMPLETED,
@@ -5946,7 +5959,7 @@ export class AppointmentsService {
           'e',
           'e.service_appointments_id = sa._id AND e.deleted_at IS NULL',
         )
-        .where('ap.appointment_id IN (:...appointmentIds)', { appointmentIds })
+        .where('ap.appointment_id = ANY(:appointmentIds)', { appointmentIds })
         .andWhere('ap.deleted_at IS NULL')
         .andWhere('sa.deleted_at IS NULL')
         .getRawMany();
@@ -5991,7 +6004,7 @@ export class AppointmentsService {
           'ep.created_at AS ep_created_at',
         ])
         .from('e_prescriptions', 'ep')
-        .where('ep.appointment_id IN (:...appointmentIds)', { appointmentIds })
+        .where('ep.appointment_id = ANY(:appointmentIds)', { appointmentIds })
         .andWhere('ep.deleted_at IS NULL')
         .getRawMany();
 
@@ -6268,7 +6281,7 @@ export class AppointmentsService {
           'eu',
           'eu.erm_id = e._id AND eu.deleted_at IS NULL',
         )
-        .where('sa.appointment_package_id IN (:...packageIds)', { packageIds })
+        .where('sa.appointment_package_id = ANY(:packageIds)', { packageIds })
         .andWhere('sa.deleted_at IS NULL')
         .getRawMany();
     }
@@ -6472,13 +6485,19 @@ export class AppointmentsService {
     const { page, limit, search, specialization, clinic_id } = params;
     const offset = (page - 1) * limit;
 
-    // Build base query for doctors
-    let doctorQuery = this.dataSource
+    const doctorsQuery = this.dataSource
       .createQueryBuilder()
       .select([
         'doctor._id AS doctor_id',
         'di.full_name AS full_name',
         'cci.work_specialty_at_clinic AS specialization',
+        `JSONB_AGG(
+          DISTINCT JSONB_BUILD_OBJECT(
+            'clinic_id', clinic._id,
+            'clinic_name', cmi.clinic_branch_name,
+            'clinic_address', addr.address
+          )
+        ) FILTER (WHERE clinic._id IS NOT NULL) AS clinics`,
       ])
       .from('accounts', 'doctor')
       .innerJoin('doctor_information', 'di', 'di.account_id = doctor._id')
@@ -6492,94 +6511,70 @@ export class AppointmentsService {
         'cci',
         'cci.contract_id = cp._id AND cci.deleted_at IS NULL',
       )
+      .innerJoin(
+        'employee_schedule',
+        'es',
+        'es.employee_id = doctor._id AND es.deleted_at IS NULL',
+      )
+      .innerJoin('accounts', 'clinic', 'clinic._id = es.clinic_id')
+      .leftJoin(
+        'clinic_manager_information',
+        'cmi',
+        'cmi.account_id = clinic._id',
+      )
+      .leftJoin(
+        'clinics_legal_documents',
+        'cld',
+        'cld.account_id = clinic._id',
+      )
+      .leftJoin('addresses', 'addr', 'addr.account_id = clinic._id')
       .where('doctor.role = :role', { role: AccountRole.DOCTOR })
       .andWhere('doctor.status = :status', { status: 'ACTIVE' })
-      .andWhere('doctor.deleted_at IS NULL');
+      .andWhere('doctor.deleted_at IS NULL')
+      .andWhere(
+        'cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL',
+        { verifiedStatus: LegalDocumentVerificationStatus.APPROVED },
+      )
+      .andWhere('clinic.status = :clinicStatus OR clinic.status IS NULL', {
+        clinicStatus: 'ACTIVE',
+      })
+      .andWhere('clinic.deleted_at IS NULL');
 
-    // Apply search filter
     if (search) {
-      doctorQuery = doctorQuery.andWhere('di.full_name ILIKE :search', {
+      doctorsQuery.andWhere('di.full_name ILIKE :search', {
         search: `%${search}%`,
       });
     }
 
-    // Apply specialization filter
     if (specialization) {
-      doctorQuery = doctorQuery.andWhere(
-        'cci.work_specialty_at_clinic ILIKE :specialization',
-        {
-          specialization: `%${specialization}%`,
-        },
-      );
+      doctorsQuery.andWhere('cci.work_specialty_at_clinic ILIKE :specialization', {
+        specialization: `%${specialization}%`,
+      });
     }
 
-    // Apply clinic filter (doctor works at this clinic)
     if (clinic_id) {
-      doctorQuery = doctorQuery
-        .innerJoin('employee_schedule', 'es', 'es.employee_id = doctor._id')
-        .andWhere('es.clinic_id = :clinic_id', { clinic_id })
-        .andWhere('es.deleted_at IS NULL');
+      doctorsQuery.andWhere('es.clinic_id = :clinic_id', { clinic_id });
     }
 
-    // Get total count
-    const countQuery = doctorQuery.clone();
-    const totalResults = await countQuery.getRawMany();
+    const totalResults = await doctorsQuery
+      .clone()
+      .groupBy('doctor._id, di.full_name, cci.work_specialty_at_clinic')
+      .getRawMany();
     const total = totalResults.length;
 
-    // Get paginated doctors
-    const doctors = await doctorQuery
-      .groupBy('doctor._id')
-      .addGroupBy('cci.work_specialty_at_clinic')
-      .addGroupBy('di.full_name')
+    const doctors = await doctorsQuery
+      .groupBy('doctor._id, di.full_name, cci.work_specialty_at_clinic')
       .orderBy('di.full_name', 'ASC')
       .limit(limit)
       .offset(offset)
       .getRawMany();
 
-    // For each doctor, get clinics where they work
-    const enrichedDoctors = await Promise.all(
-      doctors.map(async (doctor) => {
-        const clinics = await this.dataSource
-          .createQueryBuilder()
-          .select([
-            'DISTINCT clinic._id AS clinic_id',
-            'cmi.clinic_branch_name AS clinic_name',
-            'addr.address AS clinic_address',
-          ])
-          .from('employee_schedule', 'es')
-          .innerJoin('accounts', 'clinic', 'clinic._id = es.clinic_id')
-          .innerJoin(
-            'clinic_manager_information',
-            'cmi',
-            'cmi.account_id = clinic._id',
-          )
-          .innerJoin(
-            'clinics_legal_documents',
-            'cld',
-            'cld.account_id = clinic._id',
-          )
-          .leftJoin('addresses', 'addr', 'addr.account_id = clinic._id')
-          .where('es.employee_id = :doctor_id', { doctor_id: doctor.doctor_id })
-          .andWhere('es.deleted_at IS NULL')
-          .andWhere('clinic.status = :status', { status: 'ACTIVE' })
-          .andWhere('cld.verification_status = :verifiedStatus', {
-            verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
-          })
-          .andWhere('clinic.deleted_at IS NULL')
-          .getRawMany();
-
-        return {
-          doctor_id: doctor.doctor_id,
-          full_name: doctor.full_name,
-          specialization: doctor.specialization,
-          clinics: clinics.map((c) => ({
-            clinic_id: c.clinic_id,
-            clinic_name: c.clinic_name,
-            clinic_address: c.clinic_address,
-          })),
-        };
-      }),
-    );
+    const enrichedDoctors = doctors.map((doctor) => ({
+      doctor_id: doctor.doctor_id,
+      full_name: doctor.full_name,
+      specialization: doctor.specialization,
+      clinics: doctor.clinics || [],
+    }));
 
     return {
       data: enrichedDoctors,
@@ -6615,10 +6610,11 @@ export class AppointmentsService {
   }): Promise<any> {
     const { working_date, page, limit, search, district } = params;
 
-    // Validate date format and range only if working_date is provided
+    const today = getStartOfDay();
+    const maxDate = addToVietnamTime(30, 'day');
+
     if (working_date) {
       const appointmentDate = new Date(working_date);
-      const today = getStartOfDay();
 
       if (appointmentDate < today) {
         throw new BadRequestException(
@@ -6626,149 +6622,117 @@ export class AppointmentsService {
         );
       }
 
-      const maxDate = addToVietnamTime(60, 'day');
-
       if (appointmentDate > maxDate) {
         throw new BadRequestException(
-          'Working date cannot be more than 60 days in the future',
+          'Working date cannot be more than 30 days in the future',
         );
       }
     }
 
-    // REFACTOR: Query to get branches with parent admin information
-    // Return nested structure: CLINIC_ADMIN -> branches (CLINIC_MANAGER)
-    const queryBuilder = this.dataSource
+    const branchesRaw = await this.dataSource
       .createQueryBuilder()
       .select([
-        'DISTINCT branch._id AS clinic_id', // Branch ID for booking
-        'parent._id AS clinic_admin_id', // Admin ID for grouping
-        'cai.clinic_name AS system_name', // Admin clinic name
-        'cai.profile_picture AS logo', // Admin profile picture as logo
-        'cai.description AS description', // Admin description
-        'cmi.clinic_branch_name AS branch_name', // Branch name only
+        'branch._id AS clinic_id',
+        'parent._id AS clinic_admin_id',
+        'cai.clinic_name AS system_name',
+        'cai.profile_picture AS logo',
+        'cai.description AS description',
+        'cmi.clinic_branch_name AS branch_name',
         "CASE WHEN cmi.clinic_branch_name IS NOT NULL AND cmi.clinic_branch_name != '' " +
           "THEN CONCAT(cai.clinic_name, ' - ', cmi.clinic_branch_name) " +
-          'ELSE cai.clinic_name END AS full_branch_name', // Full branch name for display
+          'ELSE cai.clinic_name END AS full_branch_name',
         "COALESCE(addr.address, '') AS clinic_address",
         'addr.district AS district',
+        'COALESCE(slot_stats.total_slots, 0)::int AS total_slots',
+        'COALESCE(slot_stats.doctor_count, 0)::int AS doctor_count',
+        'COALESCE(booked_stats.booked_count, 0)::int AS booked_count',
       ])
-      .from('accounts', 'branch') // Start from branch (CLINIC_MANAGER)
-      .innerJoin('accounts', 'parent', 'parent._id = branch.parent_id') // Join parent (CLINIC_ADMIN)
-      .innerJoin(
-        'clinic_admin_information',
-        'cai',
-        'cai.account_id = parent._id',
-      ) // Join parent info
-      .innerJoin(
-        'clinic_manager_information',
-        'cmi',
-        'cmi.account_id = branch._id',
-      ) // Join branch info
-      .innerJoin('employee_schedule', 'es', 'es.clinic_id = branch._id')
-      .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-      .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-      .innerJoin(
-        'clinics_legal_documents',
-        'cld',
-        'cld.account_id = branch._id',
-      )
+      .from('accounts', 'branch')
+      .innerJoin('accounts', 'parent', 'parent._id = branch.parent_id')
+      .innerJoin('clinic_admin_information', 'cai', 'cai.account_id = parent._id')
+      .innerJoin('clinic_manager_information', 'cmi', 'cmi.account_id = branch._id')
+      .leftJoin('employee_schedule', 'es', 'es.clinic_id = branch._id')
+      .leftJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+      .leftJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+      .leftJoin('clinics_legal_documents', 'cld', 'cld.account_id = branch._id')
       .leftJoin('addresses', 'addr', 'addr.account_id = branch._id')
-      .where('branch.role = :branchRole', {
-        branchRole: AccountRole.CLINIC_MANAGER,
-      })
+      .leftJoin(
+        (qb) =>
+          qb
+            .select(['es2.clinic_id AS clinic_id', 'SUM(csh2.limit) AS total_slots', 'COUNT(DISTINCT es2.employee_id) AS doctor_count'])
+            .from('employee_schedule', 'es2')
+            .innerJoin('clinic_shift', 'cs2', 'cs2._id = es2.clinic_shift_id')
+            .innerJoin('clinic_shift_hour', 'csh2', 'csh2.shift_id = cs2._id')
+            .where('es2.deleted_at IS NULL')
+            .andWhere('csh2.deleted_at IS NULL')
+            .andWhere('csh2.limit > 0')
+            .groupBy('es2.clinic_id'),
+        'slot_stats',
+        'slot_stats.clinic_id = branch._id',
+      )
+      .leftJoin(
+        (qb) =>
+          qb
+            .select(['clinic_id', 'COUNT(*) AS booked_count'])
+            .from('appointments', 'a')
+            .where('a.status = ANY(:statuses)', {
+              statuses: ['PENDING', 'CONFIRMED', 'CHECKED_IN'],
+            })
+            .andWhere('a.deleted_at IS NULL')
+            .groupBy('clinic_id'),
+        'booked_stats',
+        'booked_stats.clinic_id = branch._id',
+      )
+      .where('branch.role = :branchRole', { branchRole: AccountRole.CLINIC_MANAGER })
       .andWhere('branch.status = :branchStatus', { branchStatus: 'ACTIVE' })
-      .andWhere('parent.role = :parentRole', {
-        parentRole: AccountRole.CLINIC_ADMIN,
-      })
+      .andWhere('parent.role = :parentRole', { parentRole: AccountRole.CLINIC_ADMIN })
       .andWhere('parent.status = :parentStatus', { parentStatus: 'ACTIVE' })
-      .andWhere('cld.verification_status = :verifiedStatus', {
+      .andWhere('(cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL)', {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
-      .andWhere('csh.limit > 0');
+      .andWhere('csh.limit > 0')
+      .andWhere('slot_stats.total_slots IS NOT NULL');
 
-    // Add date filter only if working_date is provided
     if (working_date) {
-      queryBuilder.andWhere('es.work_date = :workDate', {
-        workDate: working_date,
-      });
+      branchesRaw.andWhere('es.work_date = :workDate', { workDate: working_date });
     }
 
-    // Add search filter (search both parent clinic name and branch name)
     if (search) {
-      queryBuilder.andWhere(
+      branchesRaw.andWhere(
         '(cai.clinic_name ILIKE :search OR cmi.clinic_branch_name ILIKE :search)',
         { search: `%${search}%` },
       );
     }
 
-    // Add district filter (use branch address)
     if (district) {
-      queryBuilder.andWhere('addr.district ILIKE :district', {
+      branchesRaw.andWhere('addr.district ILIKE :district', {
         district: `%${district}%`,
       });
     }
 
-    queryBuilder.orderBy('system_name', 'ASC').addOrderBy('branch_name', 'ASC');
+    branchesRaw
+      .groupBy('branch._id')
+      .addGroupBy('parent._id')
+      .addGroupBy('cai.clinic_name')
+      .addGroupBy('cai.profile_picture')
+      .addGroupBy('cai.description')
+      .addGroupBy('cmi.clinic_branch_name')
+      .addGroupBy('addr.address')
+      .addGroupBy('addr.district')
+      .addGroupBy('slot_stats.total_slots')
+      .addGroupBy('slot_stats.doctor_count')
+      .addGroupBy('booked_stats.booked_count');
 
-    // Get all matching branches (before pagination on grouped level)
-    const branchesRaw = await queryBuilder.getRawMany();
-
-    // For each branch, calculate available slots and doctors
-    const branchesWithStats = await Promise.all(
-      branchesRaw.map(async (branch) => {
-        // Calculate available slots for THIS BRANCH only
-        const slotsQueryBuilder = this.dataSource
-          .createQueryBuilder()
-          .select([
-            'SUM(csh.limit) AS total_slots',
-            'COUNT(DISTINCT es.employee_id) AS doctor_count',
-          ])
-          .from('employee_schedule', 'es')
-          .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-          .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-          .where('es.clinic_id = :clinicId', { clinicId: branch.clinic_id })
-          .andWhere('es.deleted_at IS NULL')
-          .andWhere('csh.deleted_at IS NULL')
-          .andWhere('csh.limit > 0');
-
-        // Add date filter only if working_date is provided
-        if (working_date) {
-          slotsQueryBuilder.andWhere('es.work_date = :workDate', {
-            workDate: working_date,
-          });
-        }
-
-        const slotsQuery = await slotsQueryBuilder.getRawOne();
-
-        // Count booked appointments for THIS BRANCH
-        const bookedQueryBuilder = this.dataSource
-          .createQueryBuilder()
-          .select('COUNT(*) AS booked_count')
-          .from('appointments', 'apt')
-          .where('apt.clinic_id = :clinicId', { clinicId: branch.clinic_id })
-          .andWhere('apt.status IN (:...statuses)', {
-            statuses: ['PENDING', 'CONFIRMED', 'CHECKED_IN'],
-          })
-          .andWhere('apt.deleted_at IS NULL');
-
-        // Add date filter only if working_date is provided
-        if (working_date) {
-          bookedQueryBuilder.andWhere('apt.appointment_date = :workDate', {
-            workDate: working_date,
-          });
-        }
-
-        const bookedQuery = await bookedQueryBuilder.getRawOne();
-
-        const totalSlots = parseInt(slotsQuery?.total_slots || '0', 10);
-        const bookedCount = parseInt(bookedQuery?.booked_count || '0', 10);
+    const branchesWithStats = (await branchesRaw.getRawMany())
+      .map((branch) => {
+        const totalSlots = parseInt(String(branch.total_slots), 10) || 0;
+        const bookedCount = parseInt(String(branch.booked_count), 10) || 0;
         const availableSlots = totalSlots - bookedCount;
-
         return {
-          clinic_id: branch.clinic_id, // CLINIC_MANAGER._id for booking
-          clinic_admin_id: branch.clinic_admin_id, // CLINIC_ADMIN._id for grouping
+          clinic_id: branch.clinic_id,
+          clinic_admin_id: branch.clinic_admin_id,
           system_name: branch.system_name,
           logo: branch.logo || null,
           description: branch.description || null,
@@ -6776,18 +6740,12 @@ export class AppointmentsService {
           clinic_address: branch.clinic_address || '',
           district: branch.district || null,
           available_slots: availableSlots > 0 ? availableSlots : 0,
-          available_doctors: parseInt(slotsQuery?.doctor_count || '0', 10),
+          available_doctors: parseInt(String(branch.doctor_count), 10) || 0,
         };
-      }),
-    );
+      })
+      .filter((b) => b.available_slots > 0);
 
-    // Filter out branches with 0 available slots
-    const filteredBranches = branchesWithStats.filter(
-      (b) => b.available_slots > 0,
-    );
-
-    // GROUP BY clinic_admin_id: Group branches by their parent admin
-    const groupedByAdmin = filteredBranches.reduce(
+    const groupedByAdmin = branchesWithStats.reduce(
       (acc, branch) => {
         const adminId = branch.clinic_admin_id;
 
@@ -6820,7 +6778,7 @@ export class AppointmentsService {
 
     // Apply pagination on clinic systems level
     const totalSystems = clinicSystems.length;
-    const totalBranches = filteredBranches.length;
+    const totalBranches = branchesWithStats.length;
     const offset = (page - 1) * limit;
     const paginatedSystems = clinicSystems.slice(offset, offset + limit);
 
@@ -7663,7 +7621,7 @@ export class AppointmentsService {
         a.clinic_shift_hour_id = csh._id 
         AND a.appointment_date = es.work_date
       `)
-      .where('es.clinic_id IN (:...branchIds)', { branchIds })
+      .where('es.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
       .andWhere('csh.limit > 0')
@@ -7919,7 +7877,6 @@ export class AppointmentsService {
     appointmentDate: string,
     extraHour: string,
   ): Promise<any> {
-    // Parse extraHour to Date object for comparison with TIMESTAMPTZ
     const requestedTime = new Date(extraHour);
     if (isNaN(requestedTime.getTime())) {
       throw new BadRequestException(
@@ -7927,7 +7884,6 @@ export class AppointmentsService {
       );
     }
 
-    // Parse appointment date
     const date = new Date(appointmentDate);
     if (isNaN(date.getTime())) {
       throw new BadRequestException(
@@ -7935,7 +7891,19 @@ export class AppointmentsService {
       );
     }
 
-    // BR: Verify clinic legal documents are approved
+    const today = getStartOfDay();
+    const maxDate = addToVietnamTime(30, 'day');
+
+    if (date < today) {
+      throw new BadRequestException('Date must be today or in the future');
+    }
+
+    if (date > maxDate) {
+      throw new BadRequestException(
+        'Date cannot be more than 30 days in the future',
+      );
+    }
+
     const legalDoc = await this.dataSource
       .createQueryBuilder()
       .select('verification_status')
@@ -7952,8 +7920,7 @@ export class AppointmentsService {
       );
     }
 
-    // Step A: Query all doctors working at the clinic on the specified date
-    const allDoctors = await this.dataSource
+    const availableDoctors = await this.dataSource
       .createQueryBuilder()
       .select([
         'DISTINCT doctor._id AS doctor_id',
@@ -7965,43 +7932,25 @@ export class AppointmentsService {
       .from('employee_schedule', 'es')
       .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
       .leftJoin('doctor_information', 'di', 'di.account_id = doctor._id')
+      .leftJoin(
+        'appointments',
+        'apt',
+        `apt.doctor_id = doctor._id 
+         AND apt.clinic_id = :clinicId 
+         AND apt.appointment_date = :workDate
+         AND (apt.appointment_hour = :requestedTime OR apt.extra_hour = :requestedTime)
+         AND apt.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')
+         AND apt.deleted_at IS NULL`,
+        { clinicId, workDate: date, requestedTime },
+      )
       .where('es.clinic_id = :clinicId', { clinicId })
       .andWhere('es.work_date = :workDate', { workDate: date })
       .andWhere('doctor.role = :role', { role: 'DOCTOR' })
       .andWhere('doctor.status = :status', { status: 'ACTIVE' })
       .andWhere('es.deleted_at IS NULL')
+      .andWhere('apt._id IS NULL')
       .getRawMany();
 
-    // Step B: Query doctors who are BUSY at the requested time
-    // A doctor is BUSY if they have an appointment where:
-    // - appointment_date matches the requested date
-    // - AND (appointment_hour = requestedTime OR extra_hour = requestedTime)
-    const busyDoctors = await this.dataSource
-      .createQueryBuilder()
-      .select('DISTINCT a.doctor_id AS doctor_id')
-      .from('appointments', 'a')
-      .where('a.clinic_id = :clinicId', { clinicId })
-      .andWhere('a.appointment_date = :appointmentDate', {
-        appointmentDate: date,
-      })
-      .andWhere(
-        '(a.appointment_hour = :requestedTime OR a.extra_hour = :requestedTime)',
-        { requestedTime },
-      )
-      .andWhere(
-        "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
-      )
-      .andWhere('a.doctor_id IS NOT NULL')
-      .andWhere('a.deleted_at IS NULL')
-      .getRawMany();
-
-    // Step C: Filter out busy doctors from the available list
-    const busyDoctorIds = new Set(busyDoctors.map((d) => d.doctor_id));
-    const availableDoctors = allDoctors.filter(
-      (doctor) => !busyDoctorIds.has(doctor.doctor_id),
-    );
-
-    // Step D: Return response with data and metadata
     return {
       data: availableDoctors.map((doctor) => ({
         doctor_id: doctor.doctor_id,
@@ -8049,7 +7998,7 @@ export class AppointmentsService {
       .leftJoin('patient.generalAccount', 'generalAccount')
       .where('appointment.doctorId = :doctorId', { doctorId })
       .andWhere('appointment.deleted_at IS NULL')
-      .andWhere('appointment.status IN (:...statuses)', {
+      .andWhere('appointment.status = ANY(:statuses)', {
         statuses: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
       })
       .select('patient._id', 'patientId')
@@ -8261,7 +8210,7 @@ export class AppointmentsService {
       .leftJoin('patient.generalAccount', 'generalAccount')
       .where('appointment.clinic_id = :clinicId', { clinicId })
       .andWhere('appointment.deleted_at IS NULL')
-      .andWhere('appointment.status IN (:...statuses)', {
+      .andWhere('appointment.status = ANY(:statuses)', {
         statuses: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
       })
       .select('patient._id', 'patientId')
@@ -8593,7 +8542,7 @@ export class AppointmentsService {
       appointmentQuery.andWhere('appointment.status = :status', { status });
     } else {
       // When ALL, show COMPLETED, CANCELLED, NO_SHOW
-      appointmentQuery.andWhere('appointment.status IN (:...statuses)', {
+      appointmentQuery.andWhere('appointment.status = ANY(:statuses)', {
         statuses: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
       });
     }

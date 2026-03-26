@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Address } from './addresses.entity';
 
@@ -17,6 +18,7 @@ import { Address } from './addresses.entity';
  * One-to-One relationship: Each address has exactly one Google Maps iframe
  */
 @Entity('google_iframe')
+@Index('idx_google_iframe_address_id', ['addressId'])
 export class GoogleIframe {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

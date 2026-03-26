@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { SubscriptionServiceStatus } from '../enums/subscription-service-status.enum';
 
@@ -14,6 +15,9 @@ import { SubscriptionServiceStatus } from '../enums/subscription-service-status.
  * Stores subscription services available for clinics
  */
 @Entity('subcription_services')
+@Index('idx_subscription_service_status', ['status'])
+@Index('idx_subscription_service_code', ['code'])
+@Index('idx_subscription_service_is_popular', ['isPopular'])
 export class SubscriptionService {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Appointment } from './appointment.entity';
 import { Transaction } from '../../transactions/entities/transaction.entity';
@@ -18,6 +19,10 @@ import { PaymentType, AppointmentPackageStatus } from '../enums';
  * Stores payment package information for appointments
  */
 @Entity('appointment_package')
+@Index('idx_appointment_package_appointment_id', ['appointmentId'])
+@Index('idx_appointment_package_transaction_id', ['transactionId'])
+@Index('idx_appointment_package_status', ['status'])
+@Index('idx_appointment_package_payment_type', ['paymentType'])
 export class AppointmentPackage {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

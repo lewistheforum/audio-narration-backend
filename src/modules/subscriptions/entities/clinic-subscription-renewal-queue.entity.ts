@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { SubscriptionService } from './subscription-service.entity';
@@ -19,6 +20,9 @@ import { SubscriptionService } from './subscription-service.entity';
  * Constraint: One clinic can only have one pending renewal request at a time (clinic_id is unique)
  */
 @Entity('clinic_subscription_renewal_queue')
+@Index('idx_renewal_queue_clinic_id', ['clinicId'])
+@Index('idx_renewal_queue_next_service_id', ['nextServiceId'])
+@Index('idx_renewal_queue_target_start_date', ['targetStartDate'])
 export class ClinicSubscriptionRenewalQueue {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

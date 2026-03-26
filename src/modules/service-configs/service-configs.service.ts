@@ -6,6 +6,9 @@ import {
   GetClinicServicesQueryDto,
 } from './dto';
 import { formatToVietnamTime } from '../../common/utils/date.util';
+import { CreateClinicServiceDto } from '../clinic-services/dto/create-clinic-service.dto';
+import { UpdateClinicServiceDto } from '../clinic-services/dto/update-clinic-service.dto';
+import { ClinicServiceResponseDto } from '../clinic-services/dto/clinic-service-response.dto';
 
 /**
  * Service Configs Service
@@ -234,7 +237,7 @@ export class ServiceConfigsService {
     };
   }
 
-  async createService(clinicManagerId: string, dto: any): Promise<any> {
+  async createService(clinicManagerId: string, dto: CreateClinicServiceDto): Promise<ClinicServiceResponseDto> {
     const categoryExists = await this.dataSource.query(
       `SELECT _id FROM clinic_service_category WHERE _id = $1 AND deleted_at IS NULL`,
       [dto.categoryId]
@@ -287,7 +290,7 @@ export class ServiceConfigsService {
     }
   }
 
-  async updateService(clinicManagerId: string, id: string, dto: any): Promise<any> {
+  async updateService(clinicManagerId: string, id: string, dto: UpdateClinicServiceDto): Promise<ClinicServiceResponseDto> {
     const raw = await this.getServiceDetail(clinicManagerId, id); // Will throw NotFoundException if service not found
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -454,7 +457,7 @@ export class ServiceConfigsService {
       )
       .leftJoin('accounts', 'a', 'a._id = csc.clinic_id')
       .leftJoin('general_accounts', 'ga', 'ga.account_id = a._id AND ga.deleted_at IS NULL')
-      .where('csc.clinic_id IN (:...clinicIds)', { clinicIds })
+      .where('csc.clinic_id = ANY(:clinicIds)', { clinicIds })
       .andWhere('csc.deleted_at IS NULL')
       .andWhere('cs.deleted_at IS NULL');
 

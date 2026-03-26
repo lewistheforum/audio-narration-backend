@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ReportType } from '../enums';
@@ -17,6 +18,10 @@ import { ReportType } from '../enums';
  * Stores reports submitted by users
  */
 @Entity('reports')
+@Index('idx_report_account_id', ['accountId'])
+@Index('idx_report_type', ['reportType'])
+@Index('idx_report_is_response', ['isResponse'])
+@Index('idx_report_created_at', ['createdAt'])
 export class Report {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

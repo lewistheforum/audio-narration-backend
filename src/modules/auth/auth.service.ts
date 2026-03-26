@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -20,6 +21,8 @@ import {
 } from './dto';
 import { CodeVerificationRepository } from '../accounts/repositories';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
+import { AccountRole } from '../accounts/enums/account-role.enum';
+import { VerificationType } from '../accounts/enums/verification-type.enum';
 import { Account } from '../accounts/entities/accounts.entity';
 import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 
@@ -66,9 +69,14 @@ export class AuthService {
     message: string;
   }> {
     const { email, password } = loginDto;
-    const user = await this.AccountsService.findByEmail(email);
+    const accountWithGeneral = await this.AccountsService.findAccountWithGeneralByEmail(email);
+    
+    if (!accountWithGeneral) {
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
+    }
 
     // Block pure OAuth users without a password - they must use Google login
+    const user = accountWithGeneral;
     if (!user || (user.isOAuthUser && !user.password)) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
@@ -89,10 +97,8 @@ export class AuthService {
     const payload = await this.buildJwtPayload(user);
     this.socketGatewayService.markUserOnline(String(user._id));
 
-    // Get general account data for response
-    const generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-      user._id,
-    );
+    // Get general account data from the joined query
+    const generalAccount = accountWithGeneral.generalAccount;
 
     // Determine message based on account status
     const message = user.status === AccountStatus.UNVERIFIED
@@ -128,13 +134,18 @@ export class AuthService {
       );
     }
 
-    let user = await this.AccountsService.findByEmail(email);
+    let user = await this.AccountsService.findAccountWithGeneralByEmail(email);
     let userId: string;
     let userEmail: string;
-    let generalAccount = null;
+    let generalAccount = user?.generalAccount || null;
 
     if (user) {
-      // Update existing user with OAuth data
+      if (user.role !== AccountRole.PATIENT) {
+        throw new ForbiddenException(
+          'Google login is only available for Patient accounts. Please log in using your registered email and password.',
+        );
+      }
+
       let needUpdate = false;
       let needUpdateGeneralAccount = false;
 
@@ -148,14 +159,9 @@ export class AuthService {
       }
 
       if (needUpdate) {
-        await this.AccountsService.updateAccountEntity(user);
+        await this.AccountsService.saveAccount(user);
       }
 
-      // Update profilePicture in GeneralAccount if needed
-      generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-        user._id,
-      );
-      
       if (picture && generalAccount && generalAccount.profilePicture !== picture) {
         generalAccount.profilePicture = picture;
         needUpdateGeneralAccount = true;
@@ -168,59 +174,45 @@ export class AuthService {
       userId = user._id;
       userEmail = user.email;
     } else {
-      // Create new patient account via Google OAuth - require initial password setup
-      // Password is explicitly set to null for OAuth-only users
+      const fullName =
+        [firstName, lastName].filter(Boolean).join(' ') || undefined;
 
-        // Construct fullName from first and last name
-        const fullName =
-          [firstName, lastName].filter(Boolean).join(' ') || undefined;
+      const createdUser = await this.AccountsService.createPatientViaOAuth({
+        email,
+        password: null,
+        username: email.split('@')[0],
+        fullName,
+        profilePicture: picture,
+      });
 
-        const createdUser = await this.AccountsService.createPatientViaOAuth({
-          email,
-          password: null,
-          username: email.split('@')[0],
-          fullName,
-          profilePicture: picture,
-        });
+      userId = createdUser.id;
+      userEmail = createdUser.email;
 
-        userId = createdUser.id;
-        userEmail = createdUser.email;
-        generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-          userId,
-        );
-
-        // Generate temporary setup token for new OAuth user
-        const setupToken = this.jwtService.sign(
-          { userId, email: userEmail, type: 'INITIAL_PWD_SETUP' },
-          { expiresIn: '15m' },
-        );
-
-        return {
-          requirePasswordSetup: true,
-          setupToken: setupToken,
-          userId: userId,
-          email: userEmail,
-        };
-      }
-
-      user = await this.AccountsService.findAccountEntityById(userId);
-
-      // Check if user account is banned or inactive
-      this.AccountsService.validateAccountAccess(user);
-
-      // Check clinic subscription status for clinic-related roles
-      await this.AccountsService.validateClinicSubscription(user);
-
-      const payload = await this.buildJwtPayload(user);
-      const accessToken = this.jwtService.sign(payload);
-
-      this.socketGatewayService.markUserOnline(String(userId));
+      const setupToken = this.jwtService.sign(
+        { userId, email: userEmail, type: 'INITIAL_PWD_SETUP' },
+        { expiresIn: '15m' },
+      );
 
       return {
-        accessToken: accessToken,
+        requirePasswordSetup: true,
+        setupToken: setupToken,
         userId: userId,
-        user: new AccountResponseDto(user, generalAccount),
+        email: userEmail,
       };
+    }
+
+    this.AccountsService.validateAccountAccess(user);
+
+    const payload = await this.buildJwtPayload(user);
+    const accessToken = this.jwtService.sign(payload);
+
+    this.socketGatewayService.markUserOnline(String(userId));
+
+    return {
+      accessToken: accessToken,
+      userId: userId,
+      user: new AccountResponseDto(user, generalAccount),
+    };
   }
 
   async verifyResetPasswordCode(dto: VerifyResetPasswordDto) {
@@ -233,11 +225,11 @@ export class AuthService {
 
     const now = getCurrentVietnamTime();
 
-    // Find latest unused code for this user
-    const userCodes = await this.codeVerificationRepository.findByUserId(user._id);
-    const record = userCodes
-      .filter(c => c.code === code && !c.used)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    const record = await this.codeVerificationRepository.findValidByUserIdAndCode(
+      user._id,
+      code,
+      VerificationType.RESET,
+    );
 
     if (!record) {
       throw new BadRequestException('Invalid verification code');
@@ -298,7 +290,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid token type');
     }
 
-    const user = await this.AccountsService.findAccountEntityById(decoded.userId);
+    const user = await this.AccountsService.findAccountWithGeneralById(decoded.userId);
     if (!user) {
       throw new BadRequestException('User not found');
     }
@@ -318,9 +310,7 @@ export class AuthService {
     user.password = await bcrypt.hash(dto.password, 10);
     await this.AccountsService.updateAccountEntity(user);
 
-    const generalAccount = await this.AccountsService.findGeneralAccountByUserId(
-      user._id,
-    );
+    const generalAccount = user.generalAccount || null;
 
     this.AccountsService.validateAccountAccess(user);
     await this.AccountsService.validateClinicSubscription(user);

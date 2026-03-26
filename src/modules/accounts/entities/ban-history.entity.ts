@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from './accounts.entity';
 import { BanType } from '../enums';
@@ -17,6 +18,7 @@ import { BanType } from '../enums';
  * Stores ban history for accounts
  */
 @Entity('ban_history')
+@Index('idx_ban_history_account_id', ['accountId'])
 export class BanHistory {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

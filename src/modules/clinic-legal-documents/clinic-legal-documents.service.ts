@@ -267,6 +267,7 @@ export class ClinicLegalDocumentsService {
 
   /**
    * Get list of ACTIVE clinic admins with their clinic managers and legal doc statuses
+   * OPTIMIZED: Uses single LEFT JOIN query instead of N+1 Promise.all
    */
   async getClinicAdminsWithManagers(
     page: number = 1,
@@ -274,69 +275,107 @@ export class ClinicLegalDocumentsService {
   ): Promise<any> {
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.accountRepository
+    // Count total admins first (without managers subquery for pagination)
+    const totalResult = await this.accountRepository
       .createQueryBuilder('admin')
-      .leftJoinAndSelect(
-        'admin.clinicAdminInformation',
-        'clinicAdminInformation',
+      .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
+      .andWhere('admin.status = :status', { status: AccountStatus.ACTIVE })
+      .getCount();
+
+    // Fetch admins with their managers in a single LEFT JOIN query
+    const rawData = await this.accountRepository
+      .createQueryBuilder('admin')
+      .leftJoin(
+        'clinic_admin_information',
+        'clinicAdminInfo',
+        'clinicAdminInfo.account_id = admin._id',
+      )
+      .leftJoin(
+        'accounts',
+        'manager',
+        'manager.parent_id = admin._id AND manager.role = :managerRole AND manager.deleted_at IS NULL',
+        { managerRole: AccountRole.CLINIC_MANAGER },
+      )
+      .leftJoin(
+        'clinic_manager_information',
+        'managerInfo',
+        'managerInfo.account_id = manager._id',
+      )
+      .leftJoin(
+        'clinics_legal_documents',
+        'legalDocs',
+        'legalDocs.account_id = manager._id AND legalDocs.verification_status = :docStatus',
+        { docStatus: LegalDocumentVerificationStatus.APPROVED },
       )
       .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
       .andWhere('admin.status = :status', { status: AccountStatus.ACTIVE })
-      .andWhere(
-        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = admin._id AND m.role = '${AccountRole.CLINIC_MANAGER}') > 1`,
-      )
-      .orderBy('admin.createdAt', 'DESC')
-      .skip(skip)
-      .take(limit);
+      .andWhere('admin.deleted_at IS NULL')
+      .select([
+        'admin._id as "adminAccountId"',
+        'admin.email as "adminEmail"',
+        'clinicAdminInfo.clinic_name as "clinicName"',
+        'manager._id as "managerAccountId"',
+        'manager.email as "managerEmail"',
+        'manager.status as "managerAccountStatus"',
+        'managerInfo.full_name as "managerFullName"',
+        'managerInfo.clinic_branch_name as "clinicBranchName"',
+        'legalDocs._id as "legalDocumentId"',
+        'legalDocs.verification_status as "verificationStatus"',
+        'legalDocs.rejection_reason as "rejectionReason"',
+        'legalDocs.created_at as "submittedAt"',
+      ])
+      .orderBy('admin.created_at', 'DESC')
+      .offset(skip)
+      .limit(limit)
+      .getRawMany();
 
-    const [clinicAdmins, totalItems] = await queryBuilder.getManyAndCount();
+    // Group managers by admin in memory
+    const adminMap = new Map<string, {
+      adminAccountId: string;
+      adminEmail: string | null;
+      clinicName: string;
+      managers: Array<{
+        accountId: string;
+        email: string | null;
+        accountStatus: string;
+        fullName: string;
+        clinicBranchName: string;
+        legalDocumentId: string | null;
+        verificationStatus: string | null;
+        rejectionReason: string | null;
+        submittedAt: Date | null;
+      }>;
+    }>();
 
-    // For each clinic admin, find their child managers with legal doc info
-    const data = await Promise.all(
-      clinicAdmins.map(async (admin) => {
-        const managers = await this.accountRepository
-          .createQueryBuilder('manager')
-          .leftJoin(
-            'clinic_manager_information',
-            'managerInfo',
-            'managerInfo.account_id = manager._id',
-          )
-          .leftJoin(
-            'clinics_legal_documents',
-            'legalDocs',
-            'legalDocs.account_id = manager._id',
-          )
-          .where('manager.parent_id = :parentId', { parentId: admin._id })
-          .andWhere('manager.role = :role', {
-            role: AccountRole.CLINIC_MANAGER,
-          })
-          .andWhere('legalDocs.verification_status = :docStatus', {
-            docStatus: LegalDocumentVerificationStatus.APPROVED,
-          })
-          .select([
-            'manager._id as "accountId"',
-            'manager.email as "email"',
-            'manager.status as "accountStatus"',
-            'managerInfo.full_name as "fullName"',
-            'managerInfo.clinic_branch_name as "clinicBranchName"',
-            'legalDocs._id as "legalDocumentId"',
-            'legalDocs.verification_status as "verificationStatus"',
-            'legalDocs.rejection_reason as "rejectionReason"',
-            'legalDocs.created_at as "submittedAt"',
-          ])
-          .getRawMany();
+    for (const row of rawData) {
+      if (!adminMap.has(row.adminAccountId)) {
+        adminMap.set(row.adminAccountId, {
+          adminAccountId: row.adminAccountId,
+          adminEmail: row.adminEmail,
+          clinicName: row.clinicName || '',
+          managers: [],
+        });
+      }
 
-        return {
-          adminAccountId: admin._id,
-          adminEmail: admin.email,
-          clinicName: admin.clinicAdminInformation?.clinicName || '',
-          managers,
-        };
-      }),
-    );
+      // Only add manager if exists (LEFT JOIN can return NULL)
+      if (row.managerAccountId) {
+        adminMap.get(row.adminAccountId)!.managers.push({
+          accountId: row.managerAccountId,
+          email: row.managerEmail,
+          accountStatus: row.managerAccountStatus,
+          fullName: row.managerFullName || row.managerEmail || 'Unknown',
+          clinicBranchName: row.clinicBranchName || '',
+          legalDocumentId: row.legalDocumentId,
+          verificationStatus: row.verificationStatus,
+          rejectionReason: row.rejectionReason,
+          submittedAt: row.submittedAt,
+        });
+      }
+    }
 
+    const totalItems = totalResult;
     return {
-      data,
+      data: Array.from(adminMap.values()),
       meta: {
         page,
         limit,
