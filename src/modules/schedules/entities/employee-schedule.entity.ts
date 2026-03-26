@@ -8,6 +8,7 @@ import {
   ManyToOne,
   ManyToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ClinicRoom } from './clinic_room.entity';
@@ -21,6 +22,7 @@ import { WeekDay } from '../enums';
  * Note: Table name is 'employee_schedule' to support all employee types
  */
 @Entity('employee_schedule')
+@Index('idx_employee_schedule_clinic_date', ['clinicId', 'workDate'])
 export class EmployeeSchedule {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
