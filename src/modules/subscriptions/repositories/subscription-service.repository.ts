@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { SubscriptionService } from '../entities/subscription-service.entity';
+import { SubscriptionServiceStatus } from '../enums/subscription-service-status.enum';
 
 /**
  * SubscriptionService Repository
@@ -21,9 +22,13 @@ export class SubscriptionServiceRepository {
    */
   async findAll(
     includeDeleted: boolean = false,
-    status?: string,
+    status?: SubscriptionServiceStatus,
   ): Promise<SubscriptionService[]> {
     const where: any = {};
+
+    if (status) {
+      where.status = status;
+    }
 
     return this.repository.find({
       where,
