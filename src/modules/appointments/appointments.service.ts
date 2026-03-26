@@ -7581,28 +7581,25 @@ export class AppointmentsService {
    */
   async getClinicSchedules(clinicId: string, workingDate?: string) {
     const today = getStartOfDay();
-    const maxDate = addToVietnamTime(60, 'day');
+    const maxDate = addToVietnamTime(30, 'day');
 
-    // Validate working_date if provided
     if (workingDate) {
       const date = new Date(workingDate);
       if (isNaN(date.getTime())) {
         throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
       }
 
-      // Validate date is within valid range
       if (date < today) {
         throw new BadRequestException('Date must be today or in the future');
       }
 
       if (date > maxDate) {
         throw new BadRequestException(
-          'Date cannot be more than 60 days in the future',
+          'Date cannot be more than 30 days in the future',
         );
       }
     }
 
-    // BR: Verify clinic legal documents are approved
     const legalDoc = await this.dataSource
       .createQueryBuilder()
       .select('verification_status')
@@ -7619,7 +7616,6 @@ export class AppointmentsService {
       );
     }
 
-    // Get all clinic branches (CLINIC_MANAGER) for this clinic (CLINIC_ADMIN)
     const branches = await this.dataSource
       .createQueryBuilder()
       .select('_id')
@@ -7630,17 +7626,13 @@ export class AppointmentsService {
       .andWhere('acc.deleted_at IS NULL')
       .getRawMany();
 
-
     const branchIds = branches.map((b) => b._id);
 
     if (branchIds.length === 0) {
-      // If no branches, treat clinicId as a branch itself
       branchIds.push(clinicId);
     }
 
-
-    // Build query with conditional date filtering
-    const queryBuilder = this.dataSource
+    const rawSlots = await this.dataSource
       .createQueryBuilder()
       .select([
         'es.work_date AS work_date',
@@ -7654,6 +7646,7 @@ export class AppointmentsService {
         'csh.end_hour AS end_time',
         'csh.limit AS limit',
         'cr.room_name AS clinic_room',
+        'COUNT(a._id) FILTER (WHERE a.status IN (\'PENDING\', \'CONFIRMED\', \'CHECKED_IN\', \'IN_PROGRESS\') AND a.deleted_at IS NULL) AS booked_count',
       ])
       .from('employee_schedule', 'es')
       .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
@@ -7666,136 +7659,38 @@ export class AppointmentsService {
         'cres.employee_schedule_id = es._id',
       )
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+      .leftJoin('appointments', 'a', `
+        a.clinic_shift_hour_id = csh._id 
+        AND a.appointment_date = es.work_date
+      `)
       .where('es.clinic_id IN (:...branchIds)', { branchIds })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
       .andWhere('csh.limit > 0')
       .andWhere('doctor.role = :doctorRole', { doctorRole: 'DOCTOR' })
-      .andWhere('doctor.status = :doctorStatus', { doctorStatus: 'ACTIVE' });
-
-    // Conditional date filtering
-    if (workingDate) {
-      // Option 3: Filter by specific date
-      queryBuilder.andWhere('es.work_date = :workingDate', { workingDate });
-    } else {
-      // Option 1: Filter by date range (today to today+60)
-      queryBuilder
-        .andWhere('es.work_date >= :today', { today })
-        .andWhere('es.work_date <= :maxDate', { maxDate });
-    }
-
-    // Query RAW DATA - Get ALL records without grouping in SQL
-    const rawSlots = await queryBuilder
+      .andWhere('doctor.status = :doctorStatus', { doctorStatus: 'ACTIVE' })
+      .groupBy('es._id, es.work_date, es.week_day, cs.shift, csh._id, doctor._id, di.full_name, doctor.username, di.position, csh.start_hour, csh.end_hour, csh.limit, cr.room_name')
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
       .addOrderBy('csh.start_hour', 'ASC')
       .getRawMany();
 
-    if (rawSlots.length > 0) {
-    }
-
-    if (rawSlots.length === 0) {
-
-      const rawScheduleCheck = await this.dataSource
-        .createQueryBuilder()
-        .select([
-          'es._id',
-          'es.work_date',
-          'es.clinic_id',
-          'es.employee_id',
-          'es.clinic_shift_id',
-        ])
-        .from('employee_schedule', 'es')
-        .where('es.clinic_id IN (:...branchIds)', { branchIds })
-        .andWhere('es.deleted_at IS NULL')
-        .getRawMany();
-      if (rawScheduleCheck.length > 0) {
-
-        // Check if clinic_shift_hour exists for those shifts
-        const shiftIds = [
-          ...new Set(rawScheduleCheck.map((r) => r.es_clinic_shift_id)),
-        ];
-
-        const hourCheck = await this.dataSource
-          .createQueryBuilder()
-          .select([
-            'csh._id',
-            'csh.shift_id',
-            'csh.start_hour',
-            'csh.end_hour',
-            'csh.limit',
-            'csh.deleted_at',
-          ])
-          .from('clinic_shift_hour', 'csh')
-          .where('csh.shift_id IN (:...shiftIds)', {
-            shiftIds: shiftIds.length ? shiftIds : ['none'],
-          })
-          .getRawMany();
-        if (hourCheck.length > 0) {
-        } else {
-        }
-
-        // Check doctor status
-        const empIds = [
-          ...new Set(rawScheduleCheck.map((r) => r.es_employee_id)),
-        ];
-        const doctorCheck = await this.dataSource
-          .createQueryBuilder()
-          .select(['acc._id', 'acc.role', 'acc.status'])
-          .from('accounts', 'acc')
-          .where('acc._id IN (:...empIds)', {
-            empIds: empIds.length ? empIds : ['none'],
-          })
-          .getRawMany();
-      }
-
+    if (!rawSlots || rawSlots.length === 0) {
       return { data: [] };
     }
 
-    // Calculate available_slots for each slot
-    const enrichedSlots = await Promise.all(
-      rawSlots.map(async (slot) => {
-        const appointmentCount = await this.dataSource
-          .createQueryBuilder()
-          .select('COUNT(*)', 'count')
-          .from('appointments', 'a')
-          .where('a.clinic_shift_hour_id = :shiftHourId', {
-            shiftHourId: slot.clinic_shift_hour_id,
-          })
-          .andWhere('a.appointment_date = :date', {
-            date: this.toVietnamDateString(slot.work_date),
-          })
-          .andWhere(
-            "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
-          )
-          .andWhere('a.deleted_at IS NULL')
-          .getRawOne();
+    const availableSlots = rawSlots
+      .map((slot) => ({
+        ...slot,
+        available_slots: parseInt(String(slot.limit)) - parseInt(String(slot.booked_count || 0)),
+      }))
+      .filter((slot) => slot.available_slots > 0);
 
-        const bookedCount = parseInt(appointmentCount?.count || '0');
-        const availableSlots = slot.limit - bookedCount;
-
-        return {
-          ...slot,
-          available_slots: availableSlots,
-        };
-      }),
-    );
-
-    // Filter out fully booked slots
-    const fullyBookedCount = enrichedSlots.filter(
-      (s) => s.available_slots <= 0,
-    ).length;
-    if (fullyBookedCount > 0) {
-    }
-    const availableSlots = enrichedSlots.filter((s) => s.available_slots > 0);
-
-    // DATA TRANSFORMATION: Group by Date -> Shift -> Slots
     const dateMap = new Map<string, any>();
 
     for (const slot of availableSlots) {
       const dateKey = this.toVietnamDateString(slot.work_date);
 
-      // Level 1: Date
       if (!dateMap.has(dateKey)) {
         dateMap.set(dateKey, {
           date: slot.work_date,
@@ -7805,9 +7700,8 @@ export class AppointmentsService {
       }
 
       const dateData = dateMap.get(dateKey);
-
-      // Level 2: Shift
       const shiftType = slot.shift_type;
+
       if (!dateData.shifts.has(shiftType)) {
         dateData.shifts.set(shiftType, {
           shift: shiftType,
@@ -7817,7 +7711,6 @@ export class AppointmentsService {
 
       const shiftData = dateData.shifts.get(shiftType);
 
-      // Level 3: Slot
       shiftData.slots.push({
         clinic_shift_hour_id: slot.clinic_shift_hour_id,
         doctor_id: slot.doctor_id,
@@ -7831,9 +7724,8 @@ export class AppointmentsService {
       });
     }
 
-    // Convert Maps to Arrays
     const result = Array.from(dateMap.values()).map((dateData) => ({
-      date: this.toVietnamDateString(dateData.date), // Format as YYYY-MM-DD string in VN timezone
+      date: this.toVietnamDateString(dateData.date),
       week_day: dateData.week_day,
       shifts: Array.from(dateData.shifts.values()),
     }));
