@@ -203,17 +203,7 @@ export class AccountsController {
    * @response 200 - Successfully retrieved username/email lists
    */
   @Get('username-email-list')
-  @ApiOperation({ summary: 'Get full list of usernames and emails' })
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    AccountRole.ADMIN,
-    AccountRole.PATIENT,
-    AccountRole.DOCTOR,
-    AccountRole.CLINIC_STAFF,
-    AccountRole.CLINIC_ADMIN,
-    AccountRole.CLINIC_MANAGER,
-  )
-  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get full list of usernames and emails (Public)' })
   @ApiResponseData({
     type: UsernameEmailListDto,
     status: MESSAGES.statusCode.success,
