@@ -71,6 +71,22 @@ export class FeedbackRepository {
   }
 
   /**
+   * Find Feedback by ID
+   *
+   * Retrieves a single feedback by its UUID.
+   * Excludes soft-deleted feedbacks by default.
+   *
+   * @param {string} id - Feedback UUID
+   * @returns {Promise<Feedback | null>} Feedback entity or null if not found
+   */
+  async findFeedbacksById(clinicId: string): Promise<Feedback[]> {
+    return this.feedbackRepository.find({
+      where: { clinicId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
    * Find Feedbacks by Clinic ID
    *
    * Retrieves all feedbacks for a specific clinic.

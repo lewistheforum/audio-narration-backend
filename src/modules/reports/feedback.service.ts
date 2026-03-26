@@ -229,7 +229,6 @@ export class FeedbackService {
           ? this.labelImages(feedback.feedbackImages)
           : Promise.resolve(null);
 
-
       const [descriptionLabel, feedbackImagesLabel] = await Promise.all([
         descriptionLabelPromise,
         imagesLabelPromise,
@@ -429,8 +428,8 @@ export class FeedbackService {
   }
 
   async findAllFeedbacksById(id: string) {
-    const feedback = await this.feedbackRepository.findFeedbackById(id);
-    return feedback ? [feedback] : [];
+    const feedback = await this.feedbackRepository.findFeedbacksById(id);
+    return feedback;
   }
 
   async findFeedbacksByDoctorId(doctorId: string) {
@@ -445,7 +444,8 @@ export class FeedbackService {
    */
   async getClinicManagersFeedbacksByAdminId(adminId: string) {
     // Fetch managers with their feedbacks in a single query using LEFT JOIN
-    const rawData = await this.dataSource.query(`
+    const rawData = await this.dataSource.query(
+      `
       SELECT 
         m._id AS manager_id,
         m.email AS manager_email,
@@ -463,26 +463,31 @@ export class FeedbackService {
         AND m.role = $2
         AND m.deleted_at IS NULL
       ORDER BY m._id, f.created_at DESC
-    `, [adminId, AccountRole.CLINIC_MANAGER]);
+    `,
+      [adminId, AccountRole.CLINIC_MANAGER],
+    );
 
     if (!rawData || rawData.length === 0) {
       return [];
     }
 
     // Group feedbacks by manager in memory
-    const managerMap = new Map<string, {
-      clinicManagerId: string;
-      clinicManagerEmail: string | null;
-      clinicManagerName: string;
-      clinicBranchName: string;
-      feedbacks: Array<{
-        feedback_id: string;
-        rating: number;
-        description: string | null;
-        created_at: Date;
-        feedback_type: string;
-      }>;
-    }>();
+    const managerMap = new Map<
+      string,
+      {
+        clinicManagerId: string;
+        clinicManagerEmail: string | null;
+        clinicManagerName: string;
+        clinicBranchName: string;
+        feedbacks: Array<{
+          feedback_id: string;
+          rating: number;
+          description: string | null;
+          created_at: Date;
+          feedback_type: string;
+        }>;
+      }
+    >();
 
     for (const row of rawData) {
       if (!managerMap.has(row.manager_id)) {

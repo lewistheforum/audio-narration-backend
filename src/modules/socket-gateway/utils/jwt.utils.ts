@@ -14,7 +14,7 @@ export const verifyToken = (
   try {
     const decoded = jwtService.verify(token) as DecodedToken;
     return decoded;
-  } catch (error) {
-    throw new Error('Invalid authentication token');
+  } catch (error: any) {
+    throw new Error(`Invalid authentication token: ${error.message}`);
   }
 };
