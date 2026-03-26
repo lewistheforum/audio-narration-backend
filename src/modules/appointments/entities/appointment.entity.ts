@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Account } from '../../accounts/entities/accounts.entity';
 import { ClinicShiftHour } from '../../schedules/entities/clinic-shift-hour.entity';
@@ -19,6 +20,7 @@ import { AppointmentStatus } from '../enums';
  * Stores patient appointment bookings
  */
 @Entity('appointments')
+@Index('idx_appointments_shift_date_status', ['clinicShiftHourId', 'appointmentDate', 'status'])
 export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
