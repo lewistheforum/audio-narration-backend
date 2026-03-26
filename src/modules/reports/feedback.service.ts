@@ -229,7 +229,6 @@ export class FeedbackService {
           ? this.labelImages(feedback.feedbackImages)
           : Promise.resolve(null);
 
-
       const [descriptionLabel, feedbackImagesLabel] = await Promise.all([
         descriptionLabelPromise,
         imagesLabelPromise,
@@ -429,8 +428,8 @@ export class FeedbackService {
   }
 
   async findAllFeedbacksById(id: string) {
-    const feedback = await this.feedbackRepository.findFeedbackById(id);
-    return feedback ? [feedback] : [];
+    const feedback = await this.feedbackRepository.findFeedbacksById(id);
+    return feedback;
   }
 
   async findFeedbacksByDoctorId(doctorId: string) {
@@ -451,6 +450,8 @@ export class FeedbackService {
       },
       relations: ['clinicManagerInformation'],
     });
+
+    console.log('check fb: ', managers);
 
     if (!managers || managers.length === 0) {
       return [];

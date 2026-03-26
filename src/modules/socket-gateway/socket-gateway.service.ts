@@ -153,7 +153,12 @@ export class SocketGatewayService
       });
     } catch (error: any) {
       if (error?.status !== 404 && error?.name !== 'NotFoundException') {
-        console.error('Connection error:', error.message || error);
+        const message = error.message || error;
+        if (message.includes('Invalid authentication token')) {
+          console.warn('Socket connection warning:', message);
+        } else {
+          console.error('Connection error:', message);
+        }
       }
       client.emit('error', {
         message: 'Invalid authentication token',
