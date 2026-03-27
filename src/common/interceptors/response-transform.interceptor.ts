@@ -33,68 +33,66 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor {
   }
 
   /**
-   * Recursively format all Date objects in the data to Vietnam timezone (+07:00)
-   * Handles nested objects, arrays, and prevents circular references
-   * 
-   * @param data - Any data structure (object, array, primitive, Date, etc.)
-   * @param visited - WeakSet to track visited objects and prevent infinite loops
-   * @returns Data with all Date objects formatted to Vietnam timezone strings
+   * High-performance recursive date formatter.
+   * Transforms both Date objects and ISO UTC strings to Vietnam timezone strings.
    */
-  private formatDates(data: any, visited = new WeakSet()): any {
-    // Handle null explicitly (typeof null === 'object')
-    if (data === null) {
-      return null;
-    }
+  private fastFormatDates(data: any, depth = 0): any {
+    if (depth > 10) return data;
+    if (data === null || data === undefined) return data;
 
-    // Handle undefined
-    if (data === undefined) {
-      return undefined;
-    }
+    const dataType = typeof data;
 
-    // Handle Date objects - convert to Vietnam timezone string
     if (data instanceof Date) {
       return formatToVietnamTime(data);
     }
 
-    // Handle arrays
-    if (Array.isArray(data)) {
-      return data.map((item) => this.formatDates(item, visited));
+    if (
+      dataType === 'string' &&
+      data.length >= 20 &&
+      data.endsWith('Z') &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:/.test(data)
+    ) {
+      return formatToVietnamTime(data);
     }
 
-    // Handle plain objects
-    if (typeof data === 'object') {
-      // Prevent circular references
-      if (visited.has(data)) {
+    if (Array.isArray(data)) {
+      return data.map((item) => this.fastFormatDates(item, depth + 1));
+    }
+
+    if (dataType === 'object') {
+      // Avoid recursing into system/complex instances like Buffers, Streams, or Socket objects
+      if (
+        data instanceof Buffer ||
+        data.constructor?.name === 'Buffer' ||
+        data.constructor?.name === 'Socket' ||
+        data.constructor?.name === 'EventEmitter'
+      ) {
         return data;
       }
-      visited.add(data);
 
-      // Create new object with formatted dates
       const formatted: any = {};
       for (const key in data) {
-        if (data.hasOwnProperty(key)) {
-          formatted[key] = this.formatDates(data[key], visited);
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          formatted[key] = this.fastFormatDates(data[key], depth + 1);
         }
       }
       return formatted;
     }
 
-    // Handle primitives (string, number, boolean)
     return data;
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const ctx = context.switchToHttp();
     const response = ctx.getResponse();
-    const request = ctx.getRequest();
 
     return next.handle().pipe(
       map((data) => {
         const message = data?.message || MESSAGES.successMessage.index;
         const rawData = this.extractResponseData(data);
         
-        // Format all dates in the response data
-        const formattedData = this.formatDates(rawData);
+        // Use the fast formatter to ensure +07:00 strings
+        const formattedData = this.fastFormatDates(rawData);
         
         return {
           statusCode: response.statusCode,

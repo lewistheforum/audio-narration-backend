@@ -195,13 +195,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -209,10 +203,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
@@ -285,13 +283,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -299,10 +291,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
@@ -371,21 +367,21 @@ export class AppointmentsService {
       throw new BadRequestException('Clinic shift hour ID is required');
     }
 
-    const appointmentHour = await this.getAppointmentHourFromShift(
-      clinicId,
-      createDto.clinicShiftHourId,
-      appointmentDate,
-    );
-
-    // Validate slot capacity for shift-hour bookings.
-    // A slot is full only when appointment count reaches clinic_shift_hour.limit.
-    if (createDto.clinicShiftHourId) {
-      await this.validateShiftHourCapacity(
+    // Validate appointment hour and capacity in parallel
+    const [appointmentHour] = await Promise.all([
+      this.getAppointmentHourFromShift(
         clinicId,
         createDto.clinicShiftHourId,
         appointmentDate,
-      );
-    }
+      ),
+      createDto.clinicShiftHourId
+        ? this.validateShiftHourCapacity(
+            clinicId,
+            createDto.clinicShiftHourId,
+            appointmentDate,
+          )
+        : Promise.resolve(),
+    ]);
 
     // Execute transaction to create appointment + package + services
     return await this.dataSource.transaction(async (manager) => {
@@ -508,46 +504,78 @@ export class AppointmentsService {
 
       await manager.save(ServiceAppointment, serviceAppointments);
 
-      // Fetch complete appointment with relations for response
-      const appointmentWithRelations = await manager.findOne(Appointment, {
-        where: { _id: savedAppointment._id },
-        relations: [
-          'patient',
-          'patient.generalAccount',
-          'patient.address',
-          'clinic',
-          'clinic.clinicManagerInformation',
-          'doctor',
-          'doctor.doctorInformation',
-        ],
-      });
-
-      // Fetch services for the created appointment (use manager to ensure transaction visibility)
-      const servicesRaw = await manager
-        .createQueryBuilder()
-        .select([
-          'clinicService._id AS id',
-          'clinicService.service_name AS serviceName',
-          'clinicService.description AS description',
-          'serviceAppointment.price AS price',
-          'serviceAppointment.discount AS discount',
-        ])
-        .from('service_appointments', 'serviceAppointment')
-        .innerJoin(
-          'clinic_service_config',
-          'clinicServiceConfig',
-          'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
-        )
-        .innerJoin(
-          'clinic_services',
-          'clinicService',
-          'clinicService._id = clinicServiceConfig.service_id',
-        )
-        .where('serviceAppointment.appointment_package_id = :packageId', {
-          packageId: savedPackage._id,
-        })
-        .andWhere('serviceAppointment.deleted_at IS NULL')
-        .getRawMany();
+      // Fetch response data in parallel
+      const [appointmentWithRelations, servicesRaw, roomsResult] =
+        await Promise.all([
+          manager.findOne(Appointment, {
+            where: { _id: savedAppointment._id },
+            relations: [
+              'patient',
+              'patient.generalAccount',
+              'patient.address',
+              'clinic',
+              'clinic.clinicManagerInformation',
+              'doctor',
+              'doctor.doctorInformation',
+            ],
+          }),
+          manager
+            .createQueryBuilder()
+            .select([
+              'clinicService._id AS id',
+              'clinicService.service_name AS serviceName',
+              'clinicService.description AS description',
+              'serviceAppointment.price AS price',
+              'serviceAppointment.discount AS discount',
+            ])
+            .from('service_appointments', 'serviceAppointment')
+            .innerJoin(
+              'clinic_service_config',
+              'clinicServiceConfig',
+              'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+            )
+            .innerJoin(
+              'clinic_services',
+              'clinicService',
+              'clinicService._id = clinicServiceConfig.service_id',
+            )
+            .where('serviceAppointment.appointment_package_id = :packageId', {
+              packageId: savedPackage._id,
+            })
+            .andWhere('serviceAppointment.deleted_at IS NULL')
+            .getRawMany(),
+          savedAppointment.clinicShiftHourId && savedAppointment.doctorId
+            ? manager
+                .createQueryBuilder()
+                .select('cr._id', 'roomId')
+                .addSelect('cr.room_name', 'roomName')
+                .from('clinic_shift_hour', 'csh')
+                .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+                .innerJoin(
+                  'employee_schedule',
+                  'es',
+                  'es.clinic_shift_id = cs._id',
+                )
+                .innerJoin(
+                  'clinic_room_employee_schedule',
+                  'cres',
+                  'cres.employee_schedule_id = es._id',
+                )
+                .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+                .where('csh._id = :clinicShiftHourId', {
+                  clinicShiftHourId: savedAppointment.clinicShiftHourId,
+                })
+                .andWhere('es.employee_id = :doctorId', {
+                  doctorId: savedAppointment.doctorId,
+                })
+                .andWhere('es.work_date = :appointmentDate', {
+                  appointmentDate: savedAppointment.appointmentDate,
+                })
+                .andWhere('es.deleted_at IS NULL')
+                .andWhere('cr.deleted_at IS NULL')
+                .getRawMany()
+            : Promise.resolve([]),
+        ]);
 
       const services = servicesRaw.map((row) => ({
         id: row.id,
@@ -557,42 +585,10 @@ export class AppointmentsService {
         discount: row.discount ? parseFloat(row.discount) : 0,
       }));
 
-      // Fetch clinic rooms if doctor shift is assigned
-      let clinicRooms = [];
-
-      if (savedAppointment.clinicShiftHourId && savedAppointment.doctorId) {
-        // Query clinic rooms directly without needing appointment_id
-        const roomsResult = await manager
-          .createQueryBuilder()
-          .select('cr._id', 'roomId')
-          .addSelect('cr.room_name', 'roomName')
-          .from('clinic_shift_hour', 'csh')
-          .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
-          .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
-          .innerJoin(
-            'clinic_room_employee_schedule',
-            'cres',
-            'cres.employee_schedule_id = es._id',
-          )
-          .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-          .where('csh._id = :clinicShiftHourId', {
-            clinicShiftHourId: savedAppointment.clinicShiftHourId,
-          })
-          .andWhere('es.employee_id = :doctorId', {
-            doctorId: savedAppointment.doctorId,
-          })
-          .andWhere('es.work_date = :appointmentDate', {
-            appointmentDate: savedAppointment.appointmentDate,
-          })
-          .andWhere('es.deleted_at IS NULL')
-          .andWhere('cr.deleted_at IS NULL')
-          .getRawMany();
-
-        clinicRooms = roomsResult.map((row) => ({
-          id: row.roomId,
-          roomName: row.roomName,
-        }));
-      }
+      const clinicRooms = roomsResult.map((row) => ({
+        id: row.roomId,
+        roomName: row.roomName,
+      }));
 
       return this.transformToResponseDto(
         appointmentWithRelations!,
@@ -2615,13 +2611,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -2629,10 +2619,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const appointmentItems = appointments.map((appointment) => {
@@ -2706,13 +2700,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -2720,10 +2708,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const appointmentItems = appointments.map((appointment) => {

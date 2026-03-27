@@ -435,9 +435,11 @@ export class AccountsService {
   }
 
   async getAccountInformationByRole(id: string): Promise<AccountResponseDto> {
-    const account = await this.findAccountEntityById(id);
-
-    const address = await this.addressRepository.findByAccountId(id);
+    // Parallel fetch basic account and address info
+    const [account, address] = await Promise.all([
+      this.findAccountEntityById(id),
+      this.addressRepository.findByAccountId(id),
+    ]);
 
     const googleIframe = await this.googleIframeRepository.findByAddressId(
       address?._id,

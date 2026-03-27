@@ -17,7 +17,7 @@ export const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
  * @returns Date object representing current time in Vietnam (GMT+7)
  */
 export function getCurrentVietnamTime(): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).utc(true).toDate();
+  return dayjs().tz(VIETNAM_TIMEZONE).toDate();
 }
 
 /**
@@ -49,7 +49,7 @@ export function formatToVietnamTime(date?: Date | string | number): string {
  * parseVietnamTime("2026-03-10T14:25:09.075Z") // Will be converted to Vietnam time
  */
 export function parseVietnamTime(isoString: string): Date {
-  return dayjs(isoString).tz(VIETNAM_TIMEZONE).utc(true).toDate();
+  return dayjs(isoString).tz(VIETNAM_TIMEZONE).toDate();
 }
 
 /**
@@ -67,7 +67,7 @@ export function addToVietnamTime(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).add(amount, unit).utc(true).toDate();
+  return dayjs().tz(VIETNAM_TIMEZONE).add(amount, unit).toDate();
 }
 
 /**
@@ -83,7 +83,27 @@ export function addToDate(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs(date).tz(VIETNAM_TIMEZONE).add(amount, unit).utc(true).toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).add(amount, unit).toDate();
+}
+
+/**
+ * Get start of month for a date in Vietnam timezone
+ *
+ * @param date - Date object or string (can be YYYY-MM)
+ * @returns Date object at YYYY-MM-01 00:00:00
+ */
+export function getStartOfMonth(date: Date | string): Date {
+  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('month').toDate();
+}
+
+/**
+ * Get end of month for a date in Vietnam timezone
+ *
+ * @param date - Date object or string (can be YYYY-MM)
+ * @returns Date object at YYYY-MM-last 23:59:59
+ */
+export function getEndOfMonth(date: Date | string): Date {
+  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('month').toDate();
 }
 
 /**
@@ -141,9 +161,9 @@ export function getVietnamTimestamp(date?: Date | string | number): number {
  */
 export function getStartOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').toDate();
 }
 
 /**
@@ -154,9 +174,9 @@ export function getStartOfDay(date?: Date | string): Date {
  */
 export function getEndOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').toDate();
 }
 
 /**
@@ -190,7 +210,7 @@ export function subtractFromVietnamTime(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).subtract(amount, unit).utc(true).toDate();
+  return dayjs().tz(VIETNAM_TIMEZONE).subtract(amount, unit).toDate();
 }
 
 /**
@@ -270,9 +290,9 @@ export function compareDates(
  */
 export function startOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').toDate();
 }
 
 /**
@@ -283,7 +303,7 @@ export function startOfDay(date?: Date | string): Date {
  */
 export function endOfDay(date?: Date | string): Date {
   if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
+    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').toDate();
   }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').utc(true).toDate();
+  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').toDate();
 }
