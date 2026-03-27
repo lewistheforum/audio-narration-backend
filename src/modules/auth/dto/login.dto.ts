@@ -5,11 +5,8 @@ import {
   MinLength,
   MaxLength,
   IsNotEmpty,
-  IsOptional,
-  IsEnum,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { AccountRole } from '../../accounts/enums/account-role.enum';
 
 /**
  * Login Data Transfer Object
@@ -38,14 +35,4 @@ export class LoginDto {
   @MinLength(6, { message: 'Password must be at least 6 characters' })
   @MaxLength(50, { message: 'Password must not exceed 50 characters' })
   password: string;
-
-  @ApiProperty({
-    description: 'Optional role hint for overlapping emails',
-    enum: AccountRole,
-    required: false,
-    example: AccountRole.CLINIC_ADMIN,
-  })
-  @IsOptional()
-  @IsEnum(AccountRole, { message: 'Invalid account role' })
-  role?: AccountRole;
 }

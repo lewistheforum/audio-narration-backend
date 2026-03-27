@@ -22,6 +22,7 @@ import {
 import { CodeVerificationRepository } from '../accounts/repositories';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
 import { AccountRole } from '../accounts/enums/account-role.enum';
+import { LegalDocumentVerificationStatus } from '../accounts/enums/legal-document-verification-status.enum';
 import { VerificationType } from '../accounts/enums/verification-type.enum';
 import { Account } from '../accounts/entities/accounts.entity';
 import { getCurrentVietnamTime } from 'src/common/utils/date.util';
@@ -40,10 +41,171 @@ export class AuthService {
     private codeVerificationRepository: CodeVerificationRepository,
   ) {}
 
+  private isOnboardingStatus(status?: RegistrationStatus): boolean {
+    return !!status && [
+      RegistrationStatus.PENDING_SEPAY_SETUP,
+      RegistrationStatus.PENDING_MANAGER_SETUP,
+      RegistrationStatus.PENDING_LEGAL_SETUP,
+      RegistrationStatus.PENDING_APPROVAL,
+      RegistrationStatus.PENDING_PAYMENT,
+    ].includes(status);
+  }
+
+  private ensureHierarchySubscription(
+    subscription: Account['subscription'] | undefined,
+    message: string,
+  ): void {
+    const now = getCurrentVietnamTime();
+
+    if (!subscription) {
+      throw new ForbiddenException(message);
+    }
+
+    const allowedStatuses = [
+      RegistrationStatus.ACTIVE,
+      RegistrationStatus.NON_RENEWING,
+    ];
+
+    if (!allowedStatuses.includes(subscription.subscriptionStatus)) {
+      throw new ForbiddenException(message);
+    }
+
+    if (
+      subscription.expirationDate &&
+      new Date(subscription.expirationDate) <= now
+    ) {
+      throw new ForbiddenException(message);
+    }
+  }
+
+  private validateHierarchyLoginAccess(
+    user: Account,
+    onboardingStatus?: RegistrationStatus,
+  ): void {
+    if (
+      this.isOnboardingStatus(onboardingStatus) &&
+      [AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER].includes(user.role)
+    ) {
+      return;
+    }
+
+    if (user.role === AccountRole.CLINIC_ADMIN) {
+      this.ensureHierarchySubscription(
+        user.subscription,
+        'Clinic subscription is not active. Please renew or complete the registration flow.',
+      );
+      return;
+    }
+
+    if (user.role === AccountRole.CLINIC_MANAGER) {
+      if (user.status === AccountStatus.MANAGER_DISABLED) {
+        throw new ForbiddenException(
+          'Your clinic branch has been temporarily disabled. Please contact your clinic administrator.',
+        );
+      }
+
+      const parentAdmin = user.parent;
+
+      if (!parentAdmin) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No parent clinic admin found.',
+        );
+      }
+
+      if (parentAdmin.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'The clinic network has been suspended. Please contact support for assistance.',
+        );
+      }
+
+      if (parentAdmin.status === AccountStatus.DELETED) {
+        throw new ForbiddenException(
+          'The clinic network has been deleted. Please contact support.',
+        );
+      }
+
+      this.ensureHierarchySubscription(
+        parentAdmin.subscription,
+        'The parent clinic subscription is not active. Please contact the clinic administrator.',
+      );
+
+      if (
+        !user.legalDocuments ||
+        user.legalDocuments.verificationStatus !==
+          LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          'Manager legal documents are not approved yet. Dashboard access is blocked.',
+        );
+      }
+
+      return;
+    }
+
+    if (
+      user.role === AccountRole.CLINIC_STAFF ||
+      user.role === AccountRole.DOCTOR
+    ) {
+      const parentManager = user.parent;
+
+      if (!parentManager) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No parent clinic manager found.',
+        );
+      }
+
+      if (parentManager.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'Your clinic branch has been suspended. Please contact support.',
+        );
+      }
+
+      if (parentManager.status === AccountStatus.MANAGER_DISABLED) {
+        throw new ForbiddenException(
+          'Your clinic branch has been temporarily disabled. Please contact your clinic administrator.',
+        );
+      }
+
+      if (
+        !parentManager.legalDocuments ||
+        parentManager.legalDocuments.verificationStatus !==
+          LegalDocumentVerificationStatus.APPROVED
+      ) {
+        throw new ForbiddenException(
+          'Parent manager legal documents are not approved yet. Dashboard access is blocked.',
+        );
+      }
+
+      const rootAdmin = parentManager.parent;
+
+      if (!rootAdmin) {
+        throw new ForbiddenException(
+          'Account hierarchy error. No root clinic admin found.',
+        );
+      }
+
+      if (rootAdmin.status === AccountStatus.BAN) {
+        throw new ForbiddenException(
+          'The clinic network has been suspended. Please contact support for assistance.',
+        );
+      }
+
+      if (rootAdmin.status === AccountStatus.DELETED) {
+        throw new ForbiddenException(
+          'The clinic network has been deleted. Please contact support.',
+        );
+      }
+
+      this.ensureHierarchySubscription(
+        rootAdmin.subscription,
+        'The root clinic subscription is not active. Please contact the clinic administrator.',
+      );
+    }
+  }
+
   private async resolveLoginAccount(loginDto: LoginDto): Promise<Account> {
-    const candidateAccounts = await this.AccountsService.findAccountsWithGeneralByEmail(
+    const candidateAccounts = await this.AccountsService.findLoginCandidatesByEmail(
       loginDto.email,
-      loginDto.role,
     );
 
     if (candidateAccounts.length === 0) {
@@ -70,8 +232,16 @@ export class AuthService {
     }
 
     if (matchedAccounts.length > 1) {
+      const prioritizedClinicAdmin = matchedAccounts.find(
+        (account) => account.role === AccountRole.CLINIC_ADMIN,
+      );
+
+      if (prioritizedClinicAdmin) {
+        return prioritizedClinicAdmin;
+      }
+
       throw new UnauthorizedException(
-        'Multiple accounts matched this email. Please login again with the correct role.',
+        'Multiple accounts matched this email and password. Please contact support.',
       );
     }
 
@@ -131,15 +301,10 @@ export class AuthService {
     // Check if user account is banned or deleted (UNVERIFIED is allowed)
     this.AccountsService.validateAccountAccess(user);
 
-    // Check if parent manager is disabled (for Staff/Doctor)
-    await this.AccountsService.validateParentManagerStatus(user);
-
-    // Check clinic subscription status for clinic-related roles
-    await this.AccountsService.validateClinicSubscription(user);
-
     const onboardingState = await this.AccountsService.getLoginOnboardingState(
       user,
     );
+    this.validateHierarchyLoginAccess(user, onboardingState.onboardingStatus);
     const payload = await this.buildJwtPayload(user, onboardingState);
     this.socketGatewayService.markUserOnline(String(user._id));
 

@@ -2523,6 +2523,23 @@ export class AccountsService {
     return this.accountRepository.findAccountByEmail(email);
   }
 
+  async findLoginCandidatesByEmail(email: string): Promise<Account[]> {
+    return this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.legalDocuments', 'legalDocuments')
+      .leftJoinAndSelect('account.subscription', 'subscription')
+      .leftJoinAndSelect('account.parent', 'parent')
+      .leftJoinAndSelect('parent.legalDocuments', 'parentLegalDocuments')
+      .leftJoinAndSelect('parent.subscription', 'parentSubscription')
+      .leftJoinAndSelect('parent.parent', 'rootAdmin')
+      .leftJoinAndSelect('rootAdmin.subscription', 'rootAdminSubscription')
+      .where('account.email = :email', { email })
+      .andWhere('account.deletedAt IS NULL')
+      .distinct(true)
+      .getMany();
+  }
+
   async findAccountsWithGeneralByEmail(
     email: string,
     role?: AccountRole,
@@ -4806,6 +4823,32 @@ export class AccountsService {
       ) {
         throw new ConflictException(
           'This email is already registered in the system and cannot be used for this role.',
+        );
+      }
+
+      const clinicAdminAccount = await queryRunner.manager
+        .getRepository(Account)
+        .createQueryBuilder('clinicAdmin')
+        .addSelect('clinicAdmin.password')
+        .where('clinicAdmin._id = :clinicAdminId', { clinicAdminId })
+        .andWhere('clinicAdmin.role = :role', {
+          role: AccountRole.CLINIC_ADMIN,
+        })
+        .andWhere('clinicAdmin.deletedAt IS NULL')
+        .getOne();
+
+      if (!clinicAdminAccount?.password) {
+        throw new NotFoundException('Clinic admin account not found');
+      }
+
+      const isSameAsClinicAdminPassword = await bcrypt.compare(
+        dto.password,
+        clinicAdminAccount.password,
+      );
+
+      if (isSameAsClinicAdminPassword) {
+        throw new BadRequestException(
+          'Mật khẩu của Quản lý không được trùng với mật khẩu của Chủ phòng khám (Clinic Admin)',
         );
       }
 

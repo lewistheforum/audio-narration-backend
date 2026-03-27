@@ -11,6 +11,18 @@ dayjs.extend(timezone);
  */
 export const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
+function toVietnamDayjs(date?: Date | string | number): dayjs.Dayjs {
+  if (!date) {
+    return dayjs().tz(VIETNAM_TIMEZONE);
+  }
+
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return dayjs.tz(`${date} 00:00:00`, VIETNAM_TIMEZONE);
+  }
+
+  return dayjs(date).tz(VIETNAM_TIMEZONE);
+}
+
 /**
  * Get current time in Vietnam timezone as Date object
  *
@@ -144,6 +156,48 @@ export function getStartOfDay(date?: Date | string): Date {
     return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
   }
   return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').utc(true).toDate();
+}
+
+/**
+ * Get start of tomorrow (00:00:00) in Vietnam timezone.
+ *
+ * @returns Date object at 00:00:00 tomorrow in Vietnam time
+ */
+export function getStartOfTomorrow(): Date {
+  return dayjs()
+    .tz(VIETNAM_TIMEZONE)
+    .add(1, 'day')
+    .startOf('day')
+    .utc(true)
+    .toDate();
+}
+
+/**
+ * Get start of a specific date in Vietnam timezone.
+ *
+ * @param date - Date or date string to normalize
+ * @returns Date object at 00:00:00 of that date in Vietnam time
+ */
+export function getStartOfVietnamDate(date: Date | string | number): Date {
+  return toVietnamDayjs(date).startOf('day').utc(true).toDate();
+}
+
+/**
+ * Check if a requested booking date is at least tomorrow in Vietnam timezone.
+ *
+ * @param date - Date or ISO string to validate
+ * @returns true if the requested date is tomorrow or later in Vietnam time
+ */
+export function isAtLeastOneDayInAdvanceVietnam(
+  date: Date | string | number,
+): boolean {
+  const requestedDate = toVietnamDayjs(date).startOf('day');
+  const startOfTomorrow = dayjs()
+    .tz(VIETNAM_TIMEZONE)
+    .add(1, 'day')
+    .startOf('day');
+
+  return !requestedDate.isBefore(startOfTomorrow);
 }
 
 /**

@@ -25,6 +25,9 @@ import { WeekDay } from '../enums';
 @Index('idx_employee_schedule_clinic_date', ['clinicId', 'workDate'])
 @Index('idx_employee_schedule_employee_date', ['employeeId', 'workDate'])
 @Index('idx_employee_schedule_clinic_shift', ['clinicShiftId'])
+@Index('idx_employee_schedule_clinic_workdate_deleted', ['clinicId', 'workDate', 'deletedAt'])
+@Index('idx_employee_schedule_employee_clinic_workdate', ['employeeId', 'clinicId', 'workDate'])
+@Index('idx_employee_schedule_shift_workdate_deleted', ['clinicShiftId', 'workDate', 'deletedAt'])
 export class EmployeeSchedule {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

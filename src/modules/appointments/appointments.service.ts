@@ -14,9 +14,13 @@ import {
   getCurrentVietnamTime,
   addToVietnamTime,
   getStartOfDay,
+  getStartOfTomorrow,
+  getStartOfVietnamDate,
   getDateString,
   formatToVietnamTime,
+  formatToDateOnly,
   isInPast,
+  isAtLeastOneDayInAdvanceVietnam,
 } from 'src/common/utils/date.util';
 import {
   AppointmentRepository,
@@ -133,6 +137,9 @@ import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
  */
 @Injectable()
 export class AppointmentsService {
+  private readonly MIN_ADVANCE_BOOKING_MESSAGE =
+    'Appointments must be booked at least 1 day in advance';
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly appointmentRepository: AppointmentRepository,
@@ -147,6 +154,12 @@ export class AppointmentsService {
     @Inject(forwardRef(() => TransactionsService))
     private readonly transactionsService: TransactionsService,
   ) {}
+
+  private validateMinimumBookingLeadTime(date: string): void {
+    if (!isAtLeastOneDayInAdvanceVietnam(date)) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+    }
+  }
 
   /**
    * Get all appointments for a clinic (Staff access)
@@ -6613,16 +6626,13 @@ export class AppointmentsService {
   }): Promise<any> {
     const { working_date, page, limit, search, district } = params;
 
-    const today = getStartOfDay();
     const maxDate = addToVietnamTime(30, 'day');
 
     if (working_date) {
-      const appointmentDate = new Date(working_date);
+      const appointmentDate = getStartOfVietnamDate(working_date);
 
-      if (appointmentDate < today) {
-        throw new BadRequestException(
-          'Working date must be today or in the future',
-        );
+      if (!isAtLeastOneDayInAdvanceVietnam(working_date)) {
+        throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
       }
 
       if (appointmentDate > maxDate) {
@@ -7541,17 +7551,26 @@ export class AppointmentsService {
    * @returns Nested schedule structure: dates -> shifts -> slots
    */
   async getClinicSchedules(clinicId: string, workingDate?: string) {
-    const today = getStartOfDay();
+    const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(30, 'day');
+    const startOfTomorrowDateString = this.toVietnamDateString(startOfTomorrow);
+    const maxDateString = this.toVietnamDateString(maxDate);
+    const validAppointmentStatuses = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+      AppointmentStatus.CHECKED_IN,
+      AppointmentStatus.IN_PROGRESS,
+    ];
+    let normalizedWorkingDate: string | undefined;
 
     if (workingDate) {
-      const date = new Date(workingDate);
+      const date = getStartOfVietnamDate(workingDate);
       if (isNaN(date.getTime())) {
         throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
       }
 
-      if (date < today) {
-        throw new BadRequestException('Date must be today or in the future');
+      if (!isAtLeastOneDayInAdvanceVietnam(workingDate)) {
+        throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
       }
 
       if (date > maxDate) {
@@ -7559,6 +7578,8 @@ export class AppointmentsService {
           'Date cannot be more than 30 days in the future',
         );
       }
+
+      normalizedWorkingDate = this.toVietnamDateString(date);
     }
 
     const legalDoc = await this.dataSource
@@ -7593,7 +7614,7 @@ export class AppointmentsService {
       branchIds.push(clinicId);
     }
 
-    const rawSlots = await this.dataSource
+    const scheduleQuery = this.dataSource
       .createQueryBuilder()
       .select([
         'es.work_date AS work_date',
@@ -7607,7 +7628,8 @@ export class AppointmentsService {
         'csh.end_hour AS end_time',
         'csh.limit AS limit',
         'cr.room_name AS clinic_room',
-        'COUNT(a._id) FILTER (WHERE a.status IN (\'PENDING\', \'CONFIRMED\', \'CHECKED_IN\', \'IN_PROGRESS\') AND a.deleted_at IS NULL) AS booked_count',
+        'COUNT(DISTINCT a._id) AS booked_count',
+        'GREATEST(csh.limit - COUNT(DISTINCT a._id), 0) AS available_slots',
       ])
       .from('employee_schedule', 'es')
       .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
@@ -7623,7 +7645,9 @@ export class AppointmentsService {
       .leftJoin('appointments', 'a', `
         a.clinic_shift_hour_id = csh._id 
         AND a.appointment_date = es.work_date
-      `)
+        AND a.status IN (:...validAppointmentStatuses)
+        AND a.deleted_at IS NULL
+      `, { validAppointmentStatuses })
       .where('es.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
@@ -7631,25 +7655,32 @@ export class AppointmentsService {
       .andWhere('doctor.role = :doctorRole', { doctorRole: 'DOCTOR' })
       .andWhere('doctor.status = :doctorStatus', { doctorStatus: 'ACTIVE' })
       .groupBy('es._id, es.work_date, es.week_day, cs.shift, csh._id, doctor._id, di.full_name, doctor.username, di.position, csh.start_hour, csh.end_hour, csh.limit, cr.room_name')
+      .having('GREATEST(csh.limit - COUNT(DISTINCT a._id), 0) > 0')
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
-      .addOrderBy('csh.start_hour', 'ASC')
-      .getRawMany();
+      .addOrderBy('csh.start_hour', 'ASC');
+
+    if (normalizedWorkingDate) {
+      scheduleQuery.andWhere('es.work_date = :workingDate', {
+        workingDate: normalizedWorkingDate,
+      });
+    } else {
+      scheduleQuery
+        .andWhere('es.work_date >= :startOfTomorrowDate', {
+          startOfTomorrowDate: startOfTomorrowDateString,
+        })
+        .andWhere('es.work_date <= :maxDate', { maxDate: maxDateString });
+    }
+
+    const rawSlots = await scheduleQuery.getRawMany();
 
     if (!rawSlots || rawSlots.length === 0) {
       return { data: [] };
     }
 
-    const availableSlots = rawSlots
-      .map((slot) => ({
-        ...slot,
-        available_slots: parseInt(String(slot.limit)) - parseInt(String(slot.booked_count || 0)),
-      }))
-      .filter((slot) => slot.available_slots > 0);
-
     const dateMap = new Map<string, any>();
 
-    for (const slot of availableSlots) {
+    for (const slot of rawSlots) {
       const dateKey = this.toVietnamDateString(slot.work_date);
 
       if (!dateMap.has(dateKey)) {
@@ -7680,7 +7711,7 @@ export class AppointmentsService {
         start_time: slot.start_time,
         end_time: slot.end_time,
         limit: slot.limit,
-        available_slots: slot.available_slots,
+        available_slots: parseInt(String(slot.available_slots || 0)),
         clinic_room: slot.clinic_room,
       });
     }
@@ -7716,7 +7747,7 @@ export class AppointmentsService {
       throw new BadRequestException('clinic_id is required');
     }
 
-    const today = getStartOfDay();
+    const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(60, 'day');
 
     // BR: Verify clinic legal documents are approved
@@ -7761,7 +7792,9 @@ export class AppointmentsService {
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
       .where('es.employee_id = :doctorId', { doctorId })
       .andWhere('es.clinic_id = :clinicId', { clinicId })
-      .andWhere('es.work_date >= :today', { today })
+      .andWhere('es.work_date >= :startOfTomorrow', {
+        startOfTomorrow: this.toVietnamDateString(startOfTomorrow),
+      })
       .andWhere('es.work_date <= :maxDate', { maxDate })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
@@ -7887,18 +7920,28 @@ export class AppointmentsService {
       );
     }
 
-    const date = new Date(appointmentDate);
+    const date = getStartOfVietnamDate(appointmentDate);
     if (isNaN(date.getTime())) {
       throw new BadRequestException(
         'Invalid appointment_date format. Use YYYY-MM-DD.',
       );
     }
 
-    const today = getStartOfDay();
+    const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(30, 'day');
 
-    if (date < today) {
-      throw new BadRequestException('Date must be today or in the future');
+    if (!isAtLeastOneDayInAdvanceVietnam(appointmentDate)) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+    }
+
+    if (requestedTime < startOfTomorrow) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+    }
+
+    if (formatToDateOnly(requestedTime) !== appointmentDate) {
+      throw new BadRequestException(
+        'appointment_date must match the date part of extra_hour',
+      );
     }
 
     if (date > maxDate) {

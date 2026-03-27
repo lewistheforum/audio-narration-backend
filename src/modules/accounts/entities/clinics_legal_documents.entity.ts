@@ -30,6 +30,8 @@ import { encryptionTransformer } from '../../../common/transformers/encryption.t
  */
 @Entity('clinics_legal_documents')
 @Index('idx_legal_docs_account_id', ['accountId'])
+@Index('idx_legal_docs_account_deleted', ['accountId', 'deletedAt'])
+@Index('idx_legal_docs_account_status_deleted', ['accountId', 'verificationStatus', 'deletedAt'])
 @Index('idx_legal_docs_verification_status', ['verificationStatus'])
 export class ClinicsLegalDocuments {
   @PrimaryGeneratedColumn('uuid')
