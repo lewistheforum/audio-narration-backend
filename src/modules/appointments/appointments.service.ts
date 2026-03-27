@@ -3201,15 +3201,17 @@ export class AppointmentsService {
       (sa) => sa.erm?.recordType === ERMRecordType.CONSULTATION,
     );
 
+    // Cache ePrescription to reuse in step 10 (avoid duplicate query)
+    let cachedEPrescription: EPrescription | null = null;
     if (hasConsultationErm) {
-      const ePrescription = await this.dataSource
+      cachedEPrescription = await this.dataSource
         .getRepository(EPrescription)
         .createQueryBuilder('ep')
         .where('ep.appointment_id = :appointmentId', { appointmentId })
         .andWhere('ep.deleted_at IS NULL')
         .getOne();
 
-      if (!ePrescription) {
+      if (!cachedEPrescription) {
         missingRequirements.push(
           'E-prescription not created (required when there is consultation ERM)',
         );
@@ -3245,53 +3247,53 @@ export class AppointmentsService {
 
     // 7. Lock e_prescription (already immutable by virtue of appointment status change)
     // No specific action needed as we'll check appointment status when modifying prescription
-
     // 8. Determine payment logic and appointment status
-    const appointmentStartTime = new Date(appointment.appointmentHour);
+    //
+    // Strategy: Use package.status (PAID | PENDING_PAYMENT) as the source of truth.
+    // - A package with status=PAID means it has been successfully paid (online or COD).
+    // - A package with status=PENDING_PAYMENT means it awaits payment (initial unpaid or additional service added by doctor).
+    // This is more reliable than checking transactionId (which only means a transaction was INITIATED, not completed).
+    const paidPackages = appointmentPackages.filter(
+      (pkg) => pkg.status === AppointmentPackageStatus.PAID,
+    );
+    const pendingPackages = appointmentPackages.filter(
+      (pkg) => pkg.status === AppointmentPackageStatus.PENDING_PAYMENT,
+    );
 
-    // Identify additional services (created after appointment start time)
-    const additionalServices = serviceAppointments.filter((sa) => {
-      return new Date(sa.createdAt) > appointmentStartTime;
-    });
+    const allPackagesPaid = pendingPackages.length === 0 && paidPackages.length > 0;
+    const hasUnpaidPackages = pendingPackages.length > 0;
+    const hasPaidPackages = paidPackages.length > 0;
 
-    const hasAdditionalServices = additionalServices.length > 0;
-
-    // Calculate additional amount
+    // Calculate additional amount from all pending packages (services added during examination)
+    // Additional services = services whose package has no transaction (added by doctor, not pre-booked)
+    const additionalPackages = pendingPackages;
+    const hasAdditionalServices = additionalPackages.length > 0;
     let additionalAmount = 0;
     if (hasAdditionalServices) {
-      for (const service of additionalServices) {
-        const price = service.clinicService?.price || 0;
-        additionalAmount += Number(price);
+      for (const pkg of additionalPackages) {
+        additionalAmount += Number(pkg.amount);
       }
     }
 
-    // Determine if paid online (check if any package has transactionId)
-    const hasPaidOnline = appointmentPackages.some(
-      (pkg) => pkg.transactionId !== null,
-    );
-
     // Determine payment status, appointment status, and next step
+    // CASE 1: All packages paid → Examination fully done, can export prescription
+    // CASE 2: Has any pending package → Must proceed to payment first
     let paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL';
     let nextStep: 'EXPORT_PRESCRIPTION' | 'PROCEED_TO_PAYMENT';
     let appointmentStatus: AppointmentStatus;
 
-    if (hasPaidOnline && !hasAdditionalServices) {
-      // CASE 1: Paid online + No additional services ΓåÆ Fully completed
+    if (allPackagesPaid) {
+      // CASE 1: All packages are PAID (online or COD confirmed) → Fully completed
       paymentStatus = 'PAID';
       nextStep = 'EXPORT_PRESCRIPTION';
       appointmentStatus = AppointmentStatus.COMPLETED;
-    } else if (!hasPaidOnline && !hasAdditionalServices) {
-      // CASE 2: Not paid online + No additional services ΓåÆ Need full payment
-      paymentStatus = 'UNPAID';
-      nextStep = 'PROCEED_TO_PAYMENT';
-      appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
-    } else if (hasPaidOnline && hasAdditionalServices) {
-      // CASE 3: Paid online + Has additional services ΓåÆ Need additional payment
+    } else if (hasPaidPackages && hasUnpaidPackages) {
+      // CASE 2: Some packages paid (initial online), some pending (additional services added by doctor)
       paymentStatus = 'PARTIAL';
       nextStep = 'PROCEED_TO_PAYMENT';
       appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
     } else {
-      // CASE 4: Not paid online + Has additional services ΓåÆ Need full payment (including additional)
+      // CASE 3: No packages are paid yet → Need full payment (COD appointment)
       paymentStatus = 'UNPAID';
       nextStep = 'PROCEED_TO_PAYMENT';
       appointmentStatus = AppointmentStatus.NEED_FINAL_PAYMENT;
@@ -3317,7 +3319,8 @@ export class AppointmentsService {
     );
 
     // 10. Get prescription info
-    const ePrescription = await this.dataSource
+    // Use cached result from step 5 if available (hasConsultationErm), otherwise query now
+    const ePrescription: EPrescription | null = cachedEPrescription ?? await this.dataSource
       .getRepository(EPrescription)
       .createQueryBuilder('ep')
       .where('ep.appointment_id = :appointmentId', { appointmentId })
