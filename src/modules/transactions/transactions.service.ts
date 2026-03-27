@@ -221,6 +221,20 @@ export class TransactionsService {
     // Case B: Exist but Active & Valid (User mistake?)
     const now = getCurrentVietnamTime();
 
+    if (
+      subscription &&
+      ![
+        RegistrationStatus.PENDING_PAYMENT,
+        RegistrationStatus.EXPIRED,
+        RegistrationStatus.ACTIVE,
+        RegistrationStatus.NON_RENEWING,
+      ].includes(subscription.subscriptionStatus)
+    ) {
+      throw new BadRequestException(
+        `Subscription payment is not available while registration is in ${subscription.subscriptionStatus}.`,
+      );
+    }
+
     // Check if there's already a renewal in the queue
     const hasQueue =
       await this.subscriptionServicesService.getRenewalQueueByClinicId(clinicId);

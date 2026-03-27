@@ -25,6 +25,7 @@ import { AccountRole } from '../accounts/enums/account-role.enum';
 import { VerificationType } from '../accounts/enums/verification-type.enum';
 import { Account } from '../accounts/entities/accounts.entity';
 import { getCurrentVietnamTime } from 'src/common/utils/date.util';
+import { RegistrationStatus } from '../subscriptions/enums/subscription-status.enum';
 
 /**
  * Authentication Service
@@ -39,9 +40,53 @@ export class AuthService {
     private codeVerificationRepository: CodeVerificationRepository,
   ) {}
 
-  private async buildJwtPayload(user: Account): Promise<Record<string, any>> {
+  private async resolveLoginAccount(loginDto: LoginDto): Promise<Account> {
+    const candidateAccounts = await this.AccountsService.findAccountsWithGeneralByEmail(
+      loginDto.email,
+      loginDto.role,
+    );
+
+    if (candidateAccounts.length === 0) {
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
+    }
+
+    const matchedAccounts: Account[] = [];
+
+    for (const candidate of candidateAccounts) {
+      if (candidate.isOAuthUser && !candidate.password) {
+        continue;
+      }
+
+      if (
+        candidate.password &&
+        (await bcrypt.compare(loginDto.password, candidate.password))
+      ) {
+        matchedAccounts.push(candidate);
+      }
+    }
+
+    if (matchedAccounts.length === 0) {
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
+    }
+
+    if (matchedAccounts.length > 1) {
+      throw new UnauthorizedException(
+        'Multiple accounts matched this email. Please login again with the correct role.',
+      );
+    }
+
+    return matchedAccounts[0];
+  }
+
+  private async buildJwtPayload(
+    user: Account,
+    onboardingState?: Record<string, any>,
+  ): Promise<Record<string, any>> {
     const subscriptionPayload =
       await this.AccountsService.getSubscriptionPayloadForAccount(user);
+    const resolvedOnboardingState =
+      onboardingState ||
+      (await this.AccountsService.getLoginOnboardingState(user));
 
     return {
       sub: user._id,
@@ -49,6 +94,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       ...subscriptionPayload,
+      ...resolvedOnboardingState,
     };
   }
 
@@ -65,23 +111,20 @@ export class AuthService {
       accessToken: string;
       userId: string;
       user: AccountResponseDto;
+      onboardingStatus?: RegistrationStatus;
+      registrationStep?: string;
+      nextAction?: string;
+      canAccessDashboard?: boolean;
+      managerAccountId?: string;
+      notice?: string;
+      expirationDate?: string;
     };
     message: string;
   }> {
-    const { email, password } = loginDto;
-    const accountWithGeneral = await this.AccountsService.findAccountWithGeneralByEmail(email);
-    
-    if (!accountWithGeneral) {
-      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
-    }
+    const user = await this.resolveLoginAccount(loginDto);
 
     // Block pure OAuth users without a password - they must use Google login
-    const user = accountWithGeneral;
     if (!user || (user.isOAuthUser && !user.password)) {
-      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
-    }
-
-    if (!(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
     }
 
@@ -94,11 +137,14 @@ export class AuthService {
     // Check clinic subscription status for clinic-related roles
     await this.AccountsService.validateClinicSubscription(user);
 
-    const payload = await this.buildJwtPayload(user);
+    const onboardingState = await this.AccountsService.getLoginOnboardingState(
+      user,
+    );
+    const payload = await this.buildJwtPayload(user, onboardingState);
     this.socketGatewayService.markUserOnline(String(user._id));
 
     // Get general account data from the joined query
-    const generalAccount = accountWithGeneral.generalAccount;
+    const generalAccount = user.generalAccount;
 
     // Determine message based on account status
     const message = user.status === AccountStatus.UNVERIFIED
@@ -110,6 +156,7 @@ export class AuthService {
         accessToken: this.jwtService.sign(payload),
         userId: user._id,
         user: new AccountResponseDto(user, generalAccount),
+        ...onboardingState,
       },
       message,
     };
