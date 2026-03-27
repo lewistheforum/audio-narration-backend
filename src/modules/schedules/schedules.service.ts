@@ -638,6 +638,10 @@ export class SchedulesService {
         fullName = generalAccount.fullName;
       }
 
+      const sortedHours = (schedule.clinicShift?.hours || []).sort((a: any, b: any) =>
+        a.startHour.localeCompare(b.startHour),
+      );
+
       return {
         id: schedule._id,
         workDate: schedule.workDate,
@@ -655,22 +659,11 @@ export class SchedulesService {
         shift: {
           id: schedule.clinicShift?._id,
           name: schedule.clinicShift?.shift,
-          hours:
-            schedule.clinicShift?.hours
-              ?.map((hour: any) => {
-                const isPastTime =
-                  isPastDate || (isToday && nowTimeStr > hour.startHour);
-
-                return {
-                  id: hour._id,
-                  startHour: hour.startHour,
-                  endHour: hour.endHour,
-                  limit: hour.limit,
-                  bookedCount: hour.bookedCount || 0,
-                  isFull: (hour.bookedCount || 0) >= hour.limit || isPastTime,
-                };
-              })
-              .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
+          startHour: sortedHours.length > 0 ? sortedHours[0].startHour : null,
+          endHour:
+            sortedHours.length > 0
+              ? sortedHours[sortedHours.length - 1].endHour
+              : null,
         },
         room:
           schedule.rooms && schedule.rooms.length > 0
