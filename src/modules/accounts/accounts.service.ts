@@ -4551,7 +4551,7 @@ export class AccountsService {
    * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
    * - Creates Account with CLINIC_ADMIN role and PENDING status
    * - Creates ClinicAdminInformation with clinic details AND bank configuration
-    * - Creates ClinicSubscription with PENDING_MANAGER_SETUP status
+    * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
    * - Bank fields (bankNumber, bankBranch) are encrypted via encryptionTransformer
    * - Password is hashed with bcrypt before storage
    *
@@ -4670,11 +4670,11 @@ export class AccountsService {
 
       await queryRunner.manager.save(clinicAdminInfo);
 
-      // Create ClinicSubscription entity and move directly to manager setup
+      // Create ClinicSubscription entity at Step 1 of onboarding
       const clinicSubscription = this.clinicSubscriptionRepository.create({
         clinicId: savedAccount._id,
         serviceId: dto.serviceId,
-        subscriptionStatus: RegistrationStatus.PENDING_MANAGER_SETUP,
+        subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
         subscriptionDate: getCurrentVietnamTime(),
       });
 

@@ -945,6 +945,19 @@ export class TransactionsService {
           { accountId: appointmentId },
           { isVerify: true },
         );
+
+        const subscription = await this.clinicSubscriptionRepo.findOne({
+          where: {
+            clinicId: appointmentId,
+            subscriptionStatus: RegistrationStatus.PENDING_SEPAY_SETUP,
+          },
+        });
+
+        if (subscription) {
+          subscription.subscriptionStatus =
+            RegistrationStatus.PENDING_MANAGER_SETUP;
+          await this.clinicSubscriptionRepo.save(subscription);
+        }
       }
 
       // Check if this is a SUBSCRIPTION payment
