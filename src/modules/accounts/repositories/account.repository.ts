@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial, IsNull } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
-import { AccountRole, AccountStatus, ClinicRole, LegalDocumentVerificationStatus } from '../enums';
+import {
+  AccountRole,
+  AccountStatus,
+  ClinicRole,
+  LegalDocumentVerificationStatus,
+} from '../enums';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 
 /**
@@ -42,7 +47,7 @@ export class AccountRepository {
   constructor(
     @InjectRepository(Account)
     private readonly accountRepository: Repository<Account>,
-  ) { }
+  ) {}
 
   /**
    * Find All Accounts
@@ -232,10 +237,19 @@ export class AccountRepository {
     }
     return this.accountRepository
       .createQueryBuilder('account')
-      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInformation')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInformation')
+      .leftJoinAndSelect(
+        'account.clinicAdminInformation',
+        'clinicAdminInformation',
+      )
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
+        'clinicManagerInformation',
+      )
       .leftJoinAndSelect('account.doctorInformation', 'doctorInformation')
-      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInformation')
+      .leftJoinAndSelect(
+        'account.clinicStaffInformation',
+        'clinicStaffInformation',
+      )
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .where('account._id = ANY(:ids)', { ids })
       .getMany();
@@ -719,7 +733,9 @@ export class AccountRepository {
     if (clinicId) {
       if (Array.isArray(clinicId)) {
         if (clinicId.length > 0) {
-          queryBuilder.andWhere('account.parentId = ANY(:clinicId)', { clinicId });
+          queryBuilder.andWhere('account.parentId = ANY(:clinicId)', {
+            clinicId,
+          });
         } else {
           queryBuilder.andWhere('1 = 0');
         }
@@ -801,8 +817,9 @@ export class AccountRepository {
       queryBuilder.where('account.parentId = :clinicId', { clinicId });
     }
 
-    queryBuilder
-      .andWhere('account.role = :accountRole', { accountRole: AccountRole.CLINIC_STAFF });
+    queryBuilder.andWhere('account.role = :accountRole', {
+      accountRole: AccountRole.CLINIC_STAFF,
+    });
 
     if (status) {
       queryBuilder.andWhere('account.status = :status', { status });
@@ -831,10 +848,7 @@ export class AccountRepository {
     }
 
     // Apply pagination and ordering
-    queryBuilder
-      .skip(skip)
-      .take(take)
-      .orderBy('account.createdAt', 'DESC');
+    queryBuilder.skip(skip).take(take).orderBy('account.createdAt', 'DESC');
 
     return queryBuilder.getManyAndCount();
   }
@@ -859,9 +873,6 @@ export class AccountRepository {
     queryBuilder.leftJoinAndSelect('account.doctorInformation', 'doctorInfo');
 
     queryBuilder.where('account.parentId = :clinicId', { clinicId });
-    queryBuilder.andWhere('account.status = :status', {
-      status: AccountStatus.ACTIVE,
-    });
     queryBuilder.andWhere('account.deletedAt IS NULL');
 
     if (role) {
@@ -887,7 +898,7 @@ export class AccountRepository {
   /**
    * Find Managers by Status
    * Utility method for filtering managers by status
-   * 
+   *
    * @param clinicAdminId - Parent admin ID
    * @param statuses - Array of statuses to filter
    * @returns Array of manager accounts
@@ -901,7 +912,10 @@ export class AccountRepository {
     }
     return this.accountRepository
       .createQueryBuilder('account')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInformation')
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
+        'clinicManagerInformation',
+      )
       .where('account.parentId = :clinicAdminId', { clinicAdminId })
       .andWhere('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
       .andWhere('account.status = ANY(:statuses)', { statuses })
@@ -912,7 +926,7 @@ export class AccountRepository {
   /**
    * Count Personnel Under Manager
    * Counts Staff and Doctor accounts for a given manager
-   * 
+   *
    * @param managerId - Manager account ID
    * @returns Object with staffCount and doctorCount
    */
