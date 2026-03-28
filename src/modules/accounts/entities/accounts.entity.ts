@@ -37,7 +37,9 @@ import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
  * - Account ban management
  */
 @Entity('accounts')
-@Index('idx_accounts_email', ['email'], { unique: true })
+@Index('idx_accounts_email', ['email'])
+@Index('idx_accounts_email_deleted', ['email', 'deletedAt'])
+@Index('idx_accounts_email_role_deleted', ['email', 'role', 'deletedAt'])
 @Index('idx_accounts_username', ['username'])
 @Index('idx_accounts_status_role', ['status', 'role'])
 @Index('idx_accounts_parent_role', ['parentId', 'role'])

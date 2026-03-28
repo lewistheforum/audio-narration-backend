@@ -275,6 +275,7 @@ describe('AccountsService - Registration Flow', () => {
       bankNumber: '1234567890',
       bankBranch: 'HCM Branch',
       sepayVa: '1900123456',
+      sepayKey: 'sepay_test_key_1234567890',
       serviceId: 'service-1',
     };
 

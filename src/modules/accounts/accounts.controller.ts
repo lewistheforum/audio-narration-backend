@@ -47,6 +47,8 @@ import {
   SearchPatientQueryDto,
   PatientSearchResponseDto,
   GetEmployeesByClinicDto,
+  UploadLegalDocumentDto,
+  UpdateLegalDocumentsDto,
 } from './dto';
 
 import { MESSAGES } from 'src/common/message';
@@ -1317,7 +1319,7 @@ export class AccountsController {
   async uploadLegalDocumentsForManager(
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
-    @Body() dto: any,
+    @Body() dto: UploadLegalDocumentDto,
   ): Promise<{ data: any; message: string }> {
     const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
@@ -1428,7 +1430,7 @@ export class AccountsController {
   async updateLegalDocumentsForManager(
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
-    @Body() dto: any,
+    @Body() dto: UpdateLegalDocumentsDto,
   ): Promise<{ data: any; message: string }> {
     const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.updateLegalDocumentsForManager(

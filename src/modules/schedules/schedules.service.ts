@@ -638,6 +638,10 @@ export class SchedulesService {
         fullName = generalAccount.fullName;
       }
 
+      const sortedHours = (schedule.clinicShift?.hours || []).sort((a: any, b: any) =>
+        a.startHour.localeCompare(b.startHour),
+      );
+
       return {
         id: schedule._id,
         workDate: schedule.workDate,
@@ -655,22 +659,11 @@ export class SchedulesService {
         shift: {
           id: schedule.clinicShift?._id,
           name: schedule.clinicShift?.shift,
-          hours:
-            schedule.clinicShift?.hours
-              ?.map((hour: any) => {
-                const isPastTime =
-                  isPastDate || (isToday && nowTimeStr > hour.startHour);
-
-                return {
-                  id: hour._id,
-                  startHour: hour.startHour,
-                  endHour: hour.endHour,
-                  limit: hour.limit,
-                  bookedCount: hour.bookedCount || 0,
-                  isFull: (hour.bookedCount || 0) >= hour.limit || isPastTime,
-                };
-              })
-              .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
+          startHour: sortedHours.length > 0 ? sortedHours[0].startHour : null,
+          endHour:
+            sortedHours.length > 0
+              ? sortedHours[sortedHours.length - 1].endHour
+              : null,
         },
         room:
           schedule.rooms && schedule.rooms.length > 0
@@ -1063,69 +1056,83 @@ export class SchedulesService {
       order: { roomName: 'ASC' },
     });
 
-    // Build response with shift hours for each room
-    const roomsWithShiftHours = [];
+    if (rooms.length === 0) {
+      return { rooms: [] };
+    }
 
-    for (const room of rooms) {
-      // Query employee schedules linked to this room
-      const qb = this.dataSource
-        .createQueryBuilder()
-        .select([
-          'es._id',
-          'es.clinic_shift_id',
-          'cs.shift',
-          'csh._id as shift_hour_id',
-          'csh.start_hour',
-          'csh.end_hour',
-          'csh.limit',
-        ])
-        .from('employee_schedule', 'es')
-        .innerJoin(
-          'clinic_room_employee_schedule',
-          'cres',
-          'cres.employee_schedule_id = es._id',
-        )
-        .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-        .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-        .where('cres.clinic_room_id = :roomId', { roomId: room._id })
-        .andWhere('es.clinic_id = :clinicId', { clinicId })
-        .andWhere('es.deleted_at IS NULL')
-        .andWhere('cs.deleted_at IS NULL')
-        .andWhere('csh.deleted_at IS NULL');
+    const roomIds = rooms.map((r) => r._id);
 
-      // Filter by date if provided
-      if (date) {
-        qb.andWhere('es.work_date = :workDate', { workDate: date });
+    // Query employee schedules linked to these rooms in ONE batch query
+    const qb = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'cres.clinic_room_id as room_id',
+        'es._id as schedule_id',
+        'es.clinic_shift_id',
+        'cs.shift',
+        'csh._id as shift_hour_id',
+        'csh.start_hour',
+        'csh.end_hour',
+        'csh.limit',
+      ])
+      .from('employee_schedule', 'es')
+      .innerJoin(
+        'clinic_room_employee_schedule',
+        'cres',
+        'cres.employee_schedule_id = es._id',
+      )
+      .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+      .where('cres.clinic_room_id = ANY(:roomIds)', { roomIds })
+      .andWhere('es.clinic_id = :clinicId', { clinicId })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('cs.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL');
+
+    // Filter by date if provided
+    if (date) {
+      qb.andWhere('es.work_date = :workDate', { workDate: date });
+    }
+
+    qb.orderBy('csh.start_hour', 'ASC');
+
+    const allScheduleData = await qb.getRawMany();
+
+    // Group shift hours by room ID in memory
+    const shiftHoursByRoom = new Map<string, Map<string, any>>();
+
+    for (const row of allScheduleData) {
+      const roomId = row.room_id;
+      const shiftHourId = row.shift_hour_id;
+
+      if (!shiftHoursByRoom.has(roomId)) {
+        shiftHoursByRoom.set(roomId, new Map());
       }
 
-      qb.orderBy('csh.start_hour', 'ASC');
-
-      const scheduleData = await qb.getRawMany();
-
-      // Build unique shift hours for this room
-      const shiftHoursMap = new Map();
-      for (const row of scheduleData) {
-        const shiftHourId = row.shift_hour_id;
-        if (!shiftHoursMap.has(shiftHourId)) {
-          shiftHoursMap.set(shiftHourId, {
-            id: shiftHourId,
-            startHour: row.start_hour,
-            endHour: row.end_hour,
-            limit: row.limit,
-            shiftType: row.shift,
-            shiftId: row.clinic_shift_id,
-          });
-        }
+      const roomMap = shiftHoursByRoom.get(roomId)!;
+      if (!roomMap.has(shiftHourId)) {
+        roomMap.set(shiftHourId, {
+          id: shiftHourId,
+          startHour: row.start_hour,
+          endHour: row.end_hour,
+          limit: row.limit,
+          shiftType: row.shift,
+          shiftId: row.clinic_shift_id,
+        });
       }
+    }
 
-      const shiftHours = Array.from(shiftHoursMap.values());
+    // Build the final response structure
+    const roomsWithShiftHours = rooms.map((room) => {
+      const roomMap = shiftHoursByRoom.get(room._id);
+      const shiftHours = roomMap ? Array.from(roomMap.values()) : [];
 
-      roomsWithShiftHours.push({
+      return {
         id: room._id,
         roomName: room.roomName,
         shiftHours,
-      });
-    }
+      };
+    });
 
     return {
       rooms: roomsWithShiftHours,

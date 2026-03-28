@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { EmployeeSchedule } from '../entities/employee-schedule.entity';
 import { WeekDay } from '../enums';
+import { getEndOfMonth, getStartOfMonth } from 'src/common/utils/date.util';
 
 @Injectable()
 export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
@@ -63,9 +64,17 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     }
 
     if (options.date) {
-      queryBuilder.andWhere('schedule.workDate = :date', {
-        date: options.date,
-      });
+      if (options.date.length === 7) {
+        // Handle YYYY-MM format by expanding to whole month
+        queryBuilder.andWhere('schedule.workDate BETWEEN :start AND :end', {
+          start: getStartOfMonth(options.date),
+          end: getEndOfMonth(options.date),
+        });
+      } else {
+        queryBuilder.andWhere('schedule.workDate = :date', {
+          date: options.date,
+        });
+      }
     }
 
     if (options.from && options.to) {
@@ -166,9 +175,17 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     }
 
     if (options.date) {
-      queryBuilder.andWhere('schedule.workDate = :date', {
-        date: options.date,
-      });
+      if (options.date.length === 7) {
+        // Handle YYYY-MM format by expanding to whole month
+        queryBuilder.andWhere('schedule.workDate BETWEEN :start AND :end', {
+          start: getStartOfMonth(options.date),
+          end: getEndOfMonth(options.date),
+        });
+      } else {
+        queryBuilder.andWhere('schedule.workDate = :date', {
+          date: options.date,
+        });
+      }
     }
 
     if (options.from && options.to) {

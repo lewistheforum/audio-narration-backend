@@ -6,10 +6,14 @@ import {
   IsNotEmpty,
   IsOptional,
   IsArray,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsUUID,
   Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 /**
  * Register Clinic Admin DTO
@@ -143,7 +147,10 @@ export class RegisterClinicAdminDto {
     required: false,
   })
   @IsOptional()
-  @IsString({ message: 'Date of birth must be a string' })
+  @IsDateString(
+    {},
+    { message: 'Date of birth must be a valid ISO 8601 date string' },
+  )
   dob?: string;
 
   @ApiProperty({
@@ -162,8 +169,23 @@ export class RegisterClinicAdminDto {
     example: '550e8400-e29b-41d4-a716-4466554400000',
   })
   @IsNotEmpty({ message: 'Service ID is required' })
-  @IsString({ message: 'Service ID must be a string' })
+  @IsUUID('4', { message: 'Service ID must be a valid UUID' })
   serviceId: string;
+
+  @ApiProperty({
+    description: 'Subscription duration in months',
+    example: 3,
+    required: false,
+    default: 1,
+    enum: [1, 3, 6, 12],
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Subscription duration must be an integer' })
+  @IsIn([1, 3, 6, 12], {
+    message: 'Subscription duration must be one of: 1, 3, 6, 12 months',
+  })
+  subscriptionDurationMonths?: number = 1;
 
   // Bank configuration fields (formerly Step 3, now part of initial registration)
 
@@ -218,12 +240,12 @@ export class RegisterClinicAdminDto {
   @ApiProperty({
     description: 'SePay API key for payment processing',
     example: 'sepay_test_key_1234567890',
-    required: false,
+    required: true,
     maxLength: 255,
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'SePay key is required' })
   @IsString({ message: 'SePay key must be a string' })
   @MaxLength(255, { message: 'SePay key must not exceed 255 characters' })
   @Transform(({ value }) => value?.trim())
-  sepayKey?: string;
+  sepayKey: string;
 }

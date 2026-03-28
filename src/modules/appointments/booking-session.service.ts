@@ -26,7 +26,12 @@ import {
   addToVietnamTime,
   formatToVietnamTime,
   isInPast,
-  startOfDay,
+  getStartOfTomorrow,
+  getStartOfVietnamDate,
+  getDateString,
+  parseVietnamTime,
+  isAtLeastOneDayInAdvanceVietnam,
+  formatToDateOnly,
 } from 'src/common/utils/date.util';
 
 let uuidv4: () => string;
@@ -83,6 +88,8 @@ export interface BookingSession {
 export class BookingSessionService {
   private readonly SESSION_TTL = 1800; // 30 minutes in seconds
   private readonly KEY_PREFIX = 'booking:session:';
+  private readonly MIN_ADVANCE_BOOKING_MESSAGE =
+    'Appointments must be booked at least 1 day in advance';
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
@@ -302,6 +309,8 @@ export class BookingSessionService {
           );
         }
 
+        this.validateMinimumBookingLeadTime(data.appointment_date);
+
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
           appointmentDate: data.appointment_date,
@@ -383,6 +392,8 @@ export class BookingSessionService {
           );
         }
 
+        this.validateMinimumBookingLeadTime(data.appointment_date);
+
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
           appointmentDate: data.appointment_date,
@@ -447,13 +458,16 @@ export class BookingSessionService {
           );
         }
 
-        // Convert extra_hour to Date and validate format
-        const extraHourDate = new Date(data.extra_hour);
+        // Convert extra_hour to Date and validate format in Vietnam timezone
+        const extraHourDate = parseVietnamTime(data.extra_hour);
         if (isNaN(extraHourDate.getTime())) {
           throw new BadRequestException(
             'Invalid extra hour format. Must be a valid ISO 8601 timestamp',
           );
         }
+
+        const normalizedExtraHour = formatToVietnamTime(extraHourDate);
+        const normalizedExtraHourDate = formatToDateOnly(extraHourDate);
 
         // Validate extra_hour must be in the future (use Vietnam timezone)
         if (isInPast(extraHourDate)) {
@@ -467,30 +481,28 @@ export class BookingSessionService {
           );
         }
 
-        // Validate appointment_date matches the date part of extra_hour
-        const appointmentDate = new Date(data.appointment_date);
-        const extraHourDateOnly = new Date(
-          extraHourDate.getFullYear(),
-          extraHourDate.getMonth(),
-          extraHourDate.getDate(),
-        );
-        const appointmentDateOnly = new Date(
-          appointmentDate.getFullYear(),
-          appointmentDate.getMonth(),
-          appointmentDate.getDate(),
-        );
+        this.validateMinimumBookingLeadTime(data.appointment_date);
 
-        if (extraHourDateOnly.getTime() !== appointmentDateOnly.getTime()) {
+        if (extraHourDate < getStartOfTomorrow()) {
+          throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+        }
+
+        // Validate appointment_date matches the date part of extra_hour in UTC+7
+        if (normalizedExtraHourDate !== data.appointment_date) {
           throw new BadRequestException(
             'Appointment date must match the date part of extra hour',
           );
         }
 
+        const normalizedAppointmentDate = getDateString(
+          getStartOfVietnamDate(data.appointment_date),
+        );
+
         // MERGE: Explicitly preserve all existing fields
         // SPECIAL: Hardcode clinicShiftHourId = null for out-of-hours
         const updateFields: any = {
-          appointmentDate: data.appointment_date,
-          extraHour: data.extra_hour,
+          appointmentDate: normalizedAppointmentDate,
+          extraHour: normalizedExtraHour,
           clinicShiftHourId: null,
           currentStep: 2,
         };
@@ -693,15 +705,9 @@ export class BookingSessionService {
     } else if (option === BookingOption.DATE) {
       const dateData = data as DateInitialDataDto;
 
-      // Validate date is in future (at least today) - use Vietnam timezone
-      const appointmentDate = new Date(dateData.appointment_date);
-      const todayStart = startOfDay();
+      this.validateMinimumBookingLeadTime(dateData.appointment_date);
 
-      if (appointmentDate < todayStart) {
-        throw new BadRequestException(
-          'Appointment date must be today or in the future',
-        );
-      }
+      const appointmentDate = getStartOfVietnamDate(dateData.appointment_date);
 
       // Validate date is within 60 days
       const maxDate = addToVietnamTime(60, 'day');
@@ -727,6 +733,12 @@ export class BookingSessionService {
           throw new BadRequestException('Clinic not found or inactive');
         }
       }
+    }
+  }
+
+  private validateMinimumBookingLeadTime(appointmentDate: string): void {
+    if (!isAtLeastOneDayInAdvanceVietnam(appointmentDate)) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
     }
   }
 

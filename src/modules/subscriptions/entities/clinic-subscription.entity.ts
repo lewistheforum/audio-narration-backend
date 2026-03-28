@@ -21,6 +21,8 @@ import { RegistrationStatus } from '../enums';
  */
 @Entity('clinic_subcriptions')
 @Index('idx_clinic_subscription_clinic_id', ['clinicId'])
+@Index('idx_clinic_subscription_clinic_deleted', ['clinicId', 'deletedAt'])
+@Index('idx_clinic_subscription_clinic_status_deleted', ['clinicId', 'subscriptionStatus', 'deletedAt'])
 @Index('idx_clinic_subscription_service_id', ['serviceId'])
 @Index('idx_clinic_subscription_status', ['subscriptionStatus'])
 @Index('idx_clinic_subscription_expiration_date', ['expirationDate'])

@@ -69,38 +69,41 @@ export class ClinicRevenueService {
       throw new NotFoundException('No branches found under this admin');
     }
 
-    // Build aggregated queries
-    const summary = await this.calculateRevenueSummary(
-      branchIds,
-      filterDto.startDate,
-      filterDto.endDate,
-    );
-
-    const paymentMethodBreakdown = await this.calculatePaymentMethodBreakdown(
-      branchIds,
-      filterDto.startDate,
-      filterDto.endDate,
-    );
-
-    const serviceCategoryBreakdown =
-      await this.calculateServiceCategoryBreakdown(
+    // Build aggregated queries in parallel (except branchBreakdown which depends on summary)
+    const [
+      summary,
+      paymentMethodBreakdown,
+      serviceCategoryBreakdown,
+      revenueTrend,
+      statusBreakdown,
+    ] = await Promise.all([
+      this.calculateRevenueSummary(
         branchIds,
         filterDto.startDate,
         filterDto.endDate,
-      );
-
-    const revenueTrend = await this.calculateRevenueTrend(
-      branchIds,
-      filterDto.startDate,
-      filterDto.endDate,
-      filterDto.groupBy || RevenueGroupBy.DAY,
-    );
-
-    const statusBreakdown = await this.calculateStatusBreakdown(
-      branchIds,
-      filterDto.startDate,
-      filterDto.endDate,
-    );
+      ),
+      this.calculatePaymentMethodBreakdown(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+      this.calculateServiceCategoryBreakdown(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+      this.calculateRevenueTrend(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+        filterDto.groupBy || RevenueGroupBy.DAY,
+      ),
+      this.calculateStatusBreakdown(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+    ]);
 
     const branchBreakdown = await this.calculateBranchBreakdown(
       branchIds,
@@ -149,45 +152,48 @@ export class ClinicRevenueService {
     // Get branch information
     const branchInfo = await this.getBranchInformation(manager);
 
-    // Calculate all metrics for this branch
-    const summary = await this.calculateRevenueSummary(
-      [managerId],
-      filterDto.startDate,
-      filterDto.endDate,
-    );
-
-    const paymentMethodBreakdown = await this.calculatePaymentMethodBreakdown(
-      [managerId],
-      filterDto.startDate,
-      filterDto.endDate,
-    );
-
-    const serviceCategoryBreakdown =
-      await this.calculateServiceCategoryBreakdown(
+    // Calculate all metrics for this branch in parallel
+    const [
+      summary,
+      paymentMethodBreakdown,
+      serviceCategoryBreakdown,
+      revenueTrend,
+      statusBreakdown,
+      topServices,
+    ] = await Promise.all([
+      this.calculateRevenueSummary(
         [managerId],
         filterDto.startDate,
         filterDto.endDate,
-      );
-
-    const revenueTrend = await this.calculateRevenueTrend(
-      [managerId],
-      filterDto.startDate,
-      filterDto.endDate,
-      filterDto.groupBy || RevenueGroupBy.DAY,
-    );
-
-    const statusBreakdown = await this.calculateStatusBreakdown(
-      [managerId],
-      filterDto.startDate,
-      filterDto.endDate,
-    );
-
-    const topServices = await this.calculateTopServices(
-      [managerId],
-      filterDto.startDate,
-      filterDto.endDate,
-      10, // Top 10 services
-    );
+      ),
+      this.calculatePaymentMethodBreakdown(
+        [managerId],
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+      this.calculateServiceCategoryBreakdown(
+        [managerId],
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+      this.calculateRevenueTrend(
+        [managerId],
+        filterDto.startDate,
+        filterDto.endDate,
+        filterDto.groupBy || RevenueGroupBy.DAY,
+      ),
+      this.calculateStatusBreakdown(
+        [managerId],
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+      this.calculateTopServices(
+        [managerId],
+        filterDto.startDate,
+        filterDto.endDate,
+        10, // Top 10 services
+      ),
+    ]);
 
     return {
       period: {
