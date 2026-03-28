@@ -22,6 +22,7 @@ import {
 } from 'typeorm';
 import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
+import { EmployeeSchedule } from '../../schedules/entities/employee-schedule.entity';
 
 /**
  * Account Entity
@@ -142,6 +143,18 @@ export class Account {
    */
   @OneToOne(() => ClinicSubscription, (subscription) => subscription.clinic)
   subscription?: ClinicSubscription;
+
+  /**
+   * Clinic Working Schedule Relation
+   */
+  @OneToMany(() => EmployeeSchedule, (employeeSchedule) => employeeSchedule.clinic)
+  clinicSchedules?: EmployeeSchedule[];
+
+  /**
+   * Employee Working Schedule Relation
+   */
+  @OneToMany(() => EmployeeSchedule, (employeeSchedule) => employeeSchedule.employee)
+  employeeSchedules?: EmployeeSchedule[];
 
   /**
    * Legal Documents Relation

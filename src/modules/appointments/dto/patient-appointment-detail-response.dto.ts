@@ -90,6 +90,22 @@ export class ServiceAppointmentSummaryDto {
   @ApiProperty({ description: 'Clinic service details', type: ClinicServiceSummaryDto })
   clinic_service: ClinicServiceSummaryDto;
 
+  @ApiProperty({ description: 'Snapshot price for this service', example: 270000 })
+  price: number;
+
+  @ApiPropertyOptional({ description: 'Snapshot discount for this service', example: 10 })
+  discount?: number;
+
+  @ApiProperty({ description: 'Final price after discount for this service', example: 243000 })
+  final_price: number;
+
+  @ApiPropertyOptional({
+    description: 'Payment status inherited from the appointment package',
+    enum: AppointmentPackageStatus,
+    example: AppointmentPackageStatus.PENDING_PAYMENT,
+  })
+  payment_status?: AppointmentPackageStatus;
+
   @ApiPropertyOptional({ 
     description: 'ERM summary (if available)', 
     type: ERMSummaryDto 
@@ -106,6 +122,9 @@ export class AppointmentPackageSummaryDto {
 
   @ApiProperty({ description: 'Package amount', example: 270000 })
   amount: number;
+
+  @ApiProperty({ description: 'Package price used for total price calculation', example: 270000 })
+  price: number;
 
   @ApiPropertyOptional({ description: 'Payment method', enum: PaymentType, example: PaymentType.COD })
   payment_type?: PaymentType;
@@ -188,6 +207,9 @@ export class PatientAppointmentDetailResponseDto {
 
   @ApiProperty({ description: 'Total amount for the appointment', example: 270000 })
   total: number;
+
+  @ApiProperty({ description: 'Calculated total price from all appointment packages', example: 540000 })
+  total_price: number;
 
   @ApiPropertyOptional({ description: 'Patient note for the appointment' })
   patient_note?: string;

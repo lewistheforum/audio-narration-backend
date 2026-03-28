@@ -78,14 +78,32 @@ export class AuthService {
     }
   }
 
+  private canBypassHierarchyChecksForOnboarding(
+    user: Account,
+    onboardingStatus?: RegistrationStatus,
+  ): boolean {
+    if (!this.isOnboardingStatus(onboardingStatus)) {
+      return false;
+    }
+
+    if (user.role === AccountRole.CLINIC_ADMIN) {
+      return true;
+    }
+
+    return (
+      user.role === AccountRole.CLINIC_MANAGER &&
+      [
+        RegistrationStatus.PENDING_LEGAL_SETUP,
+        RegistrationStatus.PENDING_APPROVAL,
+      ].includes(onboardingStatus)
+    );
+  }
+
   private validateHierarchyLoginAccess(
     user: Account,
     onboardingStatus?: RegistrationStatus,
   ): void {
-    if (
-      this.isOnboardingStatus(onboardingStatus) &&
-      [AccountRole.CLINIC_ADMIN, AccountRole.CLINIC_MANAGER].includes(user.role)
-    ) {
+    if (this.canBypassHierarchyChecksForOnboarding(user, onboardingStatus)) {
       return;
     }
 

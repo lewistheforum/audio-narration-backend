@@ -7,12 +7,19 @@ import {
   DeleteDateColumn,
   ManyToOne,
   OneToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
 import { ServiceAppointment } from '../../appointments/entities/service-appointment.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
 import { ERMRecordType, ERMStatus } from '../enums';
+import { ERMConsultation } from './erm-consultation.entity';
+import { ERMXray } from './erm-xray.entity';
+import { ERMLab } from './erm-lab.entity';
+import { ERMUltrasound } from './erm-ultrasound.entity';
+import { ERMBoneDensity } from './erm-bone-density.entity';
+import { ERMProcedure } from './erm-procedure.entity';
 
 /**
  * ERM (Electronic Medical Record) Entity
@@ -80,4 +87,22 @@ export class ERM {
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt?: Date;
+
+  @OneToMany(() => ERMConsultation, (consultation) => consultation.erm)
+  consultations?: ERMConsultation[];
+
+  @OneToMany(() => ERMXray, (xray) => xray.erm)
+  xrays?: ERMXray[];
+
+  @OneToMany(() => ERMLab, (lab) => lab.erm)
+  labs?: ERMLab[];
+
+  @OneToMany(() => ERMUltrasound, (ultrasound) => ultrasound.erm)
+  ultrasounds?: ERMUltrasound[];
+
+  @OneToMany(() => ERMBoneDensity, (boneDensity) => boneDensity.erm)
+  boneDensities?: ERMBoneDensity[];
+
+  @OneToMany(() => ERMProcedure, (procedure) => procedure.erm)
+  procedures?: ERMProcedure[];
 }
