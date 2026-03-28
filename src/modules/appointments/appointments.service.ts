@@ -19,7 +19,9 @@ import {
   getDateString,
   formatToVietnamTime,
   formatToDateOnly,
+  formatToTimeOnly,
   parseVietnamTime,
+  buildVietnamDateTime,
   isInPast,
   isAtLeastOneDayInAdvanceVietnam,
 } from 'src/common/utils/date.util';
@@ -176,14 +178,7 @@ export class AppointmentsService {
     appointmentDate: string,
     startTime: string,
   ): Date {
-    const appointmentHour = getStartOfVietnamDate(appointmentDate);
-    const [hours, minutes] = startTime
-      .split(':')
-      .map((value) => parseInt(value, 10));
-
-    appointmentHour.setUTCHours(hours, minutes, 0, 0);
-
-    return appointmentHour;
+    return buildVietnamDateTime(appointmentDate, startTime);
   }
 
   private async getBookedShiftHourCount(
@@ -431,7 +426,7 @@ export class AppointmentsService {
     // Convert date strings to Date objects
     const appointmentDate = getStartOfDay(createDto.appointmentDate);
     const extraHour = createDto.extraHour
-      ? new Date(createDto.extraHour)
+      ? parseVietnamTime(createDto.extraHour)
       : null;
 
     if (!createDto.clinicShiftHourId) {
@@ -1087,7 +1082,6 @@ export class AppointmentsService {
 
     // Convert new date to Date object
     const newAppointmentDate = getStartOfDay(rescheduleDto.appointmentDate);
-    newAppointmentDate.setHours(0, 0, 0, 0);
 
     // Validate new appointment date
     const today = getStartOfDay();
@@ -1126,7 +1120,7 @@ export class AppointmentsService {
   /**
    * Handle standard booking reschedule
    *
-   * Uses pessimistic locking to safely update slot limits
+   * Uses pessimistic locking to safely validate static slot capacity
    */
   private async handleStandardReschedule(
     appointment: any,
@@ -1179,7 +1173,14 @@ export class AppointmentsService {
         throw new NotFoundException('Clinic shift hour not found');
       }
 
-      if (newShiftHour.limit <= 0) {
+      const newShiftHourLimit = Number(newShiftHour.limit || 0);
+      const bookedCount = await this.getBookedShiftHourCount(
+        queryRunner.manager,
+        rescheduleDto.clinicShiftHourId,
+        getDateString(newAppointmentDate),
+      );
+
+      if (newShiftHourLimit <= 0 || bookedCount >= newShiftHourLimit) {
         throw new BadRequestException(
           'This time slot is fully booked. Please select another time.',
         );
@@ -1240,32 +1241,13 @@ export class AppointmentsService {
         );
       }
 
-      // Update slot limits (release old, claim new)
-      const oldShiftHourId = appointment.clinicShiftHourId;
       const newShiftHourId = rescheduleDto.clinicShiftHourId;
 
-      // Release old slot (if different from new)
-      if (oldShiftHourId !== newShiftHourId) {
-        await queryRunner.manager
-          .createQueryBuilder()
-          .update('clinic_shift_hour')
-          .set({ limit: () => 'limit + 1' })
-          .where('_id = :id', { id: oldShiftHourId })
-          .execute();
-
-        // Claim new slot
-        await queryRunner.manager
-          .createQueryBuilder()
-          .update('clinic_shift_hour')
-          .set({ limit: () => 'limit - 1' })
-          .where('_id = :id', { id: newShiftHourId })
-          .execute();
-      }
-
       // Calculate new appointment hour from shift
-      const appointmentHour = new Date(newAppointmentDate);
-      const [hours, minutes] = newShiftHour.start_hour.split(':').map(Number);
-      appointmentHour.setHours(hours, minutes, 0, 0);
+      const appointmentHour = buildVietnamDateTime(
+        newAppointmentDate,
+        newShiftHour.start_hour,
+      );
 
       // Update appointment with new doctor, date, shift, and hour
       await queryRunner.manager
@@ -1326,7 +1308,7 @@ export class AppointmentsService {
       );
     }
 
-    const newExtraHour = new Date(rescheduleDto.extraHour);
+    const newExtraHour = parseVietnamTime(rescheduleDto.extraHour);
 
     // Validate extra_hour is in the future
     if (newExtraHour <= getCurrentVietnamTime()) {
@@ -1334,7 +1316,7 @@ export class AppointmentsService {
     }
 
     // Validate extra_hour is outside business hours (before 7am or after 6pm)
-    const hour = newExtraHour.getHours();
+    const hour = parseInt(formatToTimeOnly(newExtraHour).split(':')[0], 10);
     if (hour >= 7 && hour < 18) {
       throw new BadRequestException(
         'Extra hour must be outside business hours (before 7:00 AM or after 6:00 PM)',
@@ -1473,9 +1455,10 @@ export class AppointmentsService {
 
         // Update appointmentHour from shift startHour
         if (specificSchedule.startHour) {
-          const [h, m] = specificSchedule.startHour.split(':');
-          newAppointmentHour = new Date(targetDate.getTime());
-          newAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
+          newAppointmentHour = buildVietnamDateTime(
+            targetDate,
+            specificSchedule.startHour,
+          );
         }
       } else {
         // If date was explicitly provided, it MUST be valid
@@ -1517,9 +1500,10 @@ export class AppointmentsService {
 
         // Update appointmentHour from shift startHour
         if (alternativeSchedule.startHour) {
-          const [h, m] = alternativeSchedule.startHour.split(':');
-          newAppointmentHour = new Date(newAppointmentDate.getTime());
-          newAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
+          newAppointmentHour = buildVietnamDateTime(
+            newAppointmentDate,
+            alternativeSchedule.startHour,
+          );
         }
       }
     }
@@ -1527,12 +1511,11 @@ export class AppointmentsService {
     // If extraHour is provided, update it
     if (rescheduleDto.extraHour !== undefined) {
       newExtraHour = rescheduleDto.extraHour
-        ? new Date(rescheduleDto.extraHour)
+        ? parseVietnamTime(rescheduleDto.extraHour)
         : null;
       if (newExtraHour) {
         newAppointmentHour = new Date(newExtraHour);
-        newAppointmentDate = new Date(newExtraHour);
-        newAppointmentDate.setHours(0, 0, 0, 0);
+        newAppointmentDate = getStartOfVietnamDate(newExtraHour);
       }
     }
 
@@ -2250,11 +2233,7 @@ export class AppointmentsService {
       );
     }
 
-    const [h, m] = shiftHour.startHour.split(':');
-    const resolvedAppointmentHour = new Date(appointmentDate);
-    resolvedAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
-
-    return resolvedAppointmentHour;
+    return buildVietnamDateTime(appointmentDate, shiftHour.startHour);
   }
 
   /**
@@ -4210,7 +4189,7 @@ export class AppointmentsService {
    * 2. Validate slot availability and service config
    * 3. Validate doctor schedule
    * 4. Calculate appointment hour and check duplicates
-   * 5. Atomic decrement slot limit
+   * 5. Validate static slot capacity without mutating clinic_shift_hour.limit
    * 6. Create Appointment entity with status PENDING, payment_type COD
    * 7. Create AppointmentPackage entity
    * 8. Create ServiceAppointment entity
@@ -4654,7 +4633,7 @@ export class AppointmentsService {
         session_id: sessionId,
         amount: finalRoundedTotal,
         currency: 'VND',
-        expires_at: addToVietnamTime(15, 'minute'), // 15 minutes
+        expires_at: formatToVietnamTime(addToVietnamTime(15, 'minute')), // 15 minutes
       },
     };
   }
@@ -7710,7 +7689,7 @@ export class AppointmentsService {
         'di.position AS doctor_specialty',
         'csh.start_hour AS start_time',
         'csh.end_hour AS end_time',
-        'csh.limit AS remaining_limit',
+        'csh.limit AS limit',
         'cr.room_name AS clinic_room',
         'COUNT(DISTINCT a._id) AS booked_count',
       ])
@@ -7786,8 +7765,7 @@ export class AppointmentsService {
       const shiftData = dateData.shifts.get(shiftType);
 
       const bookedCount = parseInt(String(slot.booked_count || 0), 10);
-      const remainingLimit = parseInt(String(slot.remaining_limit || 0), 10);
-      const limit = remainingLimit + bookedCount;
+      const limit = parseInt(String(slot.limit || 0), 10);
       const availableSlots = Math.max(0, limit - bookedCount);
 
       shiftData.slots.push({
@@ -8000,7 +7978,7 @@ export class AppointmentsService {
     appointmentDate: string,
     extraHour: string,
   ): Promise<any> {
-    const requestedTime = new Date(extraHour);
+    const requestedTime = parseVietnamTime(extraHour);
     if (isNaN(requestedTime.getTime())) {
       throw new BadRequestException(
         'Invalid extra_hour format. Use ISO 8601 with timezone.',
