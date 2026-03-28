@@ -210,6 +210,41 @@ export class AppointmentsService {
     return parseInt(String(appointmentCount?.count || 0), 10);
   }
 
+  private normalizeMoney(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    return Number(value.toFixed(2));
+  }
+
+  private calculateServiceFinalPrice(price: number, discount: number): number {
+    const normalizedPrice = this.normalizeMoney(price);
+    const normalizedDiscount = this.normalizeMoney(discount);
+    const discountAmount = (normalizedPrice * normalizedDiscount) / 100;
+
+    return this.normalizeMoney(normalizedPrice - discountAmount);
+  }
+
+  private calculatePackageAmountFromServices(
+    serviceAppointments: Array<{ final_price: number }>,
+  ): number {
+    return this.normalizeMoney(
+      serviceAppointments.reduce(
+        (sum, serviceAppointment) => sum + serviceAppointment.final_price,
+        0,
+      ),
+    );
+  }
+
+  private calculateAppointmentTotalFromPackages(
+    packages: Array<{ amount: number }>,
+  ): number {
+    return this.normalizeMoney(
+      packages.reduce((sum, pkg) => sum + (pkg.amount || 0), 0),
+    );
+  }
+
   /**
    * Get all appointments for a clinic (Staff access)
    *
@@ -257,7 +292,13 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services and clinic rooms for all appointments in parallel
+    // Fetch services for all appointments
+    const servicesMap =
+      await this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      );
+
+    // Fetch clinic rooms for all appointments
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -265,14 +306,10 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const [servicesMap, clinicRoomsMap] = await Promise.all([
-      this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      ),
-      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      ),
-    ]);
+      );
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
@@ -345,7 +382,13 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services and clinic rooms for all appointments in parallel
+    // Fetch services for all appointments
+    const servicesMap =
+      await this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      );
+
+    // Fetch clinic rooms for all appointments
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -353,14 +396,10 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const [servicesMap, clinicRoomsMap] = await Promise.all([
-      this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      ),
-      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      ),
-    ]);
+      );
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
@@ -429,21 +468,21 @@ export class AppointmentsService {
       throw new BadRequestException('Clinic shift hour ID is required');
     }
 
-    // Validate appointment hour and capacity in parallel
-    const [appointmentHour] = await Promise.all([
-      this.getAppointmentHourFromShift(
+    const appointmentHour = await this.getAppointmentHourFromShift(
+      clinicId,
+      createDto.clinicShiftHourId,
+      appointmentDate,
+    );
+
+    // Validate slot capacity for shift-hour bookings.
+    // A slot is full only when appointment count reaches clinic_shift_hour.limit.
+    if (createDto.clinicShiftHourId) {
+      await this.validateShiftHourCapacity(
         clinicId,
         createDto.clinicShiftHourId,
         appointmentDate,
-      ),
-      createDto.clinicShiftHourId
-        ? this.validateShiftHourCapacity(
-            clinicId,
-            createDto.clinicShiftHourId,
-            appointmentDate,
-          )
-        : Promise.resolve(),
-    ]);
+      );
+    }
 
     // Execute transaction to create appointment + package + services
     return await this.dataSource.transaction(async (manager) => {
@@ -566,78 +605,46 @@ export class AppointmentsService {
 
       await manager.save(ServiceAppointment, serviceAppointments);
 
-      // Fetch response data in parallel
-      const [appointmentWithRelations, servicesRaw, roomsResult] =
-        await Promise.all([
-          manager.findOne(Appointment, {
-            where: { _id: savedAppointment._id },
-            relations: [
-              'patient',
-              'patient.generalAccount',
-              'patient.address',
-              'clinic',
-              'clinic.clinicManagerInformation',
-              'doctor',
-              'doctor.doctorInformation',
-            ],
-          }),
-          manager
-            .createQueryBuilder()
-            .select([
-              'clinicService._id AS id',
-              'clinicService.service_name AS serviceName',
-              'clinicService.description AS description',
-              'serviceAppointment.price AS price',
-              'serviceAppointment.discount AS discount',
-            ])
-            .from('service_appointments', 'serviceAppointment')
-            .innerJoin(
-              'clinic_service_config',
-              'clinicServiceConfig',
-              'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
-            )
-            .innerJoin(
-              'clinic_services',
-              'clinicService',
-              'clinicService._id = clinicServiceConfig.service_id',
-            )
-            .where('serviceAppointment.appointment_package_id = :packageId', {
-              packageId: savedPackage._id,
-            })
-            .andWhere('serviceAppointment.deleted_at IS NULL')
-            .getRawMany(),
-          savedAppointment.clinicShiftHourId && savedAppointment.doctorId
-            ? manager
-                .createQueryBuilder()
-                .select('cr._id', 'roomId')
-                .addSelect('cr.room_name', 'roomName')
-                .from('clinic_shift_hour', 'csh')
-                .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
-                .innerJoin(
-                  'employee_schedule',
-                  'es',
-                  'es.clinic_shift_id = cs._id',
-                )
-                .innerJoin(
-                  'clinic_room_employee_schedule',
-                  'cres',
-                  'cres.employee_schedule_id = es._id',
-                )
-                .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-                .where('csh._id = :clinicShiftHourId', {
-                  clinicShiftHourId: savedAppointment.clinicShiftHourId,
-                })
-                .andWhere('es.employee_id = :doctorId', {
-                  doctorId: savedAppointment.doctorId,
-                })
-                .andWhere('es.work_date = :appointmentDate', {
-                  appointmentDate: savedAppointment.appointmentDate,
-                })
-                .andWhere('es.deleted_at IS NULL')
-                .andWhere('cr.deleted_at IS NULL')
-                .getRawMany()
-            : Promise.resolve([]),
-        ]);
+      // Fetch complete appointment with relations for response
+      const appointmentWithRelations = await manager.findOne(Appointment, {
+        where: { _id: savedAppointment._id },
+        relations: [
+          'patient',
+          'patient.generalAccount',
+          'patient.address',
+          'clinic',
+          'clinic.clinicManagerInformation',
+          'doctor',
+          'doctor.doctorInformation',
+        ],
+      });
+
+      // Fetch services for the created appointment (use manager to ensure transaction visibility)
+      const servicesRaw = await manager
+        .createQueryBuilder()
+        .select([
+          'clinicService._id AS id',
+          'clinicService.service_name AS serviceName',
+          'clinicService.description AS description',
+          'serviceAppointment.price AS price',
+          'serviceAppointment.discount AS discount',
+        ])
+        .from('service_appointments', 'serviceAppointment')
+        .innerJoin(
+          'clinic_service_config',
+          'clinicServiceConfig',
+          'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+        )
+        .innerJoin(
+          'clinic_services',
+          'clinicService',
+          'clinicService._id = clinicServiceConfig.service_id',
+        )
+        .where('serviceAppointment.appointment_package_id = :packageId', {
+          packageId: savedPackage._id,
+        })
+        .andWhere('serviceAppointment.deleted_at IS NULL')
+        .getRawMany();
 
       const services = servicesRaw.map((row) => ({
         id: row.id,
@@ -647,10 +654,42 @@ export class AppointmentsService {
         discount: row.discount ? parseFloat(row.discount) : 0,
       }));
 
-      const clinicRooms = roomsResult.map((row) => ({
-        id: row.roomId,
-        roomName: row.roomName,
-      }));
+      // Fetch clinic rooms if doctor shift is assigned
+      let clinicRooms = [];
+
+      if (savedAppointment.clinicShiftHourId && savedAppointment.doctorId) {
+        // Query clinic rooms directly without needing appointment_id
+        const roomsResult = await manager
+          .createQueryBuilder()
+          .select('cr._id', 'roomId')
+          .addSelect('cr.room_name', 'roomName')
+          .from('clinic_shift_hour', 'csh')
+          .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+          .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
+          .innerJoin(
+            'clinic_room_employee_schedule',
+            'cres',
+            'cres.employee_schedule_id = es._id',
+          )
+          .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+          .where('csh._id = :clinicShiftHourId', {
+            clinicShiftHourId: savedAppointment.clinicShiftHourId,
+          })
+          .andWhere('es.employee_id = :doctorId', {
+            doctorId: savedAppointment.doctorId,
+          })
+          .andWhere('es.work_date = :appointmentDate', {
+            appointmentDate: savedAppointment.appointmentDate,
+          })
+          .andWhere('es.deleted_at IS NULL')
+          .andWhere('cr.deleted_at IS NULL')
+          .getRawMany();
+
+        clinicRooms = roomsResult.map((row) => ({
+          id: row.roomId,
+          roomName: row.roomName,
+        }));
+      }
 
       return this.transformToResponseDto(
         appointmentWithRelations!,
@@ -2657,7 +2696,13 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services and clinic rooms for all appointments in parallel
+    // Fetch services for all appointments
+    const servicesMap =
+      await this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      );
+
+    // Fetch clinic rooms for all appointments
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -2665,14 +2710,10 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const [servicesMap, clinicRoomsMap] = await Promise.all([
-      this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      ),
-      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      ),
-    ]);
+      );
 
     // Transform to response DTOs
     const appointmentItems = appointments.map((appointment) => {
@@ -2746,7 +2787,13 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services and clinic rooms for all appointments in parallel
+    // Fetch services for all appointments
+    const servicesMap =
+      await this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      );
+
+    // Fetch clinic rooms for all appointments
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -2754,14 +2801,10 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const [servicesMap, clinicRoomsMap] = await Promise.all([
-      this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      ),
-      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const clinicRoomsMap =
+      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      ),
-    ]);
+      );
 
     // Transform to response DTOs
     const appointmentItems = appointments.map((appointment) => {
@@ -5867,9 +5910,6 @@ export class AppointmentsService {
         // Shift hour info (nullable) - LEFT JOIN ensures out-of-hours appointments work
         '"csh".start_hour AS start_hour',
         '"csh".end_hour AS end_hour',
-        // Payment info
-        '"ap".payment_type AS payment_type',
-        '"ap".status AS payment_status',
         // Clinic room info (V4.5: COALESCE for out-of-hours support)
         // Priority: regular schedule room -> manual extra_room (for Option 4)
         'COALESCE("cr".room_name, "extra_room".room_name) AS clinic_room',
@@ -5909,11 +5949,6 @@ export class AppointmentsService {
         'clinic_room',
         'extra_room',
         'extra_room._id = a.extra_room_id AND extra_room.deleted_at IS NULL',
-      )
-      .leftJoin(
-        'appointment_package',
-        'ap',
-        'ap.appointment_id = a._id AND ap.deleted_at IS NULL',
       )
       .where('a.patient_id = :patientId', { patientId })
       .andWhere('a.deleted_at IS NULL');
@@ -5992,23 +6027,51 @@ export class AppointmentsService {
     });
     const appointmentsRawUnique = Array.from(uniqueAppointmentsMap.values());
 
-    // Optimization: Bulk load services to avoid N+1 queries
+    // Optimization: Bulk load packages, services, ERMs, and prescriptions to avoid N+1 queries
     let servicesMap: Map<string, any[]> = new Map();
     let ermsMap: Map<string, any[]> = new Map();
     let ePrescriptionMap: Map<string, any> = new Map();
+    let packagePricingMap: Map<
+      string,
+      {
+        total: number;
+        payment_type?: string;
+        payment_status?: string;
+      }
+    > = new Map();
     if (appointmentsRawUnique.length > 0) {
       const appointmentIds = appointmentsRawUnique.map((a) => a.appointment_id);
 
-      // Single query to fetch all services for all appointments
-      // V4.5: Fetch price & discount from service_appointments (snapshot history)
+      const packagesRaw = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'ap._id AS package_id',
+          'ap.appointment_id AS appointment_id',
+          'ap.payment_type AS payment_type',
+          'ap.status AS payment_status',
+          'ap.created_at AS created_at',
+          'tx.status AS transaction_payment_status',
+        ])
+        .from('appointment_package', 'ap')
+        .leftJoin(
+          'transactions',
+          'tx',
+          'tx._id = ap.transaction_id AND tx.deleted_at IS NULL',
+        )
+        .where('ap.appointment_id = ANY(:appointmentIds)', { appointmentIds })
+        .andWhere('ap.deleted_at IS NULL')
+        .orderBy('ap.created_at', 'ASC')
+        .getRawMany();
+
       const servicesRaw = await this.dataSource
         .createQueryBuilder()
         .select([
+          'ap._id AS package_id',
           'ap.appointment_id AS appointment_id',
           'cs._id AS service_id',
           'cs.service_name AS service_name',
-          'sa.price AS price', // V4.5: Snapshot price from service_appointments
-          'sa.discount AS discount', // V4.5: Snapshot discount from service_appointments
+          'sa.price AS price',
+          'sa.discount AS discount',
           'e._id AS erm_id',
           'e.record_type AS erm_type',
           'e.created_at AS erm_created_at',
@@ -6035,23 +6098,34 @@ export class AppointmentsService {
         .andWhere('sa.deleted_at IS NULL')
         .getRawMany();
 
-      // Group services by appointment_id
+      const servicesByPackage = new Map<string, any[]>();
+
       servicesRaw.forEach((service) => {
         const aptId = service.appointment_id;
-        const price = parseFloat(service.price || '0');
-        const discount = parseFloat(service.discount || '0');
-        const finalPrice = price - (price * discount) / 100;
+        const pkgId = service.package_id;
+        const price = this.normalizeMoney(parseFloat(service.price || '0'));
+        const discount = this.normalizeMoney(
+          parseFloat(service.discount || '0'),
+        );
+        const finalPrice = this.calculateServiceFinalPrice(price, discount);
 
         if (!servicesMap.has(aptId)) {
           servicesMap.set(aptId, []);
         }
-        servicesMap.get(aptId)!.push({
+        if (!servicesByPackage.has(pkgId)) {
+          servicesByPackage.set(pkgId, []);
+        }
+
+        const serviceSummary = {
           service_id: service.service_id,
           service_name: service.service_name,
-          price: price,
-          discount: discount,
+          price,
+          discount,
           final_price: finalPrice,
-        });
+        };
+
+        servicesMap.get(aptId)!.push(serviceSummary);
+        servicesByPackage.get(pkgId)!.push(serviceSummary);
 
         if (service.erm_id) {
           if (!ermsMap.has(aptId)) {
@@ -6063,6 +6137,44 @@ export class AppointmentsService {
             created_at: service.erm_created_at,
           });
         }
+      });
+
+      const packagesByAppointment = new Map<string, any[]>();
+      packagesRaw.forEach((pkg) => {
+        if (!packagesByAppointment.has(pkg.appointment_id)) {
+          packagesByAppointment.set(pkg.appointment_id, []);
+        }
+
+        const serviceAppointments = servicesByPackage.get(pkg.package_id) || [];
+        const amount = this.calculatePackageAmountFromServices(
+          serviceAppointments,
+        );
+
+        packagesByAppointment.get(pkg.appointment_id)!.push({
+          _id: pkg.package_id,
+          amount,
+          payment_type: pkg.payment_type,
+          payment_status: pkg.payment_status || pkg.transaction_payment_status,
+          created_at: pkg.created_at,
+        });
+      });
+
+      appointmentIds.forEach((appointmentId) => {
+        const appointmentPackages =
+          packagesByAppointment.get(appointmentId) || [];
+        const totalPrice = this.calculateAppointmentTotalFromPackages(
+          appointmentPackages,
+        );
+        const latestPackage =
+          appointmentPackages.length > 0
+            ? appointmentPackages[appointmentPackages.length - 1]
+            : null;
+
+        packagePricingMap.set(appointmentId, {
+          total: totalPrice,
+          payment_type: latestPackage?.payment_type,
+          payment_status: latestPackage?.payment_status,
+        });
       });
 
       // Fetch E-Prescription summaries
@@ -6094,6 +6206,7 @@ export class AppointmentsService {
     // - If no extra_hour (Standard Booking): use appointment_hour from shift, include start_hour/end_hour
     const data = appointmentsRawUnique.map((apt) => {
       const isOutOfHours = apt.extra_hour && !apt.clinic_shift_hour_id;
+      const pricingSummary = packagePricingMap.get(apt.appointment_id);
 
       return {
         _id: apt.appointment_id,
@@ -6121,10 +6234,11 @@ export class AppointmentsService {
         end_hour: !isOutOfHours ? apt.end_hour : null,
         clinic_room: apt.clinic_room || null,
         status: apt.status,
-        total: parseFloat(apt.total || '0'),
+        total: pricingSummary?.total || 0,
+        total_price: pricingSummary?.total || 0,
         diagnosis: apt.diagnosis || null,
-        payment_type: apt.payment_type,
-        payment_status: apt.payment_status,
+        payment_type: pricingSummary?.payment_type,
+        payment_status: pricingSummary?.payment_status,
         services: servicesMap.get(apt.appointment_id) || [],
         erms: ermsMap.get(apt.appointment_id) || [],
         e_prescription_summary:
@@ -6277,8 +6391,14 @@ export class AppointmentsService {
         'ap.amount AS amount',
         'ap.payment_type AS payment_type',
         'ap.status AS payment_status',
+        'tx.status AS transaction_payment_status',
       ])
       .from('appointment_package', 'ap')
+      .leftJoin(
+        'transactions',
+        'tx',
+        'tx._id = ap.transaction_id AND tx.deleted_at IS NULL',
+      )
       .where('ap.appointment_id = :appointmentId', { appointmentId })
       .andWhere('ap.deleted_at IS NULL')
       .getRawMany();
@@ -6358,6 +6478,12 @@ export class AppointmentsService {
     }
 
     // Group service appointments by package
+    const packagePaymentStatusMap = new Map<string, string | null>(
+      packages.map((pkg) => [
+        pkg.package_id,
+        pkg.payment_status || pkg.transaction_payment_status || null,
+      ]),
+    );
     const servicesByPackage = new Map<string, any[]>();
     const ermsList: any[] = [];
     serviceAppointmentsData.forEach((sa) => {
@@ -6366,13 +6492,25 @@ export class AppointmentsService {
         servicesByPackage.set(pkgId, []);
       }
 
+      const snapshotPrice = this.normalizeMoney(parseFloat(sa.price || '0'));
+      const snapshotDiscount = this.normalizeMoney(
+        parseFloat(sa.discount || '0'),
+      );
+      const finalPrice = this.calculateServiceFinalPrice(
+        snapshotPrice,
+        snapshotDiscount,
+      );
+
       servicesByPackage.get(pkgId)!.push({
         _id: sa.sa_id,
+        price: snapshotPrice,
+        discount: snapshotDiscount,
+        final_price: finalPrice,
+        payment_status: packagePaymentStatusMap.get(pkgId) || undefined,
         clinic_service: {
           _id: sa.service_id,
           service_name: sa.service_name,
-          price: parseFloat(sa.price || '0'),
-          discount: parseFloat(sa.discount || '0'), // V4.5: Include snapshot discount
+          price: snapshotPrice,
         },
       });
 
@@ -6477,6 +6615,24 @@ export class AppointmentsService {
       }
     }
 
+    const appointmentPackages = packages.map((pkg) => {
+      const serviceAppointments = servicesByPackage.get(pkg.package_id) || [];
+      const recalculatedPackageAmount =
+        this.calculatePackageAmountFromServices(serviceAppointments);
+
+      return {
+        _id: pkg.package_id,
+        amount: recalculatedPackageAmount,
+        price: recalculatedPackageAmount,
+        payment_type: pkg.payment_type,
+        payment_status: pkg.payment_status || pkg.transaction_payment_status,
+        service_appointments: serviceAppointments,
+      };
+    });
+
+    const totalPrice =
+      this.calculateAppointmentTotalFromPackages(appointmentPackages);
+
     // Map to response DTO structure
     // Time resolution logic:
     // - If extra_hour exists (Out-of-Hours/Option 4): use extra_hour for appointment_hour, start_hour/end_hour = null
@@ -6507,7 +6663,8 @@ export class AppointmentsService {
       end_hour: !isOutOfHoursDetail ? appointmentRaw.end_hour : null,
       clinic_room: appointmentRaw.clinic_room || null,
       status: appointmentRaw.status,
-      total: parseFloat(appointmentRaw.total || '0'),
+      total: totalPrice,
+      total_price: totalPrice,
       patient_note: appointmentRaw.patient_note,
       diagnosis: appointmentRaw.diagnosis || null,
       reject_reason:
@@ -6516,13 +6673,7 @@ export class AppointmentsService {
           : undefined,
       e_prescription: ePrescriptionDetails,
       erms: ermsList,
-      appointment_packages: packages.map((pkg) => ({
-        _id: pkg.package_id,
-        amount: parseFloat(pkg.amount || '0'),
-        payment_type: pkg.payment_type,
-        payment_status: pkg.payment_status,
-        service_appointments: servicesByPackage.get(pkg.package_id) || [],
-      })),
+      appointment_packages: appointmentPackages,
       created_at: appointmentRaw.created_at,
       updated_at: appointmentRaw.updated_at,
     };
@@ -9187,48 +9338,98 @@ export class AppointmentsService {
       )
       .where('e.appointment_id = :appointmentId', { appointmentId })
       .andWhere('e.deleted_at IS NULL')
+      .orderBy('e.created_at', 'DESC')
       .getRawMany();
 
-    return ermsRaw.map((e) => ({
-      id: e.id,
-      record_type: e.record_type,
-      status: e.status,
-      service_code: e.service_code,
-      created_at: e.created_at,
-      special_erm: e.ec_id
-        ? {
-            id: e.ec_id,
-            service_code: e.ec_service_code,
-            created_at: e.ec_created_at,
-          }
-        : e.ex_id
-          ? { id: e.ex_id, region: e.ex_region, created_at: e.ex_created_at }
-          : e.el_id
-            ? {
-                id: e.el_id,
-                panel_name: e.el_panel_name,
-                created_at: e.el_created_at,
-              }
-            : e.eu_id
-              ? {
-                  id: e.eu_id,
-                  service_code: e.eu_service_code,
-                  created_at: e.eu_created_at,
-                }
-              : e.erd_id
-                ? {
-                    id: e.erd_id,
-                    procedure_code: e.erd_procedure_code,
-                    created_at: e.erd_created_at,
-                  }
-                : e.ebd_id
-                  ? {
-                      id: e.ebd_id,
-                      site: e.ebd_site,
-                      created_at: e.ebd_created_at,
-                    }
-                  : null,
-    }));
+    const ermMap = new Map<string, any>();
+
+    for (const row of ermsRaw) {
+      if (!ermMap.has(row.id)) {
+        ermMap.set(row.id, {
+          id: row.id,
+          record_type: row.record_type,
+          status: row.status,
+          service_code: row.service_code,
+          created_at: row.created_at,
+          special_erms: [],
+        });
+      }
+
+      const ermSummary = ermMap.get(row.id);
+      const seenSpecialErmIds = new Set(
+        ermSummary.special_erms.map((item) => item.id),
+      );
+
+      const specialCandidates: Array<{
+        id: string;
+        type: string;
+        title: string | null;
+        created_at: Date | string | null;
+      }> = [];
+
+      if (row.ec_id) {
+        specialCandidates.push({
+          id: row.ec_id,
+          type: 'CONSULTATION',
+          title: row.ec_service_code || null,
+          created_at: row.ec_created_at || null,
+        });
+      }
+
+      if (row.ex_id) {
+        specialCandidates.push({
+          id: row.ex_id,
+          type: 'XRAY',
+          title: row.ex_region || null,
+          created_at: row.ex_created_at || null,
+        });
+      }
+
+      if (row.el_id) {
+        specialCandidates.push({
+          id: row.el_id,
+          type: 'LAB',
+          title: row.el_panel_name || null,
+          created_at: row.el_created_at || null,
+        });
+      }
+
+      if (row.eu_id) {
+        specialCandidates.push({
+          id: row.eu_id,
+          type: 'ULTRASOUND',
+          title: row.eu_service_code || null,
+          created_at: row.eu_created_at || null,
+        });
+      }
+
+      if (row.erd_id) {
+        specialCandidates.push({
+          id: row.erd_id,
+          type: 'PROCEDURE',
+          title: row.erd_procedure_code || null,
+          created_at: row.erd_created_at || null,
+        });
+      }
+
+      if (row.ebd_id) {
+        specialCandidates.push({
+          id: row.ebd_id,
+          type: 'BONE_DENSITY',
+          title: row.ebd_site || null,
+          created_at: row.ebd_created_at || null,
+        });
+      }
+
+      for (const specialErm of specialCandidates) {
+        if (!seenSpecialErmIds.has(specialErm.id)) {
+          ermSummary.special_erms.push(specialErm);
+          seenSpecialErmIds.add(specialErm.id);
+        }
+      }
+    }
+
+    return Array.from(ermMap.values());
   }
 
   /**
@@ -9255,71 +9456,57 @@ export class AppointmentsService {
     }
 
     const erm = await this.dataSource
-      .createQueryBuilder()
-      .select('e.*')
-      .from('erms', 'e')
-      .where('e._id = :ermId', { ermId })
-      .andWhere('e.appointment_id = :appointmentId', { appointmentId })
-      .andWhere('e.deleted_at IS NULL')
-      .getRawOne();
+      .getRepository(ERM)
+      .createQueryBuilder('erm')
+      .leftJoinAndSelect(
+        'erm.consultations',
+        'consultations',
+        'consultations.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect('erm.xrays', 'xrays', 'xrays.deleted_at IS NULL')
+      .leftJoinAndSelect('erm.labs', 'labs', 'labs.deleted_at IS NULL')
+      .leftJoinAndSelect(
+        'erm.ultrasounds',
+        'ultrasounds',
+        'ultrasounds.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'erm.boneDensities',
+        'boneDensities',
+        'boneDensities.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'erm.procedures',
+        'procedures',
+        'procedures.deleted_at IS NULL',
+      )
+      .where('erm._id = :ermId', { ermId })
+      .andWhere('erm.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('erm.deleted_at IS NULL')
+      .getOne();
 
     if (!erm) {
       throw new NotFoundException('ERM record not found');
     }
 
-    if (erm.status !== 'COMPLETED') {
-      throw new ForbiddenException(
-        'ERM record is not available (status must be COMPLETED)',
-      );
-    }
-
-    let relationTable = '';
-    switch (erm.record_type) {
-      case 'CONSULTATION':
-        relationTable = 'erm_consultations';
-        break;
-      case 'XRAY':
-        relationTable = 'erm_xrays';
-        break;
-      case 'LAB':
-        relationTable = 'erm_labs';
-        break;
-      case 'ULTRASOUND':
-        relationTable = 'erm_ultrasounds';
-        break;
-      case 'BONE_DENSITY':
-        relationTable = 'erm_bone_density';
-        break;
-      case 'PROCEDURE':
-        relationTable = 'erm_procedures';
-        break;
-      default:
-        throw new NotFoundException('Unsupported ERM record type');
-    }
-
-    const childDetails = await this.dataSource
-      .createQueryBuilder()
-      .select('c.*')
-      .from(relationTable, 'c')
-      .where('c.erm_id = :ermId', { ermId })
-      .andWhere('c.deleted_at IS NULL')
-      .getRawOne();
-
-    if (!childDetails) {
-      throw new NotFoundException(
-        `${erm.record_type} details not found for this ERM record`,
-      );
-    }
+    const specialErms = {
+      consultations: erm.consultations || [],
+      xrays: erm.xrays || [],
+      labs: erm.labs || [],
+      ultrasounds: erm.ultrasounds || [],
+      bone_densities: erm.boneDensities || [],
+      procedures: erm.procedures || [],
+    };
 
     return {
       _id: erm._id,
-      appointment_id: erm.appointment_id,
-      record_type: erm.record_type,
+      appointment_id: erm.appointmentId,
+      record_type: erm.recordType,
       status: erm.status,
-      service_code: erm.service_code,
-      created_at: erm.created_at,
-      signed_at: erm.signed_at,
-      details: childDetails,
+      service_code: erm.serviceCode,
+      created_at: erm.createdAt,
+      signed_at: erm.signedAt,
+      details: specialErms,
     };
   }
 }

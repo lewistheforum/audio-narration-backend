@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial, IsNull } from 'typeorm';
+import { Repository, DeepPartial, IsNull, Brackets } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import {
   AccountRole,
@@ -537,11 +537,35 @@ export class AccountRepository {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       });
 
-    // Apply search filter (ILIKE on clinicName AND description from parent's clinic admin info)
+    // Apply advanced search filter for clinic admin + branch names + array fields
     if (search) {
       queryBuilder.andWhere(
-        '(clinicAdminInfo.clinicName ILIKE :search OR clinicAdminInfo.description ILIKE :search)',
-        { search: `%${search}%` },
+        new Brackets((qb) => {
+          qb.where('clinicAdminInfo.clinic_name ILIKE :search', {
+            search: `%${search}%`,
+          })
+            .orWhere('clinicManagerInfo.clinic_branch_name ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere(
+              "CONCAT(COALESCE(clinicAdminInfo.clinic_name, ''), ' - ', COALESCE(clinicManagerInfo.clinic_branch_name, '')) ILIKE :search",
+              {
+                search: `%${search}%`,
+              },
+            )
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.specialized_in, '[]'::jsonb))), ', '), '') ILIKE :search",
+              {
+                search: `%${search}%`,
+              },
+            )
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.pros, '[]'::jsonb))), ', '), '') ILIKE :search",
+              {
+                search: `%${search}%`,
+              },
+            );
+        }),
       );
     }
 

@@ -53,11 +53,13 @@ import {
   ClinicListResponseDto,
   ClinicItemDto,
   ClinicDetailResponseDto,
+  ClinicWorkingScheduleDto,
   AddressDetailDto,
   DoctorSummaryDto,
   SubscriptionDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
+  DoctorWorkingScheduleDto,
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
@@ -2430,6 +2432,16 @@ export class AccountsService {
     return this.clinicSubscriptionRepository.findByClinicId(clinicId);
   }
 
+  async getManagerLegalVerificationStatus(
+    managerAccountId: string,
+  ): Promise<LegalDocumentVerificationStatus | null> {
+    const legalDocuments = await this.clinicLegalDocsRepository.findByAccountId(
+      managerAccountId,
+    );
+
+    return legalDocuments?.verificationStatus || null;
+  }
+
   /**
    * Resolve Subscription Payload For JWT
    *
@@ -3527,10 +3539,21 @@ export class AccountsService {
       const averageRating = ratingMap.get(clinic._id) || 0;
 
       if (clinicInfo && address) {
+        const adminClinicName = (clinicAdminInfo?.clinicName || '').trim();
+        const branchName = (clinicInfo?.clinicBranchName || '').trim();
+        const displayClinicName = adminClinicName && branchName
+          ? `${adminClinicName} - ${branchName}`
+          : adminClinicName || branchName;
+
+        const mappedClinicInfo = {
+          ...clinicInfo,
+          clinicBranchName: displayClinicName,
+        };
+
         clinicItems.push(
           new ClinicItemDto(
             clinic,
-            clinicInfo,
+            mappedClinicInfo,
             address,
             clinicAdminInfo,
             averageRating,
@@ -3682,36 +3705,96 @@ export class AccountsService {
    * @throws {NotFoundException} If clinic not found or not active
    */
   async findClinicById(id: string): Promise<ClinicDetailResponseDto> {
-    // Get clinic account
-    const clinic = await this.accountRepository.findAccountById(id);
+    const clinic = await this.accountRepository
+      .createQueryBuilder('clinic')
+      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoinAndSelect('clinic.address', 'address')
+      .leftJoinAndSelect('clinic.parent', 'clinicAdmin')
+      .leftJoinAndSelect('clinicAdmin.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect(
+        'clinic.clinicSchedules',
+        'clinicSchedule',
+        'clinicSchedule.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicSchedule.clinicShift',
+        'clinicShift',
+        'clinicShift.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicShift.hours',
+        'clinicShiftHour',
+        'clinicShiftHour.deleted_at IS NULL',
+      )
+      .where('clinic._id = :id', { id })
+      .andWhere('clinic.role = :role', { role: AccountRole.CLINIC_MANAGER })
+      .andWhere('clinic.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('clinic.deleted_at IS NULL')
+      .orderBy('clinicSchedule.weekDay', 'ASC')
+      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      .getOne();
+
     if (!clinic) {
       throw new NotFoundException('Clinic not found');
     }
 
-    // Validate role and status
-    if (clinic.role !== AccountRole.CLINIC_MANAGER) {
-      throw new NotFoundException('Clinic not found');
-    }
-    if (clinic.status !== AccountStatus.ACTIVE) {
-      throw new NotFoundException('Clinic not found');
-    }
-
-    // Get clinic manager information
-    const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(
-      clinic._id,
-    );
+    const clinicInfo = clinic.clinicManagerInformation;
     if (!clinicInfo) {
       throw new NotFoundException('Clinic manager information not found');
     }
 
     // Get all addresses with Google maps
-    const address = await this.addressRepository.findByAccountId(clinic._id);
+    const address = clinic.address;
     const addressDetails: AddressDetailDto[] = [];
 
-    const googleIframe = await this.googleIframeRepository.findByAddressId(
-      address._id,
+    if (address) {
+      const googleIframe = await this.googleIframeRepository.findByAddressId(
+        address._id,
+      );
+      addressDetails.push(new AddressDetailDto(address, googleIframe));
+    }
+
+    const workingScheduleMap = new Map<string, ClinicWorkingScheduleDto>();
+    const dayOrder = {
+      MONDAY: 1,
+      TUESDAY: 2,
+      WEDNESDAY: 3,
+      THURSDAY: 4,
+      FRIDAY: 5,
+      SATURDAY: 6,
+      SUNDAY: 7,
+    } as const;
+
+    for (const schedule of clinic.clinicSchedules || []) {
+      for (const hour of schedule.clinicShift?.hours || []) {
+        const key = `${schedule.weekDay}-${hour.startHour}-${hour.endHour}`;
+
+        if (!workingScheduleMap.has(key)) {
+          workingScheduleMap.set(
+            key,
+            new ClinicWorkingScheduleDto({
+              dayOfWeek: schedule.weekDay,
+              startTime: hour.startHour,
+              endTime: hour.endHour,
+            }),
+          );
+        }
+      }
+    }
+
+    const workingSchedules = Array.from(workingScheduleMap.values()).sort(
+      (left, right) => {
+        const dayDelta =
+          dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
+          dayOrder[right.dayOfWeek as keyof typeof dayOrder];
+
+        if (dayDelta !== 0) {
+          return dayDelta;
+        }
+
+        return left.startTime.localeCompare(right.startTime);
+      },
     );
-    addressDetails.push(new AddressDetailDto(address, googleIframe));
 
     // Get doctors (accounts with parentId = clinic id and role = DOCTOR)
     const doctorAccounts = await this.accountRepository.findByParentIdAndRole(
@@ -3773,34 +3856,20 @@ export class AccountsService {
     }
 
     // Fetch parent CLINIC_ADMIN account and information
-    let clinicAdmin = null;
-    let clinicAdminInfo = null;
+    const clinicAdmin = clinic.parent || null;
+    const clinicAdminInfo = clinicAdmin?.clinicAdminInformation || null;
     let finalClinicName: string | null = null;
 
-    if (clinic.parentId) {
-      clinicAdmin = await this.accountRepository.findAccountById(
-        clinic.parentId,
-      );
-      if (clinicAdmin) {
-        clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(
-          clinicAdmin._id,
-        );
+    if (clinicAdminInfo) {
+      const adminName = (clinicAdminInfo.clinicName || '').trim();
+      const branchName = (clinicInfo.clinicBranchName || '').trim();
 
-        // Compute final clinic name using same logic as ClinicItemDto
-        if (clinicAdminInfo) {
-          const adminName = (clinicAdminInfo.clinicName || '').trim();
-          const branchName = (clinicInfo.clinicBranchName || '').trim();
-
-          if (adminName && branchName) {
-            finalClinicName = `${adminName} ${branchName}`;
-          } else if (adminName) {
-            finalClinicName = adminName;
-          } else if (branchName) {
-            finalClinicName = branchName;
-          } else {
-            finalClinicName = null;
-          }
-        }
+      if (adminName && branchName) {
+        finalClinicName = `${adminName} - ${branchName}`;
+      } else if (adminName) {
+        finalClinicName = adminName;
+      } else if (branchName) {
+        finalClinicName = branchName;
       }
     }
 
@@ -3872,6 +3941,7 @@ export class AccountsService {
       clinicInfo,
       addressDetails,
       doctors,
+      workingSchedules,
       subscription,
       clinicAdmin,
       clinicAdminInfo,
@@ -4000,17 +4070,34 @@ export class AccountsService {
    * @throws {NotFoundException} If doctor not found or not eligible
    */
   async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
-    // Get doctor account
-    const doctor = await this.accountRepository.findAccountById(id);
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
-    }
+    const doctor = await this.accountRepository
+      .createQueryBuilder('doctor')
+      .leftJoinAndSelect('doctor.parent', 'clinic')
+      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoinAndSelect(
+        'doctor.employeeSchedules',
+        'employeeSchedule',
+        'employeeSchedule.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'employeeSchedule.clinicShift',
+        'clinicShift',
+        'clinicShift.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicShift.hours',
+        'clinicShiftHour',
+        'clinicShiftHour.deleted_at IS NULL',
+      )
+      .where('doctor._id = :id', { id })
+      .andWhere('doctor.role = :role', { role: AccountRole.DOCTOR })
+      .andWhere('doctor.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('doctor.deleted_at IS NULL')
+      .orderBy('employeeSchedule.weekDay', 'ASC')
+      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      .getOne();
 
-    // Validate role and status
-    if (doctor.role !== AccountRole.DOCTOR) {
-      throw new NotFoundException('Doctor not found');
-    }
-    if (doctor.status !== AccountStatus.ACTIVE) {
+    if (!doctor) {
       throw new NotFoundException('Doctor not found');
     }
 
@@ -4026,21 +4113,61 @@ export class AccountsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get clinic manager information if exists (via parentId)
     let clinicInfo = null;
-    if (doctor.parentId) {
-      const clinic = await this.accountRepository.findAccountById(
-        doctor.parentId,
-      );
-      if (clinic && clinic.clinicManagerInformation) {
-        // Combine clinic account and clinic manager information for ClinicInfo DTO
-        clinicInfo = {
-          _id: clinic.clinicManagerInformation._id,
-          clinicName: clinic.clinicManagerInformation.clinicBranchName,
-          phone: clinic.phone, // Phone comes from clinic account, not clinic_manager_information
-        };
+    if (doctor.parent?.clinicManagerInformation) {
+      clinicInfo = {
+        _id: doctor.parent.clinicManagerInformation._id,
+        clinicName: doctor.parent.clinicManagerInformation.clinicBranchName,
+        phone: doctor.parent.phone,
+      };
+    }
+
+    const workingScheduleMap = new Map<string, DoctorWorkingScheduleDto>();
+    const dayOrder = {
+      MONDAY: 1,
+      TUESDAY: 2,
+      WEDNESDAY: 3,
+      THURSDAY: 4,
+      FRIDAY: 5,
+      SATURDAY: 6,
+      SUNDAY: 7,
+    } as const;
+
+    for (const schedule of doctor.employeeSchedules || []) {
+      for (const hour of schedule.clinicShift?.hours || []) {
+        const key = `${schedule.weekDay}-${schedule.clinicShift?.shift || ''}-${hour.startHour}-${hour.endHour}`;
+
+        if (!workingScheduleMap.has(key)) {
+          workingScheduleMap.set(
+            key,
+            new DoctorWorkingScheduleDto({
+              dayOfWeek: schedule.weekDay,
+              shift: schedule.clinicShift?.shift,
+              startTime: hour.startHour,
+              endTime: hour.endHour,
+            }),
+          );
+        }
       }
     }
+
+    const workingSchedules = Array.from(workingScheduleMap.values()).sort(
+      (left, right) => {
+        const dayDelta =
+          dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
+          dayOrder[right.dayOfWeek as keyof typeof dayOrder];
+
+        if (dayDelta !== 0) {
+          return dayDelta;
+        }
+
+        if ((left.shift || '') !== (right.shift || '')) {
+          return (left.shift || '').localeCompare(right.shift || '');
+        }
+
+        return left.startTime.localeCompare(right.startTime);
+      },
+    );
 
     // Create modified account object with field priority handling
     const modifiedAccount = {
@@ -4119,6 +4246,7 @@ export class AccountsService {
       modifiedAccount,
       doctorInfo,
       clinicInfo,
+      workingSchedules,
       averageRating,
       feedbacks,
     );

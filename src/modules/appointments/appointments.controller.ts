@@ -2557,6 +2557,8 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get ERM records summary for a specific appointment',
+    description:
+      'Retrieves all ERM base records linked to the appointment without filtering by ERM status.',
   })
   @ApiParam({
     name: 'id',
@@ -2587,7 +2589,7 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Get ERM record details for a specific appointment',
     description:
-      'Retrieves Electronic Record Management (ERM) details including polymorphic child records (X-ray, Lab, Ultrasound, Consultation, Bone Density, Procedure). Only COMPLETED records are accessible to patients. Enforces strict ownership validation (patient -> appointment -> ERM).',
+      'Retrieves Electronic Record Management (ERM) details including the full cluster of related special ERM records (X-ray, Lab, Ultrasound, Consultation, Bone Density, Procedure) for the requested ERM. Enforces strict ownership validation (patient -> appointment -> ERM) without filtering by ERM status.',
   })
   @ApiParam({
     name: 'id',
@@ -2609,9 +2611,6 @@ export class AppointmentsController {
   })
   @ApiNotFoundResponse({
     description: 'Appointment, ERM, or child record not found',
-  })
-  @ApiForbiddenResponse({
-    description: 'ERM record not available (status must be COMPLETED)',
   })
   @ApiResponse({
     status: 401,
