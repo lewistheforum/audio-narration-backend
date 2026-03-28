@@ -18,6 +18,7 @@ import { ClinicShift } from './clinic-shift.entity';
  */
 @Entity('clinic_shift_hour')
 @Index('idx_clinic_shift_hour_shift_id', ['shiftId'])
+@Index('idx_clinic_shift_hour_shift_deleted', ['shiftId', 'deletedAt'])
 export class ClinicShiftHour {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

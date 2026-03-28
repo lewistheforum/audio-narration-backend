@@ -11,13 +11,65 @@ dayjs.extend(timezone);
  */
 export const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const HAS_TIMEZONE_REGEX = /(Z|[+-]\d{2}:\d{2})$/i;
+
+function toVietnamDayjs(date?: Date | string | number): dayjs.Dayjs {
+  if (date === undefined || date === null) {
+    return dayjs().tz(VIETNAM_TIMEZONE);
+  }
+
+  if (typeof date === 'string') {
+    const normalizedDate = date.trim();
+
+    if (DATE_ONLY_REGEX.test(normalizedDate)) {
+      return dayjs.tz(`${normalizedDate}T00:00:00`, VIETNAM_TIMEZONE);
+    }
+
+    if (HAS_TIMEZONE_REGEX.test(normalizedDate)) {
+      return dayjs(normalizedDate).tz(VIETNAM_TIMEZONE);
+    }
+
+    return dayjs.tz(normalizedDate, VIETNAM_TIMEZONE);
+  }
+
+  return dayjs(date).tz(VIETNAM_TIMEZONE);
+}
+
+function normalizeTimeString(time: string): string {
+  const normalizedTime = time.trim();
+
+  if (/^\d{2}:\d{2}$/.test(normalizedTime)) {
+    return `${normalizedTime}:00`;
+  }
+
+  return normalizedTime;
+}
+
+/**
+ * Build a Date object from a Vietnam date and time.
+ *
+ * @param date - Base date value
+ * @param time - Time in HH:mm or HH:mm:ss format
+ * @returns Date object representing the exact Vietnam time
+ */
+export function buildVietnamDateTime(
+  date: Date | string | number,
+  time: string,
+): Date {
+  const vietnamDate = getDateString(date);
+  const normalizedTime = normalizeTimeString(time);
+
+  return dayjs.tz(`${vietnamDate}T${normalizedTime}`, VIETNAM_TIMEZONE).toDate();
+}
+
 /**
  * Get current time in Vietnam timezone as Date object
  *
  * @returns Date object representing current time in Vietnam (GMT+7)
  */
 export function getCurrentVietnamTime(): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).toDate();
+  return toVietnamDayjs().toDate();
 }
 
 /**
@@ -25,17 +77,9 @@ export function getCurrentVietnamTime(): Date {
  *
  * @param date - Date to format (can be Date object, string, or undefined for current time)
  * @returns ISO 8601 string with +07:00 offset (e.g., "2026-03-10T21:25:09.075+07:00")
- *
- * @example
- * formatToVietnamTime() // "2026-03-10T21:25:09.075+07:00"
- * formatToVietnamTime(new Date()) // "2026-03-10T21:25:09.075+07:00"
- * formatToVietnamTime("2026-03-10T14:25:09.075Z") // "2026-03-10T21:25:09.075+07:00"
  */
 export function formatToVietnamTime(date?: Date | string | number): string {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).format();
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).format();
+  return toVietnamDayjs(date).format();
 }
 
 /**
@@ -43,13 +87,9 @@ export function formatToVietnamTime(date?: Date | string | number): string {
  *
  * @param isoString - ISO 8601 string with or without timezone
  * @returns Date object
- *
- * @example
- * parseVietnamTime("2026-03-10T21:25:09.075+07:00")
- * parseVietnamTime("2026-03-10T14:25:09.075Z") // Will be converted to Vietnam time
  */
 export function parseVietnamTime(isoString: string): Date {
-  return dayjs(isoString).tz(VIETNAM_TIMEZONE).toDate();
+  return toVietnamDayjs(isoString).toDate();
 }
 
 /**
@@ -58,16 +98,12 @@ export function parseVietnamTime(isoString: string): Date {
  * @param amount - Amount to add
  * @param unit - Unit of time ('second', 'minute', 'hour', 'day', etc.)
  * @returns Date object
- *
- * @example
- * addToVietnamTime(30, 'minute') // Current Vietnam time + 30 minutes
- * addToVietnamTime(1, 'day') // Current Vietnam time + 1 day
  */
 export function addToVietnamTime(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).add(amount, unit).toDate();
+  return toVietnamDayjs().add(amount, unit).toDate();
 }
 
 /**
@@ -83,7 +119,7 @@ export function addToDate(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs(date).tz(VIETNAM_TIMEZONE).add(amount, unit).toDate();
+  return toVietnamDayjs(date).add(amount, unit).toDate();
 }
 
 /**
@@ -93,7 +129,7 @@ export function addToDate(
  * @returns Date object at YYYY-MM-01 00:00:00
  */
 export function getStartOfMonth(date: Date | string): Date {
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('month').toDate();
+  return toVietnamDayjs(date).startOf('month').toDate();
 }
 
 /**
@@ -103,7 +139,7 @@ export function getStartOfMonth(date: Date | string): Date {
  * @returns Date object at YYYY-MM-last 23:59:59
  */
 export function getEndOfMonth(date: Date | string): Date {
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('month').toDate();
+  return toVietnamDayjs(date).endOf('month').toDate();
 }
 
 /**
@@ -113,9 +149,7 @@ export function getEndOfMonth(date: Date | string): Date {
  * @returns true if date is in the past
  */
 export function isInPast(date: Date | string): boolean {
-  const vietnamNow = dayjs().tz(VIETNAM_TIMEZONE);
-  const targetDate = dayjs(date).tz(VIETNAM_TIMEZONE);
-  return targetDate.isBefore(vietnamNow);
+  return toVietnamDayjs(date).isBefore(toVietnamDayjs());
 }
 
 /**
@@ -123,12 +157,9 @@ export function isInPast(date: Date | string): boolean {
  * REPLACES: new Date().toISOString()
  *
  * @returns ISO 8601 string with +07:00 offset
- *
- * @example
- * getCurrentTime() // "2026-03-10T21:25:09.075+07:00"
  */
 export function getCurrentTime(): string {
-  return dayjs().tz(VIETNAM_TIMEZONE).format();
+  return formatToVietnamTime();
 }
 
 /**
@@ -137,16 +168,9 @@ export function getCurrentTime(): string {
  *
  * @param date - Optional date to get timestamp for
  * @returns Milliseconds since epoch
- *
- * @example
- * getVietnamTimestamp() // Current timestamp
- * getVietnamTimestamp("2026-03-10") // Specific date timestamp
  */
 export function getVietnamTimestamp(date?: Date | string | number): number {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).valueOf();
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).valueOf();
+  return toVietnamDayjs(date).valueOf();
 }
 
 /**
@@ -154,16 +178,43 @@ export function getVietnamTimestamp(date?: Date | string | number): number {
  *
  * @param date - Optional date (defaults to today)
  * @returns Date object at 00:00:00 Vietnam time
- *
- * @example
- * getStartOfDay() // Today at 00:00:00 +07:00
- * getStartOfDay("2026-03-15") // 2026-03-15 at 00:00:00 +07:00
  */
 export function getStartOfDay(date?: Date | string): Date {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').toDate();
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').toDate();
+  return toVietnamDayjs(date).startOf('day').toDate();
+}
+
+/**
+ * Get start of tomorrow (00:00:00) in Vietnam timezone.
+ *
+ * @returns Date object at 00:00:00 tomorrow in Vietnam time
+ */
+export function getStartOfTomorrow(): Date {
+  return toVietnamDayjs().add(1, 'day').startOf('day').toDate();
+}
+
+/**
+ * Get start of a specific date in Vietnam timezone.
+ *
+ * @param date - Date or date string to normalize
+ * @returns Date object at 00:00:00 of that date in Vietnam time
+ */
+export function getStartOfVietnamDate(date: Date | string | number): Date {
+  return toVietnamDayjs(date).startOf('day').toDate();
+}
+
+/**
+ * Check if a requested booking date is at least tomorrow in Vietnam timezone.
+ *
+ * @param date - Date or ISO string to validate
+ * @returns true if the requested date is tomorrow or later in Vietnam time
+ */
+export function isAtLeastOneDayInAdvanceVietnam(
+  date: Date | string | number,
+): boolean {
+  const requestedDate = toVietnamDayjs(date).startOf('day');
+  const startOfTomorrow = toVietnamDayjs().add(1, 'day').startOf('day');
+
+  return !requestedDate.isBefore(startOfTomorrow);
 }
 
 /**
@@ -173,10 +224,7 @@ export function getStartOfDay(date?: Date | string): Date {
  * @returns Date object at 23:59:59.999 Vietnam time
  */
 export function getEndOfDay(date?: Date | string): Date {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').toDate();
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').toDate();
+  return toVietnamDayjs(date).endOf('day').toDate();
 }
 
 /**
@@ -184,16 +232,9 @@ export function getEndOfDay(date?: Date | string): Date {
  *
  * @param date - Optional date (defaults to today)
  * @returns Date string in YYYY-MM-DD format
- *
- * @example
- * getDateString() // "2026-03-10"
- * getDateString("2026-03-15T10:30:00Z") // "2026-03-15"
  */
-export function getDateString(date?: Date | string): string {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).format('YYYY-MM-DD');
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).format('YYYY-MM-DD');
+export function getDateString(date?: Date | string | number): string {
+  return toVietnamDayjs(date).format('YYYY-MM-DD');
 }
 
 /**
@@ -202,15 +243,12 @@ export function getDateString(date?: Date | string): string {
  * @param amount - Amount to subtract
  * @param unit - Unit of time
  * @returns Date object
- *
- * @example
- * subtractFromVietnamTime(6, 'month') // 6 months ago
  */
 export function subtractFromVietnamTime(
   amount: number,
   unit: dayjs.ManipulateType,
 ): Date {
-  return dayjs().tz(VIETNAM_TIMEZONE).subtract(amount, unit).toDate();
+  return toVietnamDayjs().subtract(amount, unit).toDate();
 }
 
 /**
@@ -220,9 +258,7 @@ export function subtractFromVietnamTime(
  * @returns true if date is today
  */
 export function isToday(date: Date | string): boolean {
-  const today = dayjs().tz(VIETNAM_TIMEZONE).startOf('day');
-  const targetDate = dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day');
-  return targetDate.isSame(today);
+  return toVietnamDayjs(date).startOf('day').isSame(toVietnamDayjs().startOf('day'));
 }
 
 /**
@@ -232,9 +268,7 @@ export function isToday(date: Date | string): boolean {
  * @returns true if date is in the future
  */
 export function isInFuture(date: Date | string): boolean {
-  const vietnamNow = dayjs().tz(VIETNAM_TIMEZONE);
-  const targetDate = dayjs(date).tz(VIETNAM_TIMEZONE);
-  return targetDate.isAfter(vietnamNow);
+  return toVietnamDayjs(date).isAfter(toVietnamDayjs());
 }
 
 /**
@@ -243,11 +277,8 @@ export function isInFuture(date: Date | string): boolean {
  * @param date - Date to format (defaults to current Vietnam time)
  * @returns Date string in YYYY-MM-DD format
  */
-export function formatToDateOnly(date?: Date | string): string {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).format('YYYY-MM-DD');
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).format('YYYY-MM-DD');
+export function formatToDateOnly(date?: Date | string | number): string {
+  return toVietnamDayjs(date).format('YYYY-MM-DD');
 }
 
 /**
@@ -256,11 +287,8 @@ export function formatToDateOnly(date?: Date | string): string {
  * @param date - Date to format (defaults to current Vietnam time)
  * @returns Time string in HH:mm:ss format
  */
-export function formatToTimeOnly(date?: Date | string): string {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).format('HH:mm:ss');
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).format('HH:mm:ss');
+export function formatToTimeOnly(date?: Date | string | number): string {
+  return toVietnamDayjs(date).format('HH:mm:ss');
 }
 
 /**
@@ -274,12 +302,9 @@ export function compareDates(
   date1: Date | string,
   date2: Date | string,
 ): number {
-  const d1 = dayjs(date1).tz(VIETNAM_TIMEZONE);
-  const d2 = dayjs(date2).tz(VIETNAM_TIMEZONE);
-
-  if (d1.isBefore(d2)) return -1;
-  if (d1.isAfter(d2)) return 1;
-  return 0;
+  const d1 = toVietnamDayjs(date1);
+  const d2 = d1.isAfter(date2) ? 1 : d1.isBefore(date2) ? -1 : 0;
+  return d2;
 }
 
 /**
@@ -289,10 +314,7 @@ export function compareDates(
  * @returns Date object at 00:00:00 Vietnam time
  */
 export function startOfDay(date?: Date | string): Date {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).startOf('day').toDate();
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).startOf('day').toDate();
+  return getStartOfDay(date);
 }
 
 /**
@@ -302,8 +324,5 @@ export function startOfDay(date?: Date | string): Date {
  * @returns Date object at 23:59:59.999 Vietnam time
  */
 export function endOfDay(date?: Date | string): Date {
-  if (!date) {
-    return dayjs().tz(VIETNAM_TIMEZONE).endOf('day').toDate();
-  }
-  return dayjs(date).tz(VIETNAM_TIMEZONE).endOf('day').toDate();
+  return getEndOfDay(date);
 }
