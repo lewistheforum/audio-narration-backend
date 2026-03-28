@@ -1,6 +1,14 @@
-import { IsEmail, IsString, Length, Matches } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  Length,
+  Matches,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { AccountRole } from '../../accounts/enums/account-role.enum';
 
 /**
  * Verify Email DTO
@@ -26,4 +34,14 @@ export class VerifyEmailDto {
   @Length(6, 6, { message: 'Verification code must be 6 digits' })
   @Matches(/^\d{6}$/, { message: 'Verification code must contain only numbers' })
   code: string;
+
+  @ApiProperty({
+    description: 'Optional role hint for overlapping emails',
+    enum: AccountRole,
+    required: false,
+    example: AccountRole.CLINIC_MANAGER,
+  })
+  @IsOptional()
+  @IsEnum(AccountRole, { message: 'Invalid account role' })
+  role?: AccountRole;
 }

@@ -14,9 +14,16 @@ import {
   getCurrentVietnamTime,
   addToVietnamTime,
   getStartOfDay,
+  getStartOfTomorrow,
+  getStartOfVietnamDate,
   getDateString,
   formatToVietnamTime,
+  formatToDateOnly,
+  formatToTimeOnly,
+  parseVietnamTime,
+  buildVietnamDateTime,
   isInPast,
+  isAtLeastOneDayInAdvanceVietnam,
 } from 'src/common/utils/date.util';
 import {
   AppointmentRepository,
@@ -133,6 +140,9 @@ import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
  */
 @Injectable()
 export class AppointmentsService {
+  private readonly MIN_ADVANCE_BOOKING_MESSAGE =
+    'Appointments must be booked at least 1 day in advance';
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly appointmentRepository: AppointmentRepository,
@@ -147,6 +157,58 @@ export class AppointmentsService {
     @Inject(forwardRef(() => TransactionsService))
     private readonly transactionsService: TransactionsService,
   ) {}
+
+  private validateMinimumBookingLeadTime(date: string): void {
+    if (!isAtLeastOneDayInAdvanceVietnam(date)) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+    }
+  }
+
+  private parseBookingExtraHour(extraHour: string): Date {
+    const normalizedExtraHour = parseVietnamTime(extraHour);
+
+    if (isNaN(normalizedExtraHour.getTime())) {
+      throw new BadRequestException('Invalid extraHour format');
+    }
+
+    return normalizedExtraHour;
+  }
+
+  private buildVietnamAppointmentHour(
+    appointmentDate: string,
+    startTime: string,
+  ): Date {
+    return buildVietnamDateTime(appointmentDate, startTime);
+  }
+
+  private async getBookedShiftHourCount(
+    manager: any,
+    clinicShiftHourId: string,
+    appointmentDate: string,
+  ): Promise<number> {
+    const activeStatuses = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+      AppointmentStatus.CHECKED_IN,
+      AppointmentStatus.IN_PROGRESS,
+    ];
+
+    const appointmentCount = await manager
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT a._id)', 'count')
+      .from('appointments', 'a')
+      .where('a.clinic_shift_hour_id = :clinicShiftHourId', {
+        clinicShiftHourId,
+      })
+      .andWhere('a.appointment_date = :appointmentDate', {
+        appointmentDate,
+      })
+      .andWhere('a.status IN (:...activeStatuses)', { activeStatuses })
+      .andWhere('a.deleted_at IS NULL')
+      .getRawOne();
+
+    return parseInt(String(appointmentCount?.count || 0), 10);
+  }
 
   /**
    * Get all appointments for a clinic (Staff access)
@@ -195,13 +257,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -209,10 +265,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
@@ -285,13 +345,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -299,10 +353,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const data = appointments.map((appointment) => {
@@ -364,28 +422,28 @@ export class AppointmentsService {
     // Convert date strings to Date objects
     const appointmentDate = getStartOfDay(createDto.appointmentDate);
     const extraHour = createDto.extraHour
-      ? new Date(createDto.extraHour)
+      ? parseVietnamTime(createDto.extraHour)
       : null;
 
     if (!createDto.clinicShiftHourId) {
       throw new BadRequestException('Clinic shift hour ID is required');
     }
 
-    const appointmentHour = await this.getAppointmentHourFromShift(
-      clinicId,
-      createDto.clinicShiftHourId,
-      appointmentDate,
-    );
-
-    // Validate slot capacity for shift-hour bookings.
-    // A slot is full only when appointment count reaches clinic_shift_hour.limit.
-    if (createDto.clinicShiftHourId) {
-      await this.validateShiftHourCapacity(
+    // Validate appointment hour and capacity in parallel
+    const [appointmentHour] = await Promise.all([
+      this.getAppointmentHourFromShift(
         clinicId,
         createDto.clinicShiftHourId,
         appointmentDate,
-      );
-    }
+      ),
+      createDto.clinicShiftHourId
+        ? this.validateShiftHourCapacity(
+            clinicId,
+            createDto.clinicShiftHourId,
+            appointmentDate,
+          )
+        : Promise.resolve(),
+    ]);
 
     // Execute transaction to create appointment + package + services
     return await this.dataSource.transaction(async (manager) => {
@@ -508,46 +566,78 @@ export class AppointmentsService {
 
       await manager.save(ServiceAppointment, serviceAppointments);
 
-      // Fetch complete appointment with relations for response
-      const appointmentWithRelations = await manager.findOne(Appointment, {
-        where: { _id: savedAppointment._id },
-        relations: [
-          'patient',
-          'patient.generalAccount',
-          'patient.address',
-          'clinic',
-          'clinic.clinicManagerInformation',
-          'doctor',
-          'doctor.doctorInformation',
-        ],
-      });
-
-      // Fetch services for the created appointment (use manager to ensure transaction visibility)
-      const servicesRaw = await manager
-        .createQueryBuilder()
-        .select([
-          'clinicService._id AS id',
-          'clinicService.service_name AS serviceName',
-          'clinicService.description AS description',
-          'serviceAppointment.price AS price',
-          'serviceAppointment.discount AS discount',
-        ])
-        .from('service_appointments', 'serviceAppointment')
-        .innerJoin(
-          'clinic_service_config',
-          'clinicServiceConfig',
-          'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
-        )
-        .innerJoin(
-          'clinic_services',
-          'clinicService',
-          'clinicService._id = clinicServiceConfig.service_id',
-        )
-        .where('serviceAppointment.appointment_package_id = :packageId', {
-          packageId: savedPackage._id,
-        })
-        .andWhere('serviceAppointment.deleted_at IS NULL')
-        .getRawMany();
+      // Fetch response data in parallel
+      const [appointmentWithRelations, servicesRaw, roomsResult] =
+        await Promise.all([
+          manager.findOne(Appointment, {
+            where: { _id: savedAppointment._id },
+            relations: [
+              'patient',
+              'patient.generalAccount',
+              'patient.address',
+              'clinic',
+              'clinic.clinicManagerInformation',
+              'doctor',
+              'doctor.doctorInformation',
+            ],
+          }),
+          manager
+            .createQueryBuilder()
+            .select([
+              'clinicService._id AS id',
+              'clinicService.service_name AS serviceName',
+              'clinicService.description AS description',
+              'serviceAppointment.price AS price',
+              'serviceAppointment.discount AS discount',
+            ])
+            .from('service_appointments', 'serviceAppointment')
+            .innerJoin(
+              'clinic_service_config',
+              'clinicServiceConfig',
+              'clinicServiceConfig._id = serviceAppointment.clinic_service_id',
+            )
+            .innerJoin(
+              'clinic_services',
+              'clinicService',
+              'clinicService._id = clinicServiceConfig.service_id',
+            )
+            .where('serviceAppointment.appointment_package_id = :packageId', {
+              packageId: savedPackage._id,
+            })
+            .andWhere('serviceAppointment.deleted_at IS NULL')
+            .getRawMany(),
+          savedAppointment.clinicShiftHourId && savedAppointment.doctorId
+            ? manager
+                .createQueryBuilder()
+                .select('cr._id', 'roomId')
+                .addSelect('cr.room_name', 'roomName')
+                .from('clinic_shift_hour', 'csh')
+                .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
+                .innerJoin(
+                  'employee_schedule',
+                  'es',
+                  'es.clinic_shift_id = cs._id',
+                )
+                .innerJoin(
+                  'clinic_room_employee_schedule',
+                  'cres',
+                  'cres.employee_schedule_id = es._id',
+                )
+                .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
+                .where('csh._id = :clinicShiftHourId', {
+                  clinicShiftHourId: savedAppointment.clinicShiftHourId,
+                })
+                .andWhere('es.employee_id = :doctorId', {
+                  doctorId: savedAppointment.doctorId,
+                })
+                .andWhere('es.work_date = :appointmentDate', {
+                  appointmentDate: savedAppointment.appointmentDate,
+                })
+                .andWhere('es.deleted_at IS NULL')
+                .andWhere('cr.deleted_at IS NULL')
+                .getRawMany()
+            : Promise.resolve([]),
+        ]);
 
       const services = servicesRaw.map((row) => ({
         id: row.id,
@@ -557,42 +647,10 @@ export class AppointmentsService {
         discount: row.discount ? parseFloat(row.discount) : 0,
       }));
 
-      // Fetch clinic rooms if doctor shift is assigned
-      let clinicRooms = [];
-
-      if (savedAppointment.clinicShiftHourId && savedAppointment.doctorId) {
-        // Query clinic rooms directly without needing appointment_id
-        const roomsResult = await manager
-          .createQueryBuilder()
-          .select('cr._id', 'roomId')
-          .addSelect('cr.room_name', 'roomName')
-          .from('clinic_shift_hour', 'csh')
-          .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
-          .innerJoin('employee_schedule', 'es', 'es.clinic_shift_id = cs._id')
-          .innerJoin(
-            'clinic_room_employee_schedule',
-            'cres',
-            'cres.employee_schedule_id = es._id',
-          )
-          .innerJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-          .where('csh._id = :clinicShiftHourId', {
-            clinicShiftHourId: savedAppointment.clinicShiftHourId,
-          })
-          .andWhere('es.employee_id = :doctorId', {
-            doctorId: savedAppointment.doctorId,
-          })
-          .andWhere('es.work_date = :appointmentDate', {
-            appointmentDate: savedAppointment.appointmentDate,
-          })
-          .andWhere('es.deleted_at IS NULL')
-          .andWhere('cr.deleted_at IS NULL')
-          .getRawMany();
-
-        clinicRooms = roomsResult.map((row) => ({
-          id: row.roomId,
-          roomName: row.roomName,
-        }));
-      }
+      const clinicRooms = roomsResult.map((row) => ({
+        id: row.roomId,
+        roomName: row.roomName,
+      }));
 
       return this.transformToResponseDto(
         appointmentWithRelations!,
@@ -1020,7 +1078,6 @@ export class AppointmentsService {
 
     // Convert new date to Date object
     const newAppointmentDate = getStartOfDay(rescheduleDto.appointmentDate);
-    newAppointmentDate.setHours(0, 0, 0, 0);
 
     // Validate new appointment date
     const today = getStartOfDay();
@@ -1059,7 +1116,7 @@ export class AppointmentsService {
   /**
    * Handle standard booking reschedule
    *
-   * Uses pessimistic locking to safely update slot limits
+   * Uses pessimistic locking to safely validate static slot capacity
    */
   private async handleStandardReschedule(
     appointment: any,
@@ -1112,7 +1169,14 @@ export class AppointmentsService {
         throw new NotFoundException('Clinic shift hour not found');
       }
 
-      if (newShiftHour.limit <= 0) {
+      const newShiftHourLimit = Number(newShiftHour.limit || 0);
+      const bookedCount = await this.getBookedShiftHourCount(
+        queryRunner.manager,
+        rescheduleDto.clinicShiftHourId,
+        getDateString(newAppointmentDate),
+      );
+
+      if (newShiftHourLimit <= 0 || bookedCount >= newShiftHourLimit) {
         throw new BadRequestException(
           'This time slot is fully booked. Please select another time.',
         );
@@ -1173,32 +1237,13 @@ export class AppointmentsService {
         );
       }
 
-      // Update slot limits (release old, claim new)
-      const oldShiftHourId = appointment.clinicShiftHourId;
       const newShiftHourId = rescheduleDto.clinicShiftHourId;
 
-      // Release old slot (if different from new)
-      if (oldShiftHourId !== newShiftHourId) {
-        await queryRunner.manager
-          .createQueryBuilder()
-          .update('clinic_shift_hour')
-          .set({ limit: () => 'limit + 1' })
-          .where('_id = :id', { id: oldShiftHourId })
-          .execute();
-
-        // Claim new slot
-        await queryRunner.manager
-          .createQueryBuilder()
-          .update('clinic_shift_hour')
-          .set({ limit: () => 'limit - 1' })
-          .where('_id = :id', { id: newShiftHourId })
-          .execute();
-      }
-
       // Calculate new appointment hour from shift
-      const appointmentHour = new Date(newAppointmentDate);
-      const [hours, minutes] = newShiftHour.start_hour.split(':').map(Number);
-      appointmentHour.setHours(hours, minutes, 0, 0);
+      const appointmentHour = buildVietnamDateTime(
+        newAppointmentDate,
+        newShiftHour.start_hour,
+      );
 
       // Update appointment with new doctor, date, shift, and hour
       await queryRunner.manager
@@ -1259,7 +1304,7 @@ export class AppointmentsService {
       );
     }
 
-    const newExtraHour = new Date(rescheduleDto.extraHour);
+    const newExtraHour = parseVietnamTime(rescheduleDto.extraHour);
 
     // Validate extra_hour is in the future
     if (newExtraHour <= getCurrentVietnamTime()) {
@@ -1267,7 +1312,7 @@ export class AppointmentsService {
     }
 
     // Validate extra_hour is outside business hours (before 7am or after 6pm)
-    const hour = newExtraHour.getHours();
+    const hour = parseInt(formatToTimeOnly(newExtraHour).split(':')[0], 10);
     if (hour >= 7 && hour < 18) {
       throw new BadRequestException(
         'Extra hour must be outside business hours (before 7:00 AM or after 6:00 PM)',
@@ -1406,9 +1451,10 @@ export class AppointmentsService {
 
         // Update appointmentHour from shift startHour
         if (specificSchedule.startHour) {
-          const [h, m] = specificSchedule.startHour.split(':');
-          newAppointmentHour = new Date(targetDate.getTime());
-          newAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
+          newAppointmentHour = buildVietnamDateTime(
+            targetDate,
+            specificSchedule.startHour,
+          );
         }
       } else {
         // If date was explicitly provided, it MUST be valid
@@ -1450,9 +1496,10 @@ export class AppointmentsService {
 
         // Update appointmentHour from shift startHour
         if (alternativeSchedule.startHour) {
-          const [h, m] = alternativeSchedule.startHour.split(':');
-          newAppointmentHour = new Date(newAppointmentDate.getTime());
-          newAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
+          newAppointmentHour = buildVietnamDateTime(
+            newAppointmentDate,
+            alternativeSchedule.startHour,
+          );
         }
       }
     }
@@ -1460,12 +1507,11 @@ export class AppointmentsService {
     // If extraHour is provided, update it
     if (rescheduleDto.extraHour !== undefined) {
       newExtraHour = rescheduleDto.extraHour
-        ? new Date(rescheduleDto.extraHour)
+        ? parseVietnamTime(rescheduleDto.extraHour)
         : null;
       if (newExtraHour) {
         newAppointmentHour = new Date(newExtraHour);
-        newAppointmentDate = new Date(newExtraHour);
-        newAppointmentDate.setHours(0, 0, 0, 0);
+        newAppointmentDate = getStartOfVietnamDate(newExtraHour);
       }
     }
 
@@ -2183,11 +2229,7 @@ export class AppointmentsService {
       );
     }
 
-    const [h, m] = shiftHour.startHour.split(':');
-    const resolvedAppointmentHour = new Date(appointmentDate);
-    resolvedAppointmentHour.setHours(parseInt(h), parseInt(m), 0, 0);
-
-    return resolvedAppointmentHour;
+    return buildVietnamDateTime(appointmentDate, shiftHour.startHour);
   }
 
   /**
@@ -2615,13 +2657,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -2629,10 +2665,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const appointmentItems = appointments.map((appointment) => {
@@ -2706,13 +2746,7 @@ export class AppointmentsService {
     // Get appointment IDs
     const appointmentIds = appointments.map((apt) => apt._id);
 
-    // Fetch services for all appointments
-    const servicesMap =
-      await this.appointmentPackageRepository.findServicesByAppointmentIds(
-        appointmentIds,
-      );
-
-    // Fetch clinic rooms for all appointments
+    // Fetch services and clinic rooms for all appointments in parallel
     const appointmentData = appointments.map((apt) => ({
       appointmentId: apt._id,
       clinicShiftHourId: apt.clinicShiftHourId,
@@ -2720,10 +2754,14 @@ export class AppointmentsService {
       appointmentDate: apt.appointmentDate,
     }));
 
-    const clinicRoomsMap =
-      await this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
+    const [servicesMap, clinicRoomsMap] = await Promise.all([
+      this.appointmentPackageRepository.findServicesByAppointmentIds(
+        appointmentIds,
+      ),
+      this.employeeScheduleRepository.findClinicRoomsForMultipleAppointments(
         appointmentData,
-      );
+      ),
+    ]);
 
     // Transform to response DTOs
     const appointmentItems = appointments.map((appointment) => {
@@ -3961,10 +3999,11 @@ export class AppointmentsService {
         !session.clinicId ||
         !session.doctorId ||
         !session.paymentMethod ||
+        !session.appointmentDate ||
         !session.extraHour
       ) {
         throw new BadRequestException(
-          'Incomplete out-of-hours booking session. Required: serviceIds, clinicId, doctorId, paymentMethod, extraHour.',
+          'Incomplete out-of-hours booking session. Required: serviceIds, clinicId, doctorId, appointmentDate, paymentMethod, extraHour.',
         );
       }
 
@@ -3978,11 +4017,15 @@ export class AppointmentsService {
         );
       }
 
-      // Parse extraHour to Date object
-      const extraHourDate = new Date(session.extraHour);
-      if (isNaN(extraHourDate.getTime())) {
+      // Parse extraHour to Date object using Vietnam timezone utilities
+      const extraHourDate = this.parseBookingExtraHour(session.extraHour);
+      const appointmentDate = getDateString(
+        getStartOfVietnamDate(session.appointmentDate),
+      );
+
+      if (formatToDateOnly(extraHourDate) !== appointmentDate) {
         throw new BadRequestException(
-          'Invalid extraHour format. Must be a valid ISO datetime.',
+          'Appointment date must match the date part of extraHour in Vietnam timezone.',
         );
       }
 
@@ -4039,10 +4082,8 @@ export class AppointmentsService {
       const dateInput = session.appointmentDate;
 
       if (typeof dateInput === 'string') {
-        // If it's already a string, extract YYYY-MM-DD part
-        dateString = dateInput.includes('T')
-          ? dateInput.split('T')[0]
-          : dateInput;
+        const normalizedAppointmentDate = getStartOfVietnamDate(dateInput);
+        dateString = getDateString(normalizedAppointmentDate);
       } else {
         throw new BadRequestException('Invalid appointment date format');
       }
@@ -4055,7 +4096,7 @@ export class AppointmentsService {
       }
 
       // Parse to Date object for comparison only
-      const appointmentDate = new Date(dateString + 'T00:00:00');
+      const appointmentDate = getStartOfVietnamDate(dateString);
       const todayStart = getStartOfDay();
 
       // Business Rule: Appointment date must be >= today
@@ -4140,7 +4181,7 @@ export class AppointmentsService {
    * 2. Validate slot availability and service config
    * 3. Validate doctor schedule
    * 4. Calculate appointment hour and check duplicates
-   * 5. Atomic decrement slot limit
+   * 5. Validate static slot capacity without mutating clinic_shift_hour.limit
    * 6. Create Appointment entity with status PENDING, payment_type COD
    * 7. Create AppointmentPackage entity
    * 8. Create ServiceAppointment entity
@@ -4171,7 +4212,6 @@ export class AppointmentsService {
         async (manager) => {
           // === STEP 1: Pessimistic Lock on ClinicShiftHour ===
           // SELECT ... FOR UPDATE prevents concurrent bookings
-          const shiftHourRepo = manager.getRepository('clinic_shift_hour');
           const shiftHour = await manager
             .createQueryBuilder()
             .select('csh')
@@ -4180,13 +4220,19 @@ export class AppointmentsService {
             .setLock('pessimistic_write') // Critical: Prevents race conditions
             .getOne();
 
-
           if (!shiftHour) {
             throw new NotFoundException('Time slot not found');
           }
 
-          // Business Rule: Check slot availability
-          if (shiftHour.limit <= 0) {
+          const slotLimit = Number(shiftHour.limit || 0);
+          const bookedCount = await this.getBookedShiftHourCount(
+            manager,
+            session.clinicShiftHourId,
+            dateString,
+          );
+
+          // Business Rule: Check slot availability using static capacity
+          if (slotLimit <= 0 || bookedCount >= slotLimit) {
             throw new BadRequestException(
               'This time slot is fully booked. Please select another time.',
             );
@@ -4264,11 +4310,10 @@ export class AppointmentsService {
           }
 
           // === STEP 4: Calculate Appointment Hour ===
-          // Combine date + start_hour to create full timestamp
-          // Use dateString to ensure proper date parsing without timezone issues
-          const [hours, minutes] = shiftHour.startHour.split(':');
-          const appointmentHour = new Date(
-            dateString + 'T' + hours + ':' + minutes + ':00',
+          // Combine date + start_hour using Vietnam timezone utilities
+          const appointmentHour = this.buildVietnamAppointmentHour(
+            dateString,
+            shiftHour.startHour,
           );
 
           // Business Rule: Must book at least 2 hours in advance (use Vietnam timezone)
@@ -4302,17 +4347,12 @@ export class AppointmentsService {
             );
           }
 
-          // === STEP 6: Atomic Decrement Slot Limit ===
-          await manager
-            .createQueryBuilder()
-            .update('clinic_shift_hour')
-            .set({ limit: () => 'limit - 1' }) // Raw SQL prevents race condition
-            .where('_id = :id', { id: session.clinicShiftHourId })
-            .execute();
+          // === STEP 6: Keep static slot limit unchanged ===
+          // Capacity is derived dynamically from static limit - booked appointments.
 
           // === TIER 1: Create Appointment (with placeholder total = 0) ===
           // NOTE: total will be updated after Tier 3 calculates the real sum
-          const appointmentDateForDB = new Date(dateString + 'T00:00:00');
+          const appointmentDateForDB = getStartOfVietnamDate(dateString);
 
           // appointmentRepo already declared above (for duplicate check - reused here)
           const appointment = appointmentRepo.create({
@@ -4585,7 +4625,7 @@ export class AppointmentsService {
         session_id: sessionId,
         amount: finalRoundedTotal,
         currency: 'VND',
-        expires_at: addToVietnamTime(15, 'minute'), // 15 minutes
+        expires_at: formatToVietnamTime(addToVietnamTime(15, 'minute')), // 15 minutes
       },
     };
   }
@@ -4646,7 +4686,24 @@ export class AppointmentsService {
         .where('csh._id = :id', { id: session.clinicShiftHourId })
         .getOne();
 
-      if (!slot || slot.limit <= 0) {
+      const appointmentDateString = getDateString(
+        getStartOfVietnamDate(session.appointmentDate),
+      );
+
+      if (!slot) {
+        throw new BadRequestException(
+          'This slot is currently full. Please choose another slot.',
+        );
+      }
+
+      const slotLimit = Number(slot.limit || 0);
+      const bookedCount = await this.getBookedShiftHourCount(
+        manager,
+        session.clinicShiftHourId,
+        appointmentDateString,
+      );
+
+      if (slotLimit <= 0 || bookedCount >= slotLimit) {
         throw new BadRequestException(
           'This slot is currently full. Please choose another slot.',
         );
@@ -4681,15 +4738,23 @@ export class AppointmentsService {
       const finalAmount = session.paymentAmount || calculatedTotal;
 
       // 3. Create Appointment
+      const appointmentDateForDB = getStartOfVietnamDate(session.appointmentDate);
+      const appointmentHour = slot.startHour
+        ? this.buildVietnamAppointmentHour(
+            appointmentDateString,
+            slot.startHour,
+          )
+        : session.appointmentHour
+          ? parseVietnamTime(session.appointmentHour)
+          : appointmentDateForDB;
+
       const appointment = manager.create(Appointment, {
         patientId: session.patientId,
         clinicId: session.clinicId,
         doctorId: session.doctorId,
         clinicShiftHourId: session.clinicShiftHourId,
-        appointmentDate: new Date(session.appointmentDate),
-        appointmentHour: session.appointmentHour
-          ? new Date(session.appointmentHour)
-          : new Date(session.appointmentDate),
+        appointmentDate: appointmentDateForDB,
+        appointmentHour,
         total: finalAmount, // Required field
         status: AppointmentStatus.PENDING, // Paid online -> Waiting for clinic confirmation (Updated v5.1)
         patientNote: session.patientNote,
@@ -4822,17 +4887,18 @@ export class AppointmentsService {
   ): Promise<any> {
 
     // === STEP 1: Parse extraHour ===
-    const extraHourDate = new Date(session.extraHour);
+    const extraHourDate = this.parseBookingExtraHour(session.extraHour);
+    const appointmentDateString = getDateString(
+      getStartOfVietnamDate(session.appointmentDate || extraHourDate),
+    );
 
-    // Double-check validity (should already be validated in main function)
-    if (isNaN(extraHourDate.getTime())) {
-      throw new BadRequestException('Invalid extraHour format');
+    if (formatToDateOnly(extraHourDate) !== appointmentDateString) {
+      throw new BadRequestException(
+        'Appointment date must match extra hour in Vietnam timezone.',
+      );
     }
 
-    const year = extraHourDate.getFullYear();
-    const month = String(extraHourDate.getMonth() + 1).padStart(2, '0');
-    const day = String(extraHourDate.getDate()).padStart(2, '0');
-    const dateString = `${year}-${month}-${day}`;
+    const dateString = appointmentDateString;
 
     let result: any;
     try {
@@ -4937,12 +5003,14 @@ export class AppointmentsService {
 
           // === TIER 1: Create Appointment with placeholder total ===
           const apptRepo = manager.getRepository(Appointment);
+          const appointmentDateForDB = getStartOfVietnamDate(dateString);
+
           const newAppointment = apptRepo.create({
             patientId,
             doctorId: session.doctorId,
             clinicId: session.clinicId,
             clinicShiftHourId: null, // Out-of-hours: no shift
-            appointmentDate: extraHourDate,
+            appointmentDate: appointmentDateForDB,
             appointmentHour: extraHourDate,
             extraHour: extraHourDate,
             status: AppointmentStatus.PENDING,
@@ -6613,16 +6681,13 @@ export class AppointmentsService {
   }): Promise<any> {
     const { working_date, page, limit, search, district } = params;
 
-    const today = getStartOfDay();
     const maxDate = addToVietnamTime(30, 'day');
 
     if (working_date) {
-      const appointmentDate = new Date(working_date);
+      const appointmentDate = getStartOfVietnamDate(working_date);
 
-      if (appointmentDate < today) {
-        throw new BadRequestException(
-          'Working date must be today or in the future',
-        );
+      if (!isAtLeastOneDayInAdvanceVietnam(working_date)) {
+        throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
       }
 
       if (appointmentDate > maxDate) {
@@ -7541,17 +7606,26 @@ export class AppointmentsService {
    * @returns Nested schedule structure: dates -> shifts -> slots
    */
   async getClinicSchedules(clinicId: string, workingDate?: string) {
-    const today = getStartOfDay();
+    const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(30, 'day');
+    const startOfTomorrowDateString = this.toVietnamDateString(startOfTomorrow);
+    const maxDateString = this.toVietnamDateString(maxDate);
+    const validAppointmentStatuses = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+      AppointmentStatus.CHECKED_IN,
+      AppointmentStatus.IN_PROGRESS,
+    ];
+    let normalizedWorkingDate: string | undefined;
 
     if (workingDate) {
-      const date = new Date(workingDate);
+      const date = getStartOfVietnamDate(workingDate);
       if (isNaN(date.getTime())) {
         throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
       }
 
-      if (date < today) {
-        throw new BadRequestException('Date must be today or in the future');
+      if (!isAtLeastOneDayInAdvanceVietnam(workingDate)) {
+        throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
       }
 
       if (date > maxDate) {
@@ -7559,6 +7633,8 @@ export class AppointmentsService {
           'Date cannot be more than 30 days in the future',
         );
       }
+
+      normalizedWorkingDate = this.toVietnamDateString(date);
     }
 
     const legalDoc = await this.dataSource
@@ -7593,7 +7669,7 @@ export class AppointmentsService {
       branchIds.push(clinicId);
     }
 
-    const rawSlots = await this.dataSource
+    const scheduleQuery = this.dataSource
       .createQueryBuilder()
       .select([
         'es.work_date AS work_date',
@@ -7607,7 +7683,7 @@ export class AppointmentsService {
         'csh.end_hour AS end_time',
         'csh.limit AS limit',
         'cr.room_name AS clinic_room',
-        'COUNT(a._id) FILTER (WHERE a.status IN (\'PENDING\', \'CONFIRMED\', \'CHECKED_IN\', \'IN_PROGRESS\') AND a.deleted_at IS NULL) AS booked_count',
+        'COUNT(DISTINCT a._id) AS booked_count',
       ])
       .from('employee_schedule', 'es')
       .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
@@ -7623,7 +7699,9 @@ export class AppointmentsService {
       .leftJoin('appointments', 'a', `
         a.clinic_shift_hour_id = csh._id 
         AND a.appointment_date = es.work_date
-      `)
+        AND a.status IN (:...validAppointmentStatuses)
+        AND a.deleted_at IS NULL
+      `, { validAppointmentStatuses })
       .where('es.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
@@ -7633,23 +7711,29 @@ export class AppointmentsService {
       .groupBy('es._id, es.work_date, es.week_day, cs.shift, csh._id, doctor._id, di.full_name, doctor.username, di.position, csh.start_hour, csh.end_hour, csh.limit, cr.room_name')
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
-      .addOrderBy('csh.start_hour', 'ASC')
-      .getRawMany();
+      .addOrderBy('csh.start_hour', 'ASC');
+
+    if (normalizedWorkingDate) {
+      scheduleQuery.andWhere('es.work_date = :workingDate', {
+        workingDate: normalizedWorkingDate,
+      });
+    } else {
+      scheduleQuery
+        .andWhere('es.work_date >= :startOfTomorrowDate', {
+          startOfTomorrowDate: startOfTomorrowDateString,
+        })
+        .andWhere('es.work_date <= :maxDate', { maxDate: maxDateString });
+    }
+
+    const rawSlots = await scheduleQuery.getRawMany();
 
     if (!rawSlots || rawSlots.length === 0) {
       return { data: [] };
     }
 
-    const availableSlots = rawSlots
-      .map((slot) => ({
-        ...slot,
-        available_slots: parseInt(String(slot.limit)) - parseInt(String(slot.booked_count || 0)),
-      }))
-      .filter((slot) => slot.available_slots > 0);
-
     const dateMap = new Map<string, any>();
 
-    for (const slot of availableSlots) {
+    for (const slot of rawSlots) {
       const dateKey = this.toVietnamDateString(slot.work_date);
 
       if (!dateMap.has(dateKey)) {
@@ -7672,6 +7756,10 @@ export class AppointmentsService {
 
       const shiftData = dateData.shifts.get(shiftType);
 
+      const bookedCount = parseInt(String(slot.booked_count || 0), 10);
+      const limit = parseInt(String(slot.limit || 0), 10);
+      const availableSlots = Math.max(0, limit - bookedCount);
+
       shiftData.slots.push({
         clinic_shift_hour_id: slot.clinic_shift_hour_id,
         doctor_id: slot.doctor_id,
@@ -7679,8 +7767,8 @@ export class AppointmentsService {
         doctor_specialty: slot.doctor_specialty,
         start_time: slot.start_time,
         end_time: slot.end_time,
-        limit: slot.limit,
-        available_slots: slot.available_slots,
+        limit,
+        available_slots: availableSlots,
         clinic_room: slot.clinic_room,
       });
     }
@@ -7716,7 +7804,7 @@ export class AppointmentsService {
       throw new BadRequestException('clinic_id is required');
     }
 
-    const today = getStartOfDay();
+    const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(60, 'day');
 
     // BR: Verify clinic legal documents are approved
@@ -7761,7 +7849,9 @@ export class AppointmentsService {
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
       .where('es.employee_id = :doctorId', { doctorId })
       .andWhere('es.clinic_id = :clinicId', { clinicId })
-      .andWhere('es.work_date >= :today', { today })
+      .andWhere('es.work_date >= :startOfTomorrow', {
+        startOfTomorrow: this.toVietnamDateString(startOfTomorrow),
+      })
       .andWhere('es.work_date <= :maxDate', { maxDate })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
@@ -7880,25 +7970,35 @@ export class AppointmentsService {
     appointmentDate: string,
     extraHour: string,
   ): Promise<any> {
-    const requestedTime = new Date(extraHour);
+    const requestedTime = parseVietnamTime(extraHour);
     if (isNaN(requestedTime.getTime())) {
       throw new BadRequestException(
         'Invalid extra_hour format. Use ISO 8601 with timezone.',
       );
     }
 
-    const date = new Date(appointmentDate);
+    const date = getStartOfVietnamDate(appointmentDate);
     if (isNaN(date.getTime())) {
       throw new BadRequestException(
         'Invalid appointment_date format. Use YYYY-MM-DD.',
       );
     }
 
-    const today = getStartOfDay();
+    const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(30, 'day');
 
-    if (date < today) {
-      throw new BadRequestException('Date must be today or in the future');
+    if (!isAtLeastOneDayInAdvanceVietnam(appointmentDate)) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+    }
+
+    if (requestedTime < startOfTomorrow) {
+      throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
+    }
+
+    if (formatToDateOnly(requestedTime) !== appointmentDate) {
+      throw new BadRequestException(
+        'appointment_date must match the date part of extra_hour',
+      );
     }
 
     if (date > maxDate) {

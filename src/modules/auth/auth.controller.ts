@@ -248,6 +248,7 @@ export class AuthController {
     const user = await this.AccountsService.verifyEmailCode(
       verifyEmailDto.email,
       verifyEmailDto.code,
+      verifyEmailDto.role,
     );
 
     // Send welcome email
