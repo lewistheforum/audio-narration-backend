@@ -1526,22 +1526,42 @@ export class AppointmentsService {
           appointmentId,
         );
       } else {
-        // For non-shift-hour bookings, keep exact hour conflict check.
-        const existingAppointments = await this.appointmentRepository.find({
-          clinicId: appointment.clinicId,
-          appointmentDate: newAppointmentDate,
-          appointmentHour: appointment.appointmentHour,
-          deletedAt: null,
-          status: AppointmentStatus.PENDING,
-        });
+        // For non-shift-hour (extra hour) bookings, check exact hour and extra room conflict.
+        let conflictQuery = this.dataSource
+          .createQueryBuilder()
+          .select('app._id', 'id')
+          .from('appointments', 'app')
+          .where('app.clinic_id = :clinicId', { clinicId: appointment.clinicId })
+          .andWhere('app.appointment_date = :appointmentDate', { appointmentDate: newAppointmentDate })
+          .andWhere('app.appointment_hour = :appointmentHour', { appointmentHour: newAppointmentHour })
+          .andWhere('app._id != :appointmentId', { appointmentId })
+          .andWhere('app.deleted_at IS NULL')
+          .andWhere('app.status = ANY(:activeStatuses)', {
+            activeStatuses: [
+              AppointmentStatus.PENDING,
+              AppointmentStatus.PENDING_DOCTOR,
+              AppointmentStatus.CONFIRMED,
+              AppointmentStatus.CHECKED_IN,
+              AppointmentStatus.IN_PROGRESS,
+              AppointmentStatus.NEED_FINAL_PAYMENT,
+            ],
+          });
 
-        const conflicts = existingAppointments.filter(
-          (appt) => appt._id !== appointmentId,
-        );
+        if (newExtraRoomId) {
+          conflictQuery = conflictQuery.andWhere('app.extra_room_id = :extraRoomId', {
+            extraRoomId: newExtraRoomId,
+          });
+        } else {
+          conflictQuery = conflictQuery.andWhere('app.extra_room_id IS NULL');
+        }
 
-        if (conflicts.length > 0) {
+        const conflictingAppointment = await conflictQuery.getRawOne();
+
+        if (conflictingAppointment) {
           throw new ConflictException(
-            'The new time slot is already booked. Please choose a different time.',
+            newExtraRoomId 
+              ? 'This extra room is already booked for the selected extra hour.'
+              : 'The new time slot is already booked. Please choose a different time.'
           );
         }
       }
@@ -1618,6 +1638,13 @@ export class AppointmentsService {
     if (!appointment.extraHour) {
       throw new BadRequestException(
         'Cannot assign to doctor: appointment does not have extra_hour (out-of-hours request)',
+      );
+    }
+
+    // Validate appointment has extra_room_id assigned
+    if (!appointment.extraRoomId) {
+      throw new BadRequestException(
+        'Cannot assign to doctor: appointment must have an extra room assigned first',
       );
     }
 
