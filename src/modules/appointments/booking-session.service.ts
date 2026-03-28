@@ -28,6 +28,8 @@ import {
   isInPast,
   getStartOfTomorrow,
   getStartOfVietnamDate,
+  getDateString,
+  parseVietnamTime,
   isAtLeastOneDayInAdvanceVietnam,
   formatToDateOnly,
 } from 'src/common/utils/date.util';
@@ -456,13 +458,16 @@ export class BookingSessionService {
           );
         }
 
-        // Convert extra_hour to Date and validate format
-        const extraHourDate = new Date(data.extra_hour);
+        // Convert extra_hour to Date and validate format in Vietnam timezone
+        const extraHourDate = parseVietnamTime(data.extra_hour);
         if (isNaN(extraHourDate.getTime())) {
           throw new BadRequestException(
             'Invalid extra hour format. Must be a valid ISO 8601 timestamp',
           );
         }
+
+        const normalizedExtraHour = formatToVietnamTime(extraHourDate);
+        const normalizedExtraHourDate = formatToDateOnly(extraHourDate);
 
         // Validate extra_hour must be in the future (use Vietnam timezone)
         if (isInPast(extraHourDate)) {
@@ -482,18 +487,22 @@ export class BookingSessionService {
           throw new BadRequestException(this.MIN_ADVANCE_BOOKING_MESSAGE);
         }
 
-        // Validate appointment_date matches the date part of extra_hour
-        if (formatToDateOnly(extraHourDate) !== data.appointment_date) {
+        // Validate appointment_date matches the date part of extra_hour in UTC+7
+        if (normalizedExtraHourDate !== data.appointment_date) {
           throw new BadRequestException(
             'Appointment date must match the date part of extra hour',
           );
         }
 
+        const normalizedAppointmentDate = getDateString(
+          getStartOfVietnamDate(data.appointment_date),
+        );
+
         // MERGE: Explicitly preserve all existing fields
         // SPECIAL: Hardcode clinicShiftHourId = null for out-of-hours
         const updateFields: any = {
-          appointmentDate: data.appointment_date,
-          extraHour: data.extra_hour,
+          appointmentDate: normalizedAppointmentDate,
+          extraHour: normalizedExtraHour,
           clinicShiftHourId: null,
           currentStep: 2,
         };
