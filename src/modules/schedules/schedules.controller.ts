@@ -214,6 +214,25 @@ export class SchedulesController {
   }
 
   /**
+   * Get Clinic Employees (Legal Docs Required for Doctors)
+   *
+   * Retrieves list of employees where doctors MUST have full legal documents.
+   * Used for contract creation selection.
+   */
+  @Get('options/employees/legal')
+  @Roles(AccountRole.ADMIN, AccountRole.CLINIC_MANAGER)
+  @ApiOperation({
+    summary: 'Get clinic employees (doctors/staff) for dropdown (Doctors filtered by legal docs)',
+  })
+  async getEmployeesLegal(
+    @Request() req,
+    @Query() query: GetEmployeesDto,
+  ) {
+    return this.schedulesService.getEmployeesLegal(req.user, query.search);
+  }
+
+
+  /**
    * Find All Schedules
    *
    * Retrieves a list of schedules based on filter criteria.
