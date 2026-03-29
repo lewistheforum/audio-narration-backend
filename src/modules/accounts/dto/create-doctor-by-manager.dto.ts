@@ -163,4 +163,28 @@ export class CreateDoctorByClinicManagerDto {
   @IsString({ message: 'Bank branch must be a string' })
   @Transform(({ value }) => value?.trim())
   bankBranch?: string;
+
+  @ApiProperty({
+    description: 'Professional license (URL or Object)',
+    example: 'https://example.com/professional-license.pdf',
+    required: false,
+  })
+  @IsOptional()
+  professionalLicense?: any;
+
+  @ApiProperty({
+    description: 'Certificate of practical training (URL or Object)',
+    example: 'https://example.com/practical-training.pdf',
+    required: false,
+  })
+  @IsOptional()
+  certificatePracticalTraining?: any;
+
+  @ApiProperty({
+    description: 'Medical license (URL or Object)',
+    example: 'https://example.com/medical-license.pdf',
+    required: false,
+  })
+  @IsOptional()
+  medicalLicense?: any;
 }

@@ -112,7 +112,7 @@ export class PublicDoctorInfo {
 
   @ApiProperty({
     description: 'Professional license (encrypted)',
-    example: { number: 'PL-12345', issuedBy: 'Ministry of Health' },
+    example: 'https://example.com/professional-license.pdf',
     required: false,
     nullable: true,
   })
@@ -120,7 +120,7 @@ export class PublicDoctorInfo {
 
   @ApiProperty({
     description: 'Certificate of practical training (encrypted)',
-    example: { number: 'CPT-67890', issuedBy: 'Training Center' },
+    example: 'https://example.com/practical-training.pdf',
     required: false,
     nullable: true,
   })
@@ -128,7 +128,7 @@ export class PublicDoctorInfo {
 
   @ApiProperty({
     description: 'Medical license (encrypted)',
-    example: { number: 'ML-54321', issuedBy: 'Medical Council' },
+    example: 'https://example.com/medical-license.pdf',
     required: false,
     nullable: true,
   })
