@@ -49,6 +49,7 @@ import {
   GetEmployeesByClinicDto,
   UploadLegalDocumentDto,
   UpdateLegalDocumentsDto,
+  GetClinicDetailQueryDto,
 } from './dto';
 
 import { MESSAGES } from 'src/common/message';
@@ -432,6 +433,12 @@ export class AccountsController {
    */
   @Get('clinics/:id')
   @ApiOperation({ summary: 'Get clinic details by ID' })
+  @ApiQuery({
+    name: 'doctorSearch',
+    required: false,
+    type: String,
+    description: 'Search doctors in this clinic by full name or position',
+  })
   @ApiResponseData({
     type: ClinicDetailResponseDto,
     status: MESSAGES.statusCode.success,
@@ -440,8 +447,12 @@ export class AccountsController {
   @ApiResponse({ status: 404, description: 'Clinic not found' })
   async getClinicById(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: GetClinicDetailQueryDto,
   ): Promise<{ data: ClinicDetailResponseDto; message: string }> {
-    const clinic = await this.accountsService.findClinicById(id);
+    const clinic = await this.accountsService.findClinicById(
+      id,
+      query.doctorSearch,
+    );
     return {
       data: clinic,
       message: 'Clinic details retrieved successfully',

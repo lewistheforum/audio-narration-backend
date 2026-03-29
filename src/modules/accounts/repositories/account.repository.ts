@@ -420,6 +420,7 @@ export class AccountRepository {
     skip: number = 0,
     take: number = 10,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     return this.accountRepository.findAndCount({
       where: { role, status },
       skip,
@@ -511,6 +512,7 @@ export class AccountRepository {
     province?: string,
     specialty?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect(
@@ -598,24 +600,17 @@ export class AccountRepository {
     province?: string,
     specialty?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.address', 'address')
-      .leftJoinAndSelect('account.subscription', 'subscription')
+      .innerJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
-      .andWhere(
-        'NOT subscription.subscriptionStatus = ANY(:excludedStatuses)',
-        {
-          excludedStatuses: [
-            RegistrationStatus.PENDING_SEPAY_SETUP,
-            RegistrationStatus.PENDING_MANAGER_SETUP,
-            RegistrationStatus.PENDING_LEGAL_SETUP,
-            RegistrationStatus.PENDING_APPROVAL,
-            RegistrationStatus.PENDING_PAYMENT,
-          ],
-        },
-      );
+      .andWhere('subscription.subscriptionStatus = ANY(:validStatuses)', {
+        validStatuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
+      })
+      .andWhere('subscription.expirationDate >= :now', { now });
 
     // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
     if (search) {
@@ -742,6 +737,7 @@ export class AccountRepository {
     fromDate?: string,
     toDate?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
@@ -826,6 +822,7 @@ export class AccountRepository {
     fromDate?: string,
     toDate?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicStaffInformation', 'staffInfo')
@@ -977,3 +974,8 @@ export class AccountRepository {
     return { staffCount, doctorCount };
   }
 }
+
+
+
+
+
