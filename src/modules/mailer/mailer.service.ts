@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as nodemailer from 'nodemailer';
 
 /**
@@ -79,10 +81,88 @@ export interface AppointmentReminderContext {
   }>;
 }
 
+type TemplateContext = Record<string, unknown>;
+
+type HandlebarsCompiler = {
+  compile: (source: string) => (context: TemplateContext) => string;
+};
+
 @Injectable()
 export class MailerService {
   private readonly logger = new Logger(MailerService.name);
+  private handlebarsCompiler: HandlebarsCompiler | null = null;
+
   constructor(private readonly configService: ConfigService) {}
+
+  private resolveTemplatePath(templateRelativePath: string): string {
+    const candidates = [
+      path.join(
+        process.cwd(),
+        'src',
+        'modules',
+        'mailer',
+        'templates',
+        templateRelativePath,
+      ),
+      path.join(
+        process.cwd(),
+        'dist',
+        'src',
+        'modules',
+        'mailer',
+        'templates',
+        templateRelativePath,
+      ),
+      path.join(__dirname, 'templates', templateRelativePath),
+    ];
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    throw new Error(`Email template not found: ${templateRelativePath}`);
+  }
+
+  private loadHandlebars(): HandlebarsCompiler {
+    if (this.handlebarsCompiler) {
+      return this.handlebarsCompiler;
+    }
+
+    const directPath = path.join(process.cwd(), 'node_modules', 'handlebars');
+    if (fs.existsSync(directPath)) {
+      this.handlebarsCompiler = require(directPath) as HandlebarsCompiler;
+      return this.handlebarsCompiler;
+    }
+
+    const pnpmStoreDir = path.join(process.cwd(), 'node_modules', '.pnpm');
+    if (fs.existsSync(pnpmStoreDir)) {
+      for (const entry of fs.readdirSync(pnpmStoreDir)) {
+        const candidatePath = path.join(
+          pnpmStoreDir,
+          entry,
+          'node_modules',
+          'handlebars',
+        );
+        if (fs.existsSync(candidatePath)) {
+          this.handlebarsCompiler = require(candidatePath) as HandlebarsCompiler;
+          return this.handlebarsCompiler;
+        }
+      }
+    }
+
+    throw new Error('Cannot resolve handlebars for email rendering.');
+  }
+
+  private renderTemplate(
+    templateRelativePath: string,
+    context: TemplateContext,
+  ): string {
+    const templatePath = this.resolveTemplatePath(templateRelativePath);
+    const source = fs.readFileSync(templatePath, 'utf8');
+    return this.loadHandlebars().compile(source)(context);
+  }
 
   mailTransport(): nodemailer.Transporter {
     const transporter = nodemailer.createTransport({
@@ -109,47 +189,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '⚠️ Account Warning - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FFFBEB; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FCD34D;">
-            <h1 style="color: #D97706; margin: 0 0 20px 0;">⚠️ Account Warning</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Your account has received a warning. This is strike <strong>${strikes}/3</strong>.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
-              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">Reason:</p>
-              <p style="margin: 5px 0 0 0; color: #111827;">${reason}</p>
-            </div>
-
-            <p style="color: #DC2626; font-size: 14px; margin: 20px 0 0 0; font-weight: 600;">
-              Please note that accumulating 3 strikes will result in a permanent ban.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '⚠️ Account Warning - Medicare',
+      html: this.renderTemplate('moderation/account-warning.hbs', { name, reason, strikes })
     };
 
     try {
@@ -170,47 +215,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '🚫 Account Banned - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FECACA;">
-            <h1 style="color: #DC2626; margin: 0 0 20px 0;">🚫 Account Suspended</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Your account has been permanently banned due to multiple violations (3/3 strikes).
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
-              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">Reason:</p>
-              <p style="margin: 5px 0 0 0; color: #111827;">${reason}</p>
-            </div>
-
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              If you believe this is a mistake, please contact our support team.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '🚫 Account Suspended - Medicare',
+      html: this.renderTemplate('moderation/account-banned.hbs', { name, reason })
     };
 
     try {
@@ -227,49 +237,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '✅ Account Restored - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #BBF7D0;">
-            <h1 style="color: #166534; margin: 0 0 20px 0;">✅ Account Restored</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Great news! Your account has been reactivated and your ban strikes have been reset.
-            </p>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              Please ensure you follow our community guidelines to maintain your active status.
-            </p>
-
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
-                 style="background: #166534; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-                Login Now
-              </a>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '✅ Account Restored - Medicare',
+      html: this.renderTemplate('moderation/account-unbanned.hbs', { name, loginUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
     };
 
     try {
@@ -291,47 +264,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '⚠️ Clinic Account Warning - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FFFBEB; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FCD34D;">
-            <h1 style="color: #D97706; margin: 0 0 20px 0;">⚠️ Clinic Account Warning</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Your clinic account has received a warning. This is strike <strong>${strikes}/3</strong>.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
-              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">Reason:</p>
-              <p style="margin: 5px 0 0 0; color: #111827;">${reason}</p>
-            </div>
-
-            <p style="color: #DC2626; font-size: 14px; margin: 20px 0 0 0; font-weight: 600;">
-              Please note that accumulating 3 strikes will result in a permanent ban for your clinic and all associated accounts.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '⚠️ Clinic Account Warning - Medicare',
+      html: this.renderTemplate('moderation/clinic-warning.hbs', { name, reason, strikes })
     };
 
     try {
@@ -352,50 +290,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '🚫 Clinic Account Suspended - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FECACA;">
-            <h1 style="color: #DC2626; margin: 0 0 20px 0;">🚫 Clinic Account Suspended</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Your clinic account has been permanently banned due to multiple violations (3/3 strikes).
-            </p>
-            <p style="color: #DC2626; font-size: 15px; margin: 0 0 20px 0; font-weight: 600;">
-              All associated accounts (Managers, Doctors, Staff) have also been suspended.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
-              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">Reason:</p>
-              <p style="margin: 5px 0 0 0; color: #111827;">${reason}</p>
-            </div>
-
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              If you believe this is a mistake, please contact our support team.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '🚫 Clinic Account Suspended - Medicare',
+      html: this.renderTemplate('moderation/clinic-banned.hbs', { name, reason })
     };
 
     try {
@@ -415,49 +315,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '✅ Clinic Account Restored - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #BBF7D0;">
-            <h1 style="color: #166534; margin: 0 0 20px 0;">✅ Clinic Account Restored</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Great news! Your clinic account and all associated accounts have been reactivated.
-            </p>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              Please ensure you follow our community guidelines to maintain your active status.
-            </p>
-
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
-                 style="background: #166534; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-                Login Now
-              </a>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '✅ Clinic Account Restored - Medicare',
+      html: this.renderTemplate('moderation/clinic-unbanned.hbs', { name, loginUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
     };
 
     try {
@@ -481,51 +344,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Verify Your Email - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; text-align: center;">
-            <h1 style="color: #4F46E5; margin: 0 0 20px 0;">Email Verification</h1>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              Hi ${displayName},
-            </p>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              Thank you for registering with Bonix. Please use the verification code below to verify your email address:
-            </p>
-            
-            <div style="background: white; border: 2px dashed #4F46E5; border-radius: 8px; padding: 20px; margin: 30px 0;">
-              <h2 style="color: #4F46E5; font-size: 36px; letter-spacing: 8px; margin: 0;">
-                ${code}
-              </h2>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0;">
-              This code will expire in <strong>15 minutes</strong>.
-            </p>
-            <p style="color: #6B7280; font-size: 14px; margin: 10px 0 0 0;">
-              If you didn't create an account with Bonix, please ignore this email.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Verify Your Email - Medicare',
+      html: this.renderTemplate('auth/verification-code.hbs', { displayName, code })
     };
 
     try {
@@ -550,60 +374,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Password Reset Request - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; text-align: center;">
-            <h1 style="color: #DC2626; margin: 0 0 20px 0;">🔐 Password Reset Request</h1>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              Hi ${displayName},
-            </p>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              We received a request to reset your password. Use the code below to proceed:
-            </p>
-            
-            <div style="background: white; border: 2px dashed #DC2626; border-radius: 8px; padding: 20px; margin: 30px 0;">
-              <h2 style="color: #DC2626; font-size: 36px; letter-spacing: 8px; margin: 0;">
-                ${code}
-              </h2>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0;">
-              This code will expire in <strong>15 minutes</strong>.
-            </p>
-            <p style="color: #DC2626; font-size: 14px; margin: 10px 0 0 0; font-weight: 600;">
-              ⚠️ If you didn't request this password reset, please ignore this email or contact support if you're concerned.
-            </p>
-          </div>
-          
-          <div style="background: #F3F4F6; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Security Tips:</h3>
-            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-              <li>Never share your reset code with anyone</li>
-              <li>Bonix will never ask for your password via email</li>
-              <li>Use a strong, unique password for your account</li>
-            </ul>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Password Reset Request - Medicare',
+      html: this.renderTemplate('auth/password-reset-code.hbs', { displayName, code })
     };
 
     try {
@@ -629,51 +405,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Contract Signing OTP - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #f0fdf4; border-radius: 10px; padding: 30px; text-align: center;">
-            <h1 style="color: #166534; margin: 0 0 20px 0;">✍️ Contract Signing OTP</h1>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              Hi ${displayName},
-            </p>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 30px 0;">
-              You are attempting to sign contract <strong>#${contractCode}</strong>. Please use the verification code below to confirm your signature:
-            </p>
-            
-            <div style="background: white; border: 2px dashed #166534; border-radius: 8px; padding: 20px; margin: 30px 0;">
-              <h2 style="color: #166534; font-size: 36px; letter-spacing: 8px; margin: 0;">
-                ${code}
-              </h2>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0;">
-              This code will expire in <strong>15 minutes</strong>.
-            </p>
-            <p style="color: #166534; font-size: 14px; margin: 10px 0 0 0; font-weight: 600;">
-               If you are not trying to sign this contract, please contact support immediately.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Contract Signing OTP - Medicare',
+      html: this.renderTemplate('auth/contract-signing-code.hbs', { displayName, contractCode, code })
     };
 
     try {
@@ -698,85 +435,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Welcome to Bonix!',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🎉 Welcome to Bonix!</h1>
-            <p style="font-size: 18px; margin: 0 0 10px 0;">
-              Hi ${fullName},
-            </p>
-            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
-              Your email has been successfully verified!
-            </p>
-          </div>
-          
-          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
-            <h2 style="color: #111827; margin: 0 0 20px 0;">What's Next?</h2>
-            
-            <div style="margin: 20px 0;">
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">1</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Complete Your Profile</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Add your personal information to get started</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">2</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Explore Our Services</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Discover healthcare services tailored for you</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start;">
-                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">3</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Stay Connected</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">We'll keep you updated with the latest health tips</p>
-                </div>
-              </div>
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${
-                this.configService.get<string>('FRONTEND_URL') ||
-                'http://localhost:5173'
-              }" 
-                 style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-                Get Started
-              </a>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need help? Contact us at 
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Welcome to Medicare',
+      html: this.renderTemplate('auth/welcome.hbs', { fullName, frontendUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
     };
 
     try {
@@ -795,44 +459,13 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: [targetMail],
-      subject: 'Bonix Subject',
+      subject: 'New Contact Inquiry - Medicare',
       text: 'Bonix Text',
-      html: ` 
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="margin: 16px 0;">
-                <img 
-                  alt="Bonix" 
-                  style="width: 100%; border-radius: 12px; object-fit: cover;"
-                  height="320"
-                  src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-                />
-              </div>
-              <div style="margin-top: 32px; text-align: center;">
-                <p style="margin: 16px 0; font-weight: 600; font-size: 18px; color: #4F46E5; line-height: 28px;">
-                  New Contact
-                </p>
-                <h1 style="margin: 0; margin-top: 8px; font-weight: 600; font-size: 36px; color: #111827; line-height: 36px;">
-                  Nguyen Van A
-                </h1>
-                <p style="font-size: 16px; color: #6B7280; line-height: 24px;">
-                  Phone Number: 0909090909
-                </p>
-                <p style="font-size: 16px; color: #6B7280; line-height: 24px;">
-                  Service: Service Text
-                </p>
-                <p style="font-size: 16px; color: #6B7280; line-height: 24px;">
-                  Budget: Budget Text
-                </p>
-                <p style="font-size: 16px; color: #6B7280; line-height: 24px;">
-                  Request: Request Text
-                </p>
-              </div>
-            </div>
-            `,
+      html: this.renderTemplate('legacy/send-mail.hbs', {}),
       attachments: [
         {
           filename: 'logo-Bonix.png',
@@ -868,60 +501,7 @@ export class MailerService {
       },
     });
 
-    const html = `<!doctype html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Email Verification for Account Registration</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 16px 30px rgba(15,23,42,0.18);">
-            <tr>
-              <td style="padding:24px 28px 16px 28px;">
-                <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;">
-                  Bonix App
-                </p>
-                <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
-                  Email Verification for Account Registration
-                </h1>
-                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
-                  Hello from Bonix,
-                </p>
-                <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
-                  Thank you for registering an account on <strong>Bonix</strong>.<br/>
-                  Your email verification code is:
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:8px 28px 16px 28px;">
-                <span style="display:inline-block;padding:12px 24px;border-radius:999px;background-color:#111827;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.35em;">
-                  ${code}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 28px 20px 28px;">
-                <p style="margin:0 0 4px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  This code is valid for <strong>10 minutes</strong>. Please do not share this code with anyone.
-                </p>
-                <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  If you did not register for this account, please ignore this email.
-                </p>
-                <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
-                  This is an automated email, please do not reply.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+    const html = this.renderTemplate('auth/verification-email.hbs', { code })
 
     const mailOptions = {
       from: `"Bonix App" <${user}>`,
@@ -952,61 +532,7 @@ export class MailerService {
       },
     });
 
-    const html = `<!doctype html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Password Reset Request</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 16px 30px rgba(15,23,42,0.18);">
-            <tr>
-              <td style="padding:24px 28px 16px 28px;">
-                <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;">
-                  Bonix App
-                </p>
-                <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;text-align:center;">
-                  Password Reset Request
-                </h1>
-                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#374151;">
-                  Hello from Bonix,
-                </p>
-                <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">
-                  We received a password reset request for the account using email:
-                  <strong>${email}</strong>.<br/>
-                  Your password reset code is:
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:8px 28px 16px 28px;">
-                <span style="display:inline-block;padding:12px 24px;border-radius:999px;background-color:#111827;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.35em;">
-                  ${code}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 28px 20px 28px;">
-                <p style="margin:0 0 4px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  This code is valid for <strong>10 minutes</strong>. If you did not request a password reset, please ignore this email.
-                </p>
-                <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#4b5563;">
-                  For security reasons, never share this code with anyone.
-                </p>
-                <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
-                  This is an automated email, please do not reply.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+    const html = this.renderTemplate('auth/reset-password-email.hbs', { email, code })
 
     const mailOptions = {
       from: `"Bonix App" <${user}>`,
@@ -1032,81 +558,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Welcome to Bonix - Clinic Registration Initiated',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img
-              alt="Bonix Logo"
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🏥 Welcome to Bonix!</h1>
-            <p style="font-size: 18px; margin: 0 0 10px 0;">
-              ${displayName}
-            </p>
-            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
-              Your clinic registration has been successfully initiated!
-            </p>
-          </div>
-          
-          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
-            <h2 style="color: #111827; margin: 0 0 20px 0;">What's Next?</h2>
-            
-            <div style="margin: 20px 0;">
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">1</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Configure Payment Settings</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Complete your payment configuration to proceed</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">2</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Create Clinic Manager Account</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Set up your clinic manager credentials</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start;">
-                <div style="background: #4F46E5; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">3</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Upload Legal Documents</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Submit required documentation for verification</p>
-                </div>
-              </div>
-            </div>
-            
-            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px;">
-              <p style="margin: 0; color: #92400E; font-size: 14px;">
-                <strong>⚠️ Important:</strong> Please complete your Payment Configuration before proceeding with the next steps.
-              </p>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need help? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Welcome to Medicare - Clinic Registration Initiated',
+      html: this.renderTemplate('onboarding/clinic-admin-welcome.hbs', { displayName })
     };
 
     try {
@@ -1131,40 +588,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
       subject: `Action Required: Employee Signed Contract #${contractCode}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #eff6ff; border-radius: 10px; padding: 30px; text-align: center;">
-            <h1 style="color: #1e40af; margin: 0 0 20px 0;">✍️ Contract Signed</h1>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 20px 0;">
-              Employee <strong>${employeeName}</strong> has signed the contract <strong>#${contractCode}</strong>.
-            </p>
-            
-            <div style="margin: 30px 0;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}" 
-                 style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                Review & Sign Now
-              </a>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 0;">
-              Please review and countersign to finalize the agreement.
-            </p>
-          </div>
-        </div>
-      `,
+      html: this.renderTemplate('contracts/signed-manager.hbs', { employeeName, contractCode, actionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}` })
     };
 
     try {
@@ -1188,33 +617,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
       subject: `Contract #${contractCode} is Now Active`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #f0fdf4; border-radius: 10px; padding: 30px; text-align: center;">
-            <h1 style="color: #166534; margin: 0 0 20px 0;">🎉 Contract Finalized</h1>
-            <p style="color: #6B7280; font-size: 16px; margin: 0 0 20px 0;">
-              Your contract <strong>#${contractCode}</strong> has been signed by <strong>${managerName}</strong> and is now <strong>ACTIVE</strong>.
-            </p>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              You can now view your finalized contract details on the dashboard.
-            </p>
-          </div>
-        </div>
-      `,
+      html: this.renderTemplate('contracts/completed-employee.hbs', { contractCode, managerName })
     };
 
     try {
@@ -1237,25 +645,12 @@ export class MailerService {
         
         const mailOptions = {
             from: {
-                name: 'Bonix',
+                name: 'Medicare',
                 address: this.configService.get<string>('EMAIL_USER'),
             },
             to: email,
             subject,
-            html: `
-                <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
-                    <h2 style="color: #ef4444;">Contract Signing Rejection Notice</h2>
-                    <p>Hello,</p>
-                    <p>We would like to inform you that contract <strong>#${contractCode}</strong> has been rejected by <strong>${signerName}</strong>.</p>
-                    <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
-                        <p style="margin: 0; font-weight: bold;">Rejection Reason:</p>
-                        <p style="margin: 5px 0 0 0;">${reason}</p>
-                    </div>
-                    <p>Please log in to the system to review the details and take next steps.</p>
-                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-                    <p style="font-size: 12px; color: #666;">This is an automated email, please do not reply.</p>
-                </div>
-            `,
+            html: this.renderTemplate('contracts/rejected.hbs', { contractCode, signerName, reason })
         };
 
         try {
@@ -1285,33 +680,7 @@ export class MailerService {
             },
             to: email,
             subject,
-            html: `
-                <div style="font-family: sans-serif; line-height: 1.5; color: #333; max-width: 600px; margin: 0 auto;">
-                    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 25px;">
-                        <h2 style="color: #dc2626; margin-top: 0;">⚠️ Urgent Contract Cancellation Notice</h2>
-                        <p>Dear Recipient,</p>
-                        <p>Our security system has detected an issue with contract <strong>#${contractCode}</strong>.</p>
-                        
-                        <div style="background-color: #ffffff; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                            <p style="margin: 0; font-weight: bold; color: #991b1b;">Status: CANCELLED</p>
-                            <p style="margin: 10px 0 0 0; color: #4b5563;"><strong>Reason:</strong> ${reason}</p>
-                        </div>
-                        
-                        <p style="color: #4b5563;">Please note the following:</p>
-                        <ul style="color: #4b5563;">
-                            <li>This contract is no longer legally valid within our system.</li>
-                            <li>If this is an employee account, your account status has been changed to <strong>Pending Approval</strong> to ensure safety.</li>
-                        </ul>
-                        
-                        <p style="margin-top: 25px;">If you believe this is an error, please contact technical support immediately.</p>
-                        
-                        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 25px 0;">
-                        <p style="font-size: 12px; color: #9ca3af; text-align: center;">
-                            © 2026 Bonix Healthcare System. Your security is our top priority.
-                        </p>
-                    </div>
-                </div>
-            `,
+            html: this.renderTemplate('contracts/cancelled.hbs', { contractCode, reason })
         };
 
         try {
@@ -1336,77 +705,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: managerEmail,
-      subject: 'Your Clinic Manager Account Credentials - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img
-              alt="Bonix Logo"
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">👋 Welcome, Clinic Manager!</h1>
-            <p style="font-size: 18px; margin: 0 0 10px 0;">
-              ${displayName}
-            </p>
-            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
-              Your account has been created successfully!
-            </p>
-          </div>
-          
-          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
-            <h2 style="color: #111827; margin: 0 0 20px 0; text-align: center;">Your Login Credentials</h2>
-            
-            <div style="background: white; border: 2px solid #E5E7EB; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <div style="margin-bottom: 15px;">
-                <p style="margin: 0 0 5px 0; color: #6B7280; font-size: 14px; font-weight: 600;">Username:</p>
-                <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">${username}</p>
-              </div>
-              
-              <div style="margin-bottom: 15px;">
-                <p style="margin: 0 0 5px 0; color: #6B7280; font-size: 14px; font-weight: 600;">Password:</p>
-                <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">${password}</p>
-              </div>
-            </div>
-            
-            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px;">
-              <p style="margin: 0; color: #92400E; font-size: 14px;">
-                <strong>⚠️ Important:</strong> Please change your password after your first login for security purposes.
-              </p>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="${
-              this.configService.get<string>('FRONTEND_URL') ||
-              'http://localhost:5173'
-            }/login"
-               style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-              Login to Your Account
-            </a>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need help? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Your Clinic Manager Account Credentials - Medicare',
+      html: this.renderTemplate('onboarding/manager-credentials.hbs', { displayName, username, password, loginUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/login` })
     };
 
     try {
@@ -1430,84 +734,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: adminEmail,
-      subject: '🎉 Registration Approved - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img
-              alt="Bonix Logo"
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">🎉 Registration Approved!</h1>
-            <p style="font-size: 18px; margin: 0 0 10px 0;">
-              ${displayName}
-            </p>
-            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
-              Your clinic registration has been approved by Bonix!
-            </p>
-          </div>
-          
-          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
-            <h2 style="color: #111827; margin: 0 0 20px 0;">Next Steps</h2>
-            
-            <div style="margin: 20px 0;">
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #10B981; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">✓</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Registration Approved</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Your clinic registration has been reviewed and approved</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start;">
-                <div style="background: #F59E0B; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">!</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Complete Payment</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Please complete your subscription payment to activate your clinic</p>
-                </div>
-              </div>
-            </div>
-            
-            <div style="background: #ECFDF5; border: 2px solid #10B981; border-radius: 8px; padding: 20px; margin-top: 20px;">
-              <h3 style="margin: 0 0 10px 0; color: #065F46; font-size: 16px;">Payment Required</h3>
-              <p style="margin: 0; color: #047857; font-size: 14px;">
-                Your clinic is ready to go! Please complete the payment process to activate your subscription and start using Bonix services.
-              </p>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="${
-              this.configService.get<string>('FRONTEND_URL') ||
-              'http://localhost:5173'
-            }/payment"
-               style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-              Complete Payment
-            </a>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need help? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '🎉 Registration Approved - Medicare',
+      html: this.renderTemplate('onboarding/registration-approved.hbs', { displayName, paymentUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/payment` })
     };
 
     try {
@@ -1532,99 +764,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: adminEmail,
-      subject: 'Registration Update - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img
-              alt="Bonix Logo"
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); border-radius: 10px; padding: 40px; text-align: center; color: white;">
-            <h1 style="margin: 0 0 20px 0; font-size: 32px;">📋 Registration Update</h1>
-            <p style="font-size: 18px; margin: 0 0 10px 0;">
-              ${displayName}
-            </p>
-            <p style="font-size: 16px; margin: 0; opacity: 0.9;">
-              Your registration requires attention
-            </p>
-          </div>
-          
-          <div style="background: #f8f9fa; border-radius: 10px; padding: 30px; margin-top: 20px;">
-            <h2 style="color: #111827; margin: 0 0 20px 0;">Rejection Reason</h2>
-            
-            <div style="background: #FEF2F2; border: 2px solid #EF4444; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <p style="margin: 0; color: #7F1D1D; font-size: 16px; line-height: 1.6;">
-                ${reason}
-              </p>
-            </div>
-            
-            <h2 style="color: #111827; margin: 30px 0 20px 0;">What You Need To Do</h2>
-            
-            <div style="margin: 20px 0;">
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #EF4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">1</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Review the Reason</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Carefully review the reason for rejection above</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start; margin-bottom: 15px;">
-                <div style="background: #EF4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">2</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Update Documents</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Update your legal documents based on the feedback</p>
-                </div>
-              </div>
-              
-              <div style="display: flex; align-items: start;">
-                <div style="background: #EF4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; flex-shrink: 0;">3</div>
-                <div>
-                  <h3 style="margin: 0 0 5px 0; color: #111827;">Resubmit for Review</h3>
-                  <p style="margin: 0; color: #6B7280; font-size: 14px;">Submit your updated documents for re-verification</p>
-                </div>
-              </div>
-            </div>
-            
-            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px;">
-              <p style="margin: 0; color: #92400E; font-size: 14px;">
-                <strong>💡 Tip:</strong> If you have questions about the rejection reason, please contact our support team for clarification.
-              </p>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="${
-              this.configService.get<string>('FRONTEND_URL') ||
-              'http://localhost:5173'
-            }/documents"
-               style="background: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-              Update Documents
-            </a>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need help? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Registration Update - Medicare',
+      html: this.renderTemplate('onboarding/registration-rejected.hbs', { displayName, reason, documentsUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/documents` })
     };
 
     try {
@@ -1657,93 +802,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: `${urgentFlag}Your Bonix Subscription Expires in ${daysText}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: ${isUrgent ? '#FEF2F2' : '#FFF7ED'}; border-radius: 10px; padding: 30px; border-left: 4px solid ${isUrgent ? '#DC2626' : '#F59E0B'};">
-            <h1 style="color: ${isUrgent ? '#DC2626' : '#F59E0B'}; margin: 0 0 20px 0; font-size: 24px;">
-              ${isUrgent ? '🚨 URGENT ACTION REQUIRED' : '⏰ Subscription Reminder'}
-            </h1>
-            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
-              Hi <strong>${context.clinicName}</strong>,
-            </p>
-            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Your Bonix subscription (<strong>${context.planName}</strong>) will expire in <strong style="color: ${isUrgent ? '#DC2626' : '#F59E0B'};">${daysText}</strong>.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="color: #6B7280; font-size: 14px;">Current Plan:</span>
-                <strong style="color: #111827; font-size: 16px;">${context.planName}</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #6B7280; font-size: 14px;">Expiration Date:</span>
-                <strong style="color: ${isUrgent ? '#DC2626' : '#F59E0B'}; font-size: 16px;">${context.expirationDate}</strong>
-              </div>
-            </div>
-            
-            ${
-              isUrgent
-                ? `
-              <div style="background: #FEE2E2; border: 2px solid #DC2626; border-radius: 8px; padding: 15px; margin: 20px 0;">
-                <p style="color: #991B1B; font-size: 14px; margin: 0; font-weight: 600;">
-                  ⚠️ Your subscription expires TOMORROW! Renew now to avoid service interruption.
-                </p>
-              </div>
-            `
-                : `
-              <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0;">
-                <p style="color: #92400E; font-size: 14px; margin: 0;">
-                  💡 <strong>Tip:</strong> Renew now to ensure uninterrupted access to your Bonix services.
-                </p>
-              </div>
-            `
-            }
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${context.renewalLink}"
-                 style="background: ${isUrgent ? '#DC2626' : '#F59E0B'}; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
-                ${isUrgent ? 'Renew Now' : 'Renew Subscription'}
-              </a>
-            </div>
-          </div>
-          
-          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Why Renew?</h3>
-            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-              <li>Maintain uninterrupted access to all features</li>
-              <li>Continue managing patient appointments seamlessly</li>
-              <li>Keep your clinic data secure and accessible</li>
-              <li>Receive ongoing support from our team</li>
-            </ul>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need help? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: `${urgentFlag}Your Medicare Subscription Expires in ${daysText}`,
+      html: this.renderTemplate('subscription/warning.hbs', { titleText: isUrgent ? 'Immediate Attention Required' : 'Subscription Reminder', clinicName: context.clinicName, planName: context.planName, daysText, expirationDate: context.expirationDate, highlightMessage: isUrgent ? 'Your subscription will expire tomorrow. Please renew promptly to avoid any interruption to your services.' : 'Please renew in advance to ensure uninterrupted access to your Medicare services.', renewalLink: context.renewalLink, ctaText: isUrgent ? 'Renew Now' : 'Renew Subscription' })
     };
 
     try {
@@ -1773,85 +837,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: `✅ Your Bonix Subscription Renews ${daysText}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; border-left: 4px solid #10B981;">
-            <h1 style="color: #10B981; margin: 0 0 20px 0; font-size: 24px;">
-              ✅ Your Renewal is Scheduled
-            </h1>
-            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
-              Hi <strong>${context.clinicName}</strong>,
-            </p>
-            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Good news! Your Bonix subscription renewal is already scheduled. No action needed from your side.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D1FAE5;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <span style="color: #6B7280; font-size: 14px;">Current Plan:</span>
-                <strong style="color: #111827; font-size: 16px;">${context.currentPlan}</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <span style="color: #6B7280; font-size: 14px;">Next Plan:</span>
-                <strong style="color: #10B981; font-size: 16px;">${context.nextPlan}</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #6B7280; font-size: 14px;">Activates:</span>
-                <strong style="color: #059669; font-size: 16px;">${activationText}</strong>
-              </div>
-            </div>
-            
-            <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
-              <p style="color: #065F46; font-size: 14px; margin: 0;">
-                🎉 <strong>Automatic Renewal:</strong> Your subscription will seamlessly continue with zero downtime.
-              </p>
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription"
-                 style="background: #10B981; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
-                View Subscription Details
-              </a>
-            </div>
-          </div>
-          
-          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">What Happens Next?</h3>
-            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-              <li>Your new subscription will activate automatically</li>
-              <li>You'll continue to have uninterrupted access</li>
-              <li>All your data and settings will remain intact</li>
-              <li>We'll send you a confirmation once the renewal is complete</li>
-            </ul>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Questions? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: `✅ Your Medicare Subscription Renews ${daysText}`,
+      html: this.renderTemplate('subscription/reassurance.hbs', { clinicName: context.clinicName, currentPlan: context.currentPlan, nextPlan: context.nextPlan, activationText, subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription` })
     };
 
     try {
@@ -1877,81 +868,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: '❌ Your Bonix Subscription Has Expired',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FEF2F2; border-radius: 10px; padding: 30px; border-left: 4px solid #DC2626;">
-            <h1 style="color: #DC2626; margin: 0 0 20px 0; font-size: 24px;">
-              ⚠️ Subscription Expired
-            </h1>
-            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
-              Hi <strong>${context.clinicName}</strong>,
-            </p>
-            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Your Bonix subscription (<strong>${context.planName}</strong>) has expired as of <strong>${context.expirationDate}</strong>.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 2px solid #FEE2E2;">
-              <h3 style="color: #DC2626; margin: 0 0 15px 0; font-size: 16px;">Services No Longer Available:</h3>
-              <ul style="color: #6B7280; font-size: 14px; margin: 0; padding-left: 20px;">
-                <li>Patient appointment management</li>
-                <li>Medical record access</li>
-                <li>Clinic dashboard features</li>
-                <li>Staff and doctor management</li>
-                <li>Reporting and analytics</li>
-              </ul>
-            </div>
-            
-            <div style="background: #FEE2E2; border: 2px solid #DC2626; border-radius: 8px; padding: 15px; margin: 20px 0;">
-              <p style="color: #991B1B; font-size: 14px; margin: 0; font-weight: 600;">
-                🔒 Your account is now in limited access mode. Renew to restore full functionality.
-              </p>
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${context.renewalLink}"
-                 style="background: #DC2626; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
-                Renew Subscription Now
-              </a>
-            </div>
-          </div>
-          
-          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Renew Today to:</h3>
-            <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-              <li>Restore full access to all Bonix features</li>
-              <li>Resume managing patient appointments</li>
-              <li>Access your clinic data and reports</li>
-              <li>Continue providing quality healthcare services</li>
-            </ul>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Need assistance? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '❌ Your Medicare Subscription Has Expired',
+      html: this.renderTemplate('subscription/subscription-expired.hbs', { clinicName: context.clinicName, planName: context.planName, expirationDate: context.expirationDate, renewalLink: context.renewalLink })
     };
 
     try {
@@ -1974,99 +896,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: '✅ Your Bonix Subscription Has Been Renewed',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F0FDF4; border-radius: 10px; padding: 30px; border-left: 4px solid #10B981;">
-            <h1 style="color: #10B981; margin: 0 0 20px 0; font-size: 24px;">
-              🎉 Subscription Renewed Successfully!
-            </h1>
-            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
-              Hi <strong>${context.clinicName}</strong>,
-            </p>
-            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Great news! Your Bonix subscription has been successfully renewed. Your services continue uninterrupted.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #D1FAE5;">
-              <h3 style="color: #111827; margin: 0 0 15px 0; font-size: 16px;">Renewal Details</h3>
-              <div style="border-bottom: 1px solid #E5E7EB; padding-bottom: 10px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="color: #6B7280; font-size: 14px;">Subscription Plan:</span>
-                  <strong style="color: #111827; font-size: 15px;">${context.planName}</strong>
-                </div>
-              </div>
-              <div style="border-bottom: 1px solid #E5E7EB; padding-bottom: 10px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="color: #6B7280; font-size: 14px;">Start Date:</span>
-                  <strong style="color: #111827; font-size: 15px;">${context.startDate}</strong>
-                </div>
-              </div>
-              <div style="border-bottom: 1px solid #E5E7EB; padding-bottom: 10px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="color: #6B7280; font-size: 14px;">Expiration Date:</span>
-                  <strong style="color: #10B981; font-size: 15px;">${context.endDate}</strong>
-                </div>
-              </div>
-              <div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: #6B7280; font-size: 14px;">Transaction ID:</span>
-                  <code style="background: #F3F4F6; padding: 4px 8px; border-radius: 4px; font-size: 13px; color: #111827;">${context.transactionId}</code>
-                </div>
-              </div>
-            </div>
-            
-            <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
-              <p style="color: #065F46; font-size: 14px; margin: 0;">
-                ✅ <strong>All Services Active:</strong> You have full access to all Bonix features until ${context.endDate}.
-              </p>
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${context.invoiceLink}"
-                 style="background: #10B981; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px; margin-right: 10px;">
-                View Invoice
-              </a>
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription"
-                 style="background: #6B7280; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
-                Manage Subscription
-              </a>
-            </div>
-          </div>
-          
-          <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">Thank You for Choosing Bonix</h3>
-            <p style="color: #6B7280; font-size: 14px; margin: 10px 0;">
-              We're committed to providing you with the best healthcare management platform. Your continued trust means everything to us!
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Questions? Reach out at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '✅ Your Medicare Subscription Has Been Renewed',
+      html: this.renderTemplate('subscription/renewal-success.hbs', { clinicName: context.clinicName, planName: context.planName, startDate: context.startDate, endDate: context.endDate, transactionId: context.transactionId, invoiceLink: context.invoiceLink, subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription` })
     };
 
     try {
@@ -2094,121 +929,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to,
-      subject: `${icon} Your Bonix Subscription Plan Has Changed`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: ${isUpgrade ? '#F0F9FF' : '#F0FDF4'}; border-radius: 10px; padding: 30px; border-left: 4px solid ${isUpgrade ? '#0284C7' : '#10B981'};">
-            <h1 style="color: ${isUpgrade ? '#0284C7' : '#10B981'}; margin: 0 0 20px 0; font-size: 24px;">
-              ${icon} Subscription Plan ${changeType} Successful!
-            </h1>
-            <p style="color: #111827; font-size: 16px; margin: 0 0 15px 0;">
-              Hi <strong>${context.clinicName}</strong>,
-            </p>
-            <p style="color: #374151; font-size: 16px; margin: 0 0 20px 0;">
-              Your subscription plan has been successfully updated. ${isUpgrade ? 'Enjoy your enhanced features!' : 'Your new plan is now active.'}
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid ${isUpgrade ? '#BAE6FD' : '#D1FAE5'};">
-              <h3 style="color: #111827; margin: 0 0 15px 0; font-size: 16px;">Plan Change Details</h3>
-              
-              <div style="background: #FEF2F2; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
-                <div style="text-align: center;">
-                  <span style="color: #6B7280; font-size: 12px; text-transform: uppercase; font-weight: 600;">Previous Plan</span>
-                  <div style="color: #DC2626; font-size: 18px; font-weight: bold; margin-top: 5px;">${context.oldPlan}</div>
-                </div>
-              </div>
-              
-              <div style="text-align: center; margin: 10px 0;">
-                <span style="font-size: 24px;">${isUpgrade ? '⬆️' : '➡️'}</span>
-              </div>
-              
-              <div style="background: ${isUpgrade ? '#DBEAFE' : '#D1FAE5'}; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
-                <div style="text-align: center;">
-                  <span style="color: #065F46; font-size: 12px; text-transform: uppercase; font-weight: 600;">New Plan</span>
-                  <div style="color: ${isUpgrade ? '#0284C7' : '#10B981'}; font-size: 18px; font-weight: bold; margin-top: 5px;">${context.newPlan}</div>
-                </div>
-              </div>
-              
-              <div style="border-top: 1px solid #E5E7EB; padding-top: 15px; margin-top: 15px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <span style="color: #6B7280; font-size: 14px;">Start Date:</span>
-                  <strong style="color: #111827; font-size: 15px;">${context.startDate}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: #6B7280; font-size: 14px;">Next Renewal:</span>
-                  <strong style="color: ${isUpgrade ? '#0284C7' : '#10B981'}; font-size: 15px;">${context.endDate}</strong>
-                </div>
-              </div>
-            </div>
-            
-            ${
-              isUpgrade
-                ? `
-              <div style="background: #DBEAFE; border-left: 4px solid #0284C7; padding: 15px; margin: 20px 0;">
-                <p style="color: #075985; font-size: 14px; margin: 0;">
-                  🎉 <strong>Congratulations!</strong> You now have access to premium features and enhanced capabilities.
-                </p>
-              </div>
-            `
-                : `
-              <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
-                <p style="color: #065F46; font-size: 14px; margin: 0;">
-                  ✅ <strong>Plan Updated:</strong> Your new subscription plan is now active.
-                </p>
-              </div>
-            `
-            }
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription"
-                 style="background: ${isUpgrade ? '#0284C7' : '#10B981'}; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 16px;">
-                ${isUpgrade ? 'Explore New Features' : 'View Subscription'}
-              </a>
-            </div>
-          </div>
-          
-          ${
-            isUpgrade
-              ? `
-            <div style="background: #F9FAFB; border-radius: 8px; padding: 20px; margin-top: 20px;">
-              <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 16px;">What's New in Your Plan?</h3>
-              <ul style="color: #6B7280; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-                <li>Access to advanced analytics and reporting</li>
-                <li>Priority customer support</li>
-                <li>Enhanced data storage capacity</li>
-                <li>Additional customization options</li>
-              </ul>
-            </div>
-          `
-              : ''
-          }
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #6B7280; font-size: 14px; margin: 0 0 10px 0;">
-              Questions about your new plan? Contact us at
-              <a href="mailto:support@Bonix.com" style="color: #4F46E5; text-decoration: none;">support@Bonix.com</a>
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: `${icon} Your Medicare Subscription Plan Has Changed`,
+      html: this.renderTemplate('subscription/plan-change-success.hbs', { icon, changeType, clinicName: context.clinicName, summaryText: isUpgrade ? 'Your enhanced plan benefits are now available.' : 'Your updated plan is now active.', oldPlan: context.oldPlan, newPlan: context.newPlan, startDate: context.startDate, endDate: context.endDate, highlightMessage: isUpgrade ? 'You now have access to the enhanced capabilities included with your updated plan.' : 'Your updated subscription plan is now active and ready for use.', subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`, buttonText: isUpgrade ? 'Explore New Features' : 'View Subscription', featureNote: isUpgrade ? 'Additional premium capabilities are now available to your clinic.' : 'The benefits of your updated plan are now available to your clinic.' })
     };
 
     try {
@@ -2233,58 +959,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: '🗑️ Incomplete Registration Data Removed - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #FEF3C7; border-radius: 10px; padding: 30px; text-align: center; border: 1px solid #FCD34D;">
-            <h1 style="color: #92400E; margin: 0 0 20px 0;">🗑️ Registration Data Removed</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi${clinicName ? ' ' + clinicName : ''},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Your subscription registration has been in <strong>${status}</strong> status for over 6 months without any updates. As part of our data maintenance, the previously saved registration information has been removed.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: left;">
-              <p style="margin: 0; color: #6B7280; font-size: 14px; font-weight: 600;">What does this mean?</p>
-              <ul style="color: #111827; font-size: 14px; margin: 10px 0; padding-left: 20px;">
-                <li>All previously saved registration data has been deleted</li>
-                <li>This includes clinic information, legal documents, and manager details</li>
-                <li>If you wish to subscribe, you will need to register again from scratch</li>
-              </ul>
-            </div>
-
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              If you'd like to re-register, please visit our platform and start a new subscription.
-            </p>
-
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}" 
-                 style="background: #92400E; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-                Re-Register Now
-              </a>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '🗑️ Incomplete Registration Data Removed - Medicare',
+      html: this.renderTemplate('onboarding/stale-registration-deleted.hbs', { greeting: clinicName ? `Dear ${clinicName},` : 'Dear Valued Clinic,', status, reRegisterUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
     };
 
     try {
@@ -2311,46 +991,12 @@ export class MailerService {
     const transporter = this.mailTransport();
     const mailOptions = {
       from: {
-        name: 'Bonix Support',
+        name: 'Medicare Support',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Update on Your Report - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F8FAFC; border-radius: 10px; padding: 30px; border: 1px solid #E2E8F0;">
-            <h1 style="color: #0F172A; margin: 0 0 20px 0;">Report Update</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Hi ${name},
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Thank you for taking the time to submit a report. Our team has reviewed it and provided the following response:
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
-              <p style="margin: 0; color: #111827; line-height: 1.5;">${responseDescription.replace(/\\n/g, '<br>')}</p>
-            </div>
-            
-            <p style="color: #6B7280; font-size: 14px; margin: 20px 0 0 0;">
-              If you have any further questions or concerns, please feel free to reply to this email or contact our support team.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Update on Your Report - Medicare',
+      html: this.renderTemplate('support/report-response.hbs', { name, responseHtml: responseDescription.replace(/\n/g, '<br>') })
     };
 
     try {
@@ -2386,70 +1032,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: 'Chào mừng bạn đến với Bonix - Thông tin đăng nhập',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F0F9FF; border-radius: 10px; padding: 30px; border: 1px solid #BAE6FD;">
-            <h1 style="color: #0369A1; margin: 0 0 20px 0;">Chào mừng bạn đến với Bonix!</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Kính chào <strong>${fullName}</strong>,
-            </p>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Cảm ơn bạn đã chọn Bonix để chăm sóc sức khỏe. Tài khoản của bạn đã được tạo thành công!
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
-              <h2 style="color: #111827; margin: 0 0 15px 0; font-size: 18px;">Thông tin đăng nhập:</h2>
-              <div style="margin-bottom: 10px;">
-                <span style="color: #6B7280; font-size: 14px;">Email/Tài khoản:</span>
-                <p style="margin: 5px 0 0 0; color: #111827; font-weight: 600; font-size: 16px;">${username}</p>
-              </div>
-              <div>
-                <span style="color: #6B7280; font-size: 14px;">Mật khẩu tạm thời:</span>
-                <p style="margin: 5px 0 0 0; color: #0369A1; font-weight: 600; font-size: 18px; letter-spacing: 1px;">${temporaryPassword}</p>
-              </div>
-            </div>
-
-            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 4px;">
-              <p style="margin: 0; color: #92400E; font-size: 14px; font-weight: 600;">⚠️ LƯU Ý QUAN TRỌNG:</p>
-              <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #92400E; font-size: 14px;">
-                <li>Vui lòng đổi mật khẩu ngay sau khi đăng nhập lần đầu</li>
-                <li>Không chia sẻ mật khẩu cho bất kỳ ai</li>
-                <li>Bạn có thể cập nhật thông tin cá nhân (ngày sinh, giới tính, địa chỉ...) trong phần "Hồ sơ của tôi"</li>
-              </ul>
-            </div>
-
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${frontendUrl}/login" 
-                 style="background: #0369A1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
-                Đăng nhập ngay
-              </a>
-            </div>
-
-            <p style="color: #6B7280; font-size: 14px; margin: 30px 0 0 0; text-align: center;">
-              Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua email hoặc hotline được cung cấp tại phòng khám.
-            </p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2026 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Welcome to Medicare - Access Credentials',
+      html: this.renderTemplate('patient/welcome-with-password.hbs', { fullName, username, temporaryPassword, loginUrl: `${frontendUrl}/login` })
     };
 
     try {
@@ -2468,90 +1056,14 @@ export class MailerService {
     context: AppointmentReminderContext,
   ): Promise<void> {
     const transporter = this.mailTransport();
-
-    const servicesListHtml = context.services
-      .map(
-        (service) =>
-          `<li style="margin: 8px 0; color: #374151; line-height: 1.5;">${service.serviceName}</li>`,
-      )
-      .join('');
-
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,
-      subject: `[${context.clinicName}] - Nhắc nhở lịch hẹn ngày ${context.appointmentDate}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
-          <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-            
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; padding: 30px 20px;">
-              <img 
-                src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png" 
-                alt="${context.clinicName}" 
-                style="max-width: 180px; height: auto; margin-bottom: 15px;"
-              />
-              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">NHẮC NHỞ LỊCH HẸN</h1>
-            </div>
-
-            <!-- Content -->
-            <div style="padding: 30px 25px;">
-              <p style="margin: 0 0 20px 0; font-size: 15px;">Kính gửi <strong>${context.patientName}</strong>,</p>
-              
-              <p style="margin: 0 0 20px 0; font-size: 15px;">Đây là email nhắc nhở về lịch hẹn của bạn tại <strong>${context.clinicName}</strong>:</p>
-              
-              <!-- Appointment Details -->
-              <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0;">
-                <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px; font-weight: 600;">THÔNG TIN LỊCH HẸN</h3>
-                <p style="margin: 10px 0; color: #475569; font-size: 14px;"><strong>Ngày giờ:</strong> ${context.appointmentHour}, ${context.appointmentDate}</p>
-                <p style="margin: 10px 0; color: #475569; font-size: 14px;"><strong>Bác sĩ:</strong> ${context.doctorName}${context.doctorSpecialization ? ` - ${context.doctorSpecialization}` : ''}</p>
-                <p style="margin: 10px 0 5px 0; color: #475569; font-size: 14px;"><strong>Dịch vụ:</strong></p>
-                <ul style="margin: 0; padding-left: 25px;">
-                  ${servicesListHtml}
-                </ul>
-              </div>
-
-              <!-- Clinic Info -->
-              <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 25px 0;">
-                <h3 style="margin: 0 0 15px 0; color: #92400e; font-size: 16px; font-weight: 600;">ĐỊA CHỈ PHÒNG KHÁM</h3>
-                <p style="margin: 10px 0; color: #78350f; font-size: 14px;"><strong>Địa chỉ:</strong> ${context.clinicAddress}</p>
-                <p style="margin: 10px 0; color: #78350f; font-size: 14px;"><strong>Hotline:</strong> ${context.clinicPhone}</p>
-              </div>
-
-              <!-- Preparation Guide -->
-              <div style="margin: 25px 0;">
-                <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px; font-weight: 600;">HƯỚNG DẪN CHUẨN BỊ</h3>
-                <ul style="margin: 0; padding-left: 25px; color: #475569; font-size: 14px;">
-                  <li style="margin: 8px 0; line-height: 1.6;">Vui lòng có mặt trước 15 phút để làm thủ tục</li>
-                  <li style="margin: 8px 0; line-height: 1.6;">Mang theo giấy tờ tùy thân (CMND/CCCD)</li>
-                  <li style="margin: 8px 0; line-height: 1.6;">Mang theo kết quả xét nghiệm cũ (nếu có)</li>
-                </ul>
-              </div>
-
-              <p style="margin: 25px 0 0 0; font-size: 14px; color: #64748b;">Nếu bạn cần thay đổi hoặc hủy lịch hẹn, vui lòng liên hệ với chúng tôi sớm nhất có thể.</p>
-            </div>
-
-            <!-- Footer -->
-            <div style="background-color: #f8fafc; padding: 25px; text-align: center; font-size: 13px; color: #64748b;">
-              <p style="margin: 0 0 8px 0; font-weight: 600; color: #475569;">${context.clinicName}</p>
-              <p style="margin: 0 0 5px 0;">Hotline: ${context.clinicPhone}</p>
-              <p style="margin: 0 0 15px 0;">${context.clinicAddress}</p>
-              <p style="margin: 0; color: #94a3b8; font-size: 12px;">© 2026 Bonix. All rights reserved.</p>
-            </div>
-
-          </div>
-        </body>
-        </html>
-      `,
+      subject: `[${context.clinicName}] Appointment Reminder for ${context.appointmentDate}`,
+      html: this.renderTemplate('appointment/appointment-reminder.hbs', { ...context })
     };
 
     try {
@@ -2579,84 +1091,12 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix',
+        name: 'Medicare',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: data.email,
-      subject: '✨ Thông báo tạo tài khoản thành công - Bonix',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img 
-              alt="Bonix Logo" 
-              style="width: 150px; height: auto;"
-              src="https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png"
-            />
-          </div>
-          
-          <div style="background: #F0F9FF; border-radius: 10px; padding: 30px; border: 1px solid #BAE6FD;">
-            <h1 style="color: #0369A1; margin: 0 0 20px 0;">Tài khoản Bonix của bạn đã sẵn sàng!</h1>
-            <p style="color: #4B5563; font-size: 16px; margin: 0 0 20px 0;">
-              Chào mừng <strong>${data.fullName}</strong> đến với Bonix.
-            </p>
-            
-            <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #E5E7EB;">
-              <h2 style="color: #111827; margin: 0 0 15px 0; font-size: 18px;">Thông tin chi tiết:</h2>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                <div>
-                  <span style="color: #6B7280; font-size: 12px; display: block;">Họ và tên:</span>
-                  <span style="color: #111827; font-weight: 600;">${data.fullName}</span>
-                </div>
-                ${data.phone ? `
-                <div>
-                  <span style="color: #6B7280; font-size: 12px; display: block;">Số điện thoại:</span>
-                  <span style="color: #111827; font-weight: 600;">${data.phone}</span>
-                </div>
-                ` : ''}
-              </div>
-
-              ${data.dob ? `
-              <div style="margin-bottom: 15px;">
-                <span style="color: #6B7280; font-size: 12px; display: block;">Ngày sinh:</span>
-                <span style="color: #111827; font-weight: 600;">${data.dob}</span>
-              </div>
-              ` : ''}
-
-              <div style="border-top: 1px dashed #E5E7EB; padding-top: 15px; margin-top: 15px;">
-                <div style="margin-bottom: 10px;">
-                  <span style="color: #6B7280; font-size: 12px;">Tên đăng nhập:</span>
-                  <p style="margin: 2px 0 0 0; color: #111827; font-weight: 600; font-size: 16px;">${data.username}</p>
-                </div>
-                <div>
-                  <span style="color: #6B7280; font-size: 12px;">Mật khẩu tạm thời:</span>
-                  <p style="margin: 2px 0 0 0; color: #0369A1; font-weight: 600; font-size: 18px; letter-spacing: 1px;">${data.password}</p>
-                </div>
-              </div>
-            </div>
-
-            <div style="background: #FDF2F2; border-left: 4px solid #EF4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
-              <p style="margin: 0; color: #991B1B; font-size: 14px; font-weight: 600;">⚠️ Bảo mật:</p>
-              <p style="margin: 5px 0 0 0; color: #991B1B; font-size: 13px;">
-                Đây là mật khẩu tạm thời. Để bảo mật, vui lòng thay đổi mật khẩu ngay sau lần đăng nhập đầu tiên.
-              </p>
-            </div>
-
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="${frontendUrl}" 
-                 style="background: #0369A1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                Bắt đầu ngay
-              </a>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <p style="color: #9CA3AF; font-size: 12px; margin: 0;">
-              © 2025 Bonix. All rights reserved.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: '✨ Your Medicare Account Is Ready',
+      html: this.renderTemplate('patient/account-notification.hbs', { ...data, frontendUrl })
     };
 
     try {
