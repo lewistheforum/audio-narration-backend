@@ -193,6 +193,9 @@ importers:
       '@types/swagger-ui-express':
         specifier: ^4.1.8
         version: 4.1.8
+      handlebars:
+        specifier: 4.7.8
+        version: 4.7.8
       jest:
         specifier: ^30.2.0
         version: 30.2.0(@types/node@22.18.6)(ts-node@10.9.2(@types/node@22.18.6)(typescript@5.9.2))

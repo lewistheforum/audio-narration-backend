@@ -23,6 +23,7 @@ lerna-debug.log*
 /TestFlow
 /document
 /instructions
+/scripts
 
 # IDEs and editors
 /.idea
@@ -76,3 +77,4 @@ sequence_diagram/
 # Local AI Curated Skills
 skills/
 .curated/
+.preview/
