@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { EmployeeSchedule } from '../entities/employee-schedule.entity';
+import { ClinicShiftHour } from '../entities/clinic-shift-hour.entity';
 import { WeekDay } from '../enums';
 import { getEndOfMonth, getStartOfMonth } from 'src/common/utils/date.util';
 
@@ -240,11 +241,11 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
    * Find Schedule Conflict
    *
    * Checks if a schedule already exists for a specific employee on a specific date and shift.
-   * Used to prevent overlapping schedules during creation or update.
+   * Now updated to check for ANY overlapping time hours, even if Shift IDs are different.
    *
    * @param employeeId - ID of the employee
    * @param workDate - Date of work
-   * @param clinicShiftId - ID of the shift
+   * @param clinicShiftId - ID of the shift (to get its base hours)
    * @param excludeId - (Optional) ID of a schedule to exclude (for update checks)
    * @returns Matching EmployeeSchedule or null
    */
@@ -254,10 +255,30 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     clinicShiftId: string,
     excludeId?: string,
   ): Promise<EmployeeSchedule | null> {
+    // 1. Get the start and end hours for the requested clinicShiftId
+    const shiftHours = await this.dataSource
+      .getRepository(ClinicShiftHour)
+      .createQueryBuilder('hour')
+      .where('hour.shiftId = :clinicShiftId', { clinicShiftId })
+      .orderBy('hour.startHour', 'ASC')
+      .getMany();
+
+    if (shiftHours.length === 0) return null;
+
+    const firstHour = shiftHours[0].startHour;
+    const lastHour = shiftHours[shiftHours.length - 1].endHour;
+
+    // 2. Query for ANY existing schedule on same date/employee whose hours overlap
     const queryBuilder = this.createQueryBuilder('schedule')
+      .innerJoin('schedule.clinicShift', 'shift')
+      .innerJoin('shift.hours', 'existingHour')
       .where('schedule.employeeId = :employeeId', { employeeId })
       .andWhere('schedule.workDate = :workDate', { workDate })
-      .andWhere('schedule.clinicShiftId = :clinicShiftId', { clinicShiftId });
+      .andWhere('schedule.deletedAt IS NULL')
+      .andWhere(
+        '(existingHour.startHour < :lastHour AND existingHour.endHour > :firstHour)',
+        { firstHour, lastHour },
+      );
 
     if (excludeId) {
       queryBuilder.andWhere('schedule._id != :excludeId', { excludeId });
@@ -380,14 +401,15 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
     return roomsMap;
   }
+
   /**
    * Find Room Conflict
    *
-   * Checks if a room is already assigned to any doctor on a specific date and shift.
+   * Checks if a room is already assigned to any doctor on a specific date during overlapping hours.
    *
    * @param roomId - ID of the room
    * @param workDate - Date of work
-   * @param clinicShiftId - ID of the shift
+   * @param clinicShiftId - ID of the shift (to get its base hours)
    * @param excludeId - (Optional) ID of a schedule to exclude
    * @returns Matching EmployeeSchedule or null
    */
@@ -397,12 +419,31 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     clinicShiftId: string,
     excludeId?: string,
   ): Promise<EmployeeSchedule | null> {
+    // 1. Get the range for requested shift
+    const shiftHours = await this.dataSource
+      .getRepository(ClinicShiftHour)
+      .createQueryBuilder('hour')
+      .where('hour.shiftId = :clinicShiftId', { clinicShiftId })
+      .orderBy('hour.startHour', 'ASC')
+      .getMany();
+
+    if (shiftHours.length === 0) return null;
+
+    const firstHour = shiftHours[0].startHour;
+    const lastHour = shiftHours[shiftHours.length - 1].endHour;
+
+    // 2. Query for ANY existing schedule on same date/room whose hours overlap
     const queryBuilder = this.createQueryBuilder('schedule')
       .innerJoin('schedule.rooms', 'room')
+      .innerJoin('schedule.clinicShift', 'shift')
+      .innerJoin('shift.hours', 'existingHour')
       .where('room._id = :roomId', { roomId })
       .andWhere('schedule.workDate = :workDate', { workDate })
-      .andWhere('schedule.clinicShiftId = :clinicShiftId', { clinicShiftId })
-      .andWhere('schedule.deletedAt IS NULL');
+      .andWhere('schedule.deletedAt IS NULL')
+      .andWhere(
+        '(existingHour.startHour < :lastHour AND existingHour.endHour > :firstHour)',
+        { firstHour, lastHour },
+      );
 
     if (excludeId) {
       queryBuilder.andWhere('schedule._id != :excludeId', { excludeId });

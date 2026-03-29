@@ -6,6 +6,8 @@ import {
   IsUrl,
   IsArray,
   IsBoolean,
+  IsEmail,
+  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -17,6 +19,29 @@ import { Transform } from 'class-transformer';
  * All fields are optional - only provided fields will be updated
  */
 export class UpdateClinicAdminOwnProfileDto {
+  @ApiProperty({
+    description: 'Account email address',
+    example: 'admin@clinic.com',
+    required: false,
+  })
+  @IsOptional()
+  @IsEmail({}, { message: 'Invalid email format' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email?: string;
+
+  @ApiProperty({
+    description: 'Account phone number',
+    example: '0912345678',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: 'Phone must be a string' })
+  @Matches(/^0\d{9}$/, {
+    message: 'Phone must be exactly 10 digits and start with 0',
+  })
+  @Transform(({ value }) => value?.trim())
+  phone?: string;
+
   @ApiProperty({
     description: 'Clinic name',
     example: 'City Medical Clinic',

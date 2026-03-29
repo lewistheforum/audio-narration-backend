@@ -177,6 +177,134 @@ export class SchedulesService {
   }
 
   /**
+   * Get Clinic Employees (Legal Docs Required for Doctors)
+   *
+   * Similar to getEmployees but filters Doctors to only include those who have
+   * provided all required legal documents.
+   */
+  async getEmployeesLegal(user: any, search?: string) {
+    const clinicId = await this.resolveClinicId(user);
+    if (!clinicId)
+      return [];
+
+    let targetManagerId: string;
+
+    const manager = await this.accountRepository.findOne({
+      where: {
+        parentId: clinicId,
+        role: AccountRole.CLINIC_MANAGER,
+      },
+    });
+
+    if (manager) {
+      targetManagerId = manager._id;
+    } else {
+      const acc = await this.accountRepository.findOne({
+        where: { _id: clinicId },
+      });
+      if (acc && acc.role === AccountRole.CLINIC_MANAGER) {
+        targetManagerId = clinicId;
+      } else {
+        return [];
+      }
+    }
+
+    const employees = await this.accountRepository
+      .createQueryBuilder('account')
+      .select(['account._id', 'account.username', 'account.role'])
+      .where('account.parent_id = :parentId', { parentId: targetManagerId })
+      .andWhere('account.role = ANY(:roles)', {
+        roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+      })
+      .getMany();
+
+    if (!employees.length)
+      return [];
+
+    const employeeIds = employees.map((e) => e._id);
+    const [doctorInfos, generalAccounts, staffInfos] = await Promise.all([
+      this.doctorInfoRepository
+        .createQueryBuilder('di')
+        .where('di.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+      this.generalAccountRepository
+        .createQueryBuilder('ga')
+        .where('ga.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+      this.clinicStaffRepository
+        .createQueryBuilder('csi')
+        .where('csi.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+    ]);
+
+    const doctorInfoMap = new Map<string, DoctorInformation>();
+    doctorInfos.forEach((info) => {
+      doctorInfoMap.set(info.accountId, info);
+    });
+
+    const generalAccountMap = new Map<string, GeneralAccount>();
+    generalAccounts.forEach((acc) => {
+      generalAccountMap.set(acc.accountId, acc);
+    });
+
+    const staffInfoMap = new Map<string, ClinicStaffInformation>();
+    staffInfos.forEach((info) => {
+      staffInfoMap.set(info.accountId, info);
+    });
+
+    let results = employees.map((emp) => {
+      const doctorInfo = doctorInfoMap.get(emp._id);
+      const generalAccount = generalAccountMap.get(emp._id);
+      const staffInfo = staffInfoMap.get(emp._id);
+
+      // Special Filtering Rule for DOCTOR: Must have all 3 legal docs
+      if (emp.role === AccountRole.DOCTOR) {
+        if (
+          !doctorInfo ||
+          !doctorInfo.medicalLicense ||
+          !doctorInfo.professionalLicense ||
+          !doctorInfo.certificatePracticalTraining
+        ) {
+          return null; // Filter out doctors with incomplete docs
+        }
+      }
+
+      let fullName = emp.username || 'Unknown';
+      if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
+        fullName = doctorInfo.fullName;
+      } else if (emp.role === AccountRole.CLINIC_STAFF && staffInfo?.fullName) {
+        fullName = staffInfo.fullName;
+      } else if (generalAccount?.fullName) {
+        fullName = generalAccount.fullName;
+      }
+
+      return {
+        id: emp._id,
+        name: fullName,
+        role: emp.role,
+        username: emp.username,
+        profilePicture:
+          emp.role === AccountRole.DOCTOR
+            ? doctorInfo?.profilePicture
+            : staffInfo?.profilePicture ||
+              generalAccount?.profilePicture ||
+              null,
+      };
+    }).filter(e => e !== null);
+
+    if (search) {
+      const searchLower = search.toLowerCase();
+      results = results.filter(
+        (e) =>
+          (e.name && e.name.toLowerCase().includes(searchLower)) ||
+          (e.username && e.username.toLowerCase().includes(searchLower)),
+      );
+    }
+
+    return results;
+  }
+
+  /**
    * Copy Schedule (List Based)
    *
    * Copies schedules from a list of source dates to a target start date.

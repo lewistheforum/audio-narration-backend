@@ -68,17 +68,21 @@ Module Hợp đồng quản lý quy trình ký kết hợp đồng điện tử 
     -   **Email:** Gửi thông báo cho đối phương về việc hợp đồng bị từ chối kèm lý do.
     -   **Lưu ý:** Quản lý có thể sửa thông tin hợp đồng từ trạng thái `REJECTED` để đưa về `DRAFT` (reset quy trình).
 
-### 2.6 Hủy Bỏ Hợp Đồng (Cancel/Delete)
--   **Actor:** Quản lý phòng khám.
+### 2.6 Hủy Bỏ Hợp Đồng (Cancel)
+-   **Actor:** Quản lý phòng khám (Clinic Manager) hoặc Quản trị viên (Admin).
 -   **Hành động:** Hủy bỏ gói hợp đồng.
 -   **Yêu cầu:** 
-    -   Cho phép hủy ở bất kỳ trạng thái nào **trước khi** hợp đồng thành `CURRENT`.
-    -   Nếu đã là `CURRENT`, việc chấm dứt hợp đồng phải tuân theo quy trình pháp lý khác (không nằm trong phạm vi module ký này).
--   **Kết quả:** Soft delete gói hợp đồng và thông tin liên quan.
+    -   Cho phép hủy ở bất kỳ trạng thái nào (DRAFT, PENDING_SIGNATURE, PENDING_MANAGER_SIGNATURE, CURRENT).
+    -   **Đặc biệt:** Nếu hợp đồng đang ở trạng thái `CURRENT` (đang có hiệu lực):
+        -   Hệ thống tự động chuyển trạng thái tài khoản của Nhân viên liên quan thành `PENDING_APPROVAL`.
+        -   Hệ thống gửi email thông báo (bằng tiếng Anh) cho Nhân viên về việc hợp đồng bị hủy và yêu cầu phê duyệt lại tài khoản.
+-   **Kết quả:** 
+    -   Trạng thái hợp đồng chuyển thành `CANCELLED`.
+    -   Ghi log thông tin hủy hợp đồng.
 
 ### 2.7 Tự Động Hủy do Vi phạm (Auto-Cancel on Tampering)
 -   **Actor:** Hệ thống (System).
--   **Tình huống:** Phát hiện tệp hợp đồng bị sửa đổi hoặc chữ ký không khớp trong các bước xem danh sách/chi tiết.
+-   **Tình huống:** Phát hiện tệp hợp đồng bị sửa đổi hoặc chữ ký không khớp trong các bước kiểm tra (Verification).
 -   **Hành động:** 
     -   Chuyển trạng thái hợp đồng thành `CANCELLED`.
     -   **Vô hiệu hóa nhân viên:** Chuyển trạng thái tài khoản nhân viên liên quan thành `PENDING_APPROVAL` để ngăn chặn truy cập trái phép.
