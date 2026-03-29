@@ -3704,13 +3704,54 @@ export class AccountsService {
    * @returns {Promise<ClinicDetailResponseDto>} Full clinic details
    * @throws {NotFoundException} If clinic not found or not active
    */
-  async findClinicById(id: string): Promise<ClinicDetailResponseDto> {
+  async findClinicById(
+    id: string,
+    doctorSearch?: string,
+  ): Promise<ClinicDetailResponseDto> {
+    const normalizedDoctorSearch = doctorSearch?.trim();
+    const doctorJoinConditions = [
+      'doctor.role = :doctorRole',
+      'doctor.status = :doctorStatus',
+      'doctor.deleted_at IS NULL',
+    ];
+    const doctorJoinParams: Record<string, string> = {
+      doctorRole: AccountRole.DOCTOR,
+      doctorStatus: AccountStatus.ACTIVE,
+    };
+
+    if (normalizedDoctorSearch) {
+      doctorJoinConditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM doctor_information doctorSearchInfo
+          WHERE doctorSearchInfo.account_id = doctor._id
+            AND doctorSearchInfo.deleted_at IS NULL
+            AND (
+              doctorSearchInfo.full_name ILIKE :doctorSearch
+              OR doctorSearchInfo.position ILIKE :doctorSearch
+            )
+        )`,
+      );
+      doctorJoinParams.doctorSearch = `%${normalizedDoctorSearch}%`;
+    }
+
     const clinic = await this.accountRepository
       .createQueryBuilder('clinic')
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
       .leftJoinAndSelect('clinic.address', 'address')
       .leftJoinAndSelect('clinic.parent', 'clinicAdmin')
       .leftJoinAndSelect('clinicAdmin.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect(
+        'clinic.children',
+        'doctor',
+        doctorJoinConditions.join(' AND '),
+        doctorJoinParams,
+      )
+      .leftJoinAndSelect(
+        'doctor.doctorInformation',
+        'doctorInfo',
+        'doctorInfo.deleted_at IS NULL',
+      )
       .leftJoinAndSelect(
         'clinic.clinicSchedules',
         'clinicSchedule',
@@ -3796,17 +3837,15 @@ export class AccountsService {
       },
     );
 
-    // Get doctors (accounts with parentId = clinic id and role = DOCTOR)
-    const doctorAccounts = await this.accountRepository.findByParentIdAndRole(
-      clinic._id,
-      AccountRole.DOCTOR,
+    const doctorAccounts = (clinic.children || []).filter(
+      (doctor) =>
+        doctor.role === AccountRole.DOCTOR &&
+        doctor.status === AccountStatus.ACTIVE,
     );
 
     const doctors: DoctorSummaryDto[] = [];
     if (doctorAccounts.length > 0) {
-      const doctorIds = doctorAccounts.map((d) => d._id);
-
-      const doctorInfos = await this.doctorInfoRepository.findByAccountIds(doctorIds);
+      const doctorIds = doctorAccounts.map((doctor) => doctor._id);
 
       const ratingResults = await this.dataSource.query(
         `
@@ -3825,15 +3864,15 @@ export class AccountsService {
         ratingMap.set(row.doctor_id, parseFloat(row.avg_rating) || 0);
       }
 
-      const doctorInfoMap = new Map<string, any>();
-      for (const info of doctorInfos) {
-        doctorInfoMap.set(info.accountId, info);
-      }
-
       for (const doctor of doctorAccounts) {
-        const doctorInfo = doctorInfoMap.get(doctor._id);
         const doctorAvgRating = ratingMap.get(doctor._id) || 0;
-        doctors.push(new DoctorSummaryDto(doctor, doctorInfo, doctorAvgRating));
+        doctors.push(
+          new DoctorSummaryDto(
+            doctor,
+            doctor.doctorInformation,
+            doctorAvgRating,
+          ),
+        );
       }
     }
 

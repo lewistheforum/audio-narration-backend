@@ -702,3 +702,10 @@ export class ClinicAdminsService {
     });
   }
 }
+
+
+
+
+
+
+
