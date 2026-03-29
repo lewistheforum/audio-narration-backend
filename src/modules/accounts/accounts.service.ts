@@ -3438,6 +3438,9 @@ export class AccountsService {
         academicDegree: dto.academicDegree,
         experience: dto.experience,
         position: dto.position,
+        professionalLicense: dto.professionalLicense,
+        certificatePracticalTraining: dto.certificatePracticalTraining,
+        medicalLicense: dto.medicalLicense,
       });
 
       await queryRunner.manager.save(doctorInfo);
