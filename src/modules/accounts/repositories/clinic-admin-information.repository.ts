@@ -79,6 +79,17 @@ export class ClinicAdminInformationRepository {
   }
 
   /**
+   * Find clinic admin information by sepayKey
+   */
+  async findBySepayKey(
+    sepayKey: string,
+  ): Promise<ClinicAdminInformation | null> {
+    return this.repository.findOne({
+      where: { sepayKey },
+    });
+  }
+
+  /**
    * Create clinic admin information entity (without saving)
    *
    * NOTE: Role validation should be performed at service level before calling this method.
