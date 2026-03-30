@@ -220,4 +220,11 @@ export class FeedbackRepository {
   async countFeedbacks(): Promise<number> {
     return this.feedbackRepository.count();
   }
+
+  /**
+   * Create Query Builder for complex queries
+   */
+  createQueryBuilder(alias?: string) {
+    return this.feedbackRepository.createQueryBuilder(alias);
+  }
 }

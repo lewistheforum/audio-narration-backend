@@ -151,7 +151,7 @@ export class AiController {
   @ApiOperation({
     summary: 'Get recommended clinics from patient address',
     description:
-      'Fetch recommended clinics (Admins and Managers) from the database matching the patient\'s province code.',
+      "Fetch recommended clinics (Admins and Managers) from the database matching the patient's province code.",
   })
   @ApiResponse({
     status: 200,
@@ -165,6 +165,25 @@ export class AiController {
     @Param('id') id: string,
   ): Promise<any> {
     return this.aiService.getRecommendationsFromPatientAddress(id);
+  }
+
+  @Get('recommendation-clinic/clinics/most-rating')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get most rating clinics',
+    description:
+      'Fetch most rating clinics (Admins and Managers) from the database.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Most rating clinics retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Failed to fetch recommendations',
+  })
+  async getMostRatingClinics(): Promise<any> {
+    return this.aiService.getMostRatingClinics();
   }
 
   @Post('fracture-detection')
