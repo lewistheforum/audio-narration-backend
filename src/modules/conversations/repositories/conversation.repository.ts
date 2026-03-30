@@ -147,9 +147,24 @@ export class ConversationRepository {
       .createQueryBuilder(Account, 'account')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .where('account.role = ANY(:roles)', {
-        roles: [AccountRole.ADMIN, AccountRole.CLINIC_ADMIN],
-      })
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = account._id',
+      )
+      .leftJoin(
+        'subcription_services',
+        'service',
+        'service._id = subscription.service_id',
+      )
+      .where(
+        '(account.role = :adminRole) OR (account.role = :clinicAdminRole AND (service.code != :basicCode OR service.code IS NULL))',
+        {
+          adminRole: AccountRole.ADMIN,
+          clinicAdminRole: AccountRole.CLINIC_ADMIN,
+          basicCode: 'BASIC',
+        },
+      )
       .andWhere('account.deletedAt IS NULL')
       .getMany();
 
@@ -253,7 +268,7 @@ export class ConversationRepository {
   async findAccountsWithDetails(accountIds: string[]): Promise<any[]> {
     if (!accountIds || accountIds.length === 0) return [];
 
-    const accounts = await this.conversationRepository.manager
+    const rawAndEntities = await this.conversationRepository.manager
       .createQueryBuilder(Account, 'account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect(
@@ -263,13 +278,57 @@ export class ConversationRepository {
       .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoin(
+        'accounts',
+        'managerAccount',
+        'account.role IN (:...staffRoles) AND managerAccount._id = account.parent_id',
+        { staffRoles: [AccountRole.CLINIC_STAFF, AccountRole.DOCTOR] },
+      )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        `
+        (account.role = :clinicAdminRole AND subscription.clinic_id = account._id) OR
+        (account.role = :managerRole AND subscription.clinic_id = account.parent_id) OR
+        (account.role IN (:...staffRoles) AND subscription.clinic_id = managerAccount.parent_id)
+        `,
+        {
+          clinicAdminRole: AccountRole.CLINIC_ADMIN,
+          managerRole: AccountRole.CLINIC_MANAGER,
+          staffRoles: [AccountRole.CLINIC_STAFF, AccountRole.DOCTOR],
+        },
+      )
+      .leftJoin(
+        'subcription_services',
+        'service',
+        'service._id = subscription.service_id',
+      )
+      .addSelect('service.code', 'subscriptionCode')
       .where('account._id = ANY(:accountIds)', {
         accountIds,
       })
       .andWhere('account.deletedAt IS NULL')
-      .getMany();
+      .getRawAndEntities();
 
-    return accounts.map((acc) => this.mapAccountToDetail(acc));
+    const accounts = rawAndEntities.entities;
+    const rawData = rawAndEntities.raw;
+
+    const rawMap = new Map<string, string>();
+    for (const raw of rawData) {
+      const idKey = Object.keys(raw).find(
+        (k) => k.endsWith('__id') && raw[k] === raw.account__id,
+      );
+      const id = raw[idKey || 'account__id'];
+      if (id && raw.subscriptionCode) {
+        rawMap.set(id, raw.subscriptionCode);
+      }
+    }
+
+    return accounts.map((acc) => {
+      const detail: any = this.mapAccountToDetail(acc);
+      detail.subscriptionCode = rawMap.get(acc._id) || null;
+      return detail;
+    });
   }
 
   async findConversationsWithParticipantsAndMessages(
@@ -330,6 +389,20 @@ export class ConversationRepository {
         .map((pId: string) => accountMap.get(pId))
         .filter(Boolean);
 
+      const hasBasicClinicUser = participants.some((p: any) => {
+        const isClinicUser = [
+          AccountRole.CLINIC_ADMIN,
+          AccountRole.CLINIC_MANAGER,
+          AccountRole.CLINIC_STAFF,
+          AccountRole.DOCTOR,
+        ].includes(p.role);
+        return isClinicUser && p.subscriptionCode === 'BASIC';
+      });
+
+      if (hasBasicClinicUser) {
+        continue;
+      }
+
       result.push({
         id: conv._id,
         title: conv.title,
@@ -389,6 +462,20 @@ export class ConversationRepository {
       const participants = (conv.participants || [])
         .map((pId: string) => accountMap.get(pId))
         .filter(Boolean);
+
+      const hasBasicClinicUser = participants.some((p: any) => {
+        const isClinicUser = [
+          AccountRole.CLINIC_ADMIN,
+          AccountRole.CLINIC_MANAGER,
+          AccountRole.CLINIC_STAFF,
+          AccountRole.DOCTOR,
+        ].includes(p.role);
+        return isClinicUser && p.subscriptionCode === 'BASIC';
+      });
+
+      if (hasBasicClinicUser) {
+        continue;
+      }
 
       result.push({
         id: conv._id,

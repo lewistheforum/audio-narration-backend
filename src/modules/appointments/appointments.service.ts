@@ -148,6 +148,7 @@ export class AppointmentsService {
     'You already have a confirmed appointment at this time. Please select a different time slot.';
   private readonly RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE =
     'You already have a confirmed appointment at this new time. Please select a different time slot.';
+  private readonly logger = new Logger(AppointmentsService.name);
   private readonly APPOINTMENT_CONFLICT_EXCLUDED_STATUSES = [
     AppointmentStatus.CANCELLED,
     AppointmentStatus.ABSENT,
