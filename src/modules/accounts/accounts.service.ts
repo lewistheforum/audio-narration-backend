@@ -213,7 +213,9 @@ export class AccountsService {
     includeDeleted: boolean = false,
   ): Promise<AccountResponseDto[]> {
     const accounts =
-      await this.accountRepository.findAllAccountsWithGeneralAccount(includeDeleted);
+      await this.accountRepository.findAllAccountsWithGeneralAccount(
+        includeDeleted,
+      );
 
     return accounts.map(
       (account) => new AccountResponseDto(account, account.generalAccount),
@@ -609,7 +611,9 @@ export class AccountsService {
           accountId: savedAccount._id,
           fullName: createAccountDto.fullName,
           gender: createAccountDto.gender,
-          dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
+          dob: createAccountDto.dob
+            ? new Date(createAccountDto.dob)
+            : undefined,
           profilePicture: createAccountDto.profilePicture,
         });
         await queryRunner.manager.save(generalAccount);
@@ -729,10 +733,9 @@ export class AccountsService {
     }
 
     if (savedAccount.phone) {
-      this.zaloWebhookService.sendFriendRequest(
-        savedAccount.phone,
-        'OAuth Registration',
-      ).catch(() => {});
+      this.zaloWebhookService
+        .sendFriendRequest(savedAccount.phone, 'OAuth Registration')
+        .catch(() => {});
     }
 
     return new AccountResponseDto(savedAccount, generalAccount);
@@ -2435,9 +2438,8 @@ export class AccountsService {
   async getManagerLegalVerificationStatus(
     managerAccountId: string,
   ): Promise<LegalDocumentVerificationStatus | null> {
-    const legalDocuments = await this.clinicLegalDocsRepository.findByAccountId(
-      managerAccountId,
-    );
+    const legalDocuments =
+      await this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
 
     return legalDocuments?.verificationStatus || null;
   }
@@ -2533,12 +2535,15 @@ export class AccountsService {
    * }
    * ```
    */
-  async findByEmail(email: string): Promise<Account | null> {
-    return this.accountRepository.findAccountByEmail(email);
+  async findByEmail(email: string, role?: string): Promise<Account | null> {
+    return this.accountRepository.findAccountByEmail(email, role);
   }
 
-  async findLoginCandidatesByEmail(email: string): Promise<Account[]> {
-    return this.accountRepository
+  async findLoginCandidatesByEmail(
+    email: string,
+    role?: string,
+  ): Promise<Account[]> {
+    const query = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .leftJoinAndSelect('account.legalDocuments', 'legalDocuments')
@@ -2549,9 +2554,13 @@ export class AccountsService {
       .leftJoinAndSelect('parent.parent', 'rootAdmin')
       .leftJoinAndSelect('rootAdmin.subscription', 'rootAdminSubscription')
       .where('account.email = :email', { email })
-      .andWhere('account.deletedAt IS NULL')
-      .distinct(true)
-      .getMany();
+      .andWhere('account.deletedAt IS NULL');
+
+    if (role) {
+      query.andWhere('account.role = :role', { role });
+    }
+
+    return query.distinct(true).getMany();
   }
 
   async findAccountsWithGeneralByEmail(
@@ -2605,9 +2614,8 @@ export class AccountsService {
     }
 
     const clinicAdminId = await this.resolveClinicAdminId(account);
-    const registrationStatus = await this.getRegistrationStatusByClinicAdminId(
-      clinicAdminId,
-    );
+    const registrationStatus =
+      await this.getRegistrationStatusByClinicAdminId(clinicAdminId);
     const onboardingStatus = registrationStatus.status;
     const canAccessDashboard =
       onboardingStatus === RegistrationStatus.ACTIVE ||
@@ -2873,11 +2881,14 @@ export class AccountsService {
    */
   async initiatePasswordReset(
     email: string,
+    role: string,
   ): Promise<{ code: string; user: Account }> {
-    const account = await this.findByEmail(email);
+    const account = await this.findByEmail(email, role);
 
     if (!account) {
-      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+      throw new NotFoundException(
+        MESSAGES.failMessage.accountCannotResetInRole,
+      );
     }
 
     // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
@@ -2956,12 +2967,15 @@ export class AccountsService {
    */
   async resetPasswordWithCode(
     email: string,
+    role: string,
     code: string,
     newPassword: string,
   ): Promise<void> {
-    const account = await this.findByEmail(email);
+    const account = await this.findByEmail(email, role);
     if (!account) {
-      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+      throw new NotFoundException(
+        MESSAGES.failMessage.accountCannotResetInRole,
+      );
     }
 
     // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
@@ -3544,9 +3558,10 @@ export class AccountsService {
       if (clinicInfo && address) {
         const adminClinicName = (clinicAdminInfo?.clinicName || '').trim();
         const branchName = (clinicInfo?.clinicBranchName || '').trim();
-        const displayClinicName = adminClinicName && branchName
-          ? `${adminClinicName} - ${branchName}`
-          : adminClinicName || branchName;
+        const displayClinicName =
+          adminClinicName && branchName
+            ? `${adminClinicName} - ${branchName}`
+            : adminClinicName || branchName;
 
         const mappedClinicInfo = {
           ...clinicInfo,
@@ -3743,7 +3758,10 @@ export class AccountsService {
       .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
       .leftJoinAndSelect('clinic.address', 'address')
       .leftJoinAndSelect('clinic.parent', 'clinicAdmin')
-      .leftJoinAndSelect('clinicAdmin.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect(
+        'clinicAdmin.clinicAdminInformation',
+        'clinicAdminInfo',
+      )
       .leftJoinAndSelect(
         'clinic.children',
         'doctor',
@@ -4635,9 +4653,9 @@ export class AccountsService {
     account: Account,
     email: string,
   ): Promise<void> {
-    const existingAccounts = (await this.findNonDeletedAccountsByEmail(email)).filter(
-      (existingAccount) => existingAccount._id !== account._id,
-    );
+    const existingAccounts = (
+      await this.findNonDeletedAccountsByEmail(email)
+    ).filter((existingAccount) => existingAccount._id !== account._id);
 
     if (existingAccounts.length === 0) {
       return;
@@ -4740,7 +4758,7 @@ export class AccountsService {
    * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
    * - Creates Account with CLINIC_ADMIN role and PENDING status
    * - Creates ClinicAdminInformation with clinic details AND bank configuration
-    * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
+   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
    * - Bank fields (bankNumber, bankBranch) are encrypted via encryptionTransformer
    * - Password is hashed with bcrypt before storage
    *
@@ -4906,7 +4924,7 @@ export class AccountsService {
    * - Actor must have CLINIC_ADMIN role
    * - Registration/subscription status must be PENDING_MANAGER_SETUP
    * - Only one manager allowed for this clinic admin (validate none exists)
-    * - Creates manager Account with CLINIC_MANAGER role and PENDING_APPROVAL status
+   * - Creates manager Account with CLINIC_MANAGER role and PENDING_APPROVAL status
    * - Creates ClinicManagerInformation entity
    * - Links via parentId to the clinic admin account
    * - Transitions status to PENDING_LEGAL_SETUP
@@ -4969,11 +4987,13 @@ export class AccountsService {
       );
       const parentAdminWithSameEmail = existingAccounts.find(
         (account) =>
-          account.role === AccountRole.CLINIC_ADMIN && account._id === clinicAdminId,
+          account.role === AccountRole.CLINIC_ADMIN &&
+          account._id === clinicAdminId,
       );
       const differentAdminWithSameEmail = existingAccounts.find(
         (account) =>
-          account.role === AccountRole.CLINIC_ADMIN && account._id !== clinicAdminId,
+          account.role === AccountRole.CLINIC_ADMIN &&
+          account._id !== clinicAdminId,
       );
       const siblingManagerWithSameEmail = existingAccounts.find(
         (account) =>

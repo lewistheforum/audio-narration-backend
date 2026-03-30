@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -42,13 +43,16 @@ export class AuthService {
   ) {}
 
   private isOnboardingStatus(status?: RegistrationStatus): boolean {
-    return !!status && [
-      RegistrationStatus.PENDING_SEPAY_SETUP,
-      RegistrationStatus.PENDING_MANAGER_SETUP,
-      RegistrationStatus.PENDING_LEGAL_SETUP,
-      RegistrationStatus.PENDING_APPROVAL,
-      RegistrationStatus.PENDING_PAYMENT,
-    ].includes(status);
+    return (
+      !!status &&
+      [
+        RegistrationStatus.PENDING_SEPAY_SETUP,
+        RegistrationStatus.PENDING_MANAGER_SETUP,
+        RegistrationStatus.PENDING_LEGAL_SETUP,
+        RegistrationStatus.PENDING_APPROVAL,
+        RegistrationStatus.PENDING_PAYMENT,
+      ].includes(status)
+    );
   }
 
   private ensureHierarchySubscription(
@@ -222,12 +226,14 @@ export class AuthService {
   }
 
   private async resolveLoginAccount(loginDto: LoginDto): Promise<Account> {
-    const candidateAccounts = await this.AccountsService.findLoginCandidatesByEmail(
-      loginDto.email,
-    );
+    const candidateAccounts =
+      await this.AccountsService.findLoginCandidatesByEmail(
+        loginDto.email,
+        loginDto.role,
+      );
 
     if (candidateAccounts.length === 0) {
-      throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
+      throw new UnauthorizedException(MESSAGES.failMessage.invalidAccountRole);
     }
 
     const matchedAccounts: Account[] = [];
@@ -311,6 +317,10 @@ export class AuthService {
   }> {
     const user = await this.resolveLoginAccount(loginDto);
 
+    if (user.role !== loginDto.role) {
+      throw new UnauthorizedException(MESSAGES.failMessage.roleMissmatch);
+    }
+
     // Block pure OAuth users without a password - they must use Google login
     if (!user || (user.isOAuthUser && !user.password)) {
       throw new UnauthorizedException(MESSAGES.failMessage.invalidCredentials);
@@ -319,9 +329,8 @@ export class AuthService {
     // Check if user account is banned or deleted (UNVERIFIED is allowed)
     this.AccountsService.validateAccountAccess(user);
 
-    const onboardingState = await this.AccountsService.getLoginOnboardingState(
-      user,
-    );
+    const onboardingState =
+      await this.AccountsService.getLoginOnboardingState(user);
     this.validateHierarchyLoginAccess(user, onboardingState.onboardingStatus);
     const payload = await this.buildJwtPayload(user, onboardingState);
     this.socketGatewayService.markUserOnline(String(user._id));
@@ -330,9 +339,10 @@ export class AuthService {
     const generalAccount = user.generalAccount;
 
     // Determine message based on account status
-    const message = user.status === AccountStatus.UNVERIFIED
-      ? MESSAGES.successMessage.loginSuccessUnverified
-      : MESSAGES.successMessage.loginSuccess;
+    const message =
+      user.status === AccountStatus.UNVERIFIED
+        ? MESSAGES.successMessage.loginSuccessUnverified
+        : MESSAGES.successMessage.loginSuccess;
 
     return {
       data: {
@@ -392,7 +402,11 @@ export class AuthService {
         await this.AccountsService.saveAccount(user);
       }
 
-      if (picture && generalAccount && generalAccount.profilePicture !== picture) {
+      if (
+        picture &&
+        generalAccount &&
+        generalAccount.profilePicture !== picture
+      ) {
         generalAccount.profilePicture = picture;
         needUpdateGeneralAccount = true;
       }
@@ -446,20 +460,30 @@ export class AuthService {
   }
 
   async verifyResetPasswordCode(dto: VerifyResetPasswordDto) {
-    const { email, code } = dto;
+    const { email, code, role } = dto;
 
-    const user = await this.AccountsService.findByEmail(email);
+    const user = await this.AccountsService.findByEmail(email, role);
+
     if (!user) {
-      throw new BadRequestException('User does not exist');
+      throw new NotFoundException(
+        MESSAGES.failMessage.accountCannotResetInRole,
+      );
+    }
+
+    if (user.isOAuthUser && !user.password) {
+      throw new BadRequestException(
+        MESSAGES.failMessage.oauthUserCannotResetPassword,
+      );
     }
 
     const now = getCurrentVietnamTime();
 
-    const record = await this.codeVerificationRepository.findValidByUserIdAndCode(
-      user._id,
-      code,
-      VerificationType.RESET,
-    );
+    const record =
+      await this.codeVerificationRepository.findValidByUserIdAndCode(
+        user._id,
+        code,
+        VerificationType.RESET,
+      );
 
     if (!record) {
       throw new BadRequestException('Invalid verification code');
@@ -470,7 +494,8 @@ export class AuthService {
     }
 
     return {
-      message: 'Verification code validated successfully. You can now set a new password.',
+      message:
+        'Verification code validated successfully. You can now set a new password.',
     };
   }
 
@@ -520,15 +545,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid token type');
     }
 
-    const user = await this.AccountsService.findAccountWithGeneralById(decoded.userId);
+    const user = await this.AccountsService.findAccountWithGeneralById(
+      decoded.userId,
+    );
     if (!user) {
       throw new BadRequestException('User not found');
     }
 
     if (user.password !== null) {
-      throw new BadRequestException(
-        'This account already has a password set.',
-      );
+      throw new BadRequestException('This account already has a password set.');
     }
 
     if (!user.isOAuthUser) {
@@ -556,8 +581,8 @@ export class AuthService {
         userId: user._id,
         user: new AccountResponseDto(user, generalAccount),
       },
-      message: 'Password set successfully. You can now login with email/password or Google.',
+      message:
+        'Password set successfully. You can now login with email/password or Google.',
     };
   }
-
 }

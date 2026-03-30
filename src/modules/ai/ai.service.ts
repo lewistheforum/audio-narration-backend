@@ -174,6 +174,93 @@ export class AiService {
   }
 
   /**
+   * Get recommended clinics from patient address (province match)
+   * @param patientId The patient account ID
+   */
+  async getRecommendationsFromPatientAddress(patientId: string): Promise<any> {
+    try {
+      // 1. Get patient address
+      const patient = await this.accountRepository.createQueryBuilder('account')
+        .leftJoinAndSelect('account.address', 'address')
+        .where('account._id = :patientId', { patientId })
+        .getOne();
+
+      if (!patient || !patient.address || !patient.address.province) {
+        return {
+          recommendationsClinicAdmins: [],
+          recommendationsClinicManagers: [],
+        };
+      }
+
+      const provinceId = patient.address.province;
+
+      // 2. Fetch Clinic Admins by province
+      const clinicAdmins = await this.accountRepository.createQueryBuilder('account')
+        .leftJoinAndSelect('account.clinicAdminInformation', 'adminInfo')
+        .leftJoinAndSelect('account.address', 'address')
+        .where('account.role = :role', { role: 'CLINIC_ADMIN' })
+        .andWhere('address.province = :provinceId', { provinceId })
+        .andWhere('account.deletedAt IS NULL')
+        .getMany();
+
+      // 3. Fetch Clinic Managers by province
+      const clinicManagers = await this.accountRepository.createQueryBuilder('account')
+        .leftJoinAndSelect('account.clinicManagerInformation', 'managerInfo')
+        .leftJoinAndSelect('account.address', 'address')
+        .leftJoinAndSelect('account.parent', 'parentAccount')
+        .leftJoinAndSelect('parentAccount.clinicAdminInformation', 'parentAdminInfo')
+        .where('account.role = :role', { role: 'CLINIC_MANAGER' })
+        .andWhere('address.province = :provinceId', { provinceId })
+        .andWhere('account.deletedAt IS NULL')
+        .getMany();
+
+      // 4. Map results to DTO
+      const recommendationsClinicAdmins = clinicAdmins.map((acc) => ({
+        id: acc._id,
+        account_id: acc._id,
+        email: acc.email,
+        phone: acc.phone || acc.clinicAdminInformation?.clinicPhone,
+        clinic_name: acc.clinicAdminInformation?.clinicName || 'Unknown',
+        description: acc.clinicAdminInformation?.description,
+        specialized_in: acc.clinicAdminInformation?.specializedIn || [],
+        pros: acc.clinicAdminInformation?.pros || [],
+        paraclinical: acc.clinicAdminInformation?.paraclinical || [],
+        dob: acc.clinicAdminInformation?.dob,
+        profile_picture: acc.clinicAdminInformation?.profilePicture,
+        created_at: acc.createdAt,
+        updated_at: acc.updatedAt,
+      }));
+
+      const recommendationsClinicManagers = clinicManagers.map((acc) => ({
+        id: acc._id,
+        parent_id: acc.parentId,
+        email: acc.email,
+        phone: acc.phone,
+        clinic_name: acc.parent?.clinicAdminInformation?.clinicName 
+          ? `${acc.parent.clinicAdminInformation.clinicName} - ${acc.clinicManagerInformation?.clinicBranchName}`
+          : (acc.clinicManagerInformation?.clinicBranchName || 'Unknown'),
+        description: acc.parent?.clinicAdminInformation?.description || acc.clinicManagerInformation?.fullName,
+        specialized_in: acc.parent?.clinicAdminInformation?.specializedIn || [],
+        pros: acc.parent?.clinicAdminInformation?.pros || [],
+        paraclinical: acc.parent?.clinicAdminInformation?.paraclinical || [],
+        dob: acc.clinicManagerInformation?.dob,
+        profile_picture: acc.clinicManagerInformation?.profilePicture,
+        created_at: acc.createdAt,
+        updated_at: acc.updatedAt,
+      }));
+
+      return {
+        recommendationsClinicAdmins,
+        recommendationsClinicManagers,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to fetch recommendations from address: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Detect fractures using AI backend
    * @param dto The payload containing base64 image and optional notes
    */

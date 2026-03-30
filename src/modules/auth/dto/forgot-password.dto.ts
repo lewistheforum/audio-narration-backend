@@ -8,6 +8,13 @@ export class ForgotPasswordDto {
   })
   @IsEmail()
   email: string;
+
+  @ApiProperty({
+    description: 'Current role of the user',
+    example: 'PATIENT',
+  })
+  @IsString()
+  role: string;
 }
 
 export class VerifyResetPasswordDto {
@@ -17,6 +24,13 @@ export class VerifyResetPasswordDto {
   })
   @IsEmail()
   email: string;
+
+  @ApiProperty({
+    description: 'Current role of the user',
+    example: 'PATIENT',
+  })
+  @IsString()
+  role: string;
 
   @ApiProperty({
     description: '6-digit verification code sent via email',

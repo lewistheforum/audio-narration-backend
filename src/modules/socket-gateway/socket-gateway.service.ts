@@ -621,6 +621,98 @@ export class SocketGatewayService
     }
   }
 
+  // Utility method to broadcast message update
+  public async broadcastMessageUpdate(
+    conversationId: string,
+    message: any,
+  ): Promise<void> {
+    try {
+      const updateEvent = {
+        messageId: message._id,
+        conversationId: conversationId,
+        content: message.content,
+        updatedAt: message.updatedAt,
+      };
+
+      // Broadcast to all participants in the conversation room
+      this.server
+        .to(`conversation:${conversationId}`)
+        .emit('messageUpdated', updateEvent);
+
+      // Also broadcast conversation update to refresh the sidebar (last message content might have changed)
+      const conversationUpdateEvent: ConversationUpdateEvent = {
+        conversationId: conversationId,
+        lastMessage: {
+          id: message._id,
+          content: message.content,
+          senderId: message.senderId,
+          messageType: message.messageType,
+          createdAt: message.createdAt,
+        },
+        updatedAt: getCurrentVietnamTime(),
+      };
+
+      this.server
+        .to(`conversation:${conversationId}`)
+        .emit('conversationUpdated', conversationUpdateEvent);
+
+      console.log(`Broadcasted message update in conversation ${conversationId}`);
+    } catch (error) {
+      console.error('Error broadcasting message update:', error);
+    }
+  }
+
+  // Utility method to broadcast message deletion
+  public async broadcastMessageDelete(
+    conversationId: string,
+    messageId: string,
+    newLastMessage?: any,
+  ): Promise<void> {
+    try {
+      // Broadcast to all participants in the conversation room
+      this.server
+        .to(`conversation:${conversationId}`)
+        .emit('messageDeleted', {
+          messageId,
+          conversationId,
+        });
+
+      // If the deleted message was the latest, broadcast a conversation update with the new last message
+      if (newLastMessage) {
+        const conversationUpdateEvent: ConversationUpdateEvent = {
+          conversationId: conversationId,
+          lastMessage: {
+            id: newLastMessage._id,
+            content: newLastMessage.content,
+            senderId: newLastMessage.senderId,
+            messageType: newLastMessage.messageType,
+            createdAt: newLastMessage.createdAt,
+          },
+          updatedAt: getCurrentVietnamTime(),
+        };
+
+        this.server
+          .to(`conversation:${conversationId}`)
+          .emit('conversationUpdated', conversationUpdateEvent);
+      } else if (newLastMessage === null) {
+        // Conversation has no messages left
+        this.server
+          .to(`conversation:${conversationId}`)
+          .emit('conversationUpdated', {
+            conversationId,
+            lastMessage: null,
+            updatedAt: getCurrentVietnamTime(),
+          } as any);
+      }
+
+      console.log(
+        `Broadcasted message deletion in conversation ${conversationId}`,
+      );
+    } catch (error) {
+      console.error('Error broadcasting message deletion:', error);
+    }
+  }
+
   // Utility method to send notification to specific user
   public async sendMessageNotification(
     userId: string,

@@ -77,7 +77,7 @@ export class AuthController {
     private AccountsService: AccountsService,
     private mailerService: MailerService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * User Login
@@ -124,7 +124,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirects to Google login page' })
   @UseGuards(AuthGuard('google'))
-  async googleAuth(): Promise<void> { }
+  async googleAuth(): Promise<void> {}
 
   /**
    * Google OAuth Callback Handler
@@ -138,10 +138,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Returns JWT token and user info' })
   @ApiResponse({ status: 401, description: 'Google authentication failed' })
   @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(
-    @Req() req: any,
-    @Res() res: any,
-  ): Promise<void> {
+  async googleAuthRedirect(@Req() req: any, @Res() res: any): Promise<void> {
     const tokenData = await this.authService.googleLogin(req.user);
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -173,10 +170,17 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Set initial password for new Google OAuth user',
-    description: 'Required for new Google users to establish a password. Token expires after 15 minutes.',
+    description:
+      'Required for new Google users to establish a password. Token expires after 15 minutes.',
   })
-  @ApiResponse({ status: 200, description: 'Password set successfully, returns full access token' })
-  @ApiResponse({ status: 400, description: 'Invalid or expired token, or password already set' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password set successfully, returns full access token',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired token, or password already set',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized - invalid token' })
   @ApiBody({ type: SetInitialPasswordDto })
   async setInitialPassword(
@@ -185,7 +189,9 @@ export class AuthController {
     data: { accessToken: string; userId: string; user: AccountResponseDto };
     message: string;
   }> {
-    return await this.authService.setInitialPasswordForOAuthUser(setInitialPasswordDto);
+    return await this.authService.setInitialPasswordForOAuthUser(
+      setInitialPasswordDto,
+    );
   }
 
   /**
@@ -284,6 +290,7 @@ export class AuthController {
   ): Promise<{ message: string }> {
     await this.AccountsService.resetPasswordWithCode(
       resetPasswordDto.email,
+      resetPasswordDto.role,
       resetPasswordDto.code,
       resetPasswordDto.newPassword,
     );
@@ -337,8 +344,7 @@ export class AuthController {
   async checkRegistrationStatus(
     @Body('email') email: string,
   ): Promise<{ data: CheckRegistrationStatusResponseDto; message: string }> {
-    const status =
-      await this.AccountsService.checkRegistrationStatus(email);
+    const status = await this.AccountsService.checkRegistrationStatus(email);
     return {
       data: status,
       message: 'Registration status retrieved successfully',
@@ -403,7 +409,10 @@ export class AuthController {
     status: MESSAGES.statusCode.created,
     message: 'Clinic admin registered successfully',
   })
-  @ApiResponse({ status: 409, description: 'Email already exists or exceeds usage limit' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email already exists or exceeds usage limit',
+  })
   @ApiResponse({ status: 400, description: 'Validation error' })
   async registerClinicAdmin(
     @Body() dto: RegisterClinicAdminDto,
@@ -411,7 +420,8 @@ export class AuthController {
     const account = await this.AccountsService.registerClinicAdmin(dto);
     return {
       data: account,
-      message: 'Clinic admin registered successfully. Please create a clinic manager account to continue.',
+      message:
+        'Clinic admin registered successfully. Please create a clinic manager account to continue.',
     };
   }
 
@@ -434,8 +444,7 @@ export class AuthController {
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary:
-      'Add clinic staff (CLINIC_MANAGER only) - Creates PENDING account',
+    summary: 'Add clinic staff (CLINIC_MANAGER only) - Creates PENDING account',
     description:
       'Creates staff account with PENDING status. Staff must complete profile before login.',
   })
@@ -493,8 +502,7 @@ export class AuthController {
   @ApiResponseData({
     type: AccountResponseDto,
     status: MESSAGES.statusCode.created,
-    message:
-      'Doctor account created (PENDING). Doctor must complete profile.',
+    message: 'Doctor account created (PENDING). Doctor must complete profile.',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
@@ -555,20 +563,24 @@ export class AuthController {
     status: 403,
     description: 'Forbidden - Requires CLINIC_ADMIN role or invalid status',
   })
-  @ApiResponse({ status: 409, description: 'Email already exists or manager already exists' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email already exists or manager already exists',
+  })
   async createClinicManagerForRegistration(
     @Req() req: any,
     @Body() dto: CreateClinicManagerForRegistrationDto,
   ): Promise<{ data: AccountResponseDto; message: string }> {
     const adminId = req.user._id;
-    const manager = await this.AccountsService.createClinicManagerForRegistration(
-      adminId,
-      dto,
-    );
+    const manager =
+      await this.AccountsService.createClinicManagerForRegistration(
+        adminId,
+        dto,
+      );
     return {
       data: manager,
-      message: 'Clinic manager created successfully. Please upload legal documents to continue.',
+      message:
+        'Clinic manager created successfully. Please upload legal documents to continue.',
     };
   }
-
 }

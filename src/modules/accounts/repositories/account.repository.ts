@@ -168,9 +168,16 @@ export class AccountRepository {
    * const account = await repository.findAccountByEmail('user@example.com');
    * ```
    */
-  async findAccountByEmail(email: string): Promise<Account | null> {
+  async findAccountByEmail(
+    email: string,
+    role?: string,
+  ): Promise<Account | null> {
+    const where: any = { email };
+    if (role) {
+      where.role = role;
+    }
     return this.accountRepository.findOne({
-      where: { email },
+      where,
     });
   }
 
