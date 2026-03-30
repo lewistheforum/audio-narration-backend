@@ -135,6 +135,7 @@ export class MailerController {
       user.email,
       code,
       user.username,
+      user.role,
     );
 
     return {

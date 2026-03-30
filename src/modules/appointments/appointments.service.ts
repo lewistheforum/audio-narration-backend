@@ -142,6 +142,14 @@ import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 export class AppointmentsService {
   private readonly MIN_ADVANCE_BOOKING_MESSAGE =
     'Appointments must be booked at least 1 day in advance';
+  private readonly APPOINTMENT_CONFLICT_MESSAGE =
+    'You already have a confirmed appointment at this time. Please select a different time slot.';
+  private readonly RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE =
+    'You already have a confirmed appointment at this new time. Please select a different time slot.';
+  private readonly APPOINTMENT_CONFLICT_EXCLUDED_STATUSES = [
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.ABSENT,
+  ];
 
   constructor(
     private readonly dataSource: DataSource,
@@ -203,11 +211,79 @@ export class AppointmentsService {
       .andWhere('a.appointment_date = :appointmentDate', {
         appointmentDate,
       })
-      .andWhere('a.status IN (:...activeStatuses)', { activeStatuses })
+      .andWhere('a.status = ANY(:activeStatuses)', { activeStatuses })
       .andWhere('a.deleted_at IS NULL')
       .getRawOne();
 
     return parseInt(String(appointmentCount?.count || 0), 10);
+  }
+
+  private async checkPatientAppointmentOverlap(
+    manager: any,
+    patientId: string,
+    requestedStartTime: Date,
+    excludeAppointmentId?: string,
+  ): Promise<void> {
+    const query = manager
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .select('appointment._id')
+      .where('appointment.patientId = :patientId', { patientId })
+      .andWhere('appointment.appointmentHour = :requestedStartTime', {
+        requestedStartTime,
+      })
+      .andWhere('NOT (appointment.status = ANY(:excludedStatuses))', {
+        excludedStatuses: this.APPOINTMENT_CONFLICT_EXCLUDED_STATUSES,
+      })
+      .andWhere('appointment.deletedAt IS NULL');
+
+    if (excludeAppointmentId) {
+      query.andWhere('appointment._id != :excludeAppointmentId', {
+        excludeAppointmentId,
+      });
+    }
+
+    const existingAppointment = await query.limit(1).getOne();
+
+    if (existingAppointment) {
+      throw new ConflictException(
+        excludeAppointmentId
+          ? this.RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE
+          : this.APPOINTMENT_CONFLICT_MESSAGE,
+      );
+    }
+  }
+
+  private async resolveSessionAppointmentStartTime(
+    session: any,
+    dateString?: string,
+  ): Promise<Date> {
+    if (session.extraHour) {
+      return this.parseBookingExtraHour(session.extraHour);
+    }
+
+    if (session.appointmentHour) {
+      return this.parseBookingExtraHour(session.appointmentHour);
+    }
+
+    if (!session.clinicShiftHourId || !session.appointmentDate) {
+      throw new BadRequestException(
+        'The appointment start time could not be determined from the booking session.',
+      );
+    }
+
+    const shiftHour = await this.dataSource.getRepository(ClinicShiftHour).findOne({
+      where: { _id: session.clinicShiftHourId },
+      select: ['_id', 'startHour'],
+    });
+
+    if (!shiftHour) {
+      throw new NotFoundException('Time slot not found');
+    }
+
+    const normalizedDate = dateString || getDateString(getStartOfVietnamDate(session.appointmentDate));
+
+    return this.buildVietnamAppointmentHour(normalizedDate, shiftHour.startHour);
   }
 
   private normalizeMoney(value: number): number {
@@ -1284,6 +1360,13 @@ export class AppointmentsService {
         newShiftHour.start_hour,
       );
 
+      await this.checkPatientAppointmentOverlap(
+        queryRunner.manager,
+        appointment.patientId,
+        appointmentHour,
+        appointment._id,
+      );
+
       // Update appointment with new doctor, date, shift, and hour
       await queryRunner.manager
         .createQueryBuilder()
@@ -1379,6 +1462,13 @@ export class AppointmentsService {
         'This time slot is already booked. Please choose another time.',
       );
     }
+
+    await this.checkPatientAppointmentOverlap(
+      this.dataSource.manager,
+      appointment.patientId,
+      newExtraHour,
+      appointment._id,
+    );
 
     // Update appointment
     appointment.appointmentDate = newAppointmentDate;
@@ -4104,6 +4194,12 @@ export class AppointmentsService {
         throw new BadRequestException('extraHour must be in the future');
       }
 
+      await this.checkPatientAppointmentOverlap(
+        this.dataSource.manager,
+        patientId,
+        extraHourDate,
+      );
+
       // Out-of-hours validation passed, now process it
       if (session.paymentMethod === 'cod') {
         return await this.createAppointmentOutOfHours(
@@ -4183,6 +4279,17 @@ export class AppointmentsService {
           'Appointment date cannot be more than 60 days in the future',
         );
       }
+
+      const requestedStartTime = await this.resolveSessionAppointmentStartTime(
+        session,
+        dateString,
+      );
+
+      await this.checkPatientAppointmentOverlap(
+        this.dataSource.manager,
+        patientId,
+        requestedStartTime,
+      );
 
       // ========================================================================
       // STEP 3: BRANCH BASED ON BOOKING OPTION & PAYMENT METHOD
@@ -4396,26 +4503,11 @@ export class AppointmentsService {
 
           // === STEP 5: Check for Duplicate Appointments ===
           const appointmentRepo = manager.getRepository('appointments');
-          const existingAppointment = await manager
-            .createQueryBuilder()
-            .select('a')
-            .from('appointments', 'a')
-            .where('a.patient_id = :patientId', { patientId })
-            .andWhere('a.appointment_date = :dateString', { dateString })
-            .andWhere('a.clinic_shift_hour_id = :shiftHourId', {
-              shiftHourId: session.clinicShiftHourId,
-            })
-            .andWhere(
-              "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
-            )
-            .andWhere('a.deleted_at IS NULL')
-            .getOne();
-
-          if (existingAppointment) {
-            throw new ConflictException(
-              'You already have an appointment at this time',
-            );
-          }
+          await this.checkPatientAppointmentOverlap(
+            manager,
+            patientId,
+            appointmentHour,
+          );
 
           // === STEP 6: Keep static slot limit unchanged ===
           // Capacity is derived dynamically from static limit - booked appointments.
@@ -4818,6 +4910,12 @@ export class AppointmentsService {
           ? parseVietnamTime(session.appointmentHour)
           : appointmentDateForDB;
 
+      await this.checkPatientAppointmentOverlap(
+        manager,
+        session.patientId,
+        appointmentHour,
+      );
+
       const appointment = manager.create(Appointment, {
         patientId: session.patientId,
         clinicId: session.clinicId,
@@ -5045,6 +5143,12 @@ export class AppointmentsService {
               'Doctor is not available on this date at this clinic',
             );
           }
+
+          await this.checkPatientAppointmentOverlap(
+            manager,
+            patientId,
+            extraHourDate,
+          );
 
           // === STEP 4: PREVENT DOUBLE BOOKING ===
           // CRITICAL: Check if doctor already has an appointment at this extraHour

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Inject,
 } from '@nestjs/common';
 import { DataSource, In } from 'typeorm';
@@ -21,6 +22,9 @@ import {
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole } from '../accounts/enums';
+import { Appointment } from './entities/appointment.entity';
+import { AppointmentStatus } from './enums/appointment-status.enum';
+import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
 import {
   getCurrentVietnamTime,
   addToVietnamTime,
@@ -32,6 +36,7 @@ import {
   parseVietnamTime,
   isAtLeastOneDayInAdvanceVietnam,
   formatToDateOnly,
+  buildVietnamDateTime,
 } from 'src/common/utils/date.util';
 
 let uuidv4: () => string;
@@ -88,6 +93,12 @@ export interface BookingSession {
 export class BookingSessionService {
   private readonly SESSION_TTL = 1800; // 30 minutes in seconds
   private readonly KEY_PREFIX = 'booking:session:';
+  private readonly APPOINTMENT_CONFLICT_MESSAGE =
+    'You already have a confirmed appointment at this time. Please select a different time slot.';
+  private readonly APPOINTMENT_CONFLICT_EXCLUDED_STATUSES = [
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.ABSENT,
+  ];
   private readonly MIN_ADVANCE_BOOKING_MESSAGE =
     'Appointments must be booked at least 1 day in advance';
 
@@ -112,6 +123,13 @@ export class BookingSessionService {
     await this.validateInitialData(
       createDto.booking_option,
       createDto.initial_data,
+    );
+
+    await this.checkPatientAppointmentOverlap(
+      patientId,
+      await this.resolveRequestedStartTime(
+        createDto.initial_data as Record<string, unknown>,
+      ),
     );
 
     // Generate session ID
@@ -154,12 +172,7 @@ export class BookingSessionService {
     }
 
     // Save to Redis with TTL
-    const key = this.getSessionKey(sessionId);
-    await this.redisClient.setex(
-      key,
-      this.SESSION_TTL,
-      JSON.stringify(session),
-    );
+    await this.saveSession(session, this.SESSION_TTL);
 
     // Build response
     return this.buildSessionResponse(session);
@@ -233,6 +246,15 @@ export class BookingSessionService {
         if (!data.doctor_id) {
           throw new BadRequestException('Doctor ID is required in step 3');
         }
+
+        await this.checkPatientAppointmentOverlap(
+          patientId,
+          await this.resolveRequestedStartTime({
+            appointment_date: session.appointmentDate,
+            appointment_hour: data.appointment_hour,
+            clinic_shift_hour_id: data.clinic_shift_hour_id,
+          }),
+        );
 
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
@@ -310,6 +332,15 @@ export class BookingSessionService {
         }
 
         this.validateMinimumBookingLeadTime(data.appointment_date);
+
+        await this.checkPatientAppointmentOverlap(
+          patientId,
+          await this.resolveRequestedStartTime({
+            appointment_date: data.appointment_date,
+            appointment_hour: data.appointment_hour,
+            clinic_shift_hour_id: data.clinic_shift_hour_id,
+          }),
+        );
 
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
@@ -393,6 +424,15 @@ export class BookingSessionService {
         }
 
         this.validateMinimumBookingLeadTime(data.appointment_date);
+
+        await this.checkPatientAppointmentOverlap(
+          patientId,
+          await this.resolveRequestedStartTime({
+            appointment_date: data.appointment_date,
+            appointment_hour: data.appointment_hour,
+            clinic_shift_hour_id: data.clinic_shift_hour_id,
+          }),
+        );
 
         // MERGE: Explicitly preserve all existing fields
         const updateFields: any = {
@@ -494,6 +534,8 @@ export class BookingSessionService {
           );
         }
 
+        await this.checkPatientAppointmentOverlap(patientId, extraHourDate);
+
         const normalizedAppointmentDate = getDateString(
           getStartOfVietnamDate(data.appointment_date),
         );
@@ -574,11 +616,7 @@ export class BookingSessionService {
     // Save updated session to Redis (keep original TTL)
     const key = this.getSessionKey(sessionId);
     const ttl = await this.redisClient.ttl(key);
-    await this.redisClient.setex(
-      key,
-      ttl > 0 ? ttl : this.SESSION_TTL,
-      JSON.stringify(session),
-    );
+    await this.saveSession(session, ttl > 0 ? ttl : this.SESSION_TTL);
 
     return this.buildSessionResponse(session);
   }
@@ -613,6 +651,96 @@ export class BookingSessionService {
   async deleteSession(sessionId: string): Promise<void> {
     const key = this.getSessionKey(sessionId);
     await this.redisClient.del(key);
+  }
+
+  private async checkPatientAppointmentOverlap(
+    patientId: string,
+    requestedStartTime: Date | null,
+  ): Promise<void> {
+    if (!requestedStartTime) {
+      return;
+    }
+
+    const existingAppointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .select('appointment._id')
+      .where('appointment.patientId = :patientId', { patientId })
+      .andWhere('appointment.appointmentHour = :requestedStartTime', {
+        requestedStartTime,
+      })
+      .andWhere('NOT (appointment.status = ANY(:excludedStatuses))', {
+        excludedStatuses: this.APPOINTMENT_CONFLICT_EXCLUDED_STATUSES,
+      })
+      .andWhere('appointment.deletedAt IS NULL')
+      .limit(1)
+      .getOne();
+
+    if (existingAppointment) {
+      throw new ConflictException(this.APPOINTMENT_CONFLICT_MESSAGE);
+    }
+  }
+
+  private async resolveRequestedStartTime(
+    data: Record<string, unknown>,
+  ): Promise<Date | null> {
+    const extraHour =
+      typeof data.extra_hour === 'string' ? data.extra_hour : undefined;
+    const appointmentHour =
+      typeof data.appointment_hour === 'string'
+        ? data.appointment_hour
+        : undefined;
+    const appointmentDate =
+      typeof data.appointment_date === 'string'
+        ? data.appointment_date
+        : undefined;
+    const clinicShiftHourId =
+      typeof data.clinic_shift_hour_id === 'string'
+        ? data.clinic_shift_hour_id
+        : undefined;
+
+    if (extraHour) {
+      return this.parseRequestedDateTime(extraHour);
+    }
+
+    if (appointmentHour) {
+      return this.parseRequestedDateTime(appointmentHour);
+    }
+
+    if (!appointmentDate || !clinicShiftHourId) {
+      return null;
+    }
+
+    const shiftHour = await this.dataSource.getRepository(ClinicShiftHour).findOne({
+      where: { _id: clinicShiftHourId },
+      select: ['_id', 'startHour'],
+    });
+
+    if (!shiftHour) {
+      throw new BadRequestException('Clinic shift hour not found.');
+    }
+
+    return buildVietnamDateTime(
+      getDateString(getStartOfVietnamDate(appointmentDate)),
+      shiftHour.startHour,
+    );
+  }
+
+  private parseRequestedDateTime(value: string): Date {
+    const parsedDate = parseVietnamTime(value);
+
+    if (isNaN(parsedDate.getTime())) {
+      throw new BadRequestException(
+        'Invalid appointment time. Please provide a valid ISO 8601 datetime.',
+      );
+    }
+
+    return parsedDate;
+  }
+
+  private async saveSession(session: BookingSession, ttl: number): Promise<void> {
+    const key = this.getSessionKey(session.sessionId);
+    await this.redisClient.setex(key, ttl, JSON.stringify(session));
   }
 
   /**

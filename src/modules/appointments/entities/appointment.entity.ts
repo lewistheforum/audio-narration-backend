@@ -30,6 +30,7 @@ import { AppointmentStatus } from '../enums';
 @Index('idx_appointments_created_at', ['createdAt'])
 @Index('idx_appointments_clinic_date', ['clinicId', 'appointmentDate'])
 @Index('idx_appointments_patient_id', ['patientId'])
+@Index('idx_appointments_patient_appointment_hour', ['patientId', 'appointmentHour'])
 export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

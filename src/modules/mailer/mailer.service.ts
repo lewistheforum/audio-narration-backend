@@ -368,6 +368,7 @@ export class MailerService {
     email: string,
     code: string,
     firstName?: string,
+    role?: string,
   ): Promise<void> {
     const transporter = this.mailTransport();
     const displayName = firstName || 'User';
@@ -379,7 +380,11 @@ export class MailerService {
       },
       to: email,
       subject: 'Password Reset Request - Medicare',
-      html: this.renderTemplate('auth/password-reset-code.hbs', { displayName, code })
+      html: this.renderTemplate('auth/password-reset-code.hbs', {
+        displayName,
+        code,
+        role,
+      })
     };
 
     try {
