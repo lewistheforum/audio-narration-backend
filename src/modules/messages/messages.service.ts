@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -44,15 +45,25 @@ export class MessagesService {
       console.error('Error checking/clearing conversation deletedBy:', error);
     }
 
+    const now = getCurrentVietnamTime();
     const messageData = {
       ...createMessageDto,
       validatedAt: addToVietnamTime(20, 'minute'), // 20 minutes from now
-      createdAt: getCurrentVietnamTime(),
-      updatedAt: getCurrentVietnamTime(),
+      createdAt: now,
+      updatedAt: now,
       messageType: createMessageDto.messageType || MessageType.TEXT,
       isRead: createMessageDto.isRead || false,
     };
     const savedMessage = await this.messageRepository.createMessage(messageData);
+
+    // Update conversation updatedAt to bring it to the top of the list
+    try {
+      await this.conversationService.update(createMessageDto.conversationId, {
+        updatedAt: getCurrentVietnamTime(),
+      });
+    } catch (error) {
+      console.error('Error updating conversation updatedAt:', error);
+    }
 
     // Emit socket events for new message
     try {
@@ -145,17 +156,86 @@ export class MessagesService {
   ): Promise<MessageResponseDto> {
     const message = await this.findMessageEntityById(id);
 
-    Object.assign(message, updateMessageDto);
+    // Check if the message is older than 15 minutes
+    const fifteenMinutesMs = 15 * 60 * 1000;
+    const now = new Date();
+    const createdAt = new Date(message.createdAt);
+    if (now.getTime() - createdAt.getTime() > fifteenMinutesMs) {
+      throw new BadRequestException(
+        'Message cannot be edited after 15 minutes',
+      );
+    }
+
+    const updateData = {
+      ...updateMessageDto,
+      updatedAt: getCurrentVietnamTime(),
+    };
+
+    Object.assign(message, updateData);
     const updatedMessage = await this.messageRepository.updateMessage(
       id,
-      updateMessageDto,
+      updateData,
     );
+
+    // Update conversation updatedAt
+    try {
+      await this.conversationService.update(message.conversationId, {
+        updatedAt: getCurrentVietnamTime(),
+      });
+    } catch (error) {
+      console.error('Error updating conversation updatedAt on edit:', error);
+    }
+
+    // Broadcast message update via socket
+    try {
+      await this.socketGatewayService.broadcastMessageUpdate(
+        message.conversationId,
+        updatedMessage,
+      );
+    } catch (error) {
+      console.error('Error broadcasting message update:', error);
+    }
 
     return new MessageResponseDto(updatedMessage);
   }
 
   async delete(id: string): Promise<void> {
+    const message = await this.findMessageEntityById(id);
+
+    // Check if the message is older than 15 minutes
+    const fifteenMinutesMs = 15 * 60 * 1000;
+    const now = new Date();
+    const createdAt = new Date(message.createdAt);
+    if (now.getTime() - createdAt.getTime() > fifteenMinutesMs) {
+      throw new BadRequestException(
+        'Message cannot be deleted after 15 minutes',
+      );
+    }
+
     await this.messageRepository.softDeleteMessage(id);
+
+    // After deletion, find the new last message to update participants' sidebars
+    try {
+      const newLastMessage = await this.messageRepository.findLastMessageByConversation(
+        message.conversationId,
+      );
+
+      // Notify participants via socket
+      await this.socketGatewayService.broadcastMessageDelete(
+        message.conversationId,
+        id,
+        newLastMessage,
+      );
+
+      // If there's a new last message, update the conversation's updatedAt to reflect the change
+      if (newLastMessage) {
+        await this.conversationService.update(message.conversationId, {
+          updatedAt: newLastMessage.createdAt,
+        });
+      }
+    } catch (error) {
+      console.error('Error handling post-deletion socket/update:', error);
+    }
   }
 
   async markAsRead(id: string): Promise<MessageResponseDto> {
