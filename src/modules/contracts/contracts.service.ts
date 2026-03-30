@@ -771,6 +771,28 @@ export class ContractsService {
      * @param id - UUID of contract package
      * @param requester - Object containing _id and role of the requester
      */
+    async deletePackage(contractId: string, clinicManagerId: string): Promise<void> {
+        const contractPackage = await this.contractPackageRepository.findById(contractId);
+        if (!contractPackage) {
+            throw new NotFoundException('Contract package not found');
+        }
+
+        if (contractPackage.clinicManagerId !== clinicManagerId) {
+            throw new UnauthorizedException('You are not allowed to delete this contract package');
+        }
+
+        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
+        if (contractInfo?.contractStatus === ContractStatus.CURRENT) {
+            throw new BadRequestException('Cannot delete a contract package that is already CURRENT');
+        }
+
+        if (contractInfo?._id) {
+            await this.clinicContractInfoRepository.softDelete(contractInfo._id);
+        }
+
+        await this.contractPackageRepository.softDelete(contractId);
+    }
+
     async cancelContractPackage(id: string, requester: { _id: string; role: string }): Promise<void> {
         const contractPackage = await this.contractPackageRepository.findById(id);
         if (!contractPackage) throw new NotFoundException('Contract package not found');
