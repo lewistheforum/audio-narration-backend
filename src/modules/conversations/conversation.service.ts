@@ -233,25 +233,25 @@ export class ConversationService {
   async getPatientChatlist(patientId: string): Promise<any[]> {
     const doctors = await this.AccountsService['accountRepository']
       .createQueryBuilder('account')
-      .innerJoin('appointments', 'appt', 'appt.patient_id = :patientId', {
-        patientId,
-      })
       .where('account.role = :doctorRole', { doctorRole: 'DOCTOR' })
-      .orWhere(
+      .andWhere('account.deletedAt IS NULL')
+      .andWhere(
         `EXISTS (
           SELECT 1 FROM appointments appt 
           WHERE appt.patient_id = :patientId 
-          AND EXISTS (
+          AND (
+            appt.doctor_id = account._id 
+            OR EXISTS (
               SELECT 1 FROM employee_schedule es 
               JOIN clinic_shift_hour csh ON csh.shift_id = es.clinic_shift_id
               WHERE es.employee_id = account._id 
               AND csh._id = appt.clinic_shift_hour_id
               AND es.work_date = appt.appointment_date
+            )
           )
         )`,
         { patientId },
       )
-      .andWhere('account.deletedAt IS NULL')
       .select(['account._id as id'])
       .getRawMany();
 

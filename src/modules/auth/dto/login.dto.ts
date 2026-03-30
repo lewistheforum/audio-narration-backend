@@ -10,7 +10,7 @@ import { Transform } from 'class-transformer';
 
 /**
  * Login Data Transfer Object
- * 
+ *
  * Validates user login credentials
  * Email is automatically normalized (lowercase, trimmed)
  */
@@ -23,6 +23,14 @@ export class LoginDto {
   @IsEmail({}, { message: 'Invalid email format' })
   @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
+
+  @ApiProperty({
+    description: 'User role for login',
+    example: 'PATIENT',
+  })
+  @IsNotEmpty({ message: 'Role is required' })
+  @IsString()
+  role: string;
 
   @ApiProperty({
     description: 'User password',

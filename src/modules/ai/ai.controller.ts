@@ -146,6 +146,27 @@ export class AiController {
     return this.aiService.getRecommendationsFromPatientAppointment(dto);
   }
 
+  @Get('recommendation-clinic/clinics/:id/clinic-address')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get recommended clinics from patient address',
+    description:
+      'Fetch recommended clinics (Admins and Managers) from the database matching the patient\'s province code.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Recommended clinics retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Failed to fetch recommendations',
+  })
+  async getRecommendationsFromPatientAddress(
+    @Param('id') id: string,
+  ): Promise<any> {
+    return this.aiService.getRecommendationsFromPatientAddress(id);
+  }
+
   @Post('fracture-detection')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
