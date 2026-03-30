@@ -11,6 +11,7 @@ import { CreateClinicLegalDocumentDto } from './dto/create-clinic-legal-document
 import { LegalDocumentVerificationStatus } from '../accounts/enums/legal-document-verification-status.enum';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
+import { decrypt } from '../../common/utils/encryption.util';
 
 @Injectable()
 export class ClinicLegalDocumentsService {
@@ -104,7 +105,14 @@ export class ClinicLegalDocumentsService {
       .offset(skip)
       .limit(limit);
 
-    const data = await queryBuilder.getRawMany();
+    const rawData = await queryBuilder.getRawMany();
+
+    // Decrypt encrypted fields after getRawMany
+    const data = rawData.map((item) => ({
+      ...item,
+      operatingLicense: item.operatingLicense ? decrypt(item.operatingLicense) : item.operatingLicense,
+      businessLicense: item.businessLicense ? decrypt(item.businessLicense) : item.businessLicense,
+    }));
 
     // Count total pending docs with active admin
     const totalItems = await this.clinicRepo
@@ -216,6 +224,15 @@ export class ClinicLegalDocumentsService {
       throw new NotFoundException('Legal document not found');
     }
 
+    // Decrypt encrypted fields manually after getRawOne()
+    try {
+      if (result.operatingLicense) result.operatingLicense = decrypt(result.operatingLicense);
+      if (result.businessLicense) result.businessLicense = decrypt(result.businessLicense);
+      if (result.taxIdUrl) result.taxIdUrl = decrypt(result.taxIdUrl);
+    } catch (e) {
+      console.warn('Failed to decrypt some legal document fields', e);
+    }
+
     // Structure the response
     return {
       legalDocument: {
@@ -279,7 +296,7 @@ export class ClinicLegalDocumentsService {
     const totalResult = await this.accountRepository
       .createQueryBuilder('admin')
       .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('admin.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('admin.deleted_at IS NULL')
       .getCount();
 
     // Fetch admins with their managers in a single LEFT JOIN query
@@ -304,15 +321,14 @@ export class ClinicLegalDocumentsService {
       .leftJoin(
         'clinics_legal_documents',
         'legalDocs',
-        'legalDocs.account_id = manager._id AND legalDocs.verification_status = :docStatus',
-        { docStatus: LegalDocumentVerificationStatus.APPROVED },
+        'legalDocs.account_id = manager._id',
       )
       .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('admin.status = :status', { status: AccountStatus.ACTIVE })
       .andWhere('admin.deleted_at IS NULL')
       .select([
         'admin._id as "adminAccountId"',
         'admin.email as "adminEmail"',
+        'admin.status as "adminAccountStatus"',
         'clinicAdminInfo.clinic_name as "clinicName"',
         'manager._id as "managerAccountId"',
         'manager.email as "managerEmail"',
@@ -333,6 +349,7 @@ export class ClinicLegalDocumentsService {
     const adminMap = new Map<string, {
       adminAccountId: string;
       adminEmail: string | null;
+      adminAccountStatus: string;
       clinicName: string;
       managers: Array<{
         accountId: string;
@@ -352,6 +369,7 @@ export class ClinicLegalDocumentsService {
         adminMap.set(row.adminAccountId, {
           adminAccountId: row.adminAccountId,
           adminEmail: row.adminEmail,
+          adminAccountStatus: row.adminAccountStatus,
           clinicName: row.clinicName || '',
           managers: [],
         });
