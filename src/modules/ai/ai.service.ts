@@ -14,6 +14,8 @@ import { firstValueFrom } from 'rxjs';
 import { API } from '../../common/utils/ai-api';
 import { getCurrentVietnamTime } from '../../common/utils/date.util';
 import { AccountRepository } from '../accounts/repositories/account.repository';
+import { FeedbackRepository } from '../reports/repositories/feedback.repository';
+import { AccountRole } from '../accounts/enums';
 
 /**
  * AI Service
@@ -37,6 +39,7 @@ export class AiService {
     private readonly chatGptService: ChatGptService,
     private readonly httpService: HttpService,
     private readonly accountRepository: AccountRepository,
+    private readonly feedbackRepository: FeedbackRepository,
   ) {}
 
   /**
@@ -256,6 +259,120 @@ export class AiService {
     } catch (error) {
       throw new BadRequestException(
         `Failed to fetch recommendations from address: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Get most rating clinics (Admins and Managers)
+   * Fetches top 10 clinics with average rating > 4.0
+   */
+  async getMostRatingClinics(): Promise<any> {
+    try {
+      // 1. Get top 10 Clinic Admins by rating
+      const topClinicAdminsRaw = await this.feedbackRepository.createQueryBuilder('feedback')
+        .innerJoin('feedback.clinic', 'account')
+        .select('account._id', 'id')
+        .addSelect('AVG(feedback.rating)', 'avg_rating')
+        .where('account.role = :role', { role: AccountRole.CLINIC_ADMIN })
+        .andWhere('account.deletedAt IS NULL')
+        .groupBy('account._id')
+        .having('AVG(feedback.rating) > 4.0')
+        .orderBy('avg_rating', 'DESC')
+        .limit(10)
+        .getRawMany();
+
+      // 2. Get top 10 Clinic Managers by rating
+      const topClinicManagersRaw = await this.feedbackRepository.createQueryBuilder('feedback')
+        .innerJoin('feedback.clinic', 'account')
+        .select('account._id', 'id')
+        .addSelect('AVG(feedback.rating)', 'avg_rating')
+        .where('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
+        .andWhere('account.deletedAt IS NULL')
+        .groupBy('account._id')
+        .having('AVG(feedback.rating) > 4.0')
+        .orderBy('avg_rating', 'DESC')
+        .limit(10)
+        .getRawMany();
+
+      const adminIds = topClinicAdminsRaw.map((r) => r.id);
+      const managerIds = topClinicManagersRaw.map((r) => r.id);
+
+      // Create maps for ratings to use during entity mapping
+      const adminRatingsMap = new Map(topClinicAdminsRaw.map((r) => [r.id, parseFloat(r.avg_rating)]));
+      const managerRatingsMap = new Map(topClinicManagersRaw.map((r) => [r.id, parseFloat(r.avg_rating)]));
+
+      // 3. Fetch full account details for Clinic Admins
+      const clinicAdmins = adminIds.length > 0
+        ? await this.accountRepository.createQueryBuilder('account')
+            .leftJoinAndSelect('account.clinicAdminInformation', 'adminInfo')
+            .leftJoinAndSelect('account.address', 'address')
+            .where('account._id IN (:...adminIds)', { adminIds })
+            .andWhere('account.deletedAt IS NULL')
+            .getMany()
+        : [];
+
+      // 4. Fetch full account details for Clinic Managers (including parent admin info for name composition)
+      const clinicManagers = managerIds.length > 0
+        ? await this.accountRepository.createQueryBuilder('account')
+            .leftJoinAndSelect('account.clinicManagerInformation', 'managerInfo')
+            .leftJoinAndSelect('account.address', 'address')
+            .leftJoinAndSelect('account.parent', 'parentAccount')
+            .leftJoinAndSelect('parentAccount.clinicAdminInformation', 'parentAdminInfo')
+            .where('account._id IN (:...managerIds)', { managerIds })
+            .andWhere('account.deletedAt IS NULL')
+            .getMany()
+        : [];
+
+      // 5. Map Clinic Admins to requested format
+      const recommendationsClinicAdmins = clinicAdmins.map((acc) => ({
+        id: acc._id,
+        account_id: acc._id,
+        email: acc.email,
+        phone: acc.phone || acc.clinicAdminInformation?.clinicPhone,
+        clinic_name: acc.clinicAdminInformation?.clinicName || 'Unknown',
+        description: acc.clinicAdminInformation?.description || '',
+        specialized_in: acc.clinicAdminInformation?.specializedIn || [],
+        pros: acc.clinicAdminInformation?.pros || [],
+        paraclinical: acc.clinicAdminInformation?.paraclinical || [],
+        dob: acc.clinicAdminInformation?.dob,
+        profile_picture: acc.clinicAdminInformation?.profilePicture,
+        average_rating: adminRatingsMap.get(acc._id) || 0,
+        created_at: acc.createdAt,
+        updated_at: acc.updatedAt,
+      }));
+
+      // 6. Map Clinic Managers to requested format
+      const recommendationsClinicManagers = clinicManagers.map((acc) => ({
+        id: acc._id,
+        parent_id: acc.parentId,
+        email: acc.email,
+        phone: acc.phone,
+        clinic_name: acc.parent?.clinicAdminInformation?.clinicName 
+          ? `${acc.parent.clinicAdminInformation.clinicName} - ${acc.clinicManagerInformation?.clinicBranchName}`
+          : (acc.clinicManagerInformation?.clinicBranchName || 'Unknown'),
+        description: acc.parent?.clinicAdminInformation?.description || acc.clinicManagerInformation?.fullName,
+        specialized_in: acc.parent?.clinicAdminInformation?.specializedIn || [],
+        pros: acc.parent?.clinicAdminInformation?.pros || [],
+        paraclinical: acc.parent?.clinicAdminInformation?.paraclinical || [],
+        dob: acc.clinicManagerInformation?.dob,
+        profile_picture: acc.clinicManagerInformation?.profilePicture,
+        average_rating: managerRatingsMap.get(acc._id) || 0,
+        created_at: acc.createdAt,
+        updated_at: acc.updatedAt,
+      }));
+
+      // Sort by original rating order (descending avg rating)
+      recommendationsClinicAdmins.sort((a, b) => adminIds.indexOf(a.id) - adminIds.indexOf(b.id));
+      recommendationsClinicManagers.sort((a, b) => managerIds.indexOf(a.id) - managerIds.indexOf(b.id));
+
+      return {
+        recommendationsClinicAdmins,
+        recommendationsClinicManagers,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to fetch most rating clinics: ${error.message}`,
       );
     }
   }
