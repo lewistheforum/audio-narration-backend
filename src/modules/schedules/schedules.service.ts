@@ -376,12 +376,13 @@ export class SchedulesService {
             continue;
           }
 
-          // Check room conflict in target
+                    // Check room conflict in target
           if (schedule.rooms && schedule.rooms.length > 0) {
             const roomConflict = await this.scheduleRepository.findRoomConflict(
               schedule.rooms[0]._id,
               currentTargetDate,
               schedule.clinicShiftId,
+              schedule.employee?.role,
             );
 
             if (roomConflict) {
@@ -500,12 +501,13 @@ export class SchedulesService {
           );
         }
 
-        // Room Occupancy Check
+                // Room Occupancy Check
         if (roomId) {
           const roomConflict = await this.scheduleRepository.findRoomConflict(
             roomId,
             workDateObj,
             clinicShiftId,
+            employee.role,
           );
 
           if (roomConflict) {
@@ -819,6 +821,7 @@ export class SchedulesService {
 
     const schedule = await this.scheduleRepository.findOne({
       where: { _id: id },
+      relations: ['rooms', 'employee'],
     });
     if (!schedule) throw new NotFoundException('Schedule not found');
 
@@ -898,7 +901,7 @@ export class SchedulesService {
       }
     }
 
-    // Room Occupancy Check on Update
+        // Room Occupancy Check on Update
     if (roomId || clinicShiftId || workDate) {
       const roomToCheck =
         roomId ||
@@ -906,10 +909,16 @@ export class SchedulesService {
           ? schedule.rooms[0]._id
           : null);
       if (roomToCheck) {
+        // Fetch employee to get role for conflict check
+        const employeeForRole = await this.accountRepository.findOne({
+          where: { _id: schedule.employeeId },
+        });
+
         const roomConflict = await this.scheduleRepository.findRoomConflict(
           roomToCheck,
           schedule.workDate,
           schedule.clinicShiftId,
+          employeeForRole?.role,
           id, // exclude current
         );
         if (roomConflict) {
