@@ -178,20 +178,40 @@ export class ConversationService {
   }
 
   async getClinicAdminChatlist(clinicAdminId: string): Promise<any[]> {
+    const details = await this.conversationRepository.findAccountsWithDetails([
+      clinicAdminId,
+    ]);
+    if (details[0]?.subscriptionCode === 'BASIC') return [];
+
     return this.conversationRepository.findClinicAdminChatlist(clinicAdminId);
   }
 
   async getClinicManagerRelatedAccounts(managerId: string): Promise<any[]> {
+    const details = await this.conversationRepository.findAccountsWithDetails([
+      managerId,
+    ]);
+    if (details[0]?.subscriptionCode === 'BASIC') return [];
+
     return this.conversationRepository.findClinicManagerRelatedAccounts(
       managerId,
     );
   }
 
   async getStaffRelatedAccounts(staffId: string): Promise<any[]> {
+    const details = await this.conversationRepository.findAccountsWithDetails([
+      staffId,
+    ]);
+    if (details[0]?.subscriptionCode === 'BASIC') return [];
+
     return this.conversationRepository.findStaffRelatedAccounts(staffId);
   }
 
   async getDoctorChatlist(doctorId: string): Promise<any[]> {
+    const details = await this.conversationRepository.findAccountsWithDetails([
+      doctorId,
+    ]);
+    if (details[0]?.subscriptionCode === 'BASIC') return [];
+
     const staffAccounts =
       await this.conversationRepository.findStaffRelatedAccounts(doctorId);
 
@@ -256,6 +276,8 @@ export class ConversationService {
       .getRawMany();
 
     const doctorIds = doctors.map((d) => d.id);
-    return this.conversationRepository.findAccountsWithDetails(doctorIds);
+    const detailedDoctors =
+      await this.conversationRepository.findAccountsWithDetails(doctorIds);
+    return detailedDoctors.filter((d) => d.subscriptionCode !== 'BASIC');
   }
 }
