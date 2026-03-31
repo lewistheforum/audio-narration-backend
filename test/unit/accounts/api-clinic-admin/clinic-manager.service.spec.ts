@@ -17,6 +17,11 @@ import { Gender } from '../../../../src/modules/accounts/enums/gender.enum';
 import { LegalDocumentVerificationStatus } from '../../../../src/modules/accounts/enums/legal-document-verification-status.enum';
 import * as bcrypt from 'bcrypt';
 
+jest.mock('bcrypt', () => ({
+  hash: jest.fn(),
+  compare: jest.fn(),
+}));
+
 describe('ClinicManagerService', () => {
   let service: ClinicManagerService;
   let accountRepository: any;
@@ -223,7 +228,8 @@ describe('ClinicManagerService', () => {
     service = module.get<ClinicManagerService>(ClinicManagerService);
 
     // Mock bcrypt
-    jest.spyOn(bcrypt, 'hash').mockImplementation(() => Promise.resolve('hashedPassword'));
+    (bcrypt.hash as unknown as jest.Mock).mockResolvedValue('hashedPassword');
+    (bcrypt.compare as unknown as jest.Mock).mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -519,7 +525,7 @@ describe('ClinicManagerService', () => {
             updatedAt: new Date('2026-01-15'),
             children: [createMockStaff(), createMockDoctor()],
           }),
-          addresses: [{ ...mockAddress, googleIframe: mockGoogleIframe }],
+          address: { ...mockAddress, googleIframe: mockGoogleIframe },
           legalDocuments: mockLegalDocs,
         },
       });
@@ -1276,5 +1282,176 @@ describe('ClinicManagerService', () => {
 
       expect(result.message).toBe('Manager account deleted successfully');
     });
+  });
+
+  describe('sniper: generateManagerKeys', () => {
+    it('throws ForbiddenException when requester is not clinic admin', async () => {
+      accountRepository.findAccountById.mockResolvedValueOnce(
+        createMockAccount({ role: AccountRole.PATIENT }),
+      );
+
+      await expect(
+        service.generateManagerKeys('admin-123', 'manager-123'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws NotFoundException when manager not found or not owned', async () => {
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(createMockManager({ parentId: 'other-admin' }));
+
+      await expect(
+        service.generateManagerKeys('admin-123', 'manager-123'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('generates and saves new key pair for manager', async () => {
+      const manager = createMockManager({ parentId: 'admin-123' });
+      accountRepository.findAccountById
+        .mockResolvedValueOnce(createMockAccount({ role: AccountRole.CLINIC_ADMIN }))
+        .mockResolvedValueOnce(manager);
+
+      const result = await service.generateManagerKeys('admin-123', 'manager-123');
+
+      expect(result.publicKey).toBeDefined();
+      expect(result.encryptedPrivateKey).toBeDefined();
+      expect(accountRepository.saveAccount).toHaveBeenCalledWith(manager);
+    });
+  });
+
+  describe('sniper: updateManagerProfile & updateManagerLocation', () => {
+    it('updateManagerProfile blocks banned/deleted manager', async () => {
+      accountRepository.findAccountById.mockResolvedValue(
+        createMockManager({ status: AccountStatus.BAN, parentId: 'admin-123' }),
+      );
+
+      await expect(
+        service.updateManagerProfile('admin-123', AccountRole.CLINIC_ADMIN, 'manager-123', {
+          fullName: 'X',
+        } as any),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('updateManagerProfile throws when manager info not found', async () => {
+      accountRepository.findAccountById.mockResolvedValue(
+        createMockManager({ status: AccountStatus.ACTIVE, parentId: 'admin-123' }),
+      );
+      managerInfoRepository.findByAccountId.mockResolvedValue(null);
+
+      await expect(
+        service.updateManagerProfile('admin-123', AccountRole.CLINIC_ADMIN, 'manager-123', {
+          fullName: 'X',
+        } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('updateManagerProfile updates fields and returns manager detail', async () => {
+      accountRepository.findAccountById.mockResolvedValue(
+        createMockManager({ status: AccountStatus.ACTIVE, parentId: 'admin-123' }),
+      );
+      const managerInfo = createMockManagerInfo();
+      managerInfoRepository.findByAccountId.mockResolvedValue(managerInfo);
+      jest.spyOn(service, 'getManagerDetail').mockResolvedValue({ managerId: 'manager-123' } as any);
+
+      const res = await service.updateManagerProfile(
+        'admin-123',
+        AccountRole.CLINIC_ADMIN,
+        'manager-123',
+        {
+          fullName: 'New Name',
+          clinicBranchName: 'Branch Z',
+          gender: Gender.FEMALE,
+          dob: '1991-01-01',
+          profilePicture: 'https://x/y.jpg',
+        } as any,
+      );
+
+      expect(managerInfoRepository.save).toHaveBeenCalled();
+      expect(res).toEqual({ managerId: 'manager-123' });
+    });
+
+    it('updateManagerLocation creates iframe when not exists and commits', async () => {
+      accountRepository.findAccountById.mockResolvedValue(
+        createMockManager({ parentId: 'admin-123' }),
+      );
+      const address = createMockAddress();
+      addressRepository.findByAccountId.mockResolvedValue(address);
+      googleIframeRepository.findByAddressId.mockResolvedValue(null);
+
+      await service.updateManagerLocation(
+        'admin-123',
+        AccountRole.CLINIC_ADMIN,
+        'manager-123',
+        {
+          address: 'a',
+          ward: 'w',
+          district: 'd',
+          province: 'p',
+          wardName: 'wn',
+          districtName: 'dn',
+          provinceName: 'pn',
+          googleMapIframe: '<iframe />',
+        } as any,
+      );
+
+      expect(queryRunner.commitTransaction).toHaveBeenCalled();
+      expect(googleIframeRepository.create).toHaveBeenCalled();
+    });
+
+    it('updateManagerLocation rolls back when address missing', async () => {
+      accountRepository.findAccountById.mockResolvedValue(
+        createMockManager({ parentId: 'admin-123' }),
+      );
+      addressRepository.findByAccountId.mockResolvedValue(null);
+
+      await expect(
+        service.updateManagerLocation(
+          'admin-123',
+          AccountRole.CLINIC_ADMIN,
+          'manager-123',
+          {
+            address: 'a',
+            ward: 'w',
+            district: 'd',
+            province: 'p',
+            wardName: 'wn',
+            districtName: 'dn',
+            provinceName: 'pn',
+          } as any,
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+  });
+
+  describe('Business Scenario TODO Sweep', () => {
+    it.todo(
+      'Nghiệp vụ danh sách manager: chỉ CLINIC_ADMIN hợp lệ được truy cập và nhận dữ liệu phân trang theo bộ lọc',
+    );
+    it.todo(
+      'Nghiệp vụ chi tiết manager: chỉ owner admin hoặc chính manager được xem thông tin',
+    );
+    it.todo(
+      'Nghiệp vụ chi tiết manager: trạng thái PENDING_APPROVAL phải ẩn danh sách nhân sự',
+    );
+    it.todo(
+      'Nghiệp vụ tạo manager: luôn tạo với PENDING_APPROVAL và rollback nếu bất kỳ bước nào lỗi',
+    );
+    it.todo(
+      'Nghiệp vụ cập nhật hồ sơ pháp lý manager: luôn đưa verificationStatus về PENDING_REVIEW và clear rejectionReason',
+    );
+    it.todo(
+      'Nghiệp vụ cập nhật pháp lý: manager status bị ép về PENDING_APPROVAL để đóng băng vận hành chi nhánh',
+    );
+    it.todo(
+      'Nghiệp vụ disable manager: chỉ cho phép khi trạng thái ACTIVE',
+    );
+    it.todo(
+      'Nghiệp vụ enable manager: chỉ cho phép khi trạng thái MANAGER_DISABLED',
+    );
+    it.todo(
+      'Nghiệp vụ soft delete manager: chặn xóa khi legal docs đang PENDING_REVIEW hoặc manager đang ACTIVE',
+    );
   });
 });

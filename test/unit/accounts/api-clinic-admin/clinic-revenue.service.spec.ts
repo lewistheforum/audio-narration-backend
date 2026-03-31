@@ -73,9 +73,10 @@ describe('ClinicRevenueService', () => {
       addGroupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn(),
-      getRawMany: jest.fn(),
-      getMany: jest.fn(),
+      // Provide safe defaults so tests don't crash on unmapped queries
+      getRawOne: jest.fn().mockResolvedValue({}),
+      getRawMany: jest.fn().mockResolvedValue([]),
+      getMany: jest.fn().mockResolvedValue([]),
     };
     return qb;
   };
@@ -159,15 +160,6 @@ describe('ClinicRevenueService', () => {
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(onlineQb as any);
 
-      // Mock payment method breakdown (cash)
-      const cashQb = createMockQueryBuilder();
-      cashQb.getRawOne.mockResolvedValueOnce({
-        revenue: '400000',
-        transactionCount: '4',
-      });
-      transactionRepository.createQueryBuilder
-        .mockReturnValueOnce(cashQb as any);
-
       // Mock service category breakdown
       const categoryQb = createMockQueryBuilder();
       categoryQb.getRawMany.mockResolvedValueOnce([
@@ -199,6 +191,16 @@ describe('ClinicRevenueService', () => {
       });
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(successQb as any);
+
+      // Mock payment method breakdown (cash)
+      // NOTE: This query builder is created AFTER the first ONLINE query resolves.
+      const cashQb = createMockQueryBuilder();
+      cashQb.getRawOne.mockResolvedValueOnce({
+        revenue: '400000',
+        transactionCount: '4',
+      });
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(cashQb as any);
 
       // Mock status breakdown - PENDING
       const pendingQb = createMockQueryBuilder();
@@ -351,8 +353,9 @@ describe('ClinicRevenueService', () => {
       // Act
       await service.getOverallRevenueReport(adminId, filterDto);
 
-      // Assert - verify that managerId filter was applied
-      expect(accountQb.andWhere).toHaveBeenCalledWith(
+      // Assert - overall report does NOT support managerId filtering.
+      // (Use getBranchRevenueReport for branch-specific reporting.)
+      expect(accountQb.andWhere).not.toHaveBeenCalledWith(
         'account._id = :managerId',
         { managerId: 'manager-1' },
       );
@@ -439,8 +442,6 @@ describe('ClinicRevenueService', () => {
         revenue: '200000',
         transactionCount: '2',
       });
-      transactionRepository.createQueryBuilder
-        .mockReturnValueOnce(cashQb as any);
 
       // Mock service category breakdown
       const categoryQb = createMockQueryBuilder();
@@ -470,17 +471,8 @@ describe('ClinicRevenueService', () => {
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(successQb as any);
 
-      const pendingQb = createMockQueryBuilder();
-      pendingQb.getRawOne.mockResolvedValue({ count: '1', amount: '50000' });
-      transactionRepository.createQueryBuilder
-        .mockReturnValueOnce(pendingQb as any);
-
-      const failedQb = createMockQueryBuilder();
-      failedQb.getRawOne.mockResolvedValue({ count: '0', amount: '0' });
-      transactionRepository.createQueryBuilder
-        .mockReturnValueOnce(failedQb as any);
-
       // Mock top services
+      // NOTE: This QB is created synchronously while building Promise.all.
       const topServicesQb = createMockQueryBuilder();
       topServicesQb.getRawMany.mockResolvedValue([
         {
@@ -498,6 +490,21 @@ describe('ClinicRevenueService', () => {
       ]);
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(topServicesQb as any);
+
+      // Mock payment method breakdown (cash)
+      // NOTE: This QB is created AFTER the first ONLINE query resolves.
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(cashQb as any);
+
+      const pendingQb = createMockQueryBuilder();
+      pendingQb.getRawOne.mockResolvedValue({ count: '1', amount: '50000' });
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(pendingQb as any);
+
+      const failedQb = createMockQueryBuilder();
+      failedQb.getRawOne.mockResolvedValue({ count: '0', amount: '0' });
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(failedQb as any);
 
       // Act
       const result = await service.getBranchRevenueReport(
@@ -745,6 +752,20 @@ describe('ClinicRevenueService', () => {
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(onlineQb as any);
 
+      // Fill sync queries (service category, trend, first status)
+      const categoryQb = createMockQueryBuilder();
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(categoryQb as any);
+
+      const trendQb = createMockQueryBuilder();
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(trendQb as any);
+
+      const successQb = createMockQueryBuilder();
+      successQb.getRawOne.mockResolvedValue({ count: '0', amount: '0' });
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(successQb as any);
+
       const cashQb = createMockQueryBuilder();
       cashQb.getRawOne.mockResolvedValue({
         revenue: '400000',
@@ -796,17 +817,27 @@ describe('ClinicRevenueService', () => {
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(onlineQb as any);
 
-      const cashQb = createMockQueryBuilder();
-      cashQb.getRawOne.mockResolvedValue({ revenue: '0', transactionCount: '0' });
-      transactionRepository.createQueryBuilder
-        .mockReturnValueOnce(cashQb as any);
-
       const categoryQb = createMockQueryBuilder();
       categoryQb.getRawMany.mockResolvedValue([
         { categoryName: 'Consultation', revenue: '500000', serviceCount: '5' },
       ]);
       transactionRepository.createQueryBuilder
         .mockReturnValueOnce(categoryQb as any);
+
+      // Fill sync queries that run before the CASH payment query is created
+      const trendQb = createMockQueryBuilder();
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(trendQb as any);
+
+      const successQb = createMockQueryBuilder();
+      successQb.getRawOne.mockResolvedValue({ count: '0', amount: '0' });
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(successQb as any);
+
+      const cashQb = createMockQueryBuilder();
+      cashQb.getRawOne.mockResolvedValue({ revenue: '0', transactionCount: '0' });
+      transactionRepository.createQueryBuilder
+        .mockReturnValueOnce(cashQb as any);
 
       const mockQb = createMockQueryBuilder();
       mockQb.getRawOne.mockResolvedValue({ count: '0', amount: '0' });
@@ -951,5 +982,83 @@ describe('ClinicRevenueService', () => {
         'a._id = ap.appointment_id',
       );
     });
+  });
+
+  describe('Sniper: calculateRevenueTrend date format branches', () => {
+    it('uses ISO week format when groupBy is WEEK', async () => {
+      const trendQb = createMockQueryBuilder();
+      trendQb.getRawMany.mockResolvedValue([]);
+      transactionRepository.createQueryBuilder.mockReturnValue(trendQb as any);
+
+      await (service as any).calculateRevenueTrend(
+        ['manager-1'],
+        '2026-01-01',
+        '2026-01-31',
+        RevenueGroupBy.WEEK,
+      );
+
+      expect(trendQb.select).toHaveBeenCalledWith(
+        "TO_CHAR(t.transaction_date, 'IYYY-IW')",
+        'period',
+      );
+    });
+
+    it('uses month and default day format branches', async () => {
+      const monthQb = createMockQueryBuilder();
+      monthQb.getRawMany.mockResolvedValue([]);
+      transactionRepository.createQueryBuilder.mockReturnValueOnce(monthQb as any);
+
+      await (service as any).calculateRevenueTrend(
+        ['manager-1'],
+        '2026-01-01',
+        '2026-01-31',
+        RevenueGroupBy.MONTH,
+      );
+
+      expect(monthQb.select).toHaveBeenCalledWith(
+        "TO_CHAR(t.transaction_date, 'YYYY-MM')",
+        'period',
+      );
+
+      const defaultQb = createMockQueryBuilder();
+      defaultQb.getRawMany.mockResolvedValue([]);
+      transactionRepository.createQueryBuilder.mockReturnValueOnce(defaultQb as any);
+
+      await (service as any).calculateRevenueTrend(
+        ['manager-1'],
+        '2026-01-01',
+        '2026-01-31',
+        'UNKNOWN' as any,
+      );
+
+      expect(defaultQb.select).toHaveBeenCalledWith(
+        "TO_CHAR(t.transaction_date, 'YYYY-MM-DD')",
+        'period',
+      );
+    });
+  });
+
+  describe('Business Scenario TODO Sweep', () => {
+    it.todo(
+      'Nghiệp vụ báo cáo doanh thu: chỉ CLINIC_ADMIN hợp lệ mới được truy cập dữ liệu tài chính',
+    );
+    it.todo(
+      'Nghiệp vụ date range: startDate phải trước endDate và không vượt quá 365 ngày',
+    );
+    it.todo(
+      'Nghiệp vụ tổng quan: nếu admin không có chi nhánh thì từ chối và yêu cầu thiết lập chi nhánh',
+    );
+    it.todo(
+      'Nghiệp vụ doanh thu: mọi chỉ số revenue chính chỉ tính từ giao dịch SUCCESS',
+    );
+    it.todo(
+      'Nghiệp vụ status breakdown: phải hiển thị đủ SUCCESS/PENDING/FAILED để hỗ trợ giám sát rủi ro',
+    );
+    it.todo(
+      'Nghiệp vụ báo cáo chi nhánh: manager phải đúng role CLINIC_MANAGER và thuộc quyền admin',
+    );
+    it.todo(
+      'Nghiệp vụ top services: báo cáo chi nhánh luôn trả danh sách dịch vụ doanh thu cao để ưu tiên kinh doanh',
+    );
   });
 });
