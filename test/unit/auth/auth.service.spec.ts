@@ -110,7 +110,7 @@ describe('AuthService', () => {
     describe('login', () => {
         describe('Case: Successful Login (Happy Paths)', () => {
             it('should allow DOCTOR login when root admin subscription is ACTIVE', async () => {
-                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 // Mock DOCTOR account
                 const mockDoctor = createMockAccount({
@@ -142,7 +142,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login when subscription is NON_RENEWING', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -163,7 +163,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_MANAGER login when subscription is ACTIVE', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     _id: 'manager-123',
@@ -184,7 +184,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_STAFF login when subscription is ACTIVE', async () => {
-                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+                const loginDto = { email: 'staff@clinic.com', password: 'password123', role: AccountRole.CLINIC_STAFF };
 
                 const mockStaff = createMockAccount({
                     _id: 'staff-123',
@@ -205,7 +205,7 @@ describe('AuthService', () => {
             });
 
             it('should allow PATIENT login (bypasses subscription check)', async () => {
-                const loginDto = { email: 'patient@example.com', password: 'password123' };
+                const loginDto = { email: 'patient@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockPatient = createMockAccount({
                     _id: 'patient-123',
@@ -226,7 +226,7 @@ describe('AuthService', () => {
             });
 
             it('should allow ADMIN login (bypasses subscription check)', async () => {
-                const loginDto = { email: 'admin@system.com', password: 'password123' };
+                const loginDto = { email: 'admin@system.com', password: 'password123', role: AccountRole.ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-system-123',
@@ -247,7 +247,7 @@ describe('AuthService', () => {
             });
 
             it('should return user data with generalAccount information', async () => {
-                const loginDto = { email: 'user@example.com', password: 'password123' };
+                const loginDto = { email: 'user@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
 
@@ -260,7 +260,7 @@ describe('AuthService', () => {
             });
 
             it('should mark user as online after successful login', async () => {
-                const loginDto = { email: 'user@example.com', password: 'password123' };
+                const loginDto = { email: 'user@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
 
@@ -279,7 +279,7 @@ describe('AuthService', () => {
 
             // CLINIC_ADMIN Tests: Allow login even if subscription is EXPIRED
             it('should allow CLINIC_ADMIN login when subscription is EXPIRED', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -299,7 +299,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login when subscription is PENDING_SEPAY_SETUP', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -319,7 +319,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login when subscription is PENDING_MANAGER_SETUP', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -338,7 +338,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login when subscription is PENDING_LEGAL_SETUP', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -357,7 +357,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login when subscription is PENDING_APPROVAL', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -376,7 +376,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login when subscription is PENDING_PAYMENT', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -396,7 +396,7 @@ describe('AuthService', () => {
 
             // CLINIC_MANAGER Tests: Block if parent subscription not ACTIVE/NON_RENEWING OR legal docs not APPROVED
             it('should block CLINIC_MANAGER when parent subscription is EXPIRED', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     role: AccountRole.CLINIC_MANAGER,
@@ -416,7 +416,7 @@ describe('AuthService', () => {
             });
 
             it('should block CLINIC_MANAGER when parent subscription is PENDING_APPROVAL', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     role: AccountRole.CLINIC_MANAGER,
@@ -433,7 +433,7 @@ describe('AuthService', () => {
             });
 
             it('should block CLINIC_MANAGER when legal documents are PENDING_REVIEW', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     role: AccountRole.CLINIC_MANAGER,
@@ -450,7 +450,7 @@ describe('AuthService', () => {
             });
 
             it('should block CLINIC_MANAGER when legal documents are NOT_SUBMITTED', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     role: AccountRole.CLINIC_MANAGER,
@@ -467,7 +467,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_MANAGER login when parent subscription is ACTIVE and legal docs are APPROVED', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     role: AccountRole.CLINIC_MANAGER,
@@ -487,7 +487,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_MANAGER login when parent subscription is NON_RENEWING and legal docs are APPROVED', async () => {
-                const loginDto = { email: 'manager@clinic.com', password: 'password123' };
+                const loginDto = { email: 'manager@clinic.com', password: 'password123', role: AccountRole.CLINIC_MANAGER };
 
                 const mockManager = createMockAccount({
                     role: AccountRole.CLINIC_MANAGER,
@@ -507,7 +507,7 @@ describe('AuthService', () => {
 
             // CLINIC_STAFF and DOCTOR tests
             it('should block CLINIC_STAFF when subscription is PENDING_PAYMENT', async () => {
-                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+                const loginDto = { email: 'staff@clinic.com', password: 'password123', role: AccountRole.CLINIC_STAFF };
 
                 const mockStaff = createMockAccount({
                     role: AccountRole.CLINIC_STAFF,
@@ -524,7 +524,7 @@ describe('AuthService', () => {
             });
 
             it('should block DOCTOR when subscription is EXPIRED', async () => {
-                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockDoctor = createMockAccount({
                     role: AccountRole.DOCTOR,
@@ -541,7 +541,7 @@ describe('AuthService', () => {
             });
 
             it('should block login when subscription not found', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     _id: 'admin-123',
@@ -561,7 +561,7 @@ describe('AuthService', () => {
             });
 
             it('should block CLINIC_STAFF when parent hierarchy is invalid', async () => {
-                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+                const loginDto = { email: 'staff@clinic.com', password: 'password123', role: AccountRole.CLINIC_STAFF };
 
                 const mockStaff = createMockAccount({
                     role: AccountRole.CLINIC_STAFF,
@@ -579,7 +579,7 @@ describe('AuthService', () => {
             });
 
             it('should block DOCTOR when no parent account found', async () => {
-                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockDoctor = createMockAccount({
                     role: AccountRole.DOCTOR,
@@ -599,7 +599,7 @@ describe('AuthService', () => {
 
         describe('Case: Parent Manager Status Validation', () => {
             it('should block CLINIC_STAFF when parent manager is MANAGER_DISABLED', async () => {
-                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+                const loginDto = { email: 'staff@clinic.com', password: 'password123', role: AccountRole.CLINIC_STAFF };
 
                 const mockStaff = createMockAccount({
                     role: AccountRole.CLINIC_STAFF,
@@ -626,7 +626,7 @@ describe('AuthService', () => {
             });
 
             it('should block CLINIC_STAFF when parent manager is PENDING_APPROVAL', async () => {
-                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+                const loginDto = { email: 'staff@clinic.com', password: 'password123', role: AccountRole.CLINIC_STAFF };
 
                 const mockStaff = createMockAccount({
                     role: AccountRole.CLINIC_STAFF,
@@ -652,7 +652,7 @@ describe('AuthService', () => {
             });
 
             it('should block DOCTOR when parent manager is MANAGER_DISABLED', async () => {
-                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockDoctor = createMockAccount({
                     role: AccountRole.DOCTOR,
@@ -678,7 +678,7 @@ describe('AuthService', () => {
             });
 
             it('should block DOCTOR when parent manager is PENDING_APPROVAL', async () => {
-                const loginDto = { email: 'doctor@clinic.com', password: 'password123' };
+                const loginDto = { email: 'doctor@clinic.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockDoctor = createMockAccount({
                     role: AccountRole.DOCTOR,
@@ -703,7 +703,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_STAFF login when parent manager is ACTIVE', async () => {
-                const loginDto = { email: 'staff@clinic.com', password: 'password123' };
+                const loginDto = { email: 'staff@clinic.com', password: 'password123', role: AccountRole.CLINIC_STAFF };
 
                 const mockStaff = createMockAccount({
                     role: AccountRole.CLINIC_STAFF,
@@ -728,7 +728,7 @@ describe('AuthService', () => {
             });
 
             it('should NOT check parent status for CLINIC_ADMIN role', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     role: AccountRole.CLINIC_ADMIN,
@@ -749,7 +749,7 @@ describe('AuthService', () => {
             });
 
             it('should NOT check parent status for PATIENT role', async () => {
-                const loginDto = { email: 'patient@example.com', password: 'password123' };
+                const loginDto = { email: 'patient@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockPatient = createMockAccount({
                     role: AccountRole.PATIENT,
@@ -772,7 +772,7 @@ describe('AuthService', () => {
 
         describe('Case: Standard Auth Failures', () => {
             it('should throw UnauthorizedException when password is incorrect', async () => {
-                const loginDto = { email: 'user@example.com', password: 'wrongpassword' };
+                const loginDto = { email: 'user@example.com', password: 'wrongpassword', role: AccountRole.DOCTOR };
 
                 accountsService.findByEmail.mockResolvedValue(createMockAccount());
                 jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(false));
@@ -782,7 +782,7 @@ describe('AuthService', () => {
             });
 
             it('should throw UnauthorizedException when user not found', async () => {
-                const loginDto = { email: 'nonexistent@example.com', password: 'password123' };
+                const loginDto = { email: 'nonexistent@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 accountsService.findByEmail.mockResolvedValue(null);
 
@@ -791,7 +791,7 @@ describe('AuthService', () => {
             });
 
             it('should validate account access before subscription check', async () => {
-                const loginDto = { email: 'banned@example.com', password: 'password123' };
+                const loginDto = { email: 'banned@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockBannedUser = createMockAccount({
                     status: AccountStatus.BAN,
@@ -812,7 +812,7 @@ describe('AuthService', () => {
             });
 
             it('should throw UnauthorizedException when account status is DELETED', async () => {
-                const loginDto = { email: 'deleted@example.com', password: 'password123' };
+                const loginDto = { email: 'deleted@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockDeletedUser = createMockAccount({
                     status: AccountStatus.DELETED,
@@ -836,7 +836,7 @@ describe('AuthService', () => {
             });
 
             it('should allow UNVERIFIED user to login and return access token', async () => {
-                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+                const loginDto = { email: 'unverified@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockUnverifiedUser = createMockAccount({
                     _id: 'unverified-user-123',
@@ -860,7 +860,7 @@ describe('AuthService', () => {
             });
 
             it('should return warning message for UNVERIFIED status', async () => {
-                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+                const loginDto = { email: 'unverified@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockUnverifiedUser = createMockAccount({
                     status: AccountStatus.UNVERIFIED,
@@ -876,7 +876,7 @@ describe('AuthService', () => {
             });
 
             it('should return standard message for ACTIVE status', async () => {
-                const loginDto = { email: 'active@example.com', password: 'password123' };
+                const loginDto = { email: 'active@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockActiveUser = createMockAccount({
                     status: AccountStatus.ACTIVE,
@@ -892,7 +892,7 @@ describe('AuthService', () => {
             });
 
             it('should call validateClinicSubscription for UNVERIFIED clinic users', async () => {
-                const loginDto = { email: 'unverified-doctor@clinic.com', password: 'password123' };
+                const loginDto = { email: 'unverified-doctor@clinic.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockUnverifiedDoctor = createMockAccount({
                     status: AccountStatus.UNVERIFIED,
@@ -910,7 +910,7 @@ describe('AuthService', () => {
             });
 
             it('should mark UNVERIFIED user as online after login', async () => {
-                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+                const loginDto = { email: 'unverified@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockUnverifiedUser = createMockAccount({
                     _id: 'unverified-user-123',
@@ -927,7 +927,7 @@ describe('AuthService', () => {
             });
 
             it('should generate JWT with correct payload for UNVERIFIED user', async () => {
-                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+                const loginDto = { email: 'unverified@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockUnverifiedUser = createMockAccount({
                     _id: 'unverified-456',
@@ -951,7 +951,7 @@ describe('AuthService', () => {
             });
 
             it('should fetch general account data for UNVERIFIED user', async () => {
-                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+                const loginDto = { email: 'unverified@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockUnverifiedUser = createMockAccount({
                     _id: 'unverified-789',
@@ -968,7 +968,7 @@ describe('AuthService', () => {
             });
 
             it('should validate account access (BAN/DELETED check) for UNVERIFIED users', async () => {
-                const loginDto = { email: 'unverified@example.com', password: 'password123' };
+                const loginDto = { email: 'unverified@example.com', password: 'password123', role: AccountRole.PATIENT };
 
                 const mockUnverifiedUser = createMockAccount({
                     status: AccountStatus.UNVERIFIED,
@@ -990,7 +990,7 @@ describe('AuthService', () => {
             });
 
             it('should generate JWT token with correct payload', async () => {
-                const loginDto = { email: 'user@example.com', password: 'password123' };
+                const loginDto = { email: 'user@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 const mockUser = createMockAccount({
                     _id: 'user-456',
@@ -1013,7 +1013,7 @@ describe('AuthService', () => {
             });
 
             it('should return accessToken in response', async () => {
-                const loginDto = { email: 'user@example.com', password: 'password123' };
+                const loginDto = { email: 'user@example.com', password: 'password123', role: AccountRole.DOCTOR };
 
                 jwtService.sign.mockReturnValue('custom-token-xyz');
 
@@ -1031,7 +1031,7 @@ describe('AuthService', () => {
             });
 
             it('should execute complete login flow in correct order', async () => {
-                const loginDto = { email: 'user@example.com', password: 'password123' };
+                const loginDto = { email: 'user@example.com', password: 'password123', role: AccountRole.DOCTOR };
                 const callOrder: string[] = [];
 
                 accountsService.findByEmail.mockImplementation(async () => {
@@ -1082,7 +1082,7 @@ describe('AuthService', () => {
             });
 
             it('should not call subscription validation if password is wrong', async () => {
-                const loginDto = { email: 'user@example.com', password: 'wrongpassword' };
+                const loginDto = { email: 'user@example.com', password: 'wrongpassword', role: AccountRole.DOCTOR };
 
                 accountsService.findByEmail.mockResolvedValue(createMockAccount());
                 jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(false));
@@ -1095,7 +1095,7 @@ describe('AuthService', () => {
             });
 
             it('should allow CLINIC_ADMIN login even if subscription is EXPIRED', async () => {
-                const loginDto = { email: 'admin@clinic.com', password: 'password123' };
+                const loginDto = { email: 'admin@clinic.com', password: 'password123', role: AccountRole.CLINIC_ADMIN };
 
                 const mockAdmin = createMockAccount({
                     role: AccountRole.CLINIC_ADMIN,

@@ -81,6 +81,24 @@ export interface AppointmentReminderContext {
   }>;
 }
 
+/**
+ * Context for appointment rescheduled email
+ */
+export interface AppointmentRescheduledContext {
+  patientName: string;
+  clinicName: string;
+  clinicAddress: string;
+  clinicPhone: string;
+  appointmentDate: string; // Formatted date
+  appointmentHour: string; // Formatted time
+  doctorName: string;
+  doctorSpecialization?: string;
+  services: Array<{
+    serviceName: string;
+    serviceType: string;
+  }>;
+}
+
 type TemplateContext = Record<string, unknown>;
 
 type HandlebarsCompiler = {
@@ -368,6 +386,7 @@ export class MailerService {
     email: string,
     code: string,
     firstName?: string,
+    role?: string,
   ): Promise<void> {
     const transporter = this.mailTransport();
     const displayName = firstName || 'User';
@@ -379,7 +398,11 @@ export class MailerService {
       },
       to: email,
       subject: 'Password Reset Request - Medicare',
-      html: this.renderTemplate('auth/password-reset-code.hbs', { displayName, code })
+      html: this.renderTemplate('auth/password-reset-code.hbs', {
+        displayName,
+        code,
+        role,
+      })
     };
 
     try {
@@ -1104,6 +1127,33 @@ export class MailerService {
     } catch (error) {
       console.error('❌ Failed to send account notification email:', error);
       throw new Error('Failed to send account notification email');
+    }
+  }
+
+  /**
+   * Send Appointment Rescheduled Email
+   * Notifies patient that their appointment has been rescheduled by clinic staff
+   */
+  async sendAppointmentRescheduledEmail(
+    email: string,
+    context: AppointmentRescheduledContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '📅 Appointment Rescheduled - Medicare',
+      html: this.renderTemplate('appointment/appointment-rescheduled.hbs', { ...context })
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Appointment rescheduled email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send rescheduled email to ${email}:`, error);
     }
   }
 }

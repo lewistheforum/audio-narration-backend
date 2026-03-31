@@ -17,6 +17,7 @@ import {
 } from '../dto';
 import { LegalDocumentVerificationStatus } from 'src/modules/accounts/enums';
 import { getVietnamTimestamp } from '../../../common/utils/date.util';
+import { decrypt } from '../../../common/utils/encryption.util';
 
 /**
  * Admin Registration Repository
@@ -271,10 +272,21 @@ export class AdminRegistrationRepository {
       .offset(skip)
       .limit(limit);
 
-    const [data, total] = await Promise.all([
+    const [rawData, total] = await Promise.all([
       dataQueryBuilder.getRawMany(),
       baseQueryBuilder.clone().getCount(),
     ]);
+
+    // Decrypt encrypted fields after getRawMany
+    const data = rawData.map((item) => ({
+      ...item,
+      operatingLicense: item.operatingLicense
+        ? decrypt(item.operatingLicense)
+        : item.operatingLicense,
+      businessLicense: item.businessLicense
+        ? decrypt(item.businessLicense)
+        : item.businessLicense,
+    }));
 
     return [data, total];
   }

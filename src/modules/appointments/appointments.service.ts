@@ -7,6 +7,7 @@ import {
   ConflictException,
   InternalServerErrorException,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { TransactionsService } from '../transactions/transactions.service';
 import { DataSource, IsNull } from 'typeorm';
@@ -120,6 +121,7 @@ import { BookingSessionService } from './booking-session.service';
 import {
   MailerService,
   AppointmentReminderContext,
+  AppointmentRescheduledContext,
 } from '../mailer/mailer.service';
 import { AppointmentWebhookService } from './appointment-webhook.service';
 import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
@@ -142,6 +144,15 @@ import { SocketGatewayService } from '../socket-gateway/socket-gateway.service';
 export class AppointmentsService {
   private readonly MIN_ADVANCE_BOOKING_MESSAGE =
     'Appointments must be booked at least 1 day in advance';
+  private readonly APPOINTMENT_CONFLICT_MESSAGE =
+    'You already have a confirmed appointment at this time. Please select a different time slot.';
+  private readonly RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE =
+    'You already have a confirmed appointment at this new time. Please select a different time slot.';
+  private readonly logger = new Logger(AppointmentsService.name);
+  private readonly APPOINTMENT_CONFLICT_EXCLUDED_STATUSES = [
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.ABSENT,
+  ];
 
   constructor(
     private readonly dataSource: DataSource,
@@ -203,11 +214,86 @@ export class AppointmentsService {
       .andWhere('a.appointment_date = :appointmentDate', {
         appointmentDate,
       })
-      .andWhere('a.status IN (:...activeStatuses)', { activeStatuses })
+      .andWhere('a.status = ANY(:activeStatuses)', { activeStatuses })
       .andWhere('a.deleted_at IS NULL')
       .getRawOne();
 
     return parseInt(String(appointmentCount?.count || 0), 10);
+  }
+
+  private async checkPatientAppointmentOverlap(
+    manager: any,
+    patientId: string,
+    requestedStartTime: Date,
+    excludeAppointmentId?: string,
+  ): Promise<void> {
+    const query = manager
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .select('appointment._id')
+      .where('appointment.patientId = :patientId', { patientId })
+      .andWhere('appointment.appointmentHour = :requestedStartTime', {
+        requestedStartTime,
+      })
+      .andWhere('NOT (appointment.status = ANY(:excludedStatuses))', {
+        excludedStatuses: this.APPOINTMENT_CONFLICT_EXCLUDED_STATUSES,
+      })
+      .andWhere('appointment.deletedAt IS NULL');
+
+    if (excludeAppointmentId) {
+      query.andWhere('appointment._id != :excludeAppointmentId', {
+        excludeAppointmentId,
+      });
+    }
+
+    const existingAppointment = await query.limit(1).getOne();
+
+    if (existingAppointment) {
+      throw new ConflictException(
+        excludeAppointmentId
+          ? this.RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE
+          : this.APPOINTMENT_CONFLICT_MESSAGE,
+      );
+    }
+  }
+
+  private async resolveSessionAppointmentStartTime(
+    session: any,
+    dateString?: string,
+  ): Promise<Date> {
+    if (session.extraHour) {
+      return this.parseBookingExtraHour(session.extraHour);
+    }
+
+    if (session.appointmentHour) {
+      return this.parseBookingExtraHour(session.appointmentHour);
+    }
+
+    if (!session.clinicShiftHourId || !session.appointmentDate) {
+      throw new BadRequestException(
+        'The appointment start time could not be determined from the booking session.',
+      );
+    }
+
+    const shiftHour = await this.dataSource
+      .getRepository(ClinicShiftHour)
+      .findOne({
+        where: { _id: session.clinicShiftHourId },
+        select: ['_id', 'startHour'],
+      });
+
+    if (!shiftHour) {
+      throw new NotFoundException('Time slot not found');
+    }
+
+    const normalizedDate =
+      dateString ||
+      getDateString(getStartOfVietnamDate(session.appointmentDate));
+
+    return this.buildVietnamAppointmentHour(
+      normalizedDate,
+      shiftHour.startHour,
+    );
   }
 
   private normalizeMoney(value: number): number {
@@ -1284,6 +1370,13 @@ export class AppointmentsService {
         newShiftHour.start_hour,
       );
 
+      await this.checkPatientAppointmentOverlap(
+        queryRunner.manager,
+        appointment.patientId,
+        appointmentHour,
+        appointment._id,
+      );
+
       // Update appointment with new doctor, date, shift, and hour
       await queryRunner.manager
         .createQueryBuilder()
@@ -1379,6 +1472,13 @@ export class AppointmentsService {
         'This time slot is already booked. Please choose another time.',
       );
     }
+
+    await this.checkPatientAppointmentOverlap(
+      this.dataSource.manager,
+      appointment.patientId,
+      newExtraHour,
+      appointment._id,
+    );
 
     // Update appointment
     appointment.appointmentDate = newAppointmentDate;
@@ -1616,9 +1716,15 @@ export class AppointmentsService {
           .createQueryBuilder()
           .select('app._id', 'id')
           .from('appointments', 'app')
-          .where('app.clinic_id = :clinicId', { clinicId: appointment.clinicId })
-          .andWhere('app.appointment_date = :appointmentDate', { appointmentDate: newAppointmentDate })
-          .andWhere('app.appointment_hour = :appointmentHour', { appointmentHour: newAppointmentHour })
+          .where('app.clinic_id = :clinicId', {
+            clinicId: appointment.clinicId,
+          })
+          .andWhere('app.appointment_date = :appointmentDate', {
+            appointmentDate: newAppointmentDate,
+          })
+          .andWhere('app.appointment_hour = :appointmentHour', {
+            appointmentHour: newAppointmentHour,
+          })
           .andWhere('app._id != :appointmentId', { appointmentId })
           .andWhere('app.deleted_at IS NULL')
           .andWhere('app.status = ANY(:activeStatuses)', {
@@ -1633,9 +1739,12 @@ export class AppointmentsService {
           });
 
         if (newExtraRoomId) {
-          conflictQuery = conflictQuery.andWhere('app.extra_room_id = :extraRoomId', {
-            extraRoomId: newExtraRoomId,
-          });
+          conflictQuery = conflictQuery.andWhere(
+            'app.extra_room_id = :extraRoomId',
+            {
+              extraRoomId: newExtraRoomId,
+            },
+          );
         } else {
           conflictQuery = conflictQuery.andWhere('app.extra_room_id IS NULL');
         }
@@ -1644,9 +1753,9 @@ export class AppointmentsService {
 
         if (conflictingAppointment) {
           throw new ConflictException(
-            newExtraRoomId 
+            newExtraRoomId
               ? 'This extra room is already booked for the selected extra hour.'
-              : 'The new time slot is already booked. Please choose a different time.'
+              : 'The new time slot is already booked. Please choose a different time.',
           );
         }
       }
@@ -1682,6 +1791,60 @@ export class AppointmentsService {
     // Load services and clinic rooms
     const { services, clinicRooms } =
       await this.loadAppointmentServicesAndRooms(updatedAppointment);
+
+    // Send email notification to patient
+    try {
+      const fullAppointment =
+        await this.appointmentRepository.findByIdWithCompleteDetails(
+          updatedAppointment._id,
+        );
+
+      if (
+        fullAppointment &&
+        fullAppointment.patient &&
+        fullAppointment.patient.email
+      ) {
+        const context: AppointmentRescheduledContext = {
+          patientName:
+            fullAppointment.patient.generalAccount?.fullName ||
+            fullAppointment.patient.username,
+          clinicName:
+            fullAppointment.clinic?.clinicAdminInformation?.clinicName ||
+            fullAppointment.clinic?.clinicManagerInformation
+              ?.clinicBranchName ||
+            'Medicare Clinic',
+          clinicAddress: fullAppointment.clinic?.address
+            ? `${fullAppointment.clinic.address.address}, ${fullAppointment.clinic.address.wardName}, ${fullAppointment.clinic.address.districtName}, ${fullAppointment.clinic.address.provinceName}`
+            : 'Clinic Address',
+          clinicPhone:
+            fullAppointment.clinic?.clinicAdminInformation?.clinicPhone ||
+            fullAppointment.clinic?.phone ||
+            'Hotline',
+          appointmentDate: formatToDateOnly(fullAppointment.appointmentDate),
+          appointmentHour: formatToTimeOnly(fullAppointment.appointmentHour),
+          doctorName:
+            fullAppointment.doctor?.generalAccount?.fullName ||
+            fullAppointment.doctor?.doctorInformation?.fullName ||
+            'Doctor',
+          doctorSpecialization:
+            fullAppointment.doctor?.doctorInformation?.academicDegree,
+          services: services.map((s) => ({
+            serviceName: s.serviceName,
+            serviceType: s.serviceType,
+          })),
+        };
+
+        this.mailerService.sendAppointmentRescheduledEmail(
+          fullAppointment.patient.email,
+          context,
+        );
+      }
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to send rescheduling email for appointment ${updatedAppointment._id}:`,
+        emailError,
+      );
+    }
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -3368,7 +3531,8 @@ export class AppointmentsService {
       (pkg) => pkg.status === AppointmentPackageStatus.PENDING_PAYMENT,
     );
 
-    const allPackagesPaid = pendingPackages.length === 0 && paidPackages.length > 0;
+    const allPackagesPaid =
+      pendingPackages.length === 0 && paidPackages.length > 0;
     const hasUnpaidPackages = pendingPackages.length > 0;
     const hasPaidPackages = paidPackages.length > 0;
 
@@ -3428,12 +3592,14 @@ export class AppointmentsService {
 
     // 10. Get prescription info
     // Use cached result from step 5 if available (hasConsultationErm), otherwise query now
-    const ePrescription: EPrescription | null = cachedEPrescription ?? await this.dataSource
-      .getRepository(EPrescription)
-      .createQueryBuilder('ep')
-      .where('ep.appointment_id = :appointmentId', { appointmentId })
-      .andWhere('ep.deleted_at IS NULL')
-      .getOne();
+    const ePrescription: EPrescription | null =
+      cachedEPrescription ??
+      (await this.dataSource
+        .getRepository(EPrescription)
+        .createQueryBuilder('ep')
+        .where('ep.appointment_id = :appointmentId', { appointmentId })
+        .andWhere('ep.deleted_at IS NULL')
+        .getOne());
 
     // 11. Build ERMs summary
     const ermsSummary = serviceAppointments
@@ -4021,7 +4187,6 @@ export class AppointmentsService {
     sessionId: string,
     patientId: string,
   ): Promise<any> {
-
     // ========================================================================
     // STEP 1: RETRIEVE AND VALIDATE SESSION
     // ========================================================================
@@ -4104,6 +4269,12 @@ export class AppointmentsService {
         throw new BadRequestException('extraHour must be in the future');
       }
 
+      await this.checkPatientAppointmentOverlap(
+        this.dataSource.manager,
+        patientId,
+        extraHourDate,
+      );
+
       // Out-of-hours validation passed, now process it
       if (session.paymentMethod === 'cod') {
         return await this.createAppointmentOutOfHours(
@@ -4183,6 +4354,17 @@ export class AppointmentsService {
           'Appointment date cannot be more than 60 days in the future',
         );
       }
+
+      const requestedStartTime = await this.resolveSessionAppointmentStartTime(
+        session,
+        dateString,
+      );
+
+      await this.checkPatientAppointmentOverlap(
+        this.dataSource.manager,
+        patientId,
+        requestedStartTime,
+      );
 
       // ========================================================================
       // STEP 3: BRANCH BASED ON BOOKING OPTION & PAYMENT METHOD
@@ -4271,7 +4453,6 @@ export class AppointmentsService {
     session: any,
     dateString: string,
   ): Promise<any> {
-
     let result: any;
 
     // Execute transaction with SERIALIZABLE isolation level
@@ -4396,26 +4577,11 @@ export class AppointmentsService {
 
           // === STEP 5: Check for Duplicate Appointments ===
           const appointmentRepo = manager.getRepository('appointments');
-          const existingAppointment = await manager
-            .createQueryBuilder()
-            .select('a')
-            .from('appointments', 'a')
-            .where('a.patient_id = :patientId', { patientId })
-            .andWhere('a.appointment_date = :dateString', { dateString })
-            .andWhere('a.clinic_shift_hour_id = :shiftHourId', {
-              shiftHourId: session.clinicShiftHourId,
-            })
-            .andWhere(
-              "a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS')",
-            )
-            .andWhere('a.deleted_at IS NULL')
-            .getOne();
-
-          if (existingAppointment) {
-            throw new ConflictException(
-              'You already have an appointment at this time',
-            );
-          }
+          await this.checkPatientAppointmentOverlap(
+            manager,
+            patientId,
+            appointmentHour,
+          );
 
           // === STEP 6: Keep static slot limit unchanged ===
           // Capacity is derived dynamically from static limit - booked appointments.
@@ -4808,7 +4974,9 @@ export class AppointmentsService {
       const finalAmount = session.paymentAmount || calculatedTotal;
 
       // 3. Create Appointment
-      const appointmentDateForDB = getStartOfVietnamDate(session.appointmentDate);
+      const appointmentDateForDB = getStartOfVietnamDate(
+        session.appointmentDate,
+      );
       const appointmentHour = slot.startHour
         ? this.buildVietnamAppointmentHour(
             appointmentDateString,
@@ -4817,6 +4985,12 @@ export class AppointmentsService {
         : session.appointmentHour
           ? parseVietnamTime(session.appointmentHour)
           : appointmentDateForDB;
+
+      await this.checkPatientAppointmentOverlap(
+        manager,
+        session.patientId,
+        appointmentHour,
+      );
 
       const appointment = manager.create(Appointment, {
         patientId: session.patientId,
@@ -4955,7 +5129,6 @@ export class AppointmentsService {
     patientId: string,
     session: any,
   ): Promise<any> {
-
     // === STEP 1: Parse extraHour ===
     const extraHourDate = this.parseBookingExtraHour(session.extraHour);
     const appointmentDateString = getDateString(
@@ -4975,7 +5148,6 @@ export class AppointmentsService {
       result = await this.dataSource.transaction(
         'SERIALIZABLE',
         async (manager) => {
-
           // === TIER 2 PREP: Validate ALL Service Configs (multi-service) ===
           // Query clinic_service_config for ALL serviceIds in one batch
           const serviceIds: string[] = session.serviceIds;
@@ -5045,6 +5217,12 @@ export class AppointmentsService {
               'Doctor is not available on this date at this clinic',
             );
           }
+
+          await this.checkPatientAppointmentOverlap(
+            manager,
+            patientId,
+            extraHourDate,
+          );
 
           // === STEP 4: PREVENT DOUBLE BOOKING ===
           // CRITICAL: Check if doctor already has an appointment at this extraHour
@@ -5248,17 +5426,16 @@ export class AppointmentsService {
         'addr.account_id = clinic._id',
       )
       .leftJoin('clinic_service_category', 'cat', 'cat._id = cs.category_id')
-      .leftJoin(
-        'clinics_legal_documents',
-        'cld',
-        'cld.account_id = clinic._id',
-      )
+      .leftJoin('clinics_legal_documents', 'cld', 'cld.account_id = clinic._id')
       .where('csc.is_active = :active', { active: true })
       .andWhere('cs.is_active = :active', { active: true })
       .andWhere('clinic.status = :status', { status: 'ACTIVE' })
-      .andWhere('(cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL)', {
-        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
-      })
+      .andWhere(
+        '(cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL)',
+        {
+          verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+        },
+      )
       .andWhere('csc.deleted_at IS NULL')
       .andWhere('cs.deleted_at IS NULL')
       .andWhere('clinic.deleted_at IS NULL');
@@ -6173,9 +6350,8 @@ export class AppointmentsService {
         }
 
         const serviceAppointments = servicesByPackage.get(pkg.package_id) || [];
-        const amount = this.calculatePackageAmountFromServices(
-          serviceAppointments,
-        );
+        const amount =
+          this.calculatePackageAmountFromServices(serviceAppointments);
 
         packagesByAppointment.get(pkg.appointment_id)!.push({
           _id: pkg.package_id,
@@ -6189,9 +6365,8 @@ export class AppointmentsService {
       appointmentIds.forEach((appointmentId) => {
         const appointmentPackages =
           packagesByAppointment.get(appointmentId) || [];
-        const totalPrice = this.calculateAppointmentTotalFromPackages(
-          appointmentPackages,
-        );
+        const totalPrice =
+          this.calculateAppointmentTotalFromPackages(appointmentPackages);
         const latestPackage =
           appointmentPackages.length > 0
             ? appointmentPackages[appointmentPackages.length - 1]
@@ -6771,11 +6946,7 @@ export class AppointmentsService {
         'cmi',
         'cmi.account_id = clinic._id',
       )
-      .leftJoin(
-        'clinics_legal_documents',
-        'cld',
-        'cld.account_id = clinic._id',
-      )
+      .leftJoin('clinics_legal_documents', 'cld', 'cld.account_id = clinic._id')
       .leftJoin('addresses', 'addr', 'addr.account_id = clinic._id')
       .where('doctor.role = :role', { role: AccountRole.DOCTOR })
       .andWhere('doctor.status = :status', { status: 'ACTIVE' })
@@ -6796,9 +6967,12 @@ export class AppointmentsService {
     }
 
     if (specialization) {
-      doctorsQuery.andWhere('cci.work_specialty_at_clinic ILIKE :specialization', {
-        specialization: `%${specialization}%`,
-      });
+      doctorsQuery.andWhere(
+        'cci.work_specialty_at_clinic ILIKE :specialization',
+        {
+          specialization: `%${specialization}%`,
+        },
+      );
     }
 
     if (clinic_id) {
@@ -6895,8 +7069,16 @@ export class AppointmentsService {
       ])
       .from('accounts', 'branch')
       .innerJoin('accounts', 'parent', 'parent._id = branch.parent_id')
-      .innerJoin('clinic_admin_information', 'cai', 'cai.account_id = parent._id')
-      .innerJoin('clinic_manager_information', 'cmi', 'cmi.account_id = branch._id')
+      .innerJoin(
+        'clinic_admin_information',
+        'cai',
+        'cai.account_id = parent._id',
+      )
+      .innerJoin(
+        'clinic_manager_information',
+        'cmi',
+        'cmi.account_id = branch._id',
+      )
       .leftJoin('employee_schedule', 'es', 'es.clinic_id = branch._id')
       .leftJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
       .leftJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
@@ -6905,7 +7087,11 @@ export class AppointmentsService {
       .leftJoin(
         (qb) =>
           qb
-            .select(['es2.clinic_id AS clinic_id', 'SUM(csh2.limit) AS total_slots', 'COUNT(DISTINCT es2.employee_id) AS doctor_count'])
+            .select([
+              'es2.clinic_id AS clinic_id',
+              'SUM(csh2.limit) AS total_slots',
+              'COUNT(DISTINCT es2.employee_id) AS doctor_count',
+            ])
             .from('employee_schedule', 'es2')
             .innerJoin('clinic_shift', 'cs2', 'cs2._id = es2.clinic_shift_id')
             .innerJoin('clinic_shift_hour', 'csh2', 'csh2.shift_id = cs2._id')
@@ -6929,20 +7115,29 @@ export class AppointmentsService {
         'booked_stats',
         'booked_stats.clinic_id = branch._id',
       )
-      .where('branch.role = :branchRole', { branchRole: AccountRole.CLINIC_MANAGER })
-      .andWhere('branch.status = :branchStatus', { branchStatus: 'ACTIVE' })
-      .andWhere('parent.role = :parentRole', { parentRole: AccountRole.CLINIC_ADMIN })
-      .andWhere('parent.status = :parentStatus', { parentStatus: 'ACTIVE' })
-      .andWhere('(cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL)', {
-        verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+      .where('branch.role = :branchRole', {
+        branchRole: AccountRole.CLINIC_MANAGER,
       })
+      .andWhere('branch.status = :branchStatus', { branchStatus: 'ACTIVE' })
+      .andWhere('parent.role = :parentRole', {
+        parentRole: AccountRole.CLINIC_ADMIN,
+      })
+      .andWhere('parent.status = :parentStatus', { parentStatus: 'ACTIVE' })
+      .andWhere(
+        '(cld.verification_status = :verifiedStatus OR cld.verification_status IS NULL)',
+        {
+          verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
+        },
+      )
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
       .andWhere('csh.limit > 0')
       .andWhere('slot_stats.total_slots IS NOT NULL');
 
     if (working_date) {
-      branchesRaw.andWhere('es.work_date = :workDate', { workDate: working_date });
+      branchesRaw.andWhere('es.work_date = :workDate', {
+        workDate: working_date,
+      });
     }
 
     if (search) {
@@ -7874,19 +8069,26 @@ export class AppointmentsService {
         'cres.employee_schedule_id = es._id',
       )
       .leftJoin('clinic_room', 'cr', 'cr._id = cres.clinic_room_id')
-      .leftJoin('appointments', 'a', `
+      .leftJoin(
+        'appointments',
+        'a',
+        `
         a.clinic_shift_hour_id = csh._id 
         AND a.appointment_date = es.work_date
         AND a.status IN (:...validAppointmentStatuses)
         AND a.deleted_at IS NULL
-      `, { validAppointmentStatuses })
+      `,
+        { validAppointmentStatuses },
+      )
       .where('es.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('es.deleted_at IS NULL')
       .andWhere('csh.deleted_at IS NULL')
       .andWhere('csh.limit > 0')
       .andWhere('doctor.role = :doctorRole', { doctorRole: 'DOCTOR' })
       .andWhere('doctor.status = :doctorStatus', { doctorStatus: 'ACTIVE' })
-      .groupBy('es._id, es.work_date, es.week_day, cs.shift, csh._id, doctor._id, di.full_name, doctor.username, di.position, csh.start_hour, csh.end_hour, csh.limit, cr.room_name')
+      .groupBy(
+        'es._id, es.work_date, es.week_day, cs.shift, csh._id, doctor._id, di.full_name, doctor.username, di.position, csh.start_hour, csh.end_hour, csh.limit, cr.room_name',
+      )
       .orderBy('es.work_date', 'ASC')
       .addOrderBy('cs.shift', 'ASC')
       .addOrderBy('csh.start_hour', 'ASC');
