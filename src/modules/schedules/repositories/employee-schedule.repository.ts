@@ -4,6 +4,7 @@ import { EmployeeSchedule } from '../entities/employee-schedule.entity';
 import { ClinicShiftHour } from '../entities/clinic-shift-hour.entity';
 import { WeekDay } from '../enums';
 import { getEndOfMonth, getStartOfMonth } from 'src/common/utils/date.util';
+import { AccountRole } from '../../accounts/enums';
 
 @Injectable()
 export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
@@ -550,12 +551,30 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
    * @param excludeId - (Optional) ID of a schedule to exclude
    * @returns Matching EmployeeSchedule or null
    */
+  /**
+   * Find Room Conflict
+   *
+   * Checks if a room is already assigned to another doctor on a specific date during overlapping hours.
+   * According to business rules: One room can only host one doctor, but multiple staff members.
+   *
+   * @param roomId - ID of the room
+   * @param workDate - Date of work
+   * @param clinicShiftId - ID of the shift (to get its base hours)
+   * @param asRole - Role of the employee being scheduled
+   * @param excludeId - (Optional) ID of a schedule to exclude
+   * @returns Matching EmployeeSchedule or null
+   */
   async findRoomConflict(
     roomId: string,
     workDate: Date,
     clinicShiftId: string,
+    asRole: AccountRole,
     excludeId?: string,
   ): Promise<EmployeeSchedule | null> {
+    // Business rule: Multiple staff members can share a room.
+    // Room occupancy restriction only applies to DOCTORs.
+    if (asRole !== AccountRole.DOCTOR) return null;
+
     // 1. Get the range for requested shift
     const shiftHours = await this.dataSource
       .getRepository(ClinicShiftHour)
@@ -570,13 +589,16 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     const lastHour = shiftHours[shiftHours.length - 1].endHour;
 
     // 2. Query for ANY existing schedule on same date/room whose hours overlap
+    // AND the existing employee is also a DOCTOR (Room rule: only one doctor)
     const queryBuilder = this.createQueryBuilder('schedule')
       .innerJoin('schedule.rooms', 'room')
       .innerJoin('schedule.clinicShift', 'shift')
       .innerJoin('shift.hours', 'existingHour')
+      .innerJoin('schedule.employee', 'employee')
       .where('room._id = :roomId', { roomId })
       .andWhere('schedule.workDate = :workDate', { workDate })
       .andWhere('schedule.deletedAt IS NULL')
+      .andWhere('employee.role = :doctorRole', { doctorRole: AccountRole.DOCTOR })
       .andWhere(
         '(existingHour.startHour < :lastHour AND existingHour.endHour > :firstHour)',
         { firstHour, lastHour },
