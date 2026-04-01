@@ -50,7 +50,7 @@ export class SchedulesService {
     @InjectRepository(ClinicStaffInformation)
     private readonly clinicStaffRepository: Repository<ClinicStaffInformation>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Get Clinic Employees (Doctors & Staff)
@@ -159,10 +159,138 @@ export class SchedulesService {
           emp.role === AccountRole.DOCTOR
             ? doctorInfo?.profilePicture
             : staffInfo?.profilePicture ||
-              generalAccount?.profilePicture ||
-              null,
+            generalAccount?.profilePicture ||
+            null,
       };
     });
+
+    if (search) {
+      const searchLower = search.toLowerCase();
+      results = results.filter(
+        (e) =>
+          (e.name && e.name.toLowerCase().includes(searchLower)) ||
+          (e.username && e.username.toLowerCase().includes(searchLower)),
+      );
+    }
+
+    return results;
+  }
+
+  /**
+   * Get Clinic Employees (Legal Docs Required for Doctors)
+   *
+   * Similar to getEmployees but filters Doctors to only include those who have
+   * provided all required legal documents.
+   */
+  async getEmployeesLegal(user: any, search?: string) {
+    const clinicId = await this.resolveClinicId(user);
+    if (!clinicId)
+      return [];
+
+    let targetManagerId: string;
+
+    const manager = await this.accountRepository.findOne({
+      where: {
+        parentId: clinicId,
+        role: AccountRole.CLINIC_MANAGER,
+      },
+    });
+
+    if (manager) {
+      targetManagerId = manager._id;
+    } else {
+      const acc = await this.accountRepository.findOne({
+        where: { _id: clinicId },
+      });
+      if (acc && acc.role === AccountRole.CLINIC_MANAGER) {
+        targetManagerId = clinicId;
+      } else {
+        return [];
+      }
+    }
+
+    const employees = await this.accountRepository
+      .createQueryBuilder('account')
+      .select(['account._id', 'account.username', 'account.role'])
+      .where('account.parent_id = :parentId', { parentId: targetManagerId })
+      .andWhere('account.role = ANY(:roles)', {
+        roles: [AccountRole.DOCTOR, AccountRole.CLINIC_STAFF],
+      })
+      .getMany();
+
+    if (!employees.length)
+      return [];
+
+    const employeeIds = employees.map((e) => e._id);
+    const [doctorInfos, generalAccounts, staffInfos] = await Promise.all([
+      this.doctorInfoRepository
+        .createQueryBuilder('di')
+        .where('di.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+      this.generalAccountRepository
+        .createQueryBuilder('ga')
+        .where('ga.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+      this.clinicStaffRepository
+        .createQueryBuilder('csi')
+        .where('csi.account_id = ANY(:accountIds)', { accountIds: employeeIds })
+        .getMany(),
+    ]);
+
+    const doctorInfoMap = new Map<string, DoctorInformation>();
+    doctorInfos.forEach((info) => {
+      doctorInfoMap.set(info.accountId, info);
+    });
+
+    const generalAccountMap = new Map<string, GeneralAccount>();
+    generalAccounts.forEach((acc) => {
+      generalAccountMap.set(acc.accountId, acc);
+    });
+
+    const staffInfoMap = new Map<string, ClinicStaffInformation>();
+    staffInfos.forEach((info) => {
+      staffInfoMap.set(info.accountId, info);
+    });
+
+    let results = employees.map((emp) => {
+      const doctorInfo = doctorInfoMap.get(emp._id);
+      const generalAccount = generalAccountMap.get(emp._id);
+      const staffInfo = staffInfoMap.get(emp._id);
+
+      // Special Filtering Rule for DOCTOR: Must have all 3 legal docs
+      if (emp.role === AccountRole.DOCTOR) {
+        if (
+          !doctorInfo ||
+          !doctorInfo.medicalLicense ||
+          !doctorInfo.professionalLicense ||
+          !doctorInfo.certificatePracticalTraining
+        ) {
+          return null; // Filter out doctors with incomplete docs
+        }
+      }
+
+      let fullName = emp.username || 'Unknown';
+      if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
+        fullName = doctorInfo.fullName;
+      } else if (emp.role === AccountRole.CLINIC_STAFF && staffInfo?.fullName) {
+        fullName = staffInfo.fullName;
+      } else if (generalAccount?.fullName) {
+        fullName = generalAccount.fullName;
+      }
+
+      return {
+        id: emp._id,
+        name: fullName,
+        role: emp.role,
+        username: emp.username,
+        profilePicture:
+          emp.role === AccountRole.DOCTOR
+            ? doctorInfo?.profilePicture
+            : staffInfo?.profilePicture ||
+            generalAccount?.profilePicture ||
+            null,
+      };
+    }).filter(e => e !== null);
 
     if (search) {
       const searchLower = search.toLowerCase();
@@ -248,12 +376,13 @@ export class SchedulesService {
             continue;
           }
 
-          // Check room conflict in target
+                    // Check room conflict in target
           if (schedule.rooms && schedule.rooms.length > 0) {
             const roomConflict = await this.scheduleRepository.findRoomConflict(
               schedule.rooms[0]._id,
               currentTargetDate,
               schedule.clinicShiftId,
+              schedule.employee?.role,
             );
 
             if (roomConflict) {
@@ -372,12 +501,13 @@ export class SchedulesService {
           );
         }
 
-        // Room Occupancy Check
+                // Room Occupancy Check
         if (roomId) {
           const roomConflict = await this.scheduleRepository.findRoomConflict(
             roomId,
             workDateObj,
             clinicShiftId,
+            employee.role,
           );
 
           if (roomConflict) {
@@ -614,6 +744,7 @@ export class SchedulesService {
     const nowTimeStr = formatToTimeOnly();
 
     return schedules.map((schedule) => {
+
       const scheduleDateStr = formatToDateOnly(schedule.workDate);
       const isPastDate = scheduleDateStr < nowDateStr;
       const isToday = scheduleDateStr === nowDateStr;
@@ -638,6 +769,10 @@ export class SchedulesService {
         fullName = generalAccount.fullName;
       }
 
+      const sortedHours = (schedule.clinicShift?.hours || []).sort((a: any, b: any) =>
+        a.startHour.localeCompare(b.startHour),
+      );
+
       return {
         id: schedule._id,
         workDate: schedule.workDate,
@@ -649,35 +784,26 @@ export class SchedulesService {
             emp?.role === AccountRole.DOCTOR
               ? doctorInfo?.profilePicture
               : staffInfo?.profilePicture ||
-                generalAccount?.profilePicture ||
-                null,
+              generalAccount?.profilePicture ||
+              null,
         },
         shift: {
           id: schedule.clinicShift?._id,
+          shiftId: schedule.clinicShift?.shiftId,
           name: schedule.clinicShift?.shift,
-          hours:
-            schedule.clinicShift?.hours
-              ?.map((hour: any) => {
-                const isPastTime =
-                  isPastDate || (isToday && nowTimeStr > hour.startHour);
-
-                return {
-                  id: hour._id,
-                  startHour: hour.startHour,
-                  endHour: hour.endHour,
-                  limit: hour.limit,
-                  bookedCount: hour.bookedCount || 0,
-                  isFull: (hour.bookedCount || 0) >= hour.limit || isPastTime,
-                };
-              })
-              .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
+          startHour: sortedHours.length > 0 ? sortedHours[0].startHour : null,
+          endHour:
+            sortedHours.length > 0
+              ? sortedHours[sortedHours.length - 1].endHour
+              : null,
+          hours: sortedHours,
         },
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
-                id: schedule.rooms[0]._id,
-                name: schedule.rooms[0].roomName,
-              }
+              id: schedule.rooms[0]._id,
+              name: schedule.rooms[0].roomName,
+            }
             : null,
       };
     });
@@ -698,6 +824,7 @@ export class SchedulesService {
 
     const schedule = await this.scheduleRepository.findOne({
       where: { _id: id },
+      relations: ['rooms', 'employee'],
     });
     if (!schedule) throw new NotFoundException('Schedule not found');
 
@@ -777,7 +904,7 @@ export class SchedulesService {
       }
     }
 
-    // Room Occupancy Check on Update
+        // Room Occupancy Check on Update
     if (roomId || clinicShiftId || workDate) {
       const roomToCheck =
         roomId ||
@@ -785,10 +912,16 @@ export class SchedulesService {
           ? schedule.rooms[0]._id
           : null);
       if (roomToCheck) {
+        // Fetch employee to get role for conflict check
+        const employeeForRole = await this.accountRepository.findOne({
+          where: { _id: schedule.employeeId },
+        });
+
         const roomConflict = await this.scheduleRepository.findRoomConflict(
           roomToCheck,
           schedule.workDate,
           schedule.clinicShiftId,
+          employeeForRole?.role,
           id, // exclude current
         );
         if (roomConflict) {
@@ -1063,69 +1196,83 @@ export class SchedulesService {
       order: { roomName: 'ASC' },
     });
 
-    // Build response with shift hours for each room
-    const roomsWithShiftHours = [];
+    if (rooms.length === 0) {
+      return { rooms: [] };
+    }
 
-    for (const room of rooms) {
-      // Query employee schedules linked to this room
-      const qb = this.dataSource
-        .createQueryBuilder()
-        .select([
-          'es._id',
-          'es.clinic_shift_id',
-          'cs.shift',
-          'csh._id as shift_hour_id',
-          'csh.start_hour',
-          'csh.end_hour',
-          'csh.limit',
-        ])
-        .from('employee_schedule', 'es')
-        .innerJoin(
-          'clinic_room_employee_schedule',
-          'cres',
-          'cres.employee_schedule_id = es._id',
-        )
-        .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
-        .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
-        .where('cres.clinic_room_id = :roomId', { roomId: room._id })
-        .andWhere('es.clinic_id = :clinicId', { clinicId })
-        .andWhere('es.deleted_at IS NULL')
-        .andWhere('cs.deleted_at IS NULL')
-        .andWhere('csh.deleted_at IS NULL');
+    const roomIds = rooms.map((r) => r._id);
 
-      // Filter by date if provided
-      if (date) {
-        qb.andWhere('es.work_date = :workDate', { workDate: date });
+    // Query employee schedules linked to these rooms in ONE batch query
+    const qb = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'cres.clinic_room_id as room_id',
+        'es._id as schedule_id',
+        'es.clinic_shift_id',
+        'cs.shift',
+        'csh._id as shift_hour_id',
+        'csh.start_hour',
+        'csh.end_hour',
+        'csh.limit',
+      ])
+      .from('employee_schedule', 'es')
+      .innerJoin(
+        'clinic_room_employee_schedule',
+        'cres',
+        'cres.employee_schedule_id = es._id',
+      )
+      .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
+      .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
+      .where('cres.clinic_room_id = ANY(:roomIds)', { roomIds })
+      .andWhere('es.clinic_id = :clinicId', { clinicId })
+      .andWhere('es.deleted_at IS NULL')
+      .andWhere('cs.deleted_at IS NULL')
+      .andWhere('csh.deleted_at IS NULL');
+
+    // Filter by date if provided
+    if (date) {
+      qb.andWhere('es.work_date = :workDate', { workDate: date });
+    }
+
+    qb.orderBy('csh.start_hour', 'ASC');
+
+    const allScheduleData = await qb.getRawMany();
+
+    // Group shift hours by room ID in memory
+    const shiftHoursByRoom = new Map<string, Map<string, any>>();
+
+    for (const row of allScheduleData) {
+      const roomId = row.room_id;
+      const shiftHourId = row.shift_hour_id;
+
+      if (!shiftHoursByRoom.has(roomId)) {
+        shiftHoursByRoom.set(roomId, new Map());
       }
 
-      qb.orderBy('csh.start_hour', 'ASC');
-
-      const scheduleData = await qb.getRawMany();
-
-      // Build unique shift hours for this room
-      const shiftHoursMap = new Map();
-      for (const row of scheduleData) {
-        const shiftHourId = row.shift_hour_id;
-        if (!shiftHoursMap.has(shiftHourId)) {
-          shiftHoursMap.set(shiftHourId, {
-            id: shiftHourId,
-            startHour: row.start_hour,
-            endHour: row.end_hour,
-            limit: row.limit,
-            shiftType: row.shift,
-            shiftId: row.clinic_shift_id,
-          });
-        }
+      const roomMap = shiftHoursByRoom.get(roomId)!;
+      if (!roomMap.has(shiftHourId)) {
+        roomMap.set(shiftHourId, {
+          id: shiftHourId,
+          startHour: row.start_hour,
+          endHour: row.end_hour,
+          limit: row.limit,
+          shiftType: row.shift,
+          shiftId: row.clinic_shift_id,
+        });
       }
+    }
 
-      const shiftHours = Array.from(shiftHoursMap.values());
+    // Build the final response structure
+    const roomsWithShiftHours = rooms.map((room) => {
+      const roomMap = shiftHoursByRoom.get(room._id);
+      const shiftHours = roomMap ? Array.from(roomMap.values()) : [];
 
-      roomsWithShiftHours.push({
+      return {
         id: room._id,
         roomName: room.roomName,
         shiftHours,
-      });
-    }
+      };
+    });
 
     return {
       rooms: roomsWithShiftHours,
@@ -1612,9 +1759,9 @@ export class SchedulesService {
           shiftEndTime: '00:00:00', // Will be calculated from slots
           room: scheduleRoom
             ? {
-                roomId: scheduleRoom.room_id,
-                roomName: scheduleRoom.room_name,
-              }
+              roomId: scheduleRoom.room_id,
+              roomName: scheduleRoom.room_name,
+            }
             : null,
           availableSlots: [],
           bookedSlots: [],

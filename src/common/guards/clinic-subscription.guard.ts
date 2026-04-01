@@ -8,29 +8,16 @@ import { Reflector } from '@nestjs/core';
 import { AccountsService } from '../../modules/accounts/accounts.service';
 import { AccountRole } from '../../modules/accounts/enums';
 import { RegistrationStatus } from '../../modules/subscriptions/enums/subscription-status.enum';
-import { ALLOW_EXPIRED_SUBSCRIPTION_KEY } from '../decorators/allow-expired-subscription.decorator';
 
 /**
  * Guard to enforce Hierarchical Subscription Blocking for clinic-related roles.
  *
- * Business Rule: If the root CLINIC_ADMIN's subscription is expired, inactive,
- * or missing, ALL subordinate accounts (CLINIC_MANAGER, STAFF, DOCTOR) MUST
- * be BLOCKED from accessing protected routes.
- *
- * Hierarchy Resolution:
- * - CLINIC_ADMIN: Direct subscription check
- * - CLINIC_MANAGER: Parent CLINIC_ADMIN subscription
- * - CLINIC_STAFF/DOCTOR: Grandparent CLINIC_ADMIN subscription
- *
- * Blocking Conditions:
- * - No subscription record exists
- * - Subscription status is EXPIRED
- * - Subscription status is PENDING_* (not fully active)
- * - Expiration date has passed
- *
- * Bypass:
- * - CLINIC_ADMIN can access endpoints marked with @AllowExpiredSubscription()
- *   even when subscription is expired (for renewal/payment flows)
+ * Business Rule:
+ * - CLINIC_ADMIN can continue into the system when the clinic subscription is
+ *   expired so they can complete renewal/payment flows.
+ * - CLINIC_MANAGER, CLINIC_STAFF, and DOCTOR remain blocked when the root
+ *   clinic subscription is expired, inactive, or missing.
+ * - CLINIC_ADMIN is still blocked while clinic onboarding is incomplete.
  */
 @Injectable()
 export class ClinicSubscriptionGuard implements CanActivate {
@@ -68,28 +55,28 @@ export class ClinicSubscriptionGuard implements CanActivate {
       );
     }
 
-    // Check if subscription is active or in non-renewing grace period
-    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
-    const isNonRenewing = subscription.subscriptionStatus === RegistrationStatus.NON_RENEWING;
-    const isSubscriptionValid = isActive || isNonRenewing;
-
-    // Check if expiration date is still valid
     const now = new Date();
+    const isActive = subscription.subscriptionStatus === RegistrationStatus.ACTIVE;
+    const isNonRenewing =
+      subscription.subscriptionStatus === RegistrationStatus.NON_RENEWING;
+    const isExpired = subscription.subscriptionStatus === RegistrationStatus.EXPIRED;
     const isExpirationValid = subscription.expirationDate > now;
 
-    // If subscription is NOT valid or has expired
-    if (!isSubscriptionValid || !isExpirationValid) {
-      // Check if endpoint allows expired subscription access
-      const isAllowed = this.reflector.getAllAndOverride<boolean>(
-        ALLOW_EXPIRED_SUBSCRIPTION_KEY,
-        [context.getHandler(), context.getClass()],
-      );
+    if (user.role === AccountRole.CLINIC_ADMIN) {
+      const isPendingOnboarding = !isActive && !isNonRenewing && !isExpired;
 
-      // Only CLINIC_ADMIN can bypass for renewal/payment flows
-      if (isAllowed && user.role === AccountRole.CLINIC_ADMIN) {
-        return true;
+      if (isPendingOnboarding) {
+        throw new ForbiddenException(
+          'Clinic onboarding is not complete yet. Please finish the setup process before accessing the system.',
+        );
       }
 
+      return true;
+    }
+
+    const isSubscriptionValid = isActive || isNonRenewing;
+
+    if (!isSubscriptionValid || !isExpirationValid) {
       throw new ForbiddenException(
         'The clinic\'s subscription has expired. Please contact the clinic administrator to renew the plan.',
       );

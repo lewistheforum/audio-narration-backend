@@ -127,6 +127,7 @@ export class MailerController {
   ): Promise<{ message: string }> {
     const { code, user } = await this.AccountsService.initiatePasswordReset(
       forgotPasswordDto.email,
+      forgotPasswordDto.role,
     );
 
     // Send password reset email
@@ -134,6 +135,7 @@ export class MailerController {
       user.email,
       code,
       user.username,
+      user.role,
     );
 
     return {

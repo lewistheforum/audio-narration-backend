@@ -50,11 +50,9 @@ export const encryptionTransformer: ValueTransformer = {
     try {
       return decrypt(value);
     } catch (error) {
-      // If decryption fails (e.g. legacy data or invalid format), return null
-      // This prevents the application from crashing for existing users
-      // They will need to re-generate their keys
-      console.warn(`EncryptionTransformer: Failed to decrypt value. It may be using legacy format or is corrupted. Resetting to null.`);
-      return null;
+      // If decryption fails (e.g. legacy data or invalid format), return the original value
+      console.warn(`EncryptionTransformer: Failed to decrypt value. Returning original text.`);
+      return value;
     }
   },
 };
@@ -105,8 +103,13 @@ export const dateEncryptionTransformer: ValueTransformer = {
     if (value === null || value === undefined || value === '') {
       return value;
     }
-    const decrypted = decrypt(value);
-    return parseVietnamTime(decrypted);
+    try {
+      const decrypted = decrypt(value);
+      return parseVietnamTime(decrypted);
+    } catch (error) {
+      console.warn(`DateEncryptionTransformer: Failed to decrypt value. Returning original text as Date if possible.`);
+      return parseVietnamTime(value);
+    }
   },
 };
 
@@ -156,7 +159,16 @@ export const jsonbEncryptionTransformer: ValueTransformer = {
     if (value === null || value === undefined || value === '') {
       return value;
     }
-    const decrypted = decrypt(value);
-    return JSON.parse(decrypted);
+    try {
+      const decrypted = decrypt(value);
+      return JSON.parse(decrypted);
+    } catch (error) {
+      console.warn(`JsonbEncryptionTransformer: Failed to decrypt value. Attempting to parse original text.`);
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        return value;
+      }
+    }
   },
 };

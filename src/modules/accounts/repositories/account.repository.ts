@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial, IsNull } from 'typeorm';
+import { Repository, DeepPartial, IsNull, Brackets } from 'typeorm';
 import { Account } from '../entities/accounts.entity';
 import {
   AccountRole,
@@ -168,9 +168,16 @@ export class AccountRepository {
    * const account = await repository.findAccountByEmail('user@example.com');
    * ```
    */
-  async findAccountByEmail(email: string): Promise<Account | null> {
+  async findAccountByEmail(
+    email: string,
+    role?: string,
+  ): Promise<Account | null> {
+    const where: any = { email };
+    if (role) {
+      where.role = role;
+    }
     return this.accountRepository.findOne({
-      where: { email },
+      where,
     });
   }
 
@@ -420,6 +427,7 @@ export class AccountRepository {
     skip: number = 0,
     take: number = 10,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     return this.accountRepository.findAndCount({
       where: { role, status },
       skip,
@@ -511,6 +519,7 @@ export class AccountRepository {
     province?: string,
     specialty?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect(
@@ -537,11 +546,35 @@ export class AccountRepository {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       });
 
-    // Apply search filter (ILIKE on clinicName AND description from parent's clinic admin info)
+    // Apply advanced search filter for clinic admin + branch names + array fields
     if (search) {
       queryBuilder.andWhere(
-        '(clinicAdminInfo.clinicName ILIKE :search OR clinicAdminInfo.description ILIKE :search)',
-        { search: `%${search}%` },
+        new Brackets((qb) => {
+          qb.where('clinicAdminInfo.clinic_name ILIKE :search', {
+            search: `%${search}%`,
+          })
+            .orWhere('clinicManagerInfo.clinic_branch_name ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere(
+              "CONCAT(COALESCE(clinicAdminInfo.clinic_name, ''), ' - ', COALESCE(clinicManagerInfo.clinic_branch_name, '')) ILIKE :search",
+              {
+                search: `%${search}%`,
+              },
+            )
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.specialized_in, '[]'::jsonb))), ', '), '') ILIKE :search",
+              {
+                search: `%${search}%`,
+              },
+            )
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.pros, '[]'::jsonb))), ', '), '') ILIKE :search",
+              {
+                search: `%${search}%`,
+              },
+            );
+        }),
       );
     }
 
@@ -574,24 +607,17 @@ export class AccountRepository {
     province?: string,
     specialty?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
       .leftJoinAndSelect('account.address', 'address')
-      .leftJoinAndSelect('account.subscription', 'subscription')
+      .innerJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
-      .andWhere(
-        'NOT subscription.subscriptionStatus = ANY(:excludedStatuses)',
-        {
-          excludedStatuses: [
-            RegistrationStatus.PENDING_SEPAY_SETUP,
-            RegistrationStatus.PENDING_MANAGER_SETUP,
-            RegistrationStatus.PENDING_LEGAL_SETUP,
-            RegistrationStatus.PENDING_APPROVAL,
-            RegistrationStatus.PENDING_PAYMENT,
-          ],
-        },
-      );
+      .andWhere('subscription.subscriptionStatus = ANY(:validStatuses)', {
+        validStatuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
+      })
+      .andWhere('subscription.expirationDate >= :now', { now });
 
     // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
     if (search) {
@@ -718,6 +744,7 @@ export class AccountRepository {
     fromDate?: string,
     toDate?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
@@ -802,6 +829,7 @@ export class AccountRepository {
     fromDate?: string,
     toDate?: string,
   ): Promise<[Account[], number]> {
+    const now = new Date();
     const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.clinicStaffInformation', 'staffInfo')
@@ -953,3 +981,8 @@ export class AccountRepository {
     return { staffCount, doctorCount };
   }
 }
+
+
+
+
+

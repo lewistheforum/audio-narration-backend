@@ -47,6 +47,9 @@ import {
   SearchPatientQueryDto,
   PatientSearchResponseDto,
   GetEmployeesByClinicDto,
+  UploadLegalDocumentDto,
+  UpdateLegalDocumentsDto,
+  GetClinicDetailQueryDto,
 } from './dto';
 
 import { MESSAGES } from 'src/common/message';
@@ -430,6 +433,12 @@ export class AccountsController {
    */
   @Get('clinics/:id')
   @ApiOperation({ summary: 'Get clinic details by ID' })
+  @ApiQuery({
+    name: 'doctorSearch',
+    required: false,
+    type: String,
+    description: 'Search doctors in this clinic by full name or position',
+  })
   @ApiResponseData({
     type: ClinicDetailResponseDto,
     status: MESSAGES.statusCode.success,
@@ -438,8 +447,12 @@ export class AccountsController {
   @ApiResponse({ status: 404, description: 'Clinic not found' })
   async getClinicById(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: GetClinicDetailQueryDto,
   ): Promise<{ data: ClinicDetailResponseDto; message: string }> {
-    const clinic = await this.accountsService.findClinicById(id);
+    const clinic = await this.accountsService.findClinicById(
+      id,
+      query.doctorSearch,
+    );
     return {
       data: clinic,
       message: 'Clinic details retrieved successfully',
@@ -1317,7 +1330,7 @@ export class AccountsController {
   async uploadLegalDocumentsForManager(
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
-    @Body() dto: any,
+    @Body() dto: UploadLegalDocumentDto,
   ): Promise<{ data: any; message: string }> {
     const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.uploadLegalDocumentsForManager(
@@ -1428,7 +1441,7 @@ export class AccountsController {
   async updateLegalDocumentsForManager(
     @Request() req: any,
     @Param('managerAccountId', ParseUUIDPipe) managerAccountId: string,
-    @Body() dto: any,
+    @Body() dto: UpdateLegalDocumentsDto,
   ): Promise<{ data: any; message: string }> {
     const clinicAdminId = req.user._id;
     const legalDocs = await this.accountsService.updateLegalDocumentsForManager(

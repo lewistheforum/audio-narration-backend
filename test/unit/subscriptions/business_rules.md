@@ -86,6 +86,8 @@ targetEndDate = targetStartDate + duration months - 1 day (23:59:59 UTC)
 ```
 
 **Ví dụ với duration = 2, current expiry = June 30:**
+Shortcuts	Functionality
+cmd-k v or ctrl-k v	Open preview to the Side
 | targetStartDate | targetEndDate |
 |:----------------|:--------------|
 | 2025-07-01 00:00:00Z | 2025-08-31 23:59:59Z |
@@ -113,7 +115,7 @@ targetEndDate = targetStartDate + duration months - 1 day (23:59:59 UTC)
 ## 6. Xử Lý Hết Hạn (Expiration Logic)
 *(Cần Cron Job)*
 
-Khi `expirationDate < NOW` và trạng thái đang `ACTIVE`:
+Khi `expirationDate < NOW` và trạng thái đang `ACTIVE':
 1. Kiểm tra Queue có record không → Apply nếu có.
 2. Chuyển trạng thái sang `EXPIRED`.
 3. Ghi log vào lịch sử.

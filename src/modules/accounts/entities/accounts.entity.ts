@@ -22,6 +22,7 @@ import {
 } from 'typeorm';
 import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
+import { EmployeeSchedule } from '../../schedules/entities/employee-schedule.entity';
 
 /**
  * Account Entity
@@ -37,7 +38,9 @@ import { ClinicsLegalDocuments } from './clinics_legal_documents.entity';
  * - Account ban management
  */
 @Entity('accounts')
-@Index('idx_accounts_email', ['email'], { unique: true })
+@Index('idx_accounts_email', ['email'])
+@Index('idx_accounts_email_deleted', ['email', 'deletedAt'])
+@Index('idx_accounts_email_role_deleted', ['email', 'role', 'deletedAt'])
 @Index('idx_accounts_username', ['username'])
 @Index('idx_accounts_status_role', ['status', 'role'])
 @Index('idx_accounts_parent_role', ['parentId', 'role'])
@@ -140,6 +143,18 @@ export class Account {
    */
   @OneToOne(() => ClinicSubscription, (subscription) => subscription.clinic)
   subscription?: ClinicSubscription;
+
+  /**
+   * Clinic Working Schedule Relation
+   */
+  @OneToMany(() => EmployeeSchedule, (employeeSchedule) => employeeSchedule.clinic)
+  clinicSchedules?: EmployeeSchedule[];
+
+  /**
+   * Employee Working Schedule Relation
+   */
+  @OneToMany(() => EmployeeSchedule, (employeeSchedule) => employeeSchedule.employee)
+  employeeSchedules?: EmployeeSchedule[];
 
   /**
    * Legal Documents Relation

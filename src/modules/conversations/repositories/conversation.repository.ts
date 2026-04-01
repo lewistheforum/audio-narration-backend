@@ -4,21 +4,12 @@ import { Repository, ArrayContains } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
 import { AccountRole } from '../../accounts/enums';
 import { Account } from '../../accounts/entities/accounts.entity';
+import { Message } from '../../messages/entities/message.entity';
 
 /**
  * Conversation Repository
  *
  * Data access layer for Conversation entity.
- * Implements the Repository Pattern to separate data access logic from business logic.
- *
- * Responsibilities:
- * - Direct database operations (CRUD) for Conversation entity
- * - Query construction and execution
- * - No business logic (handled by ConversationService)
- * - No validation (handled by DTOs and Service)
- *
- * @class ConversationRepository
- * @injectable
  */
 @Injectable()
 export class ConversationRepository {
@@ -27,12 +18,6 @@ export class ConversationRepository {
     private readonly conversationRepository: Repository<Conversation>,
   ) {}
 
-  /**
-   * Create a new conversation
-   *
-   * @param {Partial<Conversation>} conversationData - Conversation data to create
-   * @returns {Promise<Conversation>} Created conversation entity
-   */
   async createConversation(
     conversationData: Partial<Conversation>,
   ): Promise<Conversation> {
@@ -40,35 +25,18 @@ export class ConversationRepository {
     return this.conversationRepository.save(conversation);
   }
 
-  /**
-   * Find all conversations
-   *
-   * @returns {Promise<Conversation[]>} Array of all conversation entities
-   */
   async findAllConversations(): Promise<Conversation[]> {
     return this.conversationRepository.find({
       order: { updatedAt: 'DESC' },
     });
   }
 
-  /**
-   * Find conversation by ID
-   *
-   * @param {string} id - Conversation UUID
-   * @returns {Promise<Conversation | null>} Conversation entity or null if not found
-   */
   async findConversationById(id: string): Promise<Conversation | null> {
     return this.conversationRepository.findOne({
       where: { _id: id },
     });
   }
 
-  /**
-   * Find conversations by participant IDs
-   *
-   * @param {string[]} participantIds - Array of participant UUIDs
-   * @returns {Promise<Conversation[]>} Array of conversations
-   */
   async findConversationsByParticipants(
     participantIds: string[],
   ): Promise<Conversation[]> {
@@ -79,12 +47,6 @@ export class ConversationRepository {
     });
   }
 
-  /**
-   * Find conversations for a specific user
-   *
-   * @param {string} userId - User UUID
-   * @returns {Promise<Conversation[]>} Array of conversations the user is part of
-   */
   async findConversationsByUserId(userId: string): Promise<Conversation[]> {
     return this.conversationRepository.find({
       where: {
@@ -94,13 +56,6 @@ export class ConversationRepository {
     });
   }
 
-  /**
-   * Update conversation
-   *
-   * @param {string} id - Conversation UUID
-   * @param {Partial<Conversation>} updateData - Data to update
-   * @returns {Promise<Conversation | null>} Updated conversation entity or null
-   */
   async updateConversation(
     id: string,
     updateData: Partial<Conversation>,
@@ -109,32 +64,14 @@ export class ConversationRepository {
     return this.findConversationById(id);
   }
 
-  /**
-   * Soft delete conversation
-   *
-   * @param {string} id - Conversation UUID
-   * @returns {Promise<void>}
-   */
   async softDeleteConversation(id: string): Promise<void> {
     await this.conversationRepository.softDelete(id);
   }
 
-  /**
-   * Hard delete conversation
-   *
-   * @param {string} id - Conversation UUID
-   * @returns {Promise<void>}
-   */
   async hardDeleteConversation(id: string): Promise<void> {
     await this.conversationRepository.delete(id);
   }
 
-  /**
-   * Check if conversation has deleted by values
-   *
-   * @param {string} id - Conversation UUID
-   * @returns {Promise<boolean>} True if deletedBy array has values
-   */
   async hasDeletedByValues(id: string): Promise<boolean> {
     const conversation = await this.findConversationById(id);
     return (
@@ -144,23 +81,10 @@ export class ConversationRepository {
     );
   }
 
-  /**
-   * Clear deletedBy array for conversation
-   *
-   * @param {string} id - Conversation UUID
-   * @returns {Promise<void>}
-   */
   async clearDeletedBy(id: string): Promise<void> {
     await this.conversationRepository.update(id, { deletedBy: [] });
   }
 
-  /**
-   * Add user to deletedBy array
-   *
-   * @param {string} id - Conversation UUID
-   * @param {string} userId - User UUID to add
-   * @returns {Promise<void>}
-   */
   async addUserToDeletedBy(id: string, userId: string): Promise<void> {
     const conversation = await this.findConversationById(id);
     if (conversation) {
@@ -172,13 +96,6 @@ export class ConversationRepository {
     }
   }
 
-  /**
-   * Remove user from deletedBy array
-   *
-   * @param {string} id - Conversation UUID
-   * @param {string} userId - User UUID to remove
-   * @returns {Promise<void>}
-   */
   async removeUserFromDeletedBy(id: string, userId: string): Promise<void> {
     const conversation = await this.findConversationById(id);
     if (conversation && conversation.deletedBy) {
@@ -187,12 +104,6 @@ export class ConversationRepository {
     }
   }
 
-  /**
-   * Find conversations where user is in deletedBy array
-   *
-   * @param {string} userId - User UUID
-   * @returns {Promise<Conversation[]>} Array of deleted conversations for user
-   */
   async findDeletedConversationsByUserId(
     userId: string,
   ): Promise<Conversation[]> {
@@ -232,34 +143,42 @@ export class ConversationRepository {
   }
 
   async findAdminChatlist(): Promise<any[]> {
-    return this.conversationRepository.manager
+    const accounts = await this.conversationRepository.manager
       .createQueryBuilder(Account, 'account')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .where('account.role = ANY(:roles)', {
-        roles: [AccountRole.ADMIN, AccountRole.CLINIC_ADMIN],
-      })
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = account._id',
+      )
+      .leftJoin(
+        'subcription_services',
+        'service',
+        'service._id = subscription.service_id',
+      )
+      .where(
+        '(account.role = :adminRole) OR (account.role = :clinicAdminRole AND (service.code != :basicCode OR service.code IS NULL))',
+        {
+          adminRole: AccountRole.ADMIN,
+          clinicAdminRole: AccountRole.CLINIC_ADMIN,
+          basicCode: 'BASIC',
+        },
+      )
       .andWhere('account.deletedAt IS NULL')
-      .select([
-        'account._id as id',
-        'account.email as email',
-        'account.username as username',
-        'account.role as role',
-        'account.status as status',
-        'account.isEmailVerified as isEmailVerified',
-        'account.createdAt as createdAt',
-        'account.updatedAt as updatedAt',
-        'generalAccount',
-        'clinicAdminInfo',
-      ])
-      .getRawMany();
+      .getMany();
+
+    return accounts.map((acc) => this.mapAccountToDetail(acc));
   }
 
   async findClinicAdminChatlist(clinicAdminId: string): Promise<any[]> {
-    return this.conversationRepository.manager
+    const accounts = await this.conversationRepository.manager
       .createQueryBuilder(Account, 'account')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
+        'clinicManagerInfo',
+      )
       .where(
         '(account.role = :adminRole AND account._id != :clinicAdminId) OR (account.role = :managerRole AND account.parentId = :clinicAdminId)',
         {
@@ -269,26 +188,19 @@ export class ConversationRepository {
         },
       )
       .andWhere('account.deletedAt IS NULL')
-      .select([
-        'account._id as id',
-        'account.email as email',
-        'account.username as username',
-        'account.role as role',
-        'account.status as status',
-        'account.isEmailVerified as isEmailVerified',
-        'account.createdAt as createdAt',
-        'account.updatedAt as updatedAt',
-        'generalAccount',
-        'clinicManagerInfo',
-      ])
-      .getRawMany();
+      .getMany();
+
+    return accounts.map((acc) => this.mapAccountToDetail(acc));
   }
 
   async findClinicManagerRelatedAccounts(managerId: string): Promise<any[]> {
-    return this.conversationRepository.manager
+    const accounts = await this.conversationRepository.manager
       .createQueryBuilder(Account, 'account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
+        'clinicManagerInfo',
+      )
       .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
@@ -302,35 +214,19 @@ export class ConversationRepository {
         },
       )
       .andWhere('account.deletedAt IS NULL')
-      .select([
-        'account._id as id',
-        'account.email as email',
-        'account.username as username',
-        'account.role as role',
-        'account.status as status',
-        'account.parentId as parentId',
-        'account.isEmailVerified as isEmailVerified',
-        'account.createdAt as createdAt',
-        'account.updatedAt as updatedAt',
-        'generalAccount',
-        'clinicAdminInfo',
-        'clinicManagerInfo',
-        'clinicStaffInfo',
-        'doctorInfo',
-      ])
-      .getRawMany();
+      .getMany();
+
+    return accounts.map((acc) => this.mapAccountToDetail(acc));
   }
 
   async findStaffRelatedAccounts(staffId: string): Promise<any[]> {
     const hierarchy = await this.conversationRepository.manager
       .createQueryBuilder(Account, 'staff')
-      .leftJoin('staff.clinicStaffInformation', 'staffInfo')
-      .leftJoin('clinic_manager_information', 'managerInfo', 'managerInfo._id = staff.parent_id')
-      .leftJoin('clinic_admin_information', 'adminInfo', 'adminInfo._id = managerInfo.clinic_admin_id')
+      .leftJoin('staff.parent', 'manager')
       .select([
         'staff._id as staff_id',
-        'staff.parent_id as manager_id',
-        'managerInfo.clinic_admin_id as admin_id',
+        'staff.parentId as manager_id',
+        'manager.parentId as admin_id',
       ])
       .where('staff._id = :staffId', { staffId })
       .andWhere('staff.deletedAt IS NULL')
@@ -342,10 +238,13 @@ export class ConversationRepository {
 
     const { manager_id, admin_id } = hierarchy;
 
-    return this.conversationRepository.manager
+    const accounts = await this.conversationRepository.manager
       .createQueryBuilder(Account, 'account')
       .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
+        'clinicManagerInfo',
+      )
       .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
       .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
@@ -361,23 +260,75 @@ export class ConversationRepository {
         },
       )
       .andWhere('account.deletedAt IS NULL')
-      .select([
-        'account._id as id',
-        'account.email as email',
-        'account.username as username',
-        'account.role as role',
-        'account.status as status',
-        'account.parentId as parentId',
-        'account.isEmailVerified as isEmailVerified',
-        'account.createdAt as createdAt',
-        'account.updatedAt as updatedAt',
-        'generalAccount',
-        'clinicAdminInfo',
+      .getMany();
+
+    return accounts.map((acc) => this.mapAccountToDetail(acc));
+  }
+
+  async findAccountsWithDetails(accountIds: string[]): Promise<any[]> {
+    if (!accountIds || accountIds.length === 0) return [];
+
+    const rawAndEntities = await this.conversationRepository.manager
+      .createQueryBuilder(Account, 'account')
+      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
         'clinicManagerInfo',
-        'clinicStaffInfo',
-        'doctorInfo',
-      ])
-      .getRawMany();
+      )
+      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
+      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoin(
+        'accounts',
+        'managerAccount',
+        'account.role IN (:...staffRoles) AND managerAccount._id = account.parent_id',
+        { staffRoles: [AccountRole.CLINIC_STAFF, AccountRole.DOCTOR] },
+      )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        `
+        (account.role = :clinicAdminRole AND subscription.clinic_id = account._id) OR
+        (account.role = :managerRole AND subscription.clinic_id = account.parent_id) OR
+        (account.role IN (:...staffRoles) AND subscription.clinic_id = managerAccount.parent_id)
+        `,
+        {
+          clinicAdminRole: AccountRole.CLINIC_ADMIN,
+          managerRole: AccountRole.CLINIC_MANAGER,
+          staffRoles: [AccountRole.CLINIC_STAFF, AccountRole.DOCTOR],
+        },
+      )
+      .leftJoin(
+        'subcription_services',
+        'service',
+        'service._id = subscription.service_id',
+      )
+      .addSelect('service.code', 'subscriptionCode')
+      .where('account._id = ANY(:accountIds)', {
+        accountIds,
+      })
+      .andWhere('account.deletedAt IS NULL')
+      .getRawAndEntities();
+
+    const accounts = rawAndEntities.entities;
+    const rawData = rawAndEntities.raw;
+
+    const rawMap = new Map<string, string>();
+    for (const raw of rawData) {
+      const idKey = Object.keys(raw).find(
+        (k) => k.endsWith('__id') && raw[k] === raw.account__id,
+      );
+      const id = raw[idKey || 'account__id'];
+      if (id && raw.subscriptionCode) {
+        rawMap.set(id, raw.subscriptionCode);
+      }
+    }
+
+    return accounts.map((acc) => {
+      const detail: any = this.mapAccountToDetail(acc);
+      detail.subscriptionCode = rawMap.get(acc._id) || null;
+      return detail;
+    });
   }
 
   async findConversationsWithParticipantsAndMessages(
@@ -396,35 +347,25 @@ export class ConversationRepository {
     }
 
     const allParticipantIds = new Set<string>();
-    const conversationParticipantMap = new Map<string, string[]>();
-    
     for (const conv of conversations) {
-      const ids = conv.participants || [];
-      conversationParticipantMap.set(conv._id, ids);
-      ids.forEach((id: string) => allParticipantIds.add(id));
+      if (conv.participants) {
+        conv.participants.forEach((id: string) => allParticipantIds.add(id));
+      }
     }
 
     const participantIdArray = Array.from(allParticipantIds);
-    const accounts = await this.conversationRepository.manager
-      .createQueryBuilder(Account, 'account')
-      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
-      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
-      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
-      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
-      .where('account._id = ANY(:participantIds)', { participantIds })
-      .andWhere('account.deletedAt IS NULL')
-      .getMany();
-
+    const accounts = await this.findAccountsWithDetails(participantIdArray);
     const accountMap = new Map<string, any>();
     for (const acc of accounts) {
-      accountMap.set(acc._id, acc);
+      accountMap.set(acc.id, acc);
     }
 
     const conversationIds = conversations.map((c) => c._id);
     const lastMessages = await this.conversationRepository.manager
-      .createQueryBuilder('message', 'message')
-      .where('message.conversation_id = ANY(:convIds)', { convIds: conversationIds })
+      .createQueryBuilder(Message, 'message')
+      .where('message.conversation_id = ANY(:convIds)', {
+        convIds: conversationIds,
+      })
       .andWhere(
         'message._id = (SELECT m._id FROM messages m WHERE m.conversation_id = message.conversation_id ORDER BY m.created_at DESC LIMIT 1)',
       )
@@ -432,46 +373,35 @@ export class ConversationRepository {
 
     const lastMessageMap = new Map<string, any>();
     for (const msg of lastMessages) {
-      if (!lastMessageMap.has(msg.conversationId)) {
-        lastMessageMap.set(msg.conversationId, msg);
-      }
+      lastMessageMap.set(msg.conversationId, msg);
     }
 
     const result = [];
     for (const conv of conversations) {
-      const participantIds_in_conv = conversationParticipantMap.get(conv._id) || [];
-      
-      if (excludeDeletedByAll && conv.deletedBy) {
-        const allDeleted = participantIds.every((pId) => 
-          conv.deletedBy.includes(pId)
+      if (excludeDeletedByAll && conv.deletedBy && conv.deletedBy.length > 0) {
+        const allDeleted = conv.participants.every((pId) =>
+          conv.deletedBy.includes(pId),
         );
         if (allDeleted) continue;
       }
 
-      const participants = participantIds_in_conv
+      const participants = (conv.participants || [])
         .map((pId: string) => accountMap.get(pId))
-        .filter(Boolean)
-        .map((acc: any) => {
-          const profileInfo =
-            acc.clinicAdminInformation ||
-            acc.clinicManagerInformation ||
-            acc.clinicStaffInformation ||
-            acc.doctorInformation ||
-            acc.generalAccount ||
-            null;
+        .filter(Boolean);
 
-          return {
-            id: acc._id,
-            email: acc.email,
-            username: acc.username,
-            role: acc.role,
-            status: acc.status,
-            isEmailVerified: acc.isEmailVerified,
-            createdAt: acc.createdAt,
-            updatedAt: acc.updatedAt,
-            profileInformation: profileInfo,
-          };
-        });
+      const hasBasicClinicUser = participants.some((p: any) => {
+        const isClinicUser = [
+          AccountRole.CLINIC_ADMIN,
+          AccountRole.CLINIC_MANAGER,
+          AccountRole.CLINIC_STAFF,
+          AccountRole.DOCTOR,
+        ].includes(p.role);
+        return isClinicUser && p.subscriptionCode === 'BASIC';
+      });
+
+      if (hasBasicClinicUser) {
+        continue;
+      }
 
       result.push({
         id: conv._id,
@@ -498,75 +428,54 @@ export class ConversationRepository {
     }
 
     const allParticipantIds = new Set<string>();
-    const conversationParticipantMap = new Map<string, string[]>();
-    
     for (const conv of conversations) {
-      const ids = conv.participants || [];
-      conversationParticipantMap.set(conv._id, ids);
-      ids.forEach((id: string) => allParticipantIds.add(id));
+      if (conv.participants) {
+        conv.participants.forEach((id: string) => allParticipantIds.add(id));
+      }
     }
 
     const participantIdArray = Array.from(allParticipantIds);
-    const accounts = await this.conversationRepository.manager
-      .createQueryBuilder(Account, 'account')
-      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
-      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
-      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
-      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
-      .where('account._id = ANY(:participantIds)', { participantIds: participantIdArray })
-      .andWhere('account.deletedAt IS NULL')
-      .getMany();
-
+    const accounts = await this.findAccountsWithDetails(participantIdArray);
     const accountMap = new Map<string, any>();
     for (const acc of accounts) {
-      accountMap.set(acc._id, acc);
+      accountMap.set(acc.id, acc);
     }
 
     const conversationIds = conversations.map((c) => c._id);
     const lastMessages = await this.conversationRepository.manager
-      .createQueryBuilder('message', 'message')
+      .createQueryBuilder(Message, 'message')
       .distinctOn(['message.conversation_id'])
-      .where('message.conversation_id = ANY(:convIds)', { convIds: conversationIds })
+      .where('message.conversation_id = ANY(:convIds)', {
+        convIds: conversationIds,
+      })
       .orderBy('message.conversation_id', 'DESC')
       .addOrderBy('message.created_at', 'DESC')
       .getMany();
 
     const lastMessageMap = new Map<string, any>();
     for (const msg of lastMessages) {
-      if (!lastMessageMap.has(msg.conversationId)) {
-        lastMessageMap.set(msg.conversationId, msg);
-      }
+      lastMessageMap.set(msg.conversationId, msg);
     }
 
     const result = [];
     for (const conv of conversations) {
-      const participantIds_in_conv = conversationParticipantMap.get(conv._id) || [];
-      
-      const participants = participantIds_in_conv
+      const participants = (conv.participants || [])
         .map((pId: string) => accountMap.get(pId))
-        .filter(Boolean)
-        .map((acc: any) => {
-          const profileInfo =
-            acc.clinicAdminInformation ||
-            acc.clinicManagerInformation ||
-            acc.clinicStaffInformation ||
-            acc.doctorInformation ||
-            acc.generalAccount ||
-            null;
+        .filter(Boolean);
 
-          return {
-            id: acc._id,
-            email: acc.email,
-            username: acc.username,
-            role: acc.role,
-            status: acc.status,
-            isEmailVerified: acc.isEmailVerified,
-            createdAt: acc.createdAt,
-            updatedAt: acc.updatedAt,
-            profileInformation: profileInfo,
-          };
-        });
+      const hasBasicClinicUser = participants.some((p: any) => {
+        const isClinicUser = [
+          AccountRole.CLINIC_ADMIN,
+          AccountRole.CLINIC_MANAGER,
+          AccountRole.CLINIC_STAFF,
+          AccountRole.DOCTOR,
+        ].includes(p.role);
+        return isClinicUser && p.subscriptionCode === 'BASIC';
+      });
+
+      if (hasBasicClinicUser) {
+        continue;
+      }
 
       result.push({
         id: conv._id,
@@ -583,59 +492,22 @@ export class ConversationRepository {
     return result;
   }
 
-  async findConversationByIdWithParticipants(conversationId: string): Promise<any | null> {
+  async findConversationByIdWithParticipants(
+    conversationId: string,
+  ): Promise<any | null> {
     const conv = await this.findConversationById(conversationId);
     if (!conv) return null;
 
-    const participantIds = conv.participants || [];
-    
-    const accounts = await this.conversationRepository.manager
-      .createQueryBuilder(Account, 'account')
-      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
-      .leftJoinAndSelect('account.clinicAdminInformation', 'clinicAdminInfo')
-      .leftJoinAndSelect('account.clinicManagerInformation', 'clinicManagerInfo')
-      .leftJoinAndSelect('account.clinicStaffInformation', 'clinicStaffInfo')
-      .leftJoinAndSelect('account.doctorInformation', 'doctorInfo')
-      .where('account._id = ANY(:participantIds)', { participantIds })
-      .andWhere('account.deletedAt IS NULL')
-      .getMany();
-
-    const accountMap = new Map<string, any>();
-    for (const acc of accounts) {
-      accountMap.set(acc._id, acc);
-    }
+    const participants = await this.findAccountsWithDetails(
+      conv.participants || [],
+    );
 
     const lastMessage = await this.conversationRepository.manager
-      .createQueryBuilder('message', 'message')
+      .createQueryBuilder(Message, 'message')
       .where('message.conversation_id = :convId', { convId: conversationId })
       .orderBy('message.created_at', 'DESC')
       .limit(1)
       .getOne();
-
-    const participants = participantIds
-      .map((pId: string) => accountMap.get(pId))
-      .filter(Boolean)
-      .map((acc: any) => {
-        const profileInfo =
-          acc.clinicAdminInformation ||
-          acc.clinicManagerInformation ||
-          acc.clinicStaffInformation ||
-          acc.doctorInformation ||
-          acc.generalAccount ||
-          null;
-
-        return {
-          id: acc._id,
-          email: acc.email,
-          username: acc.username,
-          role: acc.role,
-          status: acc.status,
-          isEmailVerified: acc.isEmailVerified,
-          createdAt: acc.createdAt,
-          updatedAt: acc.updatedAt,
-          profileInformation: profileInfo,
-        };
-      });
 
     return {
       id: conv._id,
@@ -646,6 +518,47 @@ export class ConversationRepository {
       deletedBy: conv.deletedBy || [],
       createdAt: conv.createdAt,
       updatedAt: conv.updatedAt,
+    };
+  }
+
+  private mapAccountToDetail(acc: Account) {
+    const profileInfo =
+      acc.clinicAdminInformation ||
+      acc.clinicManagerInformation ||
+      acc.clinicStaffInformation ||
+      acc.doctorInformation ||
+      acc.generalAccount ||
+      null;
+
+    return {
+      id: acc._id,
+      email: acc.email,
+      username: acc.username,
+      role: acc.role,
+      status: acc.status,
+      parentId: acc.parentId,
+      fullName:
+        acc.clinicAdminInformation?.clinicName ||
+        acc.clinicManagerInformation?.fullName ||
+        acc.clinicStaffInformation?.fullName ||
+        acc.doctorInformation?.fullName ||
+        acc.generalAccount?.fullName ||
+        'Unknown',
+      gender:
+        acc.clinicManagerInformation?.gender ||
+        acc.clinicStaffInformation?.gender ||
+        acc.doctorInformation?.gender ||
+        acc.generalAccount?.gender ||
+        null,
+      isEmailVerified: acc.isEmailVerified,
+      createdAt: acc.createdAt,
+      updatedAt: acc.updatedAt,
+      generalAccount: acc.generalAccount,
+      clinicAdminInfo: acc.clinicAdminInformation,
+      clinicManagerInfo: acc.clinicManagerInformation,
+      clinicStaffInfo: acc.clinicStaffInformation,
+      doctorInfo: acc.doctorInformation,
+      profileInformation: profileInfo,
     };
   }
 }

@@ -1,9 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { ContractPackageRepository } from './repositories/contract-package.repository';
 import { ClinicContractInformationRepository } from './repositories/clinic-contract-information.repository';
 import { AccountsService } from '../accounts/accounts.service';
+import { DoctorInformationRepository } from '../accounts/repositories/doctor-information.repository';
+import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -35,6 +37,7 @@ export class ContractsService {
     constructor(
         private readonly contractPackageRepository: ContractPackageRepository,
         private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
+        private readonly doctorInfoRepository: DoctorInformationRepository,
         private readonly accountsService: AccountsService,
         private readonly mailerService: MailerService,
         private readonly codeVerificationRepository: CodeVerificationRepository,
@@ -279,6 +282,22 @@ export class ContractsService {
             if (!contractPackage) throw new NotFoundException('Contract package not found');
             if (!contractInfo) throw new NotFoundException('Contract information not found');
             if (!userAccount) throw new NotFoundException('User not found');
+
+            // Security Check: Legal Documents for Doctors
+            if (userAccount.role === AccountRole.DOCTOR) {
+                const doctorInfo = await this.doctorInfoRepository.findByAccountId(userAccount._id);
+
+                if (
+                    !doctorInfo ||
+                    !doctorInfo.professionalLicense ||
+                    !doctorInfo.certificatePracticalTraining ||
+                    !doctorInfo.medicalLicense
+                ) {
+                    throw new BadRequestException(
+                        'Please upload all legal documents (Professional License, Practical Training, Medical License) before signing the contract.',
+                    );
+                }
+            }
 
             const verification = await this.codeVerificationRepository.findValidByUserIdAndCode(
                 userId,
@@ -745,37 +764,78 @@ export class ContractsService {
     }
 
     /**
-     * Delete Contract Package (Cancel)
+     * Cancel Contract Package
      * 
-     * Soft deletes the contract package and related info.
-     * Only allowed before the contract becomes CURRENT.
+     * Marks the contract as CANCELLED and locks the employee if the contract was ACTIVE.
      * 
      * @param id - UUID of contract package
-     * @param userId - ID of manager requesting deletion
+     * @param requester - Object containing _id and role of the requester
      */
-    async deletePackage(id: string, userId: string): Promise<void> {
+    async deletePackage(contractId: string, clinicManagerId: string): Promise<void> {
+        const contractPackage = await this.contractPackageRepository.findById(contractId);
+        if (!contractPackage) {
+            throw new NotFoundException('Contract package not found');
+        }
+
+        if (contractPackage.clinicManagerId !== clinicManagerId) {
+            throw new UnauthorizedException('You are not allowed to delete this contract package');
+        }
+
+        const contractInfo = await this.clinicContractInfoRepository.findByContractId(contractId);
+        if (contractInfo?.contractStatus === ContractStatus.CURRENT) {
+            throw new BadRequestException('Cannot delete a contract package that is already CURRENT');
+        }
+
+        if (contractInfo?._id) {
+            await this.clinicContractInfoRepository.softDelete(contractInfo._id);
+        }
+
+        await this.contractPackageRepository.softDelete(contractId);
+    }
+
+    async cancelContractPackage(id: string, requester: { _id: string; role: string }): Promise<void> {
+        const contractPackage = await this.contractPackageRepository.findById(id);
+        if (!contractPackage) throw new NotFoundException('Contract package not found');
+
+        // Authorization: Admin or the Owner (Clinic Manager)
+        if (
+            requester.role !== AccountRole.ADMIN &&
+            contractPackage.clinicManagerId !== requester._id
+        ) {
+            throw new ForbiddenException('You do not have permission to cancel this contract');
+        }
+
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
 
         try {
-            const contractPackage = await this.contractPackageRepository.findById(id);
-            if (!contractPackage) throw new NotFoundException('Contract package not found');
-
-            if (contractPackage.clinicManagerId !== userId) {
-                throw new UnauthorizedException('Only clinic manager can cancel this contract');
-            }
-
             const contractInfo = await this.clinicContractInfoRepository.findByContractId(id);
 
+            // Logic: Only block employee if the contract was ACTIVE (CURRENT)
             if (contractInfo && contractInfo.contractStatus === ContractStatus.CURRENT) {
-                throw new BadRequestException('Cannot cancel a contract that is already in effect');
+                // Lock account
+                await this.accountsService.updateStatus(
+                    contractPackage.employeeId,
+                    AccountStatus.PENDING_APPROVAL,
+                );
+
+                // Send Notification Email (English)
+                const employee = await this.accountsService.findOne(contractPackage.employeeId);
+                if (employee && employee.email) {
+                    await this.mailerService.sendContractCancelledNotification(
+                        employee.email,
+                        id,
+                        'Your contract has been cancelled. Your account status has been set to Pending Approval.',
+                    );
+                }
             }
 
+            // Update Status to CANCELLED
             if (contractInfo) {
-                await queryRunner.manager.softDelete(ClinicContractInformation, contractInfo._id);
+                contractInfo.contractStatus = ContractStatus.CANCELLED;
+                await queryRunner.manager.save(ClinicContractInformation, contractInfo);
             }
-            await queryRunner.manager.softDelete(ContractPackage, id);
 
             await queryRunner.commitTransaction();
         } catch (error) {
@@ -785,4 +845,5 @@ export class ContractsService {
             await queryRunner.release();
         }
     }
+
 }

@@ -619,6 +619,36 @@ export class SubscriptionDto {
   }
 }
 
+export class ClinicWorkingScheduleDto {
+  @ApiProperty({
+    description: 'Day of week',
+    example: 'MONDAY',
+  })
+  dayOfWeek: string;
+
+  @ApiProperty({
+    description: 'Shift start time',
+    example: '07:00:00',
+  })
+  startTime: string;
+
+  @ApiProperty({
+    description: 'Shift end time',
+    example: '11:00:00',
+  })
+  endTime: string;
+
+  constructor(schedule: {
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+  }) {
+    this.dayOfWeek = schedule.dayOfWeek;
+    this.startTime = schedule.startTime;
+    this.endTime = schedule.endTime;
+  }
+}
+
 /**
  * Clinic Detail Response DTO
  *
@@ -752,6 +782,12 @@ export class ClinicDetailResponseDto {
   doctors: DoctorSummaryDto[];
 
   @ApiProperty({
+    description: 'Clinic working schedules',
+    type: [ClinicWorkingScheduleDto],
+  })
+  workingSchedules: ClinicWorkingScheduleDto[];
+
+  @ApiProperty({
     description: 'Clinic subscription',
     type: SubscriptionDto,
     required: false,
@@ -780,6 +816,7 @@ export class ClinicDetailResponseDto {
     clinicInfo: any,
     addresses: AddressDetailDto[],
     doctors: DoctorSummaryDto[],
+    workingSchedules: ClinicWorkingScheduleDto[],
     subscription?: SubscriptionDto,
     clinicAdmin?: any,
     clinicAdminInfo?: any,
@@ -823,6 +860,7 @@ export class ClinicDetailResponseDto {
 
     this.addresses = addresses;
     this.doctors = doctors;
+    this.workingSchedules = workingSchedules;
     this.subscription = subscription;
     this.averageRating = averageRating !== undefined ? Number(averageRating) || 0 : undefined;
     this.feedbacks = feedbacks;

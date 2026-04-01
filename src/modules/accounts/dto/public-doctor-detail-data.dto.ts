@@ -6,6 +6,47 @@ import { PublicClinicInfo } from './public-clinic-info.dto';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
 import { FeedbackDto } from './feedback.dto';
 
+export class DoctorWorkingScheduleDto {
+  @ApiProperty({
+    description: 'Day of week',
+    example: 'MONDAY',
+  })
+  dayOfWeek: string;
+
+  @ApiProperty({
+    description: 'Shift code',
+    example: 'MORNING',
+    required: false,
+    nullable: true,
+  })
+  shift?: string;
+
+  @ApiProperty({
+    description: 'Start time',
+    example: '07:00:00',
+  })
+  startTime: string;
+
+  @ApiProperty({
+    description: 'End time',
+    example: '11:00:00',
+  })
+  endTime: string;
+
+  constructor(schedule: {
+    dayOfWeek: string;
+    shift?: string | null;
+    startTime: string;
+    endTime: string;
+  }) {
+    this.dayOfWeek = schedule.dayOfWeek;
+    this.shift = schedule.shift || undefined;
+    this.startTime = schedule.startTime;
+    this.endTime = schedule.endTime;
+  }
+}
+
+
 /**
  * Public Doctor Detail Data DTO
  *
@@ -98,6 +139,12 @@ export class PublicDoctorDetailData {
   clinic?: PublicClinicInfo;
 
   @ApiProperty({
+    description: 'Doctor working schedules',
+    type: [DoctorWorkingScheduleDto],
+  })
+  workingSchedules: DoctorWorkingScheduleDto[];
+
+  @ApiProperty({
     description: 'Average rating from feedbacks (0-5)',
     example: 4.5,
     required: false,
@@ -117,6 +164,7 @@ export class PublicDoctorDetailData {
     account: any,
     doctorInfo: any,
     clinicInfo?: any,
+    workingSchedules: DoctorWorkingScheduleDto[] = [],
     averageRating?: number,
     feedbacks?: FeedbackDto[],
   ) {
@@ -137,6 +185,7 @@ export class PublicDoctorDetailData {
       this.clinic = new PublicClinicInfo(clinicInfo);
     }
 
+    this.workingSchedules = workingSchedules;
     this.averageRating = averageRating !== undefined ? Number(averageRating) || 0 : undefined;
     this.feedbacks = feedbacks;
   }

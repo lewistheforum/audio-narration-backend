@@ -225,6 +225,7 @@ export class ContractsController {
         @Param('id') id: string,
         @Req() req
     ) {
-        return this.contractsService.deletePackage(id, req.user._id);
+        return this.contractsService.cancelContractPackage(id, req.user);
     }
+
 }

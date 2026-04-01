@@ -105,6 +105,18 @@ export class DoctorScheduleItemDto {
   shiftId: string;
 
   @ApiProperty({
+    description: 'Shift start hour (HH:MM)',
+    example: '07:00',
+  })
+  startHour: string;
+
+  @ApiProperty({
+    description: 'Shift end hour (HH:MM)',
+    example: '10:00',
+  })
+  endHour: string;
+
+  @ApiProperty({
     description: 'Available time slots',
     type: [TimeSlotDto],
   })

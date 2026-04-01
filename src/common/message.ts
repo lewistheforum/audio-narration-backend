@@ -27,7 +27,8 @@ const successMessage = {
   userRestoredSuccess: 'User restored successfully',
   // Authentication
   loginSuccess: 'User logged in successfully',
-  loginSuccessUnverified: 'Login successful. Please verify your email address to access full features.',
+  loginSuccessUnverified:
+    'Login successful. Please verify your email address to access full features.',
   googleLoginSuccess: 'Google login successful',
   paymentCreateSuccess: 'Payment QR created successfully',
   paymentUpdateSuccess: 'Payment status updated successfully',
@@ -77,7 +78,8 @@ const successMessage = {
   subscriptionCancelled: 'Subscription cancelled successfully',
   // Subscription
   subscriptionFetchedSuccess: 'Subscription fetched successfully',
-  subscriptionHistoryFetchedSuccess: 'Subscription history fetched successfully',
+  subscriptionHistoryFetchedSuccess:
+    'Subscription history fetched successfully',
   // Feedback
   feedbackCreatedSuccess: 'Feedback created successfully',
   // Clinic Manager
@@ -100,6 +102,7 @@ const failMessage = {
   userEmailAlreadyExists: 'User with this email already exists',
   userNotDeleted: 'User is not deleted',
   // Authentication Errors
+  invalidAccountRole: 'No account belonging to this role was found.',
   invalidCredentials: 'Invalid email or password',
   googleAccountNoEmail: 'Google account does not provide an email address',
   // Account Status Errors
@@ -149,6 +152,7 @@ const failMessage = {
     'Reset code has already been used. Please request a new one.',
   // Role/Permission Errors
   invalidPatientId: 'Provided patientId does not belong to a PATIENT role',
+  roleMissmatch: 'This Account have not permission to login.',
   onlyPatientCanChangeEmail:
     'Only PATIENT accounts can change their email address. Other roles must contact administrator.',
   patientOwnerRequired: 'Clinic staff account must have a patientOwnerId',
@@ -212,11 +216,15 @@ const failMessage = {
   managerPendingApproval: 'Manager account is pending approval',
   managerDisabled: 'Manager account is disabled',
   branchDisabled: 'Branch is disabled',
-  cannotCreateStaffPending: 'Cannot create staff while manager account is pending',
-  cannotCreateStaffDisabled: 'Cannot create staff while manager account is disabled',
+  cannotCreateStaffPending:
+    'Cannot create staff while manager account is pending',
+  cannotCreateStaffDisabled:
+    'Cannot create staff while manager account is disabled',
   onlyAdminCanUpdateLegalDocs: 'Only admin can update legal documents',
   cannotDeleteActiveManager: 'Cannot delete active manager',
   cannotDeletePendingReview: 'Cannot delete manager pending review',
+  accountCannotResetInRole:
+    'Account not found or cannot reset password in this role.',
 };
 
 const MESSAGES = {

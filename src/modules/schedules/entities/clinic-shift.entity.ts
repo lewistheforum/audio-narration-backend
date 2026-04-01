@@ -21,6 +21,7 @@ import { OneToMany } from 'typeorm';
  */
 @Entity('clinic_shift')
 @Index('idx_clinic_shift_clinic_id', ['clinicId'])
+@Index('idx_clinic_shift_clinic_deleted', ['clinicId', 'deletedAt'])
 export class ClinicShift {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { EmployeeSchedule } from '../entities/employee-schedule.entity';
+import { ClinicShiftHour } from '../entities/clinic-shift-hour.entity';
 import { WeekDay } from '../enums';
+import { getEndOfMonth, getStartOfMonth } from 'src/common/utils/date.util';
+import { AccountRole } from '../../accounts/enums';
 
 @Injectable()
 export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
@@ -63,9 +66,17 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     }
 
     if (options.date) {
-      queryBuilder.andWhere('schedule.workDate = :date', {
-        date: options.date,
-      });
+      if (options.date.length === 7) {
+        // Handle YYYY-MM format by expanding to whole month
+        queryBuilder.andWhere('schedule.workDate BETWEEN :start AND :end', {
+          start: getStartOfMonth(options.date),
+          end: getEndOfMonth(options.date),
+        });
+      } else {
+        queryBuilder.andWhere('schedule.workDate = :date', {
+          date: options.date,
+        });
+      }
     }
 
     if (options.from && options.to) {
@@ -148,7 +159,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .leftJoin(
         'appointments',
         'appointment',
-        'appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != \'CANCELLED\'',
+        "appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != 'CANCELLED'",
       )
       .addSelect('COUNT(appointment._id)', 'bookedCount')
       .where('schedule.clinicId = :clinicId', { clinicId })
@@ -166,9 +177,17 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     }
 
     if (options.date) {
-      queryBuilder.andWhere('schedule.workDate = :date', {
-        date: options.date,
-      });
+      if (options.date.length === 7) {
+        // Handle YYYY-MM format by expanding to whole month
+        queryBuilder.andWhere('schedule.workDate BETWEEN :start AND :end', {
+          start: getStartOfMonth(options.date),
+          end: getEndOfMonth(options.date),
+        });
+      } else {
+        queryBuilder.andWhere('schedule.workDate = :date', {
+          date: options.date,
+        });
+      }
     }
 
     if (options.from && options.to) {
@@ -200,34 +219,171 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .addOrderBy('clinicShiftHour.startHour', 'ASC')
       .getRawAndEntities()
       .then(({ raw, entities }) => {
-        // Map raw bookedCount back into the entities
-        return entities.map(entity => {
-          // Find matching raw rows to attach bookedCount to the corresponding hours
-          if (entity.clinicShift && entity.clinicShift.hours) {
-            entity.clinicShift.hours = entity.clinicShift.hours.map(hour => {
-              const rawRow = raw.find(
-                r => r.schedule__id === entity._id && r.clinicShiftHour__id === hour._id
-              );
-              return {
-                ...hour,
-                bookedCount: rawRow ? parseInt(rawRow.bookedCount, 10) : 0
-              };
-            });
+        const results = [];
+        raw.forEach((r) => {
+          const entity = entities.find((e) => e._id === r.schedule__id);
+          if (entity && entity.clinicShift && entity.clinicShift.hours) {
+            const hour = entity.clinicShift.hours.find(
+              (h) => h._id === r.clinicShiftHour__id,
+            );
+            if (hour) {
+              results.push({
+                ...entity,
+                clinicShift: {
+                  ...entity.clinicShift,
+                  _id: hour._id, // Use hour ID as shift ID for the response
+                  shiftId: hour.shiftId,
+                  hours: [
+                    {
+                      ...hour,
+                      bookedCount: r.bookedCount ? parseInt(r.bookedCount, 10) : 0,
+                    },
+                  ],
+                },
+              });
+            }
           }
-          return entity;
         });
+        return results;
       });
   }
+
+  // async findScheduleHours2(
+  //   clinicId: string,
+  //   options: {
+  //     date?: string;
+  //     from?: string;
+  //     to?: string;
+  //     employeeId?: string;
+  //     roomId?: string;
+  //     shiftId?: string;
+  //     role?: string;
+  //   },
+  // ): Promise<any[]> {
+  //   const queryBuilder = this.createQueryBuilder('schedule')
+  //     .leftJoinAndSelect('schedule.employee', 'employee')
+  //     .leftJoinAndSelect('schedule.clinicShift', 'clinicShift')
+  //     .leftJoinAndSelect('clinicShift.hours', 'clinicShiftHour')
+  //     .leftJoinAndSelect('schedule.rooms', 'rooms')
+  //     // Map doctor information manually
+  //     .leftJoinAndMapOne(
+  //       'employee.doctorInformation',
+  //       'DoctorInformation',
+  //       'doctorInfo',
+  //       'doctorInfo.accountId = employee._id',
+  //     )
+  //     // Map staff information from GeneralAccount
+  //     .leftJoinAndSelect('employee.generalAccount', 'generalAccount')
+  //     // Map staff information from ClinicStaffInformation
+  //     .leftJoinAndMapOne(
+  //       'employee.clinicStaffInformation',
+  //       'ClinicStaffInformation',
+  //       'staffInfo',
+  //       'staffInfo.accountId = employee._id',
+  //     )
+  //     // Join appointments to count bookings per hour slot
+  //     .leftJoin(
+  //       'appointments',
+  //       'appointment',
+  //       "appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != 'CANCELLED'",
+  //     )
+  //     .addSelect('clinicShiftHour._id', 'clinicShiftHour__id')
+  //     .addSelect('COUNT(appointment._id)', 'bookedCount')
+  //     .where('schedule.clinicId = :clinicId', { clinicId })
+  //     .groupBy('schedule._id')
+  //     .addGroupBy('employee._id')
+  //     .addGroupBy('clinicShift._id')
+  //     .addGroupBy('clinicShiftHour._id')
+  //     .addGroupBy('rooms._id')
+  //     .addGroupBy('doctorInfo._id')
+  //     .addGroupBy('generalAccount._id')
+  //     .addGroupBy('staffInfo._id');
+
+  //   if (options.role) {
+  //     queryBuilder.andWhere('employee.role = :role', { role: options.role });
+  //   }
+
+  //   if (options.date) {
+  //     if (options.date.length === 7) {
+  //       // Handle YYYY-MM format by expanding to whole month
+  //       queryBuilder.andWhere('schedule.workDate BETWEEN :start AND :end', {
+  //         start: getStartOfMonth(options.date),
+  //         end: getEndOfMonth(options.date),
+  //       });
+  //     } else {
+  //       queryBuilder.andWhere('schedule.workDate = :date', {
+  //         date: options.date,
+  //       });
+  //     }
+  //   }
+
+  //   if (options.from && options.to) {
+  //     queryBuilder.andWhere('schedule.workDate BETWEEN :from AND :to', {
+  //       from: options.from,
+  //       to: options.to,
+  //     });
+  //   }
+
+  //   if (options.employeeId) {
+  //     queryBuilder.andWhere('schedule.employeeId = :employeeId', {
+  //       employeeId: options.employeeId,
+  //     });
+  //   }
+
+  //   if (options.roomId) {
+  //     queryBuilder.andWhere('rooms._id = :roomId', { roomId: options.roomId });
+  //   }
+
+  //   if (options.shiftId) {
+  //     queryBuilder.andWhere('schedule.clinicShiftId = :shiftId', {
+  //       shiftId: options.shiftId,
+  //     });
+  //   }
+
+  //   return queryBuilder
+  //     .orderBy('schedule.workDate', 'ASC')
+  //     .addOrderBy('clinicShift.createdAt', 'ASC')
+  //     .addOrderBy('clinicShiftHour.startHour', 'ASC')
+  //     .getRawAndEntities()
+  //     .then(({ raw, entities }) => {
+  //       const results = [];
+  //       raw.forEach((r) => {
+  //         const entity = entities.find((e) => e._id === r.schedule__id);
+  //         if (entity && entity.clinicShift && entity.clinicShift.hours) {
+  //           const hour = entity.clinicShift.hours.find(
+  //             (h) => h._id === r.clinicShiftHour__id,
+  //           );
+  //           if (hour) {
+  //             results.push({
+  //               ...entity,
+  //               clinicShift: {
+  //                 ...entity.clinicShift,
+  //                 _id: hour._id, // Use hour ID as shift ID for the response
+  //                 shiftId: hour.shiftId,
+  //                 hours: [
+  //                   {
+  //                     ...hour,
+  //                     bookedCount: r.bookedCount ? parseInt(r.bookedCount, 10) : 0,
+  //                   },
+  //                 ],
+  //               },
+  //             });
+  //           }
+  //         }
+  //       });
+  //       return results;
+  //     });
+  // }
 
   /**
    * Find Schedule Conflict
    *
    * Checks if a schedule already exists for a specific employee on a specific date and shift.
-   * Used to prevent overlapping schedules during creation or update.
+   * Now updated to check for ANY overlapping time hours, even if Shift IDs are different.
    *
    * @param employeeId - ID of the employee
    * @param workDate - Date of work
-   * @param clinicShiftId - ID of the shift
+   * @param clinicShiftId - ID of the shift (to get its base hours)
    * @param excludeId - (Optional) ID of a schedule to exclude (for update checks)
    * @returns Matching EmployeeSchedule or null
    */
@@ -237,10 +393,30 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     clinicShiftId: string,
     excludeId?: string,
   ): Promise<EmployeeSchedule | null> {
+    // 1. Get the start and end hours for the requested clinicShiftId
+    const shiftHours = await this.dataSource
+      .getRepository(ClinicShiftHour)
+      .createQueryBuilder('hour')
+      .where('hour.shiftId = :clinicShiftId', { clinicShiftId })
+      .orderBy('hour.startHour', 'ASC')
+      .getMany();
+
+    if (shiftHours.length === 0) return null;
+
+    const firstHour = shiftHours[0].startHour;
+    const lastHour = shiftHours[shiftHours.length - 1].endHour;
+
+    // 2. Query for ANY existing schedule on same date/employee whose hours overlap
     const queryBuilder = this.createQueryBuilder('schedule')
+      .innerJoin('schedule.clinicShift', 'shift')
+      .innerJoin('shift.hours', 'existingHour')
       .where('schedule.employeeId = :employeeId', { employeeId })
       .andWhere('schedule.workDate = :workDate', { workDate })
-      .andWhere('schedule.clinicShiftId = :clinicShiftId', { clinicShiftId });
+      .andWhere('schedule.deletedAt IS NULL')
+      .andWhere(
+        '(existingHour.startHour < :lastHour AND existingHour.endHour > :firstHour)',
+        { firstHour, lastHour },
+      );
 
     if (excludeId) {
       queryBuilder.andWhere('schedule._id != :excludeId', { excludeId });
@@ -363,14 +539,28 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
     return roomsMap;
   }
+
   /**
    * Find Room Conflict
    *
-   * Checks if a room is already assigned to any doctor on a specific date and shift.
+   * Checks if a room is already assigned to any doctor on a specific date during overlapping hours.
    *
    * @param roomId - ID of the room
    * @param workDate - Date of work
-   * @param clinicShiftId - ID of the shift
+   * @param clinicShiftId - ID of the shift (to get its base hours)
+   * @param excludeId - (Optional) ID of a schedule to exclude
+   * @returns Matching EmployeeSchedule or null
+   */
+  /**
+   * Find Room Conflict
+   *
+   * Checks if a room is already assigned to another doctor on a specific date during overlapping hours.
+   * According to business rules: One room can only host one doctor, but multiple staff members.
+   *
+   * @param roomId - ID of the room
+   * @param workDate - Date of work
+   * @param clinicShiftId - ID of the shift (to get its base hours)
+   * @param asRole - Role of the employee being scheduled
    * @param excludeId - (Optional) ID of a schedule to exclude
    * @returns Matching EmployeeSchedule or null
    */
@@ -378,14 +568,41 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
     roomId: string,
     workDate: Date,
     clinicShiftId: string,
+    asRole: AccountRole,
     excludeId?: string,
   ): Promise<EmployeeSchedule | null> {
+    // Business rule: Multiple staff members can share a room.
+    // Room occupancy restriction only applies to DOCTORs.
+    if (asRole !== AccountRole.DOCTOR) return null;
+
+    // 1. Get the range for requested shift
+    const shiftHours = await this.dataSource
+      .getRepository(ClinicShiftHour)
+      .createQueryBuilder('hour')
+      .where('hour.shiftId = :clinicShiftId', { clinicShiftId })
+      .orderBy('hour.startHour', 'ASC')
+      .getMany();
+
+    if (shiftHours.length === 0) return null;
+
+    const firstHour = shiftHours[0].startHour;
+    const lastHour = shiftHours[shiftHours.length - 1].endHour;
+
+    // 2. Query for ANY existing schedule on same date/room whose hours overlap
+    // AND the existing employee is also a DOCTOR (Room rule: only one doctor)
     const queryBuilder = this.createQueryBuilder('schedule')
       .innerJoin('schedule.rooms', 'room')
+      .innerJoin('schedule.clinicShift', 'shift')
+      .innerJoin('shift.hours', 'existingHour')
+      .innerJoin('schedule.employee', 'employee')
       .where('room._id = :roomId', { roomId })
       .andWhere('schedule.workDate = :workDate', { workDate })
-      .andWhere('schedule.clinicShiftId = :clinicShiftId', { clinicShiftId })
-      .andWhere('schedule.deletedAt IS NULL');
+      .andWhere('schedule.deletedAt IS NULL')
+      .andWhere('employee.role = :doctorRole', { doctorRole: AccountRole.DOCTOR })
+      .andWhere(
+        '(existingHour.startHour < :lastHour AND existingHour.endHour > :firstHour)',
+        { firstHour, lastHour },
+      );
 
     if (excludeId) {
       queryBuilder.andWhere('schedule._id != :excludeId', { excludeId });

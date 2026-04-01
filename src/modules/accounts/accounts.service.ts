@@ -6,7 +6,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryRunner } from 'typeorm';
 import { Account } from './entities/accounts.entity';
 import {
   AccountRole,
@@ -19,7 +19,6 @@ import * as crypto from 'crypto';
 import {
   getCurrentVietnamTime,
   addToVietnamTime,
-  getVietnamTimestamp,
 } from 'src/common/utils/date.util';
 import { GeneralAccount } from './entities/general_accounts.entity';
 import { ClinicAdminInformation } from './entities/clinic-admin-information.entity';
@@ -54,11 +53,13 @@ import {
   ClinicListResponseDto,
   ClinicItemDto,
   ClinicDetailResponseDto,
+  ClinicWorkingScheduleDto,
   AddressDetailDto,
   DoctorSummaryDto,
   SubscriptionDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
+  DoctorWorkingScheduleDto,
   DoctorListResponseDto,
   DoctorItemDto,
   DoctorPaginationDto,
@@ -212,7 +213,9 @@ export class AccountsService {
     includeDeleted: boolean = false,
   ): Promise<AccountResponseDto[]> {
     const accounts =
-      await this.accountRepository.findAllAccountsWithGeneralAccount(includeDeleted);
+      await this.accountRepository.findAllAccountsWithGeneralAccount(
+        includeDeleted,
+      );
 
     return accounts.map(
       (account) => new AccountResponseDto(account, account.generalAccount),
@@ -435,9 +438,11 @@ export class AccountsService {
   }
 
   async getAccountInformationByRole(id: string): Promise<AccountResponseDto> {
-    const account = await this.findAccountEntityById(id);
-
-    const address = await this.addressRepository.findByAccountId(id);
+    // Parallel fetch basic account and address info
+    const [account, address] = await Promise.all([
+      this.findAccountEntityById(id),
+      this.addressRepository.findByAccountId(id),
+    ]);
 
     const googleIframe = await this.googleIframeRepository.findByAddressId(
       address?._id,
@@ -606,7 +611,9 @@ export class AccountsService {
           accountId: savedAccount._id,
           fullName: createAccountDto.fullName,
           gender: createAccountDto.gender,
-          dob: createAccountDto.dob ? new Date(createAccountDto.dob) : undefined,
+          dob: createAccountDto.dob
+            ? new Date(createAccountDto.dob)
+            : undefined,
           profilePicture: createAccountDto.profilePicture,
         });
         await queryRunner.manager.save(generalAccount);
@@ -726,10 +733,9 @@ export class AccountsService {
     }
 
     if (savedAccount.phone) {
-      this.zaloWebhookService.sendFriendRequest(
-        savedAccount.phone,
-        'OAuth Registration',
-      ).catch(() => {});
+      this.zaloWebhookService
+        .sendFriendRequest(savedAccount.phone, 'OAuth Registration')
+        .catch(() => {});
     }
 
     return new AccountResponseDto(savedAccount, generalAccount);
@@ -807,6 +813,10 @@ export class AccountsService {
     const oldPhone = account.phone;
 
     if (updateAccountDto.email && updateAccountDto.email !== account.email) {
+      await this.validateSharedEmailPolicyForAccountUpdate(
+        account,
+        updateAccountDto.email,
+      );
       account.email = updateAccountDto.email;
       account.isEmailVerified = false; // Reset verification for new email
       account.status = AccountStatus.ACTIVE; // Keep account active
@@ -2425,6 +2435,15 @@ export class AccountsService {
     return this.clinicSubscriptionRepository.findByClinicId(clinicId);
   }
 
+  async getManagerLegalVerificationStatus(
+    managerAccountId: string,
+  ): Promise<LegalDocumentVerificationStatus | null> {
+    const legalDocuments =
+      await this.clinicLegalDocsRepository.findByAccountId(managerAccountId);
+
+    return legalDocuments?.verificationStatus || null;
+  }
+
   /**
    * Resolve Subscription Payload For JWT
    *
@@ -2516,16 +2535,54 @@ export class AccountsService {
    * }
    * ```
    */
-  async findByEmail(email: string): Promise<Account | null> {
-    return this.accountRepository.findAccountByEmail(email);
+  async findByEmail(email: string, role?: string): Promise<Account | null> {
+    return this.accountRepository.findAccountByEmail(email, role);
   }
 
-  async findAccountWithGeneralByEmail(email: string): Promise<Account | null> {
-    return this.accountRepository
+  async findLoginCandidatesByEmail(
+    email: string,
+    role?: string,
+  ): Promise<Account[]> {
+    const query = this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect('account.generalAccount', 'generalAccount')
+      .leftJoinAndSelect('account.legalDocuments', 'legalDocuments')
+      .leftJoinAndSelect('account.subscription', 'subscription')
+      .leftJoinAndSelect('account.parent', 'parent')
+      .leftJoinAndSelect('parent.legalDocuments', 'parentLegalDocuments')
+      .leftJoinAndSelect('parent.subscription', 'parentSubscription')
+      .leftJoinAndSelect('parent.parent', 'rootAdmin')
+      .leftJoinAndSelect('rootAdmin.subscription', 'rootAdminSubscription')
+      .where('account.email = :email', { email })
+      .andWhere('account.deletedAt IS NULL');
+
+    if (role) {
+      query.andWhere('account.role = :role', { role });
+    }
+
+    return query.distinct(true).getMany();
+  }
+
+  async findAccountsWithGeneralByEmail(
+    email: string,
+    role?: AccountRole,
+  ): Promise<Account[]> {
+    const queryBuilder = this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .where('account.email = :email', { email })
-      .getOne();
+      .andWhere('account.deletedAt IS NULL');
+
+    if (role) {
+      queryBuilder.andWhere('account.role = :role', { role });
+    }
+
+    return queryBuilder.getMany();
+  }
+
+  async findAccountWithGeneralByEmail(email: string): Promise<Account | null> {
+    const accounts = await this.findAccountsWithGeneralByEmail(email);
+    return accounts[0] || null;
   }
 
   async findAccountWithGeneralById(id: string): Promise<Account | null> {
@@ -2534,6 +2591,45 @@ export class AccountsService {
       .leftJoinAndSelect('account.generalAccount', 'generalAccount')
       .where('account._id = :id', { id })
       .getOne();
+  }
+
+  async getLoginOnboardingState(account: Account): Promise<{
+    onboardingStatus?: RegistrationStatus;
+    registrationStep?: string;
+    nextAction?: string;
+    canAccessDashboard: boolean;
+    managerAccountId?: string;
+    notice?: string;
+    expirationDate?: string;
+  }> {
+    const clinicRoles = [
+      AccountRole.CLINIC_ADMIN,
+      AccountRole.CLINIC_MANAGER,
+      AccountRole.CLINIC_STAFF,
+      AccountRole.DOCTOR,
+    ];
+
+    if (!clinicRoles.includes(account.role)) {
+      return { canAccessDashboard: true };
+    }
+
+    const clinicAdminId = await this.resolveClinicAdminId(account);
+    const registrationStatus =
+      await this.getRegistrationStatusByClinicAdminId(clinicAdminId);
+    const onboardingStatus = registrationStatus.status;
+    const canAccessDashboard =
+      onboardingStatus === RegistrationStatus.ACTIVE ||
+      onboardingStatus === RegistrationStatus.NON_RENEWING;
+
+    return {
+      onboardingStatus,
+      registrationStep: registrationStatus.currentStep,
+      nextAction: registrationStatus.nextAction,
+      canAccessDashboard,
+      managerAccountId: registrationStatus.managerAccountId,
+      notice: registrationStatus.notice,
+      expirationDate: registrationStatus.expirationDate,
+    };
   }
 
   /**
@@ -2608,27 +2704,40 @@ export class AccountsService {
   async verifyEmailCode(
     email: string,
     code: string,
+    role?: AccountRole,
   ): Promise<Account & { firstName?: string; lastName?: string }> {
-    const account = await this.findAccountWithGeneralByEmail(email);
-    if (!account) {
+    const accounts = await this.findAccountsWithGeneralByEmail(email, role);
+
+    if (accounts.length === 0) {
       throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+    }
+
+    let account: Account | null = null;
+    let storedCode = null;
+
+    for (const candidate of accounts) {
+      const candidateCode =
+        await this.codeVerificationRepository.findValidByUserIdAndCode(
+          candidate._id,
+          code,
+          VerificationType.VERIFY,
+        );
+
+      if (candidateCode) {
+        account = candidate;
+        storedCode = candidateCode;
+        break;
+      }
+    }
+
+    if (!account || !storedCode) {
+      throw new UnauthorizedException(
+        MESSAGES.failMessage.invalidVerificationCode,
+      );
     }
 
     if (account.isEmailVerified) {
       throw new ConflictException(MESSAGES.failMessage.emailAlreadyVerified);
-    }
-
-    const storedCode =
-      await this.codeVerificationRepository.findValidByUserIdAndCode(
-        account._id,
-        code,
-        VerificationType.VERIFY,
-      );
-
-    if (!storedCode) {
-      throw new UnauthorizedException(
-        MESSAGES.failMessage.invalidVerificationCode,
-      );
     }
 
     if (getCurrentVietnamTime() > storedCode.expiredAt) {
@@ -2772,11 +2881,14 @@ export class AccountsService {
    */
   async initiatePasswordReset(
     email: string,
+    role: string,
   ): Promise<{ code: string; user: Account }> {
-    const account = await this.findByEmail(email);
+    const account = await this.findByEmail(email, role);
 
     if (!account) {
-      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+      throw new NotFoundException(
+        MESSAGES.failMessage.accountCannotResetInRole,
+      );
     }
 
     // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
@@ -2855,12 +2967,15 @@ export class AccountsService {
    */
   async resetPasswordWithCode(
     email: string,
+    role: string,
     code: string,
     newPassword: string,
   ): Promise<void> {
-    const account = await this.findByEmail(email);
+    const account = await this.findByEmail(email, role);
     if (!account) {
-      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
+      throw new NotFoundException(
+        MESSAGES.failMessage.accountCannotResetInRole,
+      );
     }
 
     // Pure OAuth users (no password set) cannot reset password - hybrid accounts are allowed
@@ -3337,6 +3452,9 @@ export class AccountsService {
         academicDegree: dto.academicDegree,
         experience: dto.experience,
         position: dto.position,
+        professionalLicense: dto.professionalLicense,
+        certificatePracticalTraining: dto.certificatePracticalTraining,
+        medicalLicense: dto.medicalLicense,
       });
 
       await queryRunner.manager.save(doctorInfo);
@@ -3438,10 +3556,22 @@ export class AccountsService {
       const averageRating = ratingMap.get(clinic._id) || 0;
 
       if (clinicInfo && address) {
+        const adminClinicName = (clinicAdminInfo?.clinicName || '').trim();
+        const branchName = (clinicInfo?.clinicBranchName || '').trim();
+        const displayClinicName =
+          adminClinicName && branchName
+            ? `${adminClinicName} - ${branchName}`
+            : adminClinicName || branchName;
+
+        const mappedClinicInfo = {
+          ...clinicInfo,
+          clinicBranchName: displayClinicName,
+        };
+
         clinicItems.push(
           new ClinicItemDto(
             clinic,
-            clinicInfo,
+            mappedClinicInfo,
             address,
             clinicAdminInfo,
             averageRating,
@@ -3592,49 +3722,151 @@ export class AccountsService {
    * @returns {Promise<ClinicDetailResponseDto>} Full clinic details
    * @throws {NotFoundException} If clinic not found or not active
    */
-  async findClinicById(id: string): Promise<ClinicDetailResponseDto> {
-    // Get clinic account
-    const clinic = await this.accountRepository.findAccountById(id);
+  async findClinicById(
+    id: string,
+    doctorSearch?: string,
+  ): Promise<ClinicDetailResponseDto> {
+    const normalizedDoctorSearch = doctorSearch?.trim();
+    const doctorJoinConditions = [
+      'doctor.role = :doctorRole',
+      'doctor.status = :doctorStatus',
+      'doctor.deleted_at IS NULL',
+    ];
+    const doctorJoinParams: Record<string, string> = {
+      doctorRole: AccountRole.DOCTOR,
+      doctorStatus: AccountStatus.ACTIVE,
+    };
+
+    if (normalizedDoctorSearch) {
+      doctorJoinConditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM doctor_information doctorSearchInfo
+          WHERE doctorSearchInfo.account_id = doctor._id
+            AND doctorSearchInfo.deleted_at IS NULL
+            AND (
+              doctorSearchInfo.full_name ILIKE :doctorSearch
+              OR doctorSearchInfo.position ILIKE :doctorSearch
+            )
+        )`,
+      );
+      doctorJoinParams.doctorSearch = `%${normalizedDoctorSearch}%`;
+    }
+
+    const clinic = await this.accountRepository
+      .createQueryBuilder('clinic')
+      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoinAndSelect('clinic.address', 'address')
+      .leftJoinAndSelect('clinic.parent', 'clinicAdmin')
+      .leftJoinAndSelect(
+        'clinicAdmin.clinicAdminInformation',
+        'clinicAdminInfo',
+      )
+      .leftJoinAndSelect(
+        'clinic.children',
+        'doctor',
+        doctorJoinConditions.join(' AND '),
+        doctorJoinParams,
+      )
+      .leftJoinAndSelect(
+        'doctor.doctorInformation',
+        'doctorInfo',
+        'doctorInfo.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinic.clinicSchedules',
+        'clinicSchedule',
+        'clinicSchedule.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicSchedule.clinicShift',
+        'clinicShift',
+        'clinicShift.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicShift.hours',
+        'clinicShiftHour',
+        'clinicShiftHour.deleted_at IS NULL',
+      )
+      .where('clinic._id = :id', { id })
+      .andWhere('clinic.role = :role', { role: AccountRole.CLINIC_MANAGER })
+      .andWhere('clinic.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('clinic.deleted_at IS NULL')
+      .orderBy('clinicSchedule.weekDay', 'ASC')
+      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      .getOne();
+
     if (!clinic) {
       throw new NotFoundException('Clinic not found');
     }
 
-    // Validate role and status
-    if (clinic.role !== AccountRole.CLINIC_MANAGER) {
-      throw new NotFoundException('Clinic not found');
-    }
-    if (clinic.status !== AccountStatus.ACTIVE) {
-      throw new NotFoundException('Clinic not found');
-    }
-
-    // Get clinic manager information
-    const clinicInfo = await this.clinicManagerInfoRepository.findByAccountId(
-      clinic._id,
-    );
+    const clinicInfo = clinic.clinicManagerInformation;
     if (!clinicInfo) {
       throw new NotFoundException('Clinic manager information not found');
     }
 
     // Get all addresses with Google maps
-    const address = await this.addressRepository.findByAccountId(clinic._id);
+    const address = clinic.address;
     const addressDetails: AddressDetailDto[] = [];
 
-    const googleIframe = await this.googleIframeRepository.findByAddressId(
-      address._id,
-    );
-    addressDetails.push(new AddressDetailDto(address, googleIframe));
+    if (address) {
+      const googleIframe = await this.googleIframeRepository.findByAddressId(
+        address._id,
+      );
+      addressDetails.push(new AddressDetailDto(address, googleIframe));
+    }
 
-    // Get doctors (accounts with parentId = clinic id and role = DOCTOR)
-    const doctorAccounts = await this.accountRepository.findByParentIdAndRole(
-      clinic._id,
-      AccountRole.DOCTOR,
+    const workingScheduleMap = new Map<string, ClinicWorkingScheduleDto>();
+    const dayOrder = {
+      MONDAY: 1,
+      TUESDAY: 2,
+      WEDNESDAY: 3,
+      THURSDAY: 4,
+      FRIDAY: 5,
+      SATURDAY: 6,
+      SUNDAY: 7,
+    } as const;
+
+    for (const schedule of clinic.clinicSchedules || []) {
+      for (const hour of schedule.clinicShift?.hours || []) {
+        const key = `${schedule.weekDay}-${hour.startHour}-${hour.endHour}`;
+
+        if (!workingScheduleMap.has(key)) {
+          workingScheduleMap.set(
+            key,
+            new ClinicWorkingScheduleDto({
+              dayOfWeek: schedule.weekDay,
+              startTime: hour.startHour,
+              endTime: hour.endHour,
+            }),
+          );
+        }
+      }
+    }
+
+    const workingSchedules = Array.from(workingScheduleMap.values()).sort(
+      (left, right) => {
+        const dayDelta =
+          dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
+          dayOrder[right.dayOfWeek as keyof typeof dayOrder];
+
+        if (dayDelta !== 0) {
+          return dayDelta;
+        }
+
+        return left.startTime.localeCompare(right.startTime);
+      },
+    );
+
+    const doctorAccounts = (clinic.children || []).filter(
+      (doctor) =>
+        doctor.role === AccountRole.DOCTOR &&
+        doctor.status === AccountStatus.ACTIVE,
     );
 
     const doctors: DoctorSummaryDto[] = [];
     if (doctorAccounts.length > 0) {
-      const doctorIds = doctorAccounts.map((d) => d._id);
-
-      const doctorInfos = await this.doctorInfoRepository.findByAccountIds(doctorIds);
+      const doctorIds = doctorAccounts.map((doctor) => doctor._id);
 
       const ratingResults = await this.dataSource.query(
         `
@@ -3653,15 +3885,15 @@ export class AccountsService {
         ratingMap.set(row.doctor_id, parseFloat(row.avg_rating) || 0);
       }
 
-      const doctorInfoMap = new Map<string, any>();
-      for (const info of doctorInfos) {
-        doctorInfoMap.set(info.accountId, info);
-      }
-
       for (const doctor of doctorAccounts) {
-        const doctorInfo = doctorInfoMap.get(doctor._id);
         const doctorAvgRating = ratingMap.get(doctor._id) || 0;
-        doctors.push(new DoctorSummaryDto(doctor, doctorInfo, doctorAvgRating));
+        doctors.push(
+          new DoctorSummaryDto(
+            doctor,
+            doctor.doctorInformation,
+            doctorAvgRating,
+          ),
+        );
       }
     }
 
@@ -3684,34 +3916,20 @@ export class AccountsService {
     }
 
     // Fetch parent CLINIC_ADMIN account and information
-    let clinicAdmin = null;
-    let clinicAdminInfo = null;
+    const clinicAdmin = clinic.parent || null;
+    const clinicAdminInfo = clinicAdmin?.clinicAdminInformation || null;
     let finalClinicName: string | null = null;
 
-    if (clinic.parentId) {
-      clinicAdmin = await this.accountRepository.findAccountById(
-        clinic.parentId,
-      );
-      if (clinicAdmin) {
-        clinicAdminInfo = await this.clinicAdminInfoRepository.findByAccountId(
-          clinicAdmin._id,
-        );
+    if (clinicAdminInfo) {
+      const adminName = (clinicAdminInfo.clinicName || '').trim();
+      const branchName = (clinicInfo.clinicBranchName || '').trim();
 
-        // Compute final clinic name using same logic as ClinicItemDto
-        if (clinicAdminInfo) {
-          const adminName = (clinicAdminInfo.clinicName || '').trim();
-          const branchName = (clinicInfo.clinicBranchName || '').trim();
-
-          if (adminName && branchName) {
-            finalClinicName = `${adminName} ${branchName}`;
-          } else if (adminName) {
-            finalClinicName = adminName;
-          } else if (branchName) {
-            finalClinicName = branchName;
-          } else {
-            finalClinicName = null;
-          }
-        }
+      if (adminName && branchName) {
+        finalClinicName = `${adminName} - ${branchName}`;
+      } else if (adminName) {
+        finalClinicName = adminName;
+      } else if (branchName) {
+        finalClinicName = branchName;
       }
     }
 
@@ -3783,6 +4001,7 @@ export class AccountsService {
       clinicInfo,
       addressDetails,
       doctors,
+      workingSchedules,
       subscription,
       clinicAdmin,
       clinicAdminInfo,
@@ -3911,17 +4130,34 @@ export class AccountsService {
    * @throws {NotFoundException} If doctor not found or not eligible
    */
   async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
-    // Get doctor account
-    const doctor = await this.accountRepository.findAccountById(id);
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
-    }
+    const doctor = await this.accountRepository
+      .createQueryBuilder('doctor')
+      .leftJoinAndSelect('doctor.parent', 'clinic')
+      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
+      .leftJoinAndSelect(
+        'doctor.employeeSchedules',
+        'employeeSchedule',
+        'employeeSchedule.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'employeeSchedule.clinicShift',
+        'clinicShift',
+        'clinicShift.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicShift.hours',
+        'clinicShiftHour',
+        'clinicShiftHour.deleted_at IS NULL',
+      )
+      .where('doctor._id = :id', { id })
+      .andWhere('doctor.role = :role', { role: AccountRole.DOCTOR })
+      .andWhere('doctor.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('doctor.deleted_at IS NULL')
+      .orderBy('employeeSchedule.weekDay', 'ASC')
+      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      .getOne();
 
-    // Validate role and status
-    if (doctor.role !== AccountRole.DOCTOR) {
-      throw new NotFoundException('Doctor not found');
-    }
-    if (doctor.status !== AccountStatus.ACTIVE) {
+    if (!doctor) {
       throw new NotFoundException('Doctor not found');
     }
 
@@ -3937,21 +4173,61 @@ export class AccountsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get clinic manager information if exists (via parentId)
     let clinicInfo = null;
-    if (doctor.parentId) {
-      const clinic = await this.accountRepository.findAccountById(
-        doctor.parentId,
-      );
-      if (clinic && clinic.clinicManagerInformation) {
-        // Combine clinic account and clinic manager information for ClinicInfo DTO
-        clinicInfo = {
-          _id: clinic.clinicManagerInformation._id,
-          clinicName: clinic.clinicManagerInformation.clinicBranchName,
-          phone: clinic.phone, // Phone comes from clinic account, not clinic_manager_information
-        };
+    if (doctor.parent?.clinicManagerInformation) {
+      clinicInfo = {
+        _id: doctor.parent.clinicManagerInformation._id,
+        clinicName: doctor.parent.clinicManagerInformation.clinicBranchName,
+        phone: doctor.parent.phone,
+      };
+    }
+
+    const workingScheduleMap = new Map<string, DoctorWorkingScheduleDto>();
+    const dayOrder = {
+      MONDAY: 1,
+      TUESDAY: 2,
+      WEDNESDAY: 3,
+      THURSDAY: 4,
+      FRIDAY: 5,
+      SATURDAY: 6,
+      SUNDAY: 7,
+    } as const;
+
+    for (const schedule of doctor.employeeSchedules || []) {
+      for (const hour of schedule.clinicShift?.hours || []) {
+        const key = `${schedule.weekDay}-${schedule.clinicShift?.shift || ''}-${hour.startHour}-${hour.endHour}`;
+
+        if (!workingScheduleMap.has(key)) {
+          workingScheduleMap.set(
+            key,
+            new DoctorWorkingScheduleDto({
+              dayOfWeek: schedule.weekDay,
+              shift: schedule.clinicShift?.shift,
+              startTime: hour.startHour,
+              endTime: hour.endHour,
+            }),
+          );
+        }
       }
     }
+
+    const workingSchedules = Array.from(workingScheduleMap.values()).sort(
+      (left, right) => {
+        const dayDelta =
+          dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
+          dayOrder[right.dayOfWeek as keyof typeof dayOrder];
+
+        if (dayDelta !== 0) {
+          return dayDelta;
+        }
+
+        if ((left.shift || '') !== (right.shift || '')) {
+          return (left.shift || '').localeCompare(right.shift || '');
+        }
+
+        return left.startTime.localeCompare(right.startTime);
+      },
+    );
 
     // Create modified account object with field priority handling
     const modifiedAccount = {
@@ -4030,6 +4306,7 @@ export class AccountsService {
       modifiedAccount,
       doctorInfo,
       clinicInfo,
+      workingSchedules,
       averageRating,
       feedbacks,
     );
@@ -4189,7 +4466,12 @@ export class AccountsService {
   async checkRegistrationStatus(
     email: string,
   ): Promise<CheckRegistrationStatusResponseDto> {
-    const account = await this.findByEmail(email);
+    const account = await this.accountRepository
+      .createQueryBuilder('account')
+      .where('account.email = :email', { email })
+      .andWhere('account.role = :role', { role: AccountRole.CLINIC_ADMIN })
+      .andWhere('account.deletedAt IS NULL')
+      .getOne();
 
     if (!account) {
       // Email doesn't exist - user can start registration
@@ -4201,24 +4483,137 @@ export class AccountsService {
       };
     }
 
-    // Check if account has CLINIC_ADMIN role
-    if (account.role !== AccountRole.CLINIC_ADMIN) {
+    return this.getRegistrationStatusByClinicAdminId(account._id);
+  }
+
+  private async findRegistrationAccountsByEmail(
+    queryRunner: QueryRunner,
+    email: string,
+  ): Promise<Account[]> {
+    return queryRunner.manager
+      .getRepository(Account)
+      .createQueryBuilder('account')
+      .where('account.email = :email', { email })
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id',
+        'account.email',
+        'account.role',
+        'account.parentId',
+      ])
+      .getMany();
+  }
+
+  private async findNonDeletedAccountsByEmail(
+    email: string,
+    role?: AccountRole,
+  ): Promise<Account[]> {
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
+      .where('account.email = :email', { email })
+      .andWhere('account.deletedAt IS NULL')
+      .select([
+        'account._id',
+        'account.email',
+        'account.role',
+        'account.parentId',
+        'account.password',
+        'account.status',
+        'account.isEmailVerified',
+        'account.isOAuthUser',
+      ]);
+
+    if (role) {
+      queryBuilder.andWhere('account.role = :role', { role });
+    }
+
+    return queryBuilder.getMany();
+  }
+
+  private mapRegistrationStatus(
+    status?: RegistrationStatus | null,
+    managerAccountId?: string | null,
+    expirationDate?: Date | null,
+  ): CheckRegistrationStatusResponseDto {
+    if (!status) {
       return {
-        message: 'Not a clinic admin account',
+        message: 'No subscription found',
         canResume: false,
         currentStep: null,
         nextAction: null,
       };
     }
 
-    // Get clinic subscription and manager account in a single optimized query
+    let currentStep: string;
+    let nextAction: string;
+    let notice: string | undefined;
+    let expirationDateIso: string | undefined;
+
+    switch (status) {
+      case RegistrationStatus.PENDING_SEPAY_SETUP:
+        currentStep = 'STEP_4';
+        nextAction = 'Configure and verify SePay information';
+        break;
+      case RegistrationStatus.PENDING_MANAGER_SETUP:
+        currentStep = 'STEP_5';
+        nextAction = 'Create clinic manager account';
+        break;
+      case RegistrationStatus.PENDING_LEGAL_SETUP:
+        currentStep = 'STEP_6';
+        nextAction = 'Upload or update legal documents';
+        break;
+      case RegistrationStatus.PENDING_APPROVAL:
+        currentStep = 'STEP_7';
+        nextAction = 'Wait for super admin approval';
+        break;
+      case RegistrationStatus.PENDING_PAYMENT:
+        currentStep = 'STEP_8';
+        nextAction = 'Complete subscription payment';
+        break;
+      case RegistrationStatus.ACTIVE:
+        currentStep = 'STEP_9';
+        nextAction = 'Access dashboard';
+        expirationDateIso = expirationDate?.toISOString();
+        break;
+      case RegistrationStatus.NON_RENEWING:
+        currentStep = 'STEP_9';
+        nextAction = 'Access dashboard';
+        notice =
+          'Your subscription has been cancelled and will not renew automatically. Access retained until expiration date.';
+        expirationDateIso = expirationDate?.toISOString();
+        break;
+      case RegistrationStatus.EXPIRED:
+        currentStep = 'STEP_8';
+        nextAction = 'Renew your subscription';
+        expirationDateIso = expirationDate?.toISOString();
+        break;
+      default:
+        currentStep = 'STEP_4';
+        nextAction = 'Continue clinic onboarding';
+    }
+
+    return {
+      status,
+      currentStep,
+      nextAction,
+      canResume: true,
+      message: MESSAGES.failMessage.registrationStatusInProgress,
+      managerAccountId: managerAccountId || undefined,
+      notice,
+      expirationDate: expirationDateIso,
+    };
+  }
+
+  private async getRegistrationStatusByClinicAdminId(
+    clinicAdminId: string,
+  ): Promise<CheckRegistrationStatusResponseDto> {
     const subscriptionData = await this.accountRepository
       .createQueryBuilder('account')
       .leftJoinAndSelect('account.subscription', 'subscription')
       .leftJoin(
         Account,
         'manager',
-        'manager.parent_id = account._id AND manager.role = :managerRole',
+        'manager.parent_id = account._id AND manager.role = :managerRole AND manager.deleted_at IS NULL',
         { managerRole: AccountRole.CLINIC_MANAGER },
       )
       .select([
@@ -4227,8 +4622,14 @@ export class AccountsService {
         'subscription.expirationDate as subscription_expiration',
         'manager._id as manager_account_id',
       ])
-      .where('account._id = :accountId', { accountId: account._id })
-      .getRawOne();
+      .where('account._id = :accountId', { accountId: clinicAdminId })
+      .andWhere('account.deletedAt IS NULL')
+      .getRawOne<{
+        account_id: string;
+        subscription_status: RegistrationStatus | null;
+        subscription_expiration: Date | null;
+        manager_account_id: string | null;
+      }>();
 
     if (!subscriptionData) {
       return {
@@ -4239,106 +4640,111 @@ export class AccountsService {
       };
     }
 
-    const subscription = {
-      subscriptionStatus: subscriptionData.subscription_status,
-      expirationDate: subscriptionData.subscription_expiration
+    return this.mapRegistrationStatus(
+      subscriptionData.subscription_status,
+      subscriptionData.manager_account_id,
+      subscriptionData.subscription_expiration
         ? new Date(subscriptionData.subscription_expiration)
         : null,
-    };
+    );
+  }
 
-    if (!subscription.subscriptionStatus) {
-      return {
-        message: 'No subscription found',
-        canResume: false,
-        currentStep: null,
-        nextAction: null,
-      };
+  private async validateSharedEmailPolicyForAccountUpdate(
+    account: Account,
+    email: string,
+  ): Promise<void> {
+    const existingAccounts = (
+      await this.findNonDeletedAccountsByEmail(email)
+    ).filter((existingAccount) => existingAccount._id !== account._id);
+
+    if (existingAccounts.length === 0) {
+      return;
     }
 
-    const managerAccountId = subscriptionData.manager_account_id || null;
+    if (account.role === AccountRole.CLINIC_ADMIN) {
+      const allowedManager =
+        existingAccounts.length === 1 &&
+        existingAccounts[0].role === AccountRole.CLINIC_MANAGER &&
+        existingAccounts[0].parentId === account._id;
 
-    // Map registration status to step information
-    const status = subscription.subscriptionStatus;
-    let currentStep: string;
-    let nextAction: string;
-    let notice: string | null = null;
-    let expirationDate: string | null = null;
+      if (allowedManager) {
+        return;
+      }
+    }
 
-    switch (status) {
-      // PENDING_SEPAY_SETUP is deprecated - bank config is now part of initial registration
-      case RegistrationStatus.PENDING_MANAGER_SETUP:
-        currentStep = 'STEP_3';
-        nextAction = 'Create clinic manager account';
-        break;
-      case RegistrationStatus.PENDING_LEGAL_SETUP:
-        currentStep = 'STEP_4';
-        nextAction = 'Upload legal documents for clinic manager';
-        if (!managerAccountId) {
-          return {
-            status,
-            currentStep,
-            nextAction,
-            canResume: false,
-            message:
-              'Registration data is inconsistent. Please contact support.',
-          };
-        }
-        break;
-      case RegistrationStatus.PENDING_APPROVAL:
-        currentStep = 'STEP_5';
-        nextAction = 'Waiting for admin approval';
-        if (!managerAccountId) {
-          return {
-            status,
-            currentStep,
-            nextAction,
-            canResume: false,
-            message:
-              'Registration data is inconsistent. Please contact support.',
-          };
-        }
-        break;
-      case RegistrationStatus.PENDING_PAYMENT:
-        currentStep = 'STEP_5';
-        nextAction = 'Complete payment for subscription';
-        break;
-      case RegistrationStatus.ACTIVE:
-        currentStep = 'COMPLETED';
-        nextAction = 'Access your dashboard';
-        expirationDate = subscription.expirationDate
-          ? subscription.expirationDate.toISOString()
-          : null;
-        break;
-      case RegistrationStatus.NON_RENEWING:
-        currentStep = 'COMPLETED';
-        nextAction = 'Access your dashboard (subscription will not renew)';
-        notice =
-          'Your subscription has been cancelled and will not renew automatically. Access retained until expiration date.';
-        expirationDate = subscription.expirationDate
-          ? subscription.expirationDate.toISOString()
-          : null;
-        break;
-      case RegistrationStatus.EXPIRED:
-        currentStep = 'COMPLETED';
-        nextAction = 'Renew your subscription';
-        expirationDate = subscription.expirationDate
-          ? subscription.expirationDate.toISOString()
-          : null;
-        break;
-      default:
-        currentStep = 'STEP_2';
-        nextAction = 'Complete your registration';
+    if (account.role === AccountRole.CLINIC_MANAGER) {
+      const allowedAdmin =
+        existingAccounts.length === 1 &&
+        existingAccounts[0].role === AccountRole.CLINIC_ADMIN &&
+        existingAccounts[0]._id === account.parentId;
+
+      if (allowedAdmin) {
+        return;
+      }
+    }
+
+    throw new ConflictException(
+      'This email is already registered in the system and cannot be used for this role.',
+    );
+  }
+
+  private async getClinicAdminRegistrationState(
+    queryRunner: QueryRunner,
+    clinicAdminId: string,
+  ): Promise<{
+    clinicAdminId: string;
+    clinicAdminRole: AccountRole;
+    clinicName: string | null;
+    subscriptionId: string | null;
+    subscriptionStatus: RegistrationStatus | null;
+    managerCount: number;
+  }> {
+    const registrationState = await queryRunner.manager
+      .getRepository(Account)
+      .createQueryBuilder('admin')
+      .leftJoin('admin.subscription', 'subscription')
+      .leftJoin('admin.clinicAdminInformation', 'clinicAdminInfo')
+      .leftJoin(
+        'admin.children',
+        'manager',
+        'manager.role = :managerRole AND manager.deletedAt IS NULL',
+        {
+          managerRole: AccountRole.CLINIC_MANAGER,
+        },
+      )
+      .where('admin._id = :clinicAdminId', { clinicAdminId })
+      .andWhere('admin.deletedAt IS NULL')
+      .select('admin._id', 'clinicAdminId')
+      .addSelect('admin.role', 'clinicAdminRole')
+      .addSelect('clinicAdminInfo.clinicName', 'clinicName')
+      .addSelect('subscription._id', 'subscriptionId')
+      .addSelect('subscription.subscriptionStatus', 'subscriptionStatus')
+      .addSelect('COUNT(manager._id)', 'managerCount')
+      .groupBy('admin._id')
+      .addGroupBy('admin.role')
+      .addGroupBy('clinicAdminInfo.clinicName')
+      .addGroupBy('subscription._id')
+      .addGroupBy('subscription.subscriptionStatus')
+      .getRawOne<{
+        clinicAdminId: string;
+        clinicAdminRole: AccountRole;
+        clinicName: string | null;
+        subscriptionId: string | null;
+        subscriptionStatus: RegistrationStatus | null;
+        managerCount: string;
+      }>();
+
+    if (!registrationState) {
+      throw new NotFoundException(MESSAGES.failMessage.userNotFound);
     }
 
     return {
-      status,
-      currentStep,
-      nextAction,
-      canResume: true,
-      message: MESSAGES.failMessage.registrationStatusInProgress,
-      managerAccountId: managerAccountId || undefined,
-      notice: notice || undefined,
-      expirationDate: expirationDate || undefined,
+      clinicAdminId: registrationState.clinicAdminId,
+      clinicAdminRole: registrationState.clinicAdminRole,
+      clinicName: registrationState.clinicName,
+      subscriptionId: registrationState.subscriptionId,
+      subscriptionStatus: registrationState.subscriptionStatus,
+      managerCount: Number(registrationState.managerCount || 0),
     };
   }
 
@@ -4352,7 +4758,7 @@ export class AccountsService {
    * - Email policy: One email can be used max 2 times (1x CLINIC_ADMIN + 1x CLINIC_MANAGER)
    * - Creates Account with CLINIC_ADMIN role and PENDING status
    * - Creates ClinicAdminInformation with clinic details AND bank configuration
-   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status (Step 2: Collects Initial Profile + Payment Data)
+   * - Creates ClinicSubscription with PENDING_SEPAY_SETUP status
    * - Bank fields (bankNumber, bankBranch) are encrypted via encryptionTransformer
    * - Password is hashed with bcrypt before storage
    *
@@ -4380,51 +4786,57 @@ export class AccountsService {
   async registerClinicAdmin(
     dto: RegisterClinicAdminDto,
   ): Promise<AccountResponseDto> {
-    // Step 1: Validate email uniqueness with business rule:
-    // - Email must be unique across the system
-    // - EXCEPTION: Email CAN be shared once between CLINIC_ADMIN and CLINIC_MANAGER
-    const existingAccounts = await this.accountRepository.findAccounts({
-      where: { email: dto.email },
-    });
-
-    if (existingAccounts.length > 0) {
-      // Allow sharing ONLY with exactly one CLINIC_MANAGER
-      if (
-        existingAccounts.length === 1 &&
-        existingAccounts[0].role === AccountRole.CLINIC_MANAGER
-      ) {
-        // Allow - this is the exception case
-      } else {
-        throw new ConflictException(
-          'This email is already registered in the system and cannot be used for this role.',
-        );
-      }
-    }
-
-    // Step 2: Validate sepayVa uniqueness to prevent cross-clinic payment conflicts
-    if (dto.sepayVa) {
-      const existingSepay = await this.clinicAdminInfoRepository.findBySepayVa(
-        dto.sepayVa,
-      );
-      if (existingSepay) {
-        throw new ConflictException(
-          'This SePay virtual account number is already linked to another clinic.',
-        );
-      }
-    }
-
-    // Step 3: Hash password for secure storage
+    // Step 1: Hash password for secure storage
     const hashedPassword = await bcrypt.hash(
       dto.password,
       this.BCRYPT_SALT_ROUNDS,
     );
 
-    // Step 4: Create all entities in a transaction
+    // Step 2: Create all entities in a transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await queryRunner.startTransaction('SERIALIZABLE');
 
     try {
+      const existingAccounts = await this.findRegistrationAccountsByEmail(
+        queryRunner,
+        dto.email,
+      );
+      const existingAdmins = existingAccounts.filter(
+        (account) => account.role === AccountRole.CLINIC_ADMIN,
+      );
+      const existingManagers = existingAccounts.filter(
+        (account) => account.role === AccountRole.CLINIC_MANAGER,
+      );
+      const invalidEmailOwners = existingAccounts.filter(
+        (account) => account.role !== AccountRole.CLINIC_MANAGER,
+      );
+
+      if (
+        existingAdmins.length > 0 ||
+        invalidEmailOwners.length > 0 ||
+        existingManagers.length > 1
+      ) {
+        throw new ConflictException(
+          'This email is already registered in the system and cannot be used for this role.',
+        );
+      }
+
+      if (dto.sepayVa) {
+        const existingSepay = await queryRunner.manager
+          .getRepository(ClinicAdminInformation)
+          .createQueryBuilder('clinicAdminInfo')
+          .where('clinicAdminInfo.sepayVa = :sepayVa', { sepayVa: dto.sepayVa })
+          .andWhere('clinicAdminInfo.deletedAt IS NULL')
+          .getOne();
+
+        if (existingSepay) {
+          throw new ConflictException(
+            'This SePay virtual account number is already linked to another clinic.',
+          );
+        }
+      }
+
       const { publicKey, privateKey: encryptedPrivateKey } =
         generateRSAKeyPair();
 
@@ -4465,9 +4877,7 @@ export class AccountsService {
 
       await queryRunner.manager.save(clinicAdminInfo);
 
-      // Create ClinicSubscription entity with PENDING_SEPAY_SETUP status
-      // Step 2: Collects Initial Profile + Payment Data (including bank details)
-      // Step 3: Reserved for Payment Verification and Confirmation (PATCH /account/clinic-admin/payment-config)
+      // Create ClinicSubscription entity at Step 1 of onboarding
       const clinicSubscription = this.clinicSubscriptionRepository.create({
         clinicId: savedAccount._id,
         serviceId: dto.serviceId,
@@ -4514,7 +4924,7 @@ export class AccountsService {
    * - Actor must have CLINIC_ADMIN role
    * - Registration/subscription status must be PENDING_MANAGER_SETUP
    * - Only one manager allowed for this clinic admin (validate none exists)
-   * - Creates manager Account with CLINIC_MANAGER role and ACTIVE status
+   * - Creates manager Account with CLINIC_MANAGER role and PENDING_APPROVAL status
    * - Creates ClinicManagerInformation entity
    * - Links via parentId to the clinic admin account
    * - Transitions status to PENDING_LEGAL_SETUP
@@ -4531,71 +4941,111 @@ export class AccountsService {
     clinicAdminId: string,
     dto: CreateClinicManagerForRegistrationDto,
   ): Promise<AccountResponseDto> {
-    // Step 1: Validate clinic admin exists and has CLINIC_ADMIN role
-    const clinicAdmin = await this.findAccountEntityById(clinicAdminId);
-    if (clinicAdmin.role !== AccountRole.CLINIC_ADMIN) {
-      throw new ForbiddenException(
-        'Only clinic admins can create clinic managers during registration',
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction('SERIALIZABLE');
+
+    try {
+      const registrationState = await this.getClinicAdminRegistrationState(
+        queryRunner,
+        clinicAdminId,
       );
-    }
 
-    // Step 2: Validate subscription status is PENDING_MANAGER_SETUP
-    const subscription =
-      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
-    if (!subscription) {
-      throw new NotFoundException('Clinic subscription not found');
-    }
-    if (
-      subscription.subscriptionStatus !==
-      RegistrationStatus.PENDING_MANAGER_SETUP
-    ) {
-      throw new ForbiddenException(
-        `Cannot create clinic manager. Current status: ${subscription.subscriptionStatus}. Expected: ${RegistrationStatus.PENDING_MANAGER_SETUP}`,
-      );
-    }
+      if (registrationState.clinicAdminRole !== AccountRole.CLINIC_ADMIN) {
+        throw new ForbiddenException(
+          'Only clinic admins can create clinic managers during registration',
+        );
+      }
 
-    // Step 3: Validate only one manager allowed (check if any manager already exists)
-    const existingManagers = await this.accountRepository.findByParentIdAndRole(
-      clinicAdminId,
-      AccountRole.CLINIC_MANAGER,
-    );
-    if (existingManagers.length > 0) {
-      throw new ConflictException(
-        'Only one clinic manager is allowed per clinic admin',
-      );
-    }
+      if (!registrationState.subscriptionId) {
+        throw new NotFoundException('Clinic subscription not found');
+      }
 
-    // Step 4: Validate email uniqueness with business rule:
-    // - Email must be unique across the system
-    // - EXCEPTION: Email CAN be shared once between CLINIC_ADMIN and CLINIC_MANAGER
-    const existingAccounts = await this.accountRepository.findAccounts({
-      where: { email: dto.email },
-    });
-
-    if (existingAccounts.length > 0) {
-      // Allow sharing ONLY with exactly one CLINIC_ADMIN
       if (
-        existingAccounts.length === 1 &&
-        existingAccounts[0].role === AccountRole.CLINIC_ADMIN
+        registrationState.subscriptionStatus !==
+        RegistrationStatus.PENDING_MANAGER_SETUP
       ) {
-        // Allow - this is the exception case
-      } else {
+        throw new ForbiddenException(
+          `Cannot create clinic manager. Current status: ${registrationState.subscriptionStatus}. Expected: ${RegistrationStatus.PENDING_MANAGER_SETUP}`,
+        );
+      }
+
+      if (registrationState.managerCount > 0) {
+        throw new ConflictException(
+          'Only one clinic manager is allowed per clinic admin',
+        );
+      }
+
+      const existingAccounts = await this.findRegistrationAccountsByEmail(
+        queryRunner,
+        dto.email,
+      );
+      const invalidEmailOwner = existingAccounts.find(
+        (account) =>
+          account.role !== AccountRole.CLINIC_ADMIN &&
+          account.role !== AccountRole.CLINIC_MANAGER,
+      );
+      const parentAdminWithSameEmail = existingAccounts.find(
+        (account) =>
+          account.role === AccountRole.CLINIC_ADMIN &&
+          account._id === clinicAdminId,
+      );
+      const differentAdminWithSameEmail = existingAccounts.find(
+        (account) =>
+          account.role === AccountRole.CLINIC_ADMIN &&
+          account._id !== clinicAdminId,
+      );
+      const siblingManagerWithSameEmail = existingAccounts.find(
+        (account) =>
+          account.role === AccountRole.CLINIC_MANAGER &&
+          account.parentId === clinicAdminId,
+      );
+      const unrelatedManagerWithSameEmail = existingAccounts.find(
+        (account) =>
+          account.role === AccountRole.CLINIC_MANAGER &&
+          account.parentId !== clinicAdminId,
+      );
+
+      if (
+        invalidEmailOwner ||
+        differentAdminWithSameEmail ||
+        unrelatedManagerWithSameEmail ||
+        siblingManagerWithSameEmail ||
+        (existingAccounts.length > 0 && !parentAdminWithSameEmail)
+      ) {
         throw new ConflictException(
           'This email is already registered in the system and cannot be used for this role.',
         );
       }
-    }
 
-    // Step 5: Create all entities in a transaction
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+      const clinicAdminAccount = await queryRunner.manager
+        .getRepository(Account)
+        .createQueryBuilder('clinicAdmin')
+        .addSelect('clinicAdmin.password')
+        .where('clinicAdmin._id = :clinicAdminId', { clinicAdminId })
+        .andWhere('clinicAdmin.role = :role', {
+          role: AccountRole.CLINIC_ADMIN,
+        })
+        .andWhere('clinicAdmin.deletedAt IS NULL')
+        .getOne();
 
-    try {
-      // Generate default password for manager account
-      const defaultPassword = 'Manager' + getVietnamTimestamp();
+      if (!clinicAdminAccount?.password) {
+        throw new NotFoundException('Clinic admin account not found');
+      }
+
+      const isSameAsClinicAdminPassword = await bcrypt.compare(
+        dto.password,
+        clinicAdminAccount.password,
+      );
+
+      if (isSameAsClinicAdminPassword) {
+        throw new BadRequestException(
+          'Mật khẩu của Quản lý không được trùng với mật khẩu của Chủ phòng khám (Clinic Admin)',
+        );
+      }
+
       const hashedPassword = await bcrypt.hash(
-        defaultPassword,
+        dto.password,
         this.BCRYPT_SALT_ROUNDS,
       );
 
@@ -4603,7 +5053,13 @@ export class AccountsService {
       const { publicKey, privateKey: encryptedPrivateKey } =
         generateRSAKeyPair();
 
-      // Create Account entity with CLINIC_MANAGER role and ACTIVE status
+      const subscription = queryRunner.manager.create(ClinicSubscription, {
+        _id: registrationState.subscriptionId,
+        clinicId: clinicAdminId,
+        subscriptionStatus: registrationState.subscriptionStatus,
+      });
+
+      // Create Account entity with CLINIC_MANAGER role and PENDING_APPROVAL status
       const managerAccount = this.accountRepository.createAccount({
         username: dto.username,
         email: dto.email,
@@ -4611,7 +5067,7 @@ export class AccountsService {
         phone: dto.phone,
         parentId: clinicAdminId, // Link to clinic admin
         role: AccountRole.CLINIC_MANAGER,
-        status: AccountStatus.ACTIVE,
+        status: AccountStatus.PENDING_APPROVAL,
         isEmailVerified: false,
         isOAuthUser: false,
         publicKey,
@@ -4647,6 +5103,13 @@ export class AccountsService {
 
       await queryRunner.manager.save(address);
 
+      const legalDocuments = this.clinicLegalDocsRepository.create({
+        accountId: savedManagerAccount._id,
+        verificationStatus: LegalDocumentVerificationStatus.NOT_SUBMITTED,
+      });
+
+      await queryRunner.manager.save(legalDocuments);
+
       // Update subscription status to PENDING_LEGAL_SETUP
       subscription.subscriptionStatus = RegistrationStatus.PENDING_LEGAL_SETUP;
       await queryRunner.manager.save(subscription);
@@ -4654,17 +5117,12 @@ export class AccountsService {
       await queryRunner.commitTransaction();
 
       // Send manager credentials email after successful transaction (fire-and-forget)
-      // Get clinic name from the clinic admin
-      const clinicAdminInfo =
-        await this.clinicAdminInfoRepository.findByAccountId(clinicAdminId);
-      const clinicName = clinicAdminInfo?.clinicName;
-
       this.mailerService
         .sendManagerCredentialsEmail(
           dto.email,
           savedManagerAccount.username,
-          defaultPassword,
-          clinicName,
+          dto.password,
+          registrationState.clinicName || undefined,
         )
         .catch((error) => {
           console.error('Failed to send manager credentials email:', error);
@@ -4930,6 +5388,12 @@ export class AccountsService {
       }
       if (dto.businessLicense !== undefined) {
         legalDocs.businessLicense = dto.businessLicense;
+      }
+      if (dto.taxIdUrl !== undefined) {
+        legalDocs.taxIdUrl = dto.taxIdUrl;
+      }
+      if (dto.otherDocs !== undefined) {
+        legalDocs.otherDocs = dto.otherDocs;
       }
       legalDocs.verificationStatus =
         LegalDocumentVerificationStatus.PENDING_REVIEW;
