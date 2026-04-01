@@ -40,7 +40,7 @@ export class FeedbackService {
     private readonly feedbackRepository: FeedbackRepository,
     private readonly accountRepository: AccountRepository,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Create Feedback for Clinic
@@ -429,6 +429,11 @@ export class FeedbackService {
 
   async findAllFeedbacksById(id: string) {
     const feedback = await this.feedbackRepository.findFeedbacksById(id);
+    return feedback;
+  }
+
+  async findFeedbackById(id: string) {
+    const feedback = await this.feedbackRepository.findDetailFeedbacksById(id);
     return feedback;
   }
 

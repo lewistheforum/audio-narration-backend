@@ -46,7 +46,7 @@ import { log } from 'console';
 @ApiTags('Reports')
 @Controller('feedbacks')
 export class FeedbackController {
-  constructor(private readonly feedbackService: FeedbackService) {}
+  constructor(private readonly feedbackService: FeedbackService) { }
 
   /**
    * Create Feedback for Clinic
@@ -221,6 +221,26 @@ export class FeedbackController {
     const result = feedbacks.map(
       (feedback) => new FeedbackAIResponseDto(feedback),
     );
+    return result;
+  }
+
+  @Get('/detail/:id')
+  @ApiOperation({ summary: 'Get feedbacks by id' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of feedbacks retrieved successfully',
+    type: [FeedbackAIResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Missing or invalid token',
+  })
+  async getDetailFeedbacks(
+    @Param('id') id: string,
+  ): Promise<FeedbackAIResponseDto> {
+    const feedback = await this.feedbackService.findFeedbackById(id);
+
+    const result = new FeedbackAIResponseDto(feedback);
     return result;
   }
 

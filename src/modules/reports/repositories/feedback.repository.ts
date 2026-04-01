@@ -39,7 +39,7 @@ export class FeedbackRepository {
   constructor(
     @InjectRepository(Feedback)
     private readonly feedbackRepository: Repository<Feedback>,
-  ) {}
+  ) { }
 
   /**
    * Find All Feedbacks
@@ -83,6 +83,21 @@ export class FeedbackRepository {
     return this.feedbackRepository.find({
       where: { clinicId },
       order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find Feedback by ID
+   *
+   * Retrieves a single feedback by its UUID.
+   * Excludes soft-deleted feedbacks by default.
+   *
+   * @param {string} id - Feedback UUID
+   * @returns {Promise<Feedback | null>} Feedback entity or null if not found
+   */
+  async findDetailFeedbacksById(id: string): Promise<Feedback> {
+    return this.feedbackRepository.findOne({
+      where: { _id: id },
     });
   }
 

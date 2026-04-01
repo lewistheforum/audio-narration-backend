@@ -159,7 +159,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .leftJoin(
         'appointments',
         'appointment',
-        'appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != \'CANCELLED\'',
+        "appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != 'CANCELLED'",
       )
       .addSelect('COUNT(appointment._id)', 'bookedCount')
       .where('schedule.clinicId = :clinicId', { clinicId })
@@ -219,24 +219,161 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       .addOrderBy('clinicShiftHour.startHour', 'ASC')
       .getRawAndEntities()
       .then(({ raw, entities }) => {
-        // Map raw bookedCount back into the entities
-        return entities.map(entity => {
-          // Find matching raw rows to attach bookedCount to the corresponding hours
-          if (entity.clinicShift && entity.clinicShift.hours) {
-            entity.clinicShift.hours = entity.clinicShift.hours.map(hour => {
-              const rawRow = raw.find(
-                r => r.schedule__id === entity._id && r.clinicShiftHour__id === hour._id
-              );
-              return {
-                ...hour,
-                bookedCount: rawRow ? parseInt(rawRow.bookedCount, 10) : 0
-              };
-            });
+        const results = [];
+        raw.forEach((r) => {
+          const entity = entities.find((e) => e._id === r.schedule__id);
+          if (entity && entity.clinicShift && entity.clinicShift.hours) {
+            const hour = entity.clinicShift.hours.find(
+              (h) => h._id === r.clinicShiftHour__id,
+            );
+            if (hour) {
+              results.push({
+                ...entity,
+                clinicShift: {
+                  ...entity.clinicShift,
+                  _id: hour._id, // Use hour ID as shift ID for the response
+                  shiftId: hour.shiftId,
+                  hours: [
+                    {
+                      ...hour,
+                      bookedCount: r.bookedCount ? parseInt(r.bookedCount, 10) : 0,
+                    },
+                  ],
+                },
+              });
+            }
           }
-          return entity;
         });
+        return results;
       });
   }
+
+  // async findScheduleHours2(
+  //   clinicId: string,
+  //   options: {
+  //     date?: string;
+  //     from?: string;
+  //     to?: string;
+  //     employeeId?: string;
+  //     roomId?: string;
+  //     shiftId?: string;
+  //     role?: string;
+  //   },
+  // ): Promise<any[]> {
+  //   const queryBuilder = this.createQueryBuilder('schedule')
+  //     .leftJoinAndSelect('schedule.employee', 'employee')
+  //     .leftJoinAndSelect('schedule.clinicShift', 'clinicShift')
+  //     .leftJoinAndSelect('clinicShift.hours', 'clinicShiftHour')
+  //     .leftJoinAndSelect('schedule.rooms', 'rooms')
+  //     // Map doctor information manually
+  //     .leftJoinAndMapOne(
+  //       'employee.doctorInformation',
+  //       'DoctorInformation',
+  //       'doctorInfo',
+  //       'doctorInfo.accountId = employee._id',
+  //     )
+  //     // Map staff information from GeneralAccount
+  //     .leftJoinAndSelect('employee.generalAccount', 'generalAccount')
+  //     // Map staff information from ClinicStaffInformation
+  //     .leftJoinAndMapOne(
+  //       'employee.clinicStaffInformation',
+  //       'ClinicStaffInformation',
+  //       'staffInfo',
+  //       'staffInfo.accountId = employee._id',
+  //     )
+  //     // Join appointments to count bookings per hour slot
+  //     .leftJoin(
+  //       'appointments',
+  //       'appointment',
+  //       "appointment.clinic_shift_hour_id = clinicShiftHour._id AND appointment.deleted_at IS NULL AND appointment.status != 'CANCELLED'",
+  //     )
+  //     .addSelect('clinicShiftHour._id', 'clinicShiftHour__id')
+  //     .addSelect('COUNT(appointment._id)', 'bookedCount')
+  //     .where('schedule.clinicId = :clinicId', { clinicId })
+  //     .groupBy('schedule._id')
+  //     .addGroupBy('employee._id')
+  //     .addGroupBy('clinicShift._id')
+  //     .addGroupBy('clinicShiftHour._id')
+  //     .addGroupBy('rooms._id')
+  //     .addGroupBy('doctorInfo._id')
+  //     .addGroupBy('generalAccount._id')
+  //     .addGroupBy('staffInfo._id');
+
+  //   if (options.role) {
+  //     queryBuilder.andWhere('employee.role = :role', { role: options.role });
+  //   }
+
+  //   if (options.date) {
+  //     if (options.date.length === 7) {
+  //       // Handle YYYY-MM format by expanding to whole month
+  //       queryBuilder.andWhere('schedule.workDate BETWEEN :start AND :end', {
+  //         start: getStartOfMonth(options.date),
+  //         end: getEndOfMonth(options.date),
+  //       });
+  //     } else {
+  //       queryBuilder.andWhere('schedule.workDate = :date', {
+  //         date: options.date,
+  //       });
+  //     }
+  //   }
+
+  //   if (options.from && options.to) {
+  //     queryBuilder.andWhere('schedule.workDate BETWEEN :from AND :to', {
+  //       from: options.from,
+  //       to: options.to,
+  //     });
+  //   }
+
+  //   if (options.employeeId) {
+  //     queryBuilder.andWhere('schedule.employeeId = :employeeId', {
+  //       employeeId: options.employeeId,
+  //     });
+  //   }
+
+  //   if (options.roomId) {
+  //     queryBuilder.andWhere('rooms._id = :roomId', { roomId: options.roomId });
+  //   }
+
+  //   if (options.shiftId) {
+  //     queryBuilder.andWhere('schedule.clinicShiftId = :shiftId', {
+  //       shiftId: options.shiftId,
+  //     });
+  //   }
+
+  //   return queryBuilder
+  //     .orderBy('schedule.workDate', 'ASC')
+  //     .addOrderBy('clinicShift.createdAt', 'ASC')
+  //     .addOrderBy('clinicShiftHour.startHour', 'ASC')
+  //     .getRawAndEntities()
+  //     .then(({ raw, entities }) => {
+  //       const results = [];
+  //       raw.forEach((r) => {
+  //         const entity = entities.find((e) => e._id === r.schedule__id);
+  //         if (entity && entity.clinicShift && entity.clinicShift.hours) {
+  //           const hour = entity.clinicShift.hours.find(
+  //             (h) => h._id === r.clinicShiftHour__id,
+  //           );
+  //           if (hour) {
+  //             results.push({
+  //               ...entity,
+  //               clinicShift: {
+  //                 ...entity.clinicShift,
+  //                 _id: hour._id, // Use hour ID as shift ID for the response
+  //                 shiftId: hour.shiftId,
+  //                 hours: [
+  //                   {
+  //                     ...hour,
+  //                     bookedCount: r.bookedCount ? parseInt(r.bookedCount, 10) : 0,
+  //                   },
+  //                 ],
+  //               },
+  //             });
+  //           }
+  //         }
+  //       });
+  //       return results;
+  //     });
+  // }
 
   /**
    * Find Schedule Conflict

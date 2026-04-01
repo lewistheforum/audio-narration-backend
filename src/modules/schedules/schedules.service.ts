@@ -50,7 +50,7 @@ export class SchedulesService {
     @InjectRepository(ClinicStaffInformation)
     private readonly clinicStaffRepository: Repository<ClinicStaffInformation>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Get Clinic Employees (Doctors & Staff)
@@ -159,8 +159,8 @@ export class SchedulesService {
           emp.role === AccountRole.DOCTOR
             ? doctorInfo?.profilePicture
             : staffInfo?.profilePicture ||
-              generalAccount?.profilePicture ||
-              null,
+            generalAccount?.profilePicture ||
+            null,
       };
     });
 
@@ -287,8 +287,8 @@ export class SchedulesService {
           emp.role === AccountRole.DOCTOR
             ? doctorInfo?.profilePicture
             : staffInfo?.profilePicture ||
-              generalAccount?.profilePicture ||
-              null,
+            generalAccount?.profilePicture ||
+            null,
       };
     }).filter(e => e !== null);
 
@@ -744,6 +744,7 @@ export class SchedulesService {
     const nowTimeStr = formatToTimeOnly();
 
     return schedules.map((schedule) => {
+
       const scheduleDateStr = formatToDateOnly(schedule.workDate);
       const isPastDate = scheduleDateStr < nowDateStr;
       const isToday = scheduleDateStr === nowDateStr;
@@ -783,24 +784,26 @@ export class SchedulesService {
             emp?.role === AccountRole.DOCTOR
               ? doctorInfo?.profilePicture
               : staffInfo?.profilePicture ||
-                generalAccount?.profilePicture ||
-                null,
+              generalAccount?.profilePicture ||
+              null,
         },
         shift: {
           id: schedule.clinicShift?._id,
+          shiftId: schedule.clinicShift?.shiftId,
           name: schedule.clinicShift?.shift,
           startHour: sortedHours.length > 0 ? sortedHours[0].startHour : null,
           endHour:
             sortedHours.length > 0
               ? sortedHours[sortedHours.length - 1].endHour
               : null,
+          hours: sortedHours,
         },
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
-                id: schedule.rooms[0]._id,
-                name: schedule.rooms[0].roomName,
-              }
+              id: schedule.rooms[0]._id,
+              name: schedule.rooms[0].roomName,
+            }
             : null,
       };
     });
@@ -1756,9 +1759,9 @@ export class SchedulesService {
           shiftEndTime: '00:00:00', // Will be calculated from slots
           room: scheduleRoom
             ? {
-                roomId: scheduleRoom.room_id,
-                roomName: scheduleRoom.room_name,
-              }
+              roomId: scheduleRoom.room_id,
+              roomName: scheduleRoom.room_name,
+            }
             : null,
           availableSlots: [],
           bookedSlots: [],
