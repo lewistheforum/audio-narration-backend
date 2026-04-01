@@ -99,6 +99,37 @@ export interface AppointmentRescheduledContext {
   }>;
 }
 
+/**
+ * Context for appointment cancelled email
+ */
+export interface AppointmentCancelledContext {
+  patientName: string;
+  clinicName: string;
+  clinicAddress: string;
+  clinicPhone: string;
+  appointmentDate: string; // Formatted date
+  appointmentHour: string; // Formatted time
+  reason?: string;
+}
+
+/**
+ * Context for appointment confirmed email (extra hour)
+ */
+export interface AppointmentConfirmedContext {
+  patientName: string;
+  clinicName: string;
+  clinicAddress: string;
+  clinicPhone: string;
+  appointmentDate: string; // Formatted date
+  appointmentHour: string; // Formatted time
+  doctorName: string;
+  doctorSpecialization?: string;
+  services: Array<{
+    serviceName: string;
+    serviceType: string;
+  }>;
+}
+
 type TemplateContext = Record<string, unknown>;
 
 type HandlebarsCompiler = {
@@ -1146,14 +1177,83 @@ export class MailerService {
       },
       to: email,
       subject: '📅 Appointment Rescheduled - Medicare',
-      html: this.renderTemplate('appointment/appointment-rescheduled.hbs', { ...context })
+      html: this.renderTemplate('appointment/appointment-rescheduled.hbs', {
+        ...context,
+      }),
     };
 
     try {
       await transporter.sendMail(mailOptions);
       this.logger.log(`✅ Appointment rescheduled email sent to ${email}`);
     } catch (error) {
-      this.logger.error(`❌ Failed to send rescheduled email to ${email}:`, error);
+      this.logger.error(
+        `❌ Failed to send rescheduled email to ${email}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Send Appointment Cancelled Email
+   * Notifies patient that their appointment has been cancelled by clinic staff
+   */
+  async sendAppointmentCancelledEmail(
+    email: string,
+    context: AppointmentCancelledContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '📅 Appointment Cancelled - Medicare',
+      html: this.renderTemplate('appointment/appointment-cancelled.hbs', {
+        ...context,
+      }),
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Appointment cancelled email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to send cancelled email to ${email}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Send Appointment Confirmed Email
+   * Notifies patient that their extra-hour appointment has been confirmed by doctor
+   */
+  async sendAppointmentConfirmedEmail(
+    email: string,
+    context: AppointmentConfirmedContext,
+  ): Promise<void> {
+    const transporter = this.mailTransport();
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject: '✅ Appointment Confirmed - Medicare',
+      html: this.renderTemplate('appointment/appointment-confirmed.hbs', {
+        ...context,
+      }),
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Appointment confirmed email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to send confirmed email to ${email}:`,
+        error,
+      );
     }
   }
 }

@@ -122,6 +122,8 @@ import {
   MailerService,
   AppointmentReminderContext,
   AppointmentRescheduledContext,
+  AppointmentCancelledContext,
+  AppointmentConfirmedContext,
 } from '../mailer/mailer.service';
 import { AppointmentWebhookService } from './appointment-webhook.service';
 import { SendReminderResponseDto, SendReminderBulkResponseDto } from './dto';
@@ -1030,6 +1032,47 @@ export class AppointmentsService {
         message: 'Appointment cancelled by staff',
       },
     );
+
+    // Send cancellation email to patient
+    try {
+      const fullAppointment =
+        await this.appointmentRepository.findByIdWithCompleteDetails(
+          updatedAppointment._id,
+        );
+      if (fullAppointment && fullAppointment.patient?.email) {
+        const clinicName =
+          fullAppointment.clinic?.clinicManagerInformation
+            ?.clinicBranchName ||
+          fullAppointment.clinic?.parent?.clinicAdminInformation?.clinicName ||
+          'Medicare Clinic';
+        const clinicAddress =
+          fullAppointment.clinic?.address?.address ||
+          fullAppointment.clinic?.parent?.address?.address ||
+          '';
+        const clinicPhone =
+          fullAppointment.clinic?.parent?.clinicAdminInformation?.clinicPhone ||
+          fullAppointment.clinic?.phone ||
+          '';
+
+        const context: AppointmentCancelledContext = {
+          patientName:
+            fullAppointment.patient.generalAccount?.fullName ||
+            fullAppointment.patient.username,
+          clinicName,
+          clinicAddress,
+          clinicPhone,
+          appointmentDate: formatToDateOnly(fullAppointment.appointmentDate),
+          appointmentHour: formatToTimeOnly(fullAppointment.appointmentHour),
+          reason: cancelDto.patientNote,
+        };
+        await this.mailerService.sendAppointmentCancelledEmail(
+          fullAppointment.patient.email,
+          context,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error sending cancellation email: ${error.message}`);
+    }
 
     return this.transformToResponseDto(
       updatedAppointment,
@@ -2114,6 +2157,57 @@ export class AppointmentsService {
         message: 'Appointment accepted',
       },
     );
+
+    // Send confirmation email to patient for extra-hour appointment
+    try {
+      const fullAppointment =
+        await this.appointmentRepository.findByIdWithCompleteDetails(
+          updatedAppointment._id,
+        );
+      if (fullAppointment && fullAppointment.patient?.email) {
+        const clinicName =
+          fullAppointment.clinic?.clinicManagerInformation
+            ?.clinicBranchName ||
+          fullAppointment.clinic?.parent?.clinicAdminInformation?.clinicName ||
+          'Medicare Clinic';
+        const clinicAddress =
+          fullAppointment.clinic?.address?.address ||
+          fullAppointment.clinic?.parent?.address?.address ||
+          '';
+        const clinicPhone =
+          fullAppointment.clinic?.parent?.clinicAdminInformation?.clinicPhone ||
+          fullAppointment.clinic?.phone ||
+          '';
+
+        const context: AppointmentConfirmedContext = {
+          patientName:
+            fullAppointment.patient.generalAccount?.fullName ||
+            fullAppointment.patient.username,
+          clinicName,
+          clinicAddress,
+          clinicPhone,
+          appointmentDate: formatToDateOnly(fullAppointment.appointmentDate),
+          appointmentHour: formatToTimeOnly(fullAppointment.appointmentHour),
+          doctorName:
+            fullAppointment.doctor?.doctorInformation?.fullName ||
+            fullAppointment.doctor?.username ||
+            'Attending Doctor',
+          doctorSpecialization:
+            fullAppointment.doctor?.doctorInformation?.academicDegree ||
+            fullAppointment.doctor?.doctorInformation?.position,
+          services: services.map((s) => ({
+            serviceName: s.serviceName,
+            serviceType: '',
+          })),
+        };
+        await this.mailerService.sendAppointmentConfirmedEmail(
+          fullAppointment.patient.email,
+          context,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error sending confirmation email: ${error.message}`);
+    }
 
     return this.transformToResponseDto(
       updatedAppointment,
