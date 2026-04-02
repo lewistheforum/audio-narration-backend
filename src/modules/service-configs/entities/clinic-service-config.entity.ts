@@ -20,6 +20,7 @@ import { ClinicService } from '../../clinic-services/entities/clinic-service.ent
 @Entity('clinic_service_config')
 @Index('idx_clinic_service_config_clinic', ['clinicId'])
 @Index('idx_clinic_service_config_service', ['serviceId'])
+@Index('idx_csc_clinic_active_deleted', ['clinicId', 'isActive', 'deletedAt'])
 export class ClinicServiceConfig {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

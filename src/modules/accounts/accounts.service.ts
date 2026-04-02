@@ -3626,6 +3626,7 @@ export class AccountsService {
     search?: string,
     province?: string,
     specialty?: string,
+    includeEmptyClinics: boolean = false,
   ): Promise<ClinicListResponseDto> {
     const [clinics, total] =
       await this.accountRepository.findClinicsAdminWithFilters(
@@ -3635,49 +3636,46 @@ export class AccountsService {
         search,
         province,
         specialty,
+        includeEmptyClinics,
       );
+
+    // Batch fetch all ratings in a single query (eliminates N+1)
+    const ratingResults = await this.dataSource.query(
+      `
+      SELECT f.clinic_id, AVG(f.rating)::NUMERIC(3,2) as avg_rating
+      FROM feedbacks f
+      WHERE f.clinic_id = ANY($1)
+        AND f.type = 'CLINIC'
+        AND f.deleted_at IS NULL
+      GROUP BY f.clinic_id
+    `,
+      [clinics.map((c) => c._id)],
+    );
+
+    const ratingMap = new Map<string, number>();
+    for (const row of ratingResults) {
+      ratingMap.set(row.clinic_id, parseFloat(row.avg_rating) || 0);
+    }
 
     const clinicItems: ClinicItemDto[] = [];
 
     for (const clinic of clinics) {
-      // Use clinicAdminInformation and address from joined data (already fetched by repository)
       const clinicAdminInfo = clinic.clinicAdminInformation;
       const address = clinic.address;
 
       if (!clinicAdminInfo) continue;
 
-      // Calculate average rating for this clinic
-      let averageRating = 0;
-      try {
-        const ratingResult = await this.dataSource.query(
-          `
-          SELECT AVG(f.rating)::NUMERIC(3,2) as avg_rating
-          FROM feedbacks f
-          WHERE f.clinic_id = $1
-            AND f.type = 'CLINIC'
-            AND f.deleted_at IS NULL
-        `,
-          [clinic._id],
-        );
-        averageRating = ratingResult[0]?.avg_rating
-          ? parseFloat(ratingResult[0].avg_rating)
-          : 0;
-      } catch {
-        averageRating = 0;
-      }
+      const averageRating = ratingMap.get(clinic._id) || 0;
 
-      // Adapt ClinicAdminInformation to match ClinicItemDto's expected clinicInfo structure
       const adaptedClinicInfo = {
         _id: clinicAdminInfo._id,
-        clinicBranchName: clinicAdminInfo.clinicName, // Map clinicName to branchName
-        fullName: clinicAdminInfo.clinicName, // Map clinicName to fullName (representing the org)
-        gender: 'OTHER', // Default for organization
+        clinicBranchName: clinicAdminInfo.clinicName,
+        fullName: clinicAdminInfo.clinicName,
+        gender: 'OTHER',
         profilePicture: clinicAdminInfo.profilePicture,
         dob: clinicAdminInfo.dob,
       };
 
-      // Pass adapted info as clinicInfo (2nd arg) for display compatibility.
-      // Pass original clinicAdminInfo as 4th arg for full details.
       clinicItems.push(
         new ClinicItemDto(
           clinic,

@@ -235,8 +235,18 @@ export class ClinicItemDto {
     };
 
     // Handle clinic admin information and compute final clinic name
+    // SECURITY: Strip sensitive financial/integration fields before exposing in public API
     if (clinicAdminInfo) {
-      this.clinicAdminInfor = clinicAdminInfo;
+      const {
+        bankName: _bankName,
+        bankNumber: _bankNumber,
+        bankBranch: _bankBranch,
+        sepayVa: _sepayVa,
+        sepayKey: _sepayKey,
+        ...sanitizedAdminInfo
+      } = clinicAdminInfo;
+
+      this.clinicAdminInfor = sanitizedAdminInfo as ClinicAdminInformation;
 
       // Compute final clinic name
       const adminName = (clinicAdminInfo.clinicName || '').trim();
