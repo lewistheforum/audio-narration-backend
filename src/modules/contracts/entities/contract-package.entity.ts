@@ -18,6 +18,7 @@ import { ClinicContractInformation } from './clinic-contract-information.entity'
 @Index('idx_contract_package_employee', ['employeeId'])
 @Index('idx_contract_package_clinic_manager', ['clinicManagerId'])
 @Index('idx_contract_package_role', ['role'])
+@Index('idx_contract_package_employee_deleted', ['employeeId', 'deletedAt'])
 export class ContractPackage {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

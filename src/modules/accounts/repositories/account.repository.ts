@@ -544,7 +544,34 @@ export class AccountRepository {
       })
       .andWhere('legalDoc.verification_status = :verifiedStatus', {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
-      });
+      })
+      // Functional Clinic Rule: Must have at least one active doctor/staff
+      .andWhere(
+        `EXISTS (
+          SELECT 1 FROM accounts child
+          WHERE child.parent_id = account._id
+            AND child.role IN ('DOCTOR', 'CLINIC_STAFF')
+            AND child.status = 'ACTIVE'
+            AND child.deleted_at IS NULL
+        )`,
+      )
+      // Functional Clinic Rule: Must have at least one active service
+      .andWhere(
+        `EXISTS (
+          SELECT 1 FROM clinic_service_config csc
+          WHERE csc.clinic_id = account._id
+            AND csc.is_active = true
+            AND csc.deleted_at IS NULL
+        )`,
+      )
+      // Functional Clinic Rule: Must have at least one active schedule
+      .andWhere(
+        `EXISTS (
+          SELECT 1 FROM employee_schedule es
+          WHERE es.clinic_id = account._id
+            AND es.deleted_at IS NULL
+        )`,
+      );
 
     // Apply advanced search filter for clinic admin + branch names + array fields
     if (search) {
@@ -606,6 +633,7 @@ export class AccountRepository {
     search?: string,
     province?: string,
     specialty?: string,
+    includeEmptyClinics: boolean = false,
   ): Promise<[Account[], number]> {
     const now = new Date();
     const queryBuilder = this.accountRepository
@@ -618,6 +646,41 @@ export class AccountRepository {
         validStatuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
       })
       .andWhere('subscription.expirationDate >= :now', { now });
+
+    // Functional Clinic Rule: Only apply when includeEmptyClinics is false (default)
+    // System admins can bypass this filter to manage newly created clinics
+    if (!includeEmptyClinics) {
+      queryBuilder
+        // Must have at least one active branch (CLINIC_MANAGER)
+        .andWhere(
+          `EXISTS (
+            SELECT 1 FROM accounts branch
+            WHERE branch.parent_id = account._id
+              AND branch.role = 'CLINIC_MANAGER'
+              AND branch.status = 'ACTIVE'
+              AND branch.deleted_at IS NULL
+          )`,
+        )
+        // Must have at least one active service across branches
+        .andWhere(
+          `EXISTS (
+            SELECT 1 FROM accounts branch
+            INNER JOIN clinic_service_config csc ON csc.clinic_id = branch._id
+            WHERE branch.parent_id = account._id
+              AND csc.is_active = true
+              AND csc.deleted_at IS NULL
+          )`,
+        )
+        // Must have at least one active schedule across branches
+        .andWhere(
+          `EXISTS (
+            SELECT 1 FROM accounts branch
+            INNER JOIN employee_schedule es ON es.clinic_id = branch._id
+            WHERE branch.parent_id = account._id
+              AND es.deleted_at IS NULL
+          )`,
+        );
+    }
 
     // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
     if (search) {
