@@ -48,6 +48,8 @@ import { EmployeeSchedule } from '../../schedules/entities/employee-schedule.ent
 @Index('idx_accounts_deleted_at', ['deletedAt'])
 @Index('idx_accounts_parent_id', ['parentId'])
 @Index('idx_accounts_role', ['role'])
+@Index('idx_accounts_role_status_deleted', ['role', 'status', 'deletedAt'])
+@Index('idx_accounts_status_deleted', ['status', 'deletedAt'])
 export class Account {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

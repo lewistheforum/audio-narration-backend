@@ -13,6 +13,7 @@ import { Account } from '../../accounts/entities/accounts.entity';
 import { ClinicShiftHour } from '../../schedules/entities/clinic-shift-hour.entity';
 import { ClinicRoom } from '../../schedules/entities/clinic_room.entity';
 import { AppointmentStatus } from '../enums';
+import { dateOnlyTransformer } from '../../../common/transformers/date-only.transformer';
 
 /**
  * Appointment Entity
@@ -73,7 +74,7 @@ export class Appointment {
   @JoinColumn({ name: 'clinic_shift_hour_id' })
   clinicShiftHour?: ClinicShiftHour | null;
 
-  @Column({ name: 'appointment_date', type: 'date' })
+  @Column({ name: 'appointment_date', type: 'date', transformer: dateOnlyTransformer })
   appointmentDate: Date;
 
   @Column({ name: 'appointment_hour', type: 'timestamptz', nullable: true })

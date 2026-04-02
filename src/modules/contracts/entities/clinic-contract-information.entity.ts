@@ -18,6 +18,7 @@ import { ContractStatus } from '../enums/contract-status.enum';
 @Index('idx_contract_status', ['contractStatus'])
 @Index('idx_contract_type', ['contractType'])
 @Index('idx_contract_id', ['contractId'])
+@Index('idx_contract_id_deleted', ['contractId', 'deletedAt'])
 export class ClinicContractInformation {
   @PrimaryGeneratedColumn('uuid')
   _id: string;
