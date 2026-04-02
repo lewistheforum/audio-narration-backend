@@ -38,6 +38,7 @@ import { ClinicManagerService } from './api-clinic-admin/clinic-manager.service'
 import { ClinicManagerController } from './api-clinic-admin/clinic-manager.controller';
 import { ClinicAdminProfileService } from './api-clinic-admin/clinic-admin-profile.service';
 import { ClinicAdminProfileController } from './api-clinic-admin/clinic-admin-profile.controller';
+import { ContractsModule } from '../contracts/contracts.module';
 
 /**
  * Accounts Module
@@ -86,6 +87,7 @@ import { ClinicAdminProfileController } from './api-clinic-admin/clinic-admin-pr
     forwardRef(() => MailerModule),
     forwardRef(() => SubscriptionsModule),
     forwardRef(() => TransactionsModule),
+    forwardRef(() => ContractsModule),
     HttpModule,
   ],
   controllers: [

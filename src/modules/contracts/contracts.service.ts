@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { ContractPackageRepository } from './repositories/contract-package.repository';
@@ -38,7 +38,9 @@ export class ContractsService {
         private readonly contractPackageRepository: ContractPackageRepository,
         private readonly clinicContractInfoRepository: ClinicContractInformationRepository,
         private readonly doctorInfoRepository: DoctorInformationRepository,
+        @Inject(forwardRef(() => AccountsService))
         private readonly accountsService: AccountsService,
+        @Inject(forwardRef(() => MailerService))
         private readonly mailerService: MailerService,
         private readonly codeVerificationRepository: CodeVerificationRepository,
         @InjectDataSource() private readonly dataSource: DataSource,

@@ -223,4 +223,18 @@ export class ContractPackageRepository {
 
     return queryBuilder.getManyAndCount();
   }
+
+  /**
+   * Find the newest Contract Package by Employee ID
+   *
+   * @param employeeId - Filter by Employee ID
+   * @returns The newest ContractPackage entity with clinicContractInformation or null
+   */
+  async findNewestByEmployeeId(employeeId: string): Promise<ContractPackage | null> {
+    return this.repository.createQueryBuilder('contractPackage')
+      .leftJoinAndSelect('contractPackage.clinicContractInformation', 'info')
+      .where('contractPackage.employeeId = :employeeId', { employeeId })
+      .orderBy('contractPackage.createdAt', 'DESC')
+      .getOne();
+  }
 }
