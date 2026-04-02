@@ -6,10 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Transaction } from '../../transactions/entities/transaction.entity';
-import { PaymentStatus } from '../../transactions/entities/transaction.entity';
+import { Transaction, PaymentStatus } from '../../transactions/entities/transaction.entity';
 import { Account } from '../entities/accounts.entity';
 import { AccountRole } from '../enums/account-role.enum';
+import { AppointmentStatus } from '../../appointments/enums/appointment-status.enum';
 import {
   ClinicRevenueFilterDto,
   RevenueGroupBy,
@@ -20,8 +20,13 @@ import {
   ServiceCategoryRevenueDto,
   RevenueTrendDataPointDto,
   TransactionStatusBreakdownDto,
-  BranchRevenueSummaryDto,
+  BranchOperationalOverviewDto,
+  BranchCustomerStatsItemDto,
+  BranchDoctorFeedbackDto,
+  BranchServiceStatsDto,
 } from './dto';
+import { BranchOperationalSummaryDto } from './dto/overall-revenue-report-response.dto';
+import { formatToVietnamTime, parseVietnamTime } from 'src/common/utils/date.util';
 
 interface TopServiceItem {
   serviceName: string;
@@ -29,16 +34,14 @@ interface TopServiceItem {
   revenue: number;
   count: number;
 }
-import { formatToVietnamTime, parseVietnamTime } from 'src/common/utils/date.util';
 
-/**
- * Clinic Revenue Service
- *
- * Handles revenue reporting for CLINIC_ADMIN accounts
- * Aggregates transaction data across branches with detailed breakdowns
- */
 @Injectable()
 export class ClinicRevenueService {
+  private readonly excludedAppointmentStatuses = [
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.ABSENT,
+  ];
+
   constructor(
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
@@ -46,73 +49,45 @@ export class ClinicRevenueService {
     private readonly accountRepository: Repository<Account>,
   ) {}
 
-  /**
-   * Get Overall Revenue Report
-   *
-   * Aggregates revenue data across ALL branches under the CLINIC_ADMIN
-   * Provides comprehensive financial overview with multiple breakdowns
-   */
   async getOverallRevenueReport(
     adminId: string,
     filterDto: ClinicRevenueFilterDto,
   ): Promise<OverallRevenueReportResponseDto> {
-    // Validate admin exists and has CLINIC_ADMIN role
     await this.validateClinicAdmin(adminId);
-
-    // Validate date range
     this.validateDateRange(filterDto.startDate, filterDto.endDate);
 
-    // Get ALL branch IDs under this admin (no filtering by specific manager)
     const branchIds = await this.getAdminBranchIds(adminId);
-
     if (branchIds.length === 0) {
       throw new NotFoundException('No branches found under this admin');
     }
 
-    // Build aggregated queries in parallel (except branchBreakdown which depends on summary)
     const [
       summary,
       paymentMethodBreakdown,
       serviceCategoryBreakdown,
       revenueTrend,
       statusBreakdown,
+      branchBreakdown,
     ] = await Promise.all([
-      this.calculateRevenueSummary(
-        branchIds,
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculatePaymentMethodBreakdown(
-        branchIds,
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculateServiceCategoryBreakdown(
-        branchIds,
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculateRevenueTrend(
-        branchIds,
+      this.calculateOverviewRevenueSummary(adminId, filterDto.startDate, filterDto.endDate),
+      this.calculateOverviewPaymentMethodBreakdown(adminId, filterDto.startDate, filterDto.endDate),
+      this.calculateOverviewServiceCategoryBreakdown(adminId, filterDto.startDate, filterDto.endDate),
+      this.calculateOverviewRevenueTrend(
+        adminId,
         filterDto.startDate,
         filterDto.endDate,
         filterDto.groupBy || RevenueGroupBy.DAY,
       ),
-      this.calculateStatusBreakdown(
+      this.calculateOverviewStatusBreakdown(adminId, filterDto.startDate, filterDto.endDate),
+      this.calculateOverviewBranchOperationalBreakdown(
+        adminId,
         branchIds,
         filterDto.startDate,
         filterDto.endDate,
       ),
     ]);
 
-    const branchBreakdown = await this.calculateBranchBreakdown(
-      branchIds,
-      filterDto.startDate,
-      filterDto.endDate,
-      summary.totalRevenue,
-    );
-
-    return {
+    const finalPayload: OverallRevenueReportResponseDto = {
       period: {
         startDate: filterDto.startDate,
         endDate: filterDto.endDate,
@@ -127,75 +102,37 @@ export class ClinicRevenueService {
       branchBreakdown,
       totalBranches: branchIds.length,
     };
+    return finalPayload;
   }
 
-  /**
-   * Get Branch-Specific Revenue Report
-   *
-   * Returns detailed revenue report for a specific CLINIC_MANAGER
-   * Includes top services analysis
-   */
   async getBranchRevenueReport(
     adminId: string,
     managerId: string,
     filterDto: ClinicRevenueFilterDto,
   ): Promise<BranchRevenueReportResponseDto> {
-    // Validate admin exists and has CLINIC_ADMIN role
     await this.validateClinicAdmin(adminId);
-
-    // Validate date range
     this.validateDateRange(filterDto.startDate, filterDto.endDate);
 
-    // Validate manager belongs to admin
     const manager = await this.validateManagerOwnership(adminId, managerId);
-
-    // Get branch information
     const branchInfo = await this.getBranchInformation(manager);
 
-    // Calculate all metrics for this branch in parallel
     const [
-      summary,
-      paymentMethodBreakdown,
-      serviceCategoryBreakdown,
-      revenueTrend,
-      statusBreakdown,
-      topServices,
+      operationalOverview,
+      customerStats,
+      doctorsFeedback,
+      servicesStats,
     ] = await Promise.all([
-      this.calculateRevenueSummary(
-        [managerId],
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculatePaymentMethodBreakdown(
-        [managerId],
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculateServiceCategoryBreakdown(
-        [managerId],
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculateRevenueTrend(
-        [managerId],
-        filterDto.startDate,
-        filterDto.endDate,
-        filterDto.groupBy || RevenueGroupBy.DAY,
-      ),
-      this.calculateStatusBreakdown(
-        [managerId],
-        filterDto.startDate,
-        filterDto.endDate,
-      ),
-      this.calculateTopServices(
-        [managerId],
-        filterDto.startDate,
-        filterDto.endDate,
-        10, // Top 10 services
-      ),
+      this.calculateBranchOperationalOverview(managerId, filterDto.startDate, filterDto.endDate),
+      this.getBranchCustomerStats(managerId, filterDto),
+      this.getBranchDoctorsWorkingAndFeedback(managerId, filterDto.startDate),
+      this.getBranchServiceStats(managerId, filterDto.startDate, filterDto.endDate),
     ]);
 
-    return {
+    const topServices = [...servicesStats]
+      .sort((a, b) => b.registrationCount - a.registrationCount)
+      .slice(0, 5);
+
+    const finalPayload: BranchRevenueReportResponseDto = {
       period: {
         startDate: filterDto.startDate,
         endDate: filterDto.endDate,
@@ -203,45 +140,27 @@ export class ClinicRevenueService {
         generatedAt: formatToVietnamTime(),
       },
       branchInfo,
-      summary,
-      paymentMethodBreakdown,
-      serviceCategoryBreakdown,
-      revenueTrend,
-      statusBreakdown,
+      operationalOverview,
+      customerStats,
+      doctorsFeedback,
+      servicesStats,
       topServices,
     };
+    return finalPayload;
   }
 
-  // ============================================
-  // Private Helper Methods - Validation
-  // ============================================
-
-  /**
-   * Validate Clinic Admin
-   *
-   * Ensures the user is a valid CLINIC_ADMIN with ACTIVE status
-   */
   private async validateClinicAdmin(adminId: string): Promise<void> {
-    const admin = await this.accountRepository.findOne({
-      where: { _id: adminId },
-    });
+    const admin = await this.accountRepository.findOne({ where: { _id: adminId } });
 
     if (!admin) {
       throw new NotFoundException('Admin account not found');
     }
 
     if (admin.role !== AccountRole.CLINIC_ADMIN) {
-      throw new ForbiddenException(
-        'Only CLINIC_ADMIN can access revenue reports',
-      );
+      throw new ForbiddenException('Only CLINIC_ADMIN can access revenue reports');
     }
   }
 
-  /**
-   * Validate Date Range
-   *
-   * Ensures startDate is before endDate and range does not exceed 365 days
-   */
   private validateDateRange(startDate: string, endDate: string): void {
     const start = parseVietnamTime(startDate);
     const end = parseVietnamTime(endDate);
@@ -256,34 +175,19 @@ export class ClinicRevenueService {
     }
   }
 
-  /**
-   * Get Admin Branch IDs
-   *
-   * Retrieves all CLINIC_MANAGER account IDs under this admin
-   * CRITICAL: Does NOT filter by account status (historical data requirement)
-   */
   private async getAdminBranchIds(adminId: string): Promise<string[]> {
-    const queryBuilder = this.accountRepository
+    const branches = await this.accountRepository
       .createQueryBuilder('account')
-      .select('account._id')
+      .select('account._id', '_id')
       .where('account.parent_id = :adminId', { adminId })
       .andWhere('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
-      .andWhere('account.deleted_at IS NULL');
+      .andWhere('account.deleted_at IS NULL')
+      .getRawMany();
 
-    const branches = await queryBuilder.getMany();
     return branches.map((branch) => branch._id);
   }
 
-  /**
-   * Validate Manager Ownership
-   *
-   * Ensures managerId is a valid CLINIC_MANAGER under adminId
-   * Returns the manager account with relations
-   */
-  private async validateManagerOwnership(
-    adminId: string,
-    managerId: string,
-  ): Promise<Account> {
+  private async validateManagerOwnership(adminId: string, managerId: string): Promise<Account> {
     const manager = await this.accountRepository.findOne({
       where: { _id: managerId },
       relations: ['clinicManagerInformation'],
@@ -294,9 +198,7 @@ export class ClinicRevenueService {
     }
 
     if (manager.role !== AccountRole.CLINIC_MANAGER) {
-      throw new BadRequestException(
-        'Specified account is not a CLINIC_MANAGER',
-      );
+      throw new BadRequestException('Specified account is not a CLINIC_MANAGER');
     }
 
     if (manager.parentId !== adminId) {
@@ -306,11 +208,6 @@ export class ClinicRevenueService {
     return manager;
   }
 
-/**
- * Get Branch Information
- *
- * Extracts display information for a branch from manager account
- */
   private async getBranchInformation(manager: Account): Promise<{
     managerId: string;
     branchName: string;
@@ -319,26 +216,14 @@ export class ClinicRevenueService {
   }> {
     return {
       managerId: manager._id,
-      branchName:
-        manager.clinicManagerInformation?.clinicBranchName || 'Unknown Branch',
-      managerName:
-        manager.clinicManagerInformation?.fullName || 'Unknown Manager',
+      branchName: manager.clinicManagerInformation?.clinicBranchName || 'Unknown Branch',
+      managerName: manager.clinicManagerInformation?.fullName || 'Unknown Manager',
       branchStatus: manager.status,
     };
   }
 
-  // ============================================
-  // Private Aggregation Methods
-  // ============================================
-
-  /**
-   * Calculate Revenue Summary
-   *
-   * Aggregates total revenue, transaction count, unique patients, and average value
-   * Only counts SUCCESS transactions
-   */
-  private async calculateRevenueSummary(
-    branchIds: string[],
+  private async calculateOverviewRevenueSummary(
+    adminId: string,
     startDate: string,
     endDate: string,
   ): Promise<RevenueSummaryDto> {
@@ -346,104 +231,70 @@ export class ClinicRevenueService {
       .createQueryBuilder('t')
       .select('SUM(t.amount)', 'totalRevenue')
       .addSelect('COUNT(DISTINCT t._id)', 'transactionCount')
-      .addSelect('COUNT(DISTINCT a.patient_id)', 'uniquePatients')
+      .addSelect('COUNT(DISTINCT apt.patient_id)', 'uniquePatients')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
+      .leftJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .where('t.clinic_id = :adminId', { adminId })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
       .getRawOne();
 
-    const totalRevenue = parseInt(result.totalRevenue || '0', 10);
-    const transactionCount = parseInt(result.transactionCount || '0', 10);
-    const uniquePatients = parseInt(result.uniquePatients || '0', 10);
-
     return {
-      totalRevenue,
-      transactionCount,
-      uniquePatients,
+      totalRevenue: parseInt(result.totalRevenue || '0', 10),
+      transactionCount: parseInt(result.transactionCount || '0', 10),
+      uniquePatients: parseInt(result.uniquePatients || '0', 10),
       averageTransactionValue:
-        transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
+        parseInt(result.transactionCount || '0', 10) > 0
+          ? Math.round(parseInt(result.totalRevenue || '0', 10) / parseInt(result.transactionCount || '0', 10))
+          : 0,
     };
   }
 
-  /**
-   * Calculate Payment Method Breakdown
-   *
-   * Separates revenue by ONLINE (gateway) vs CASH (COD)
-   * Only counts SUCCESS transactions
-   */
-  private async calculatePaymentMethodBreakdown(
-    branchIds: string[],
+  private async calculateOverviewPaymentMethodBreakdown(
+    adminId: string,
     startDate: string,
     endDate: string,
   ): Promise<PaymentMethodBreakdownDto> {
-    // Online payments (have gateway)
-    const onlineResult = await this.transactionRepository
+    const result = await this.transactionRepository
       .createQueryBuilder('t')
-      .select('SUM(t.amount)', 'revenue')
-      .addSelect('COUNT(t._id)', 'transactionCount')
+      .select(`SUM(CASE WHEN t.gateway IS NOT NULL THEN t.amount ELSE 0 END)`, 'onlineRevenue')
+      .addSelect(`COUNT(CASE WHEN t.gateway IS NOT NULL THEN t._id END)`, 'onlineCount')
+      .addSelect(`SUM(CASE WHEN ap.payment_type = 'cod' THEN t.amount ELSE 0 END)`, 'cashRevenue')
+      .addSelect(`COUNT(CASE WHEN ap.payment_type = 'cod' THEN t._id END)`, 'cashCount')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
+      .where('t.clinic_id = :adminId', { adminId })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
-      .andWhere('t.gateway IS NOT NULL')
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
       .getRawOne();
 
-    // Cash payments (COD)
-    const cashResult = await this.transactionRepository
-      .createQueryBuilder('t')
-      .select('SUM(t.amount)', 'revenue')
-      .addSelect('COUNT(t._id)', 'transactionCount')
-      .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
-      .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
-      .andWhere('ap.payment_type = :paymentType', { paymentType: 'cod' })
-      .andWhere('t.deleted_at IS NULL')
-      .getRawOne();
-
-    const onlineRevenue = parseInt(onlineResult.revenue || '0', 10);
-    const cashRevenue = parseInt(cashResult.revenue || '0', 10);
+    const onlineRevenue = parseInt(result.onlinerevenue || result.onlineRevenue || '0', 10);
+    const onlineCount = parseInt(result.onlinecount || result.onlineCount || '0', 10);
+    const cashRevenue = parseInt(result.cashrevenue || result.cashRevenue || '0', 10);
+    const cashCount = parseInt(result.cashcount || result.cashCount || '0', 10);
     const totalRevenue = onlineRevenue + cashRevenue;
 
     return {
       online: {
         paymentMethod: 'Online Payment',
         revenue: onlineRevenue,
-        transactionCount: parseInt(onlineResult.transactionCount || '0', 10),
-        percentage:
-          totalRevenue > 0
-            ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2))
-            : 0,
+        transactionCount: onlineCount,
+        percentage: totalRevenue > 0 ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2)) : 0,
       },
       cash: {
         paymentMethod: 'Cash on Delivery',
         revenue: cashRevenue,
-        transactionCount: parseInt(cashResult.transactionCount || '0', 10),
-        percentage:
-          totalRevenue > 0
-            ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2))
-            : 0,
+        transactionCount: cashCount,
+        percentage: totalRevenue > 0 ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2)) : 0,
       },
     };
   }
 
-  /**
-   * Calculate Service Category Breakdown
-   *
-   * Groups revenue by ClinicServiceCategory
-   * Only counts SUCCESS transactions
-   */
-  private async calculateServiceCategoryBreakdown(
-    branchIds: string[],
+  private async calculateOverviewServiceCategoryBreakdown(
+    adminId: string,
     startDate: string,
     endDate: string,
   ): Promise<ServiceCategoryRevenueDto[]> {
@@ -453,37 +304,21 @@ export class ClinicRevenueService {
       .addSelect('SUM(t.amount)', 'revenue')
       .addSelect('COUNT(sa._id)', 'serviceCount')
       .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .leftJoin(
-        'service_appointments',
-        'sa',
-        'sa.appointment_package_id = ap._id',
-      )
-      .leftJoin(
-        'clinic_service_config',
-        'csc_config',
-        'csc_config._id = sa.clinic_service_id',
-      )
+      .leftJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
+      .leftJoin('clinic_service_config', 'csc_config', 'csc_config._id = sa.clinic_service_id')
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
-      .leftJoin(
-        'clinic_service_category',
-        'csc',
-        'csc._id = cs.category_id',
-      )
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
+      .leftJoin('clinic_service_category', 'csc', 'csc._id = cs.category_id')
+      .where('t.clinic_id = :adminId', { adminId })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
       .andWhere('csc.category_name IS NOT NULL')
       .groupBy('csc.category_name')
       .orderBy('revenue', 'DESC')
       .getRawMany();
 
-    const totalRevenue = results.reduce(
-      (sum, item) => sum + parseInt(item.revenue || '0', 10),
-      0,
-    );
+    const totalRevenue = results.reduce((sum, item) => sum + parseInt(item.revenue || '0', 10), 0);
 
     return results.map((item) => {
       const revenue = parseInt(item.revenue || '0', 10);
@@ -491,55 +326,30 @@ export class ClinicRevenueService {
         categoryName: item.categoryName,
         revenue,
         serviceCount: parseInt(item.serviceCount || '0', 10),
-        percentage:
-          totalRevenue > 0
-            ? parseFloat(((revenue / totalRevenue) * 100).toFixed(2))
-            : 0,
-        topServices: [], // Placeholder for future implementation
+        percentage: totalRevenue > 0 ? parseFloat(((revenue / totalRevenue) * 100).toFixed(2)) : 0,
+        topServices: [],
       };
     });
   }
 
-  /**
-   * Calculate Revenue Trend
-   *
-   * Groups revenue by time period (day/week/month)
-   * Only counts SUCCESS transactions
-   */
-  private async calculateRevenueTrend(
-    branchIds: string[],
+  private async calculateOverviewRevenueTrend(
+    adminId: string,
     startDate: string,
     endDate: string,
-    groupBy: RevenueGroupBy = RevenueGroupBy.DAY,
+    groupBy: RevenueGroupBy,
   ): Promise<RevenueTrendDataPointDto[]> {
-    let dateFormat: string;
-    switch (groupBy) {
-      case RevenueGroupBy.DAY:
-        dateFormat = 'YYYY-MM-DD';
-        break;
-      case RevenueGroupBy.WEEK:
-        dateFormat = 'IYYY-IW'; // ISO week format
-        break;
-      case RevenueGroupBy.MONTH:
-        dateFormat = 'YYYY-MM';
-        break;
-      default:
-        dateFormat = 'YYYY-MM-DD';
-    }
-
+    const dateFormat = this.getRevenueDateFormat(groupBy);
     const results = await this.transactionRepository
       .createQueryBuilder('t')
       .select(`TO_CHAR(t.transaction_date, '${dateFormat}')`, 'period')
       .addSelect('SUM(t.amount)', 'revenue')
-      .addSelect('COUNT(t._id)', 'transactionCount')
+      .addSelect('COUNT(DISTINCT t._id)', 'transactionCount')
       .addSelect('MIN(t.transaction_date)', 'periodStart')
       .addSelect('MAX(t.transaction_date)', 'periodEnd')
-      .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
+      .where('t.clinic_id = :adminId', { adminId })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
       .groupBy('period')
       .orderBy('period', 'ASC')
@@ -554,115 +364,490 @@ export class ClinicRevenueService {
     }));
   }
 
-  /**
-   * Calculate Status Breakdown
-   *
-   * Groups transactions by PaymentStatus
-   * NOTE: Does NOT filter by status (includes all statuses)
-   */
-  private async calculateStatusBreakdown(
-    branchIds: string[],
+  private async calculateOverviewStatusBreakdown(
+    adminId: string,
     startDate: string,
     endDate: string,
   ): Promise<TransactionStatusBreakdownDto> {
-    const statuses = [
-      PaymentStatus.SUCCESS,
-      PaymentStatus.PENDING,
-      PaymentStatus.FAILED,
-    ];
-    const breakdown: TransactionStatusBreakdownDto = {
-      success: { count: 0, amount: 0 },
-      pending: { count: 0, amount: 0 },
-      failed: { count: 0, amount: 0 },
+    const result = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select(`COUNT(CASE WHEN t.status = 'SUCCESS' THEN t._id END)`, 'successCount')
+      .addSelect(`COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.amount ELSE 0 END), 0)`, 'successAmount')
+      .addSelect(`COUNT(CASE WHEN t.status = 'PENDING' THEN t._id END)`, 'pendingCount')
+      .addSelect(`COALESCE(SUM(CASE WHEN t.status = 'PENDING' THEN t.amount ELSE 0 END), 0)`, 'pendingAmount')
+      .addSelect(`COUNT(CASE WHEN t.status = 'FAILED' THEN t._id END)`, 'failedCount')
+      .addSelect(`COALESCE(SUM(CASE WHEN t.status = 'FAILED' THEN t.amount ELSE 0 END), 0)`, 'failedAmount')
+      .where('t.clinic_id = :adminId', { adminId })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
+      .andWhere('t.deleted_at IS NULL')
+      .getRawOne();
+
+    return {
+      success: {
+        count: parseInt(result.successcount || result.successCount || '0', 10),
+        amount: parseInt(result.successamount || result.successAmount || '0', 10),
+      },
+      pending: {
+        count: parseInt(result.pendingcount || result.pendingCount || '0', 10),
+        amount: parseInt(result.pendingamount || result.pendingAmount || '0', 10),
+      },
+      failed: {
+        count: parseInt(result.failedcount || result.failedCount || '0', 10),
+        amount: parseInt(result.failedamount || result.failedAmount || '0', 10),
+      },
     };
-
-    for (const status of statuses) {
-      const result = await this.transactionRepository
-        .createQueryBuilder('t')
-        .select('COUNT(t._id)', 'count')
-        .addSelect('SUM(t.amount)', 'amount')
-        .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-        .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-        .where('a.clinic_id = ANY(:branchIds)', { branchIds })
-        .andWhere('t.status = :status', { status })
-        .andWhere('t.transaction_date >= :startDate', { startDate })
-        .andWhere('t.transaction_date <= :endDate', { endDate })
-        .andWhere('t.deleted_at IS NULL')
-        .getRawOne();
-
-      const key = status.toLowerCase();
-      breakdown[key] = {
-        count: parseInt(result.count || '0', 10),
-        amount: parseInt(result.amount || '0', 10),
-      };
-    }
-
-    return breakdown;
   }
 
-  /**
-   * Calculate Branch Breakdown
-   *
-   * Revenue summary per branch for overall report
-   * Only counts SUCCESS transactions
-   */
-  private async calculateBranchBreakdown(
+  private async calculateOverviewBranchOperationalBreakdown(
+    adminId: string,
     branchIds: string[],
     startDate: string,
     endDate: string,
-    totalRevenue: number,
-  ): Promise<BranchRevenueSummaryDto[]> {
+  ): Promise<BranchOperationalSummaryDto[]> {
+    const [branches, customers, doctors, services] = await Promise.all([
+      this.accountRepository
+        .createQueryBuilder('acc')
+        .select('acc._id', 'managerId')
+        .addSelect('cmi.clinic_branch_name', 'branchName')
+        .addSelect('cmi.full_name', 'managerName')
+        .leftJoin('clinic_manager_information', 'cmi', 'cmi.account_id = acc._id')
+        .where('acc.parent_id = :adminId', { adminId })
+        .andWhere('acc.role = :role', { role: AccountRole.CLINIC_MANAGER })
+        .andWhere('acc.deleted_at IS NULL')
+        .orderBy('cmi.clinic_branch_name', 'ASC')
+        .getRawMany(),
+      this.accountRepository.manager
+        .createQueryBuilder()
+        .select('apt.clinic_id', 'managerId')
+        .addSelect('COUNT(DISTINCT apt.patient_id)', 'totalCustomers')
+        .from('appointments', 'apt')
+        .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
+        .andWhere('apt.appointment_date >= :startDate::date', { startDate })
+        .andWhere('apt.appointment_date <= :endDate::date', { endDate })
+        .andWhere('apt.deleted_at IS NULL')
+        .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
+          excludedStatuses: this.excludedAppointmentStatuses,
+        })
+        .groupBy('apt.clinic_id')
+        .getRawMany(),
+      this.accountRepository.manager
+        .createQueryBuilder()
+        .select('es.clinic_id', 'managerId')
+        .addSelect('COUNT(DISTINCT es.employee_id)', 'totalDoctors')
+        .from('employee_schedule', 'es')
+        .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+        .where('es.clinic_id = ANY(:branchIds)', { branchIds })
+        .andWhere('es.work_date >= :startDate::date', { startDate })
+        .andWhere('es.work_date <= :endDate::date', { endDate })
+        .andWhere('es.deleted_at IS NULL')
+        .andWhere('doctor.role = :doctorRole', { doctorRole: AccountRole.DOCTOR })
+        .andWhere('doctor.status = :doctorStatus', { doctorStatus: 'ACTIVE' })
+        .andWhere('doctor.deleted_at IS NULL')
+        .groupBy('es.clinic_id')
+        .getRawMany(),
+      this.accountRepository.manager
+        .createQueryBuilder()
+        .select('apt.clinic_id', 'managerId')
+        .addSelect('COUNT(sa._id)', 'totalServices')
+        .from('service_appointments', 'sa')
+        .innerJoin('appointment_package', 'ap', 'ap._id = sa.appointment_package_id')
+        .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+        .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
+        .andWhere('apt.appointment_date >= :startDate::date', { startDate })
+        .andWhere('apt.appointment_date <= :endDate::date', { endDate })
+        .andWhere('apt.deleted_at IS NULL')
+        .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
+          excludedStatuses: this.excludedAppointmentStatuses,
+        })
+        .groupBy('apt.clinic_id')
+        .getRawMany(),
+    ]);
+
+    const customerMap = new Map(customers.map((item) => [item.managerId, parseInt(item.totalCustomers || '0', 10)]));
+    const doctorMap = new Map(doctors.map((item) => [item.managerId, parseInt(item.totalDoctors || '0', 10)]));
+    const serviceMap = new Map(services.map((item) => [item.managerId, parseInt(item.totalServices || '0', 10)]));
+
+    return branches.map((branch) => ({
+      managerId: branch.managerId,
+      branchName: branch.branchName || 'Unknown Branch',
+      managerName: branch.managerName || 'Unknown Manager',
+      totalCustomers: customerMap.get(branch.managerId) || 0,
+      totalDoctors: doctorMap.get(branch.managerId) || 0,
+      totalServices: serviceMap.get(branch.managerId) || 0,
+    }));
+  }
+
+  private async calculateBranchRevenueSummary(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<RevenueSummaryDto> {
+    const result = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select('SUM(t.amount)', 'totalRevenue')
+      .addSelect('COUNT(DISTINCT t._id)', 'transactionCount')
+      .addSelect('COUNT(DISTINCT apt.patient_id)', 'uniquePatients')
+      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
+      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .where('apt.clinic_id = :managerId', { managerId })
+      .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
+      .andWhere('t.deleted_at IS NULL')
+      .getRawOne();
+
+    const totalRevenue = parseInt(result.totalRevenue || '0', 10);
+    const transactionCount = parseInt(result.transactionCount || '0', 10);
+    return {
+      totalRevenue,
+      transactionCount,
+      uniquePatients: parseInt(result.uniquePatients || '0', 10),
+      averageTransactionValue: transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
+    };
+  }
+
+  private async calculateBranchPaymentMethodBreakdown(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<PaymentMethodBreakdownDto> {
+    const result = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select(`SUM(CASE WHEN t.gateway IS NOT NULL THEN t.amount ELSE 0 END)`, 'onlineRevenue')
+      .addSelect(`COUNT(CASE WHEN t.gateway IS NOT NULL THEN t._id END)`, 'onlineCount')
+      .addSelect(`SUM(CASE WHEN ap.payment_type = 'cod' THEN t.amount ELSE 0 END)`, 'cashRevenue')
+      .addSelect(`COUNT(CASE WHEN ap.payment_type = 'cod' THEN t._id END)`, 'cashCount')
+      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
+      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .where('apt.clinic_id = :managerId', { managerId })
+      .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
+      .andWhere('t.deleted_at IS NULL')
+      .getRawOne();
+
+    const onlineRevenue = parseInt(result.onlinerevenue || result.onlineRevenue || '0', 10);
+    const onlineCount = parseInt(result.onlinecount || result.onlineCount || '0', 10);
+    const cashRevenue = parseInt(result.cashrevenue || result.cashRevenue || '0', 10);
+    const cashCount = parseInt(result.cashcount || result.cashCount || '0', 10);
+    const totalRevenue = onlineRevenue + cashRevenue;
+
+    return {
+      online: {
+        paymentMethod: 'Online Payment',
+        revenue: onlineRevenue,
+        transactionCount: onlineCount,
+        percentage: totalRevenue > 0 ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2)) : 0,
+      },
+      cash: {
+        paymentMethod: 'Cash on Delivery',
+        revenue: cashRevenue,
+        transactionCount: cashCount,
+        percentage: totalRevenue > 0 ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2)) : 0,
+      },
+    };
+  }
+
+  private async calculateBranchServiceCategoryBreakdown(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<ServiceCategoryRevenueDto[]> {
     const results = await this.transactionRepository
       .createQueryBuilder('t')
-      .select('acc._id', 'managerId')
-      .addSelect('cmi.clinic_branch_name', 'branchName')
-      .addSelect('cmi.full_name', 'managerName')
-      .addSelect('acc.status', 'branchStatus')
+      .select('csc.category_name', 'categoryName')
       .addSelect('SUM(t.amount)', 'revenue')
-      .addSelect('COUNT(t._id)', 'transactionCount')
-      .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .leftJoin('accounts', 'acc', 'acc._id = a.clinic_id')
-      .leftJoin(
-        'clinic_manager_information',
-        'cmi',
-        'cmi.account_id = acc._id',
-      )
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
+      .addSelect('COUNT(sa._id)', 'serviceCount')
+      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
+      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
+      .leftJoin('clinic_service_config', 'csc_config', 'csc_config._id = sa.clinic_service_id')
+      .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
+      .leftJoin('clinic_service_category', 'csc', 'csc._id = cs.category_id')
+      .where('apt.clinic_id = :managerId', { managerId })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
-      .groupBy('acc._id')
-      .addGroupBy('cmi.clinic_branch_name')
-      .addGroupBy('cmi.full_name')
-      .addGroupBy('acc.status')
+      .andWhere('csc.category_name IS NOT NULL')
+      .groupBy('csc.category_name')
       .orderBy('revenue', 'DESC')
       .getRawMany();
 
+    const totalRevenue = results.reduce((sum, item) => sum + parseInt(item.revenue || '0', 10), 0);
+
     return results.map((item) => {
-      const branchRevenue = parseInt(item.revenue || '0', 10);
+      const revenue = parseInt(item.revenue || '0', 10);
       return {
-        managerId: item.managerId,
-        branchName: item.branchName || 'Unknown Branch',
-        managerName: item.managerName || 'Unknown Manager',
-        branchStatus: item.branchStatus,
-        totalRevenue: branchRevenue,
-        transactionCount: parseInt(item.transactionCount || '0', 10),
-        revenuePercentage:
-          totalRevenue > 0
-            ? parseFloat(((branchRevenue / totalRevenue) * 100).toFixed(2))
-            : 0,
+        categoryName: item.categoryName,
+        revenue,
+        serviceCount: parseInt(item.serviceCount || '0', 10),
+        percentage: totalRevenue > 0 ? parseFloat(((revenue / totalRevenue) * 100).toFixed(2)) : 0,
+        topServices: [],
       };
     });
   }
 
-  /**
-   * Calculate Top Services
-   *
-   * Returns top N services by revenue for a branch
-   * Only counts SUCCESS transactions
-   */
+  private async calculateBranchRevenueTrend(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+    groupBy: RevenueGroupBy,
+  ): Promise<RevenueTrendDataPointDto[]> {
+    const dateFormat = this.getRevenueDateFormat(groupBy);
+    const results = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select(`TO_CHAR(t.transaction_date, '${dateFormat}')`, 'period')
+      .addSelect('SUM(t.amount)', 'revenue')
+      .addSelect('COUNT(DISTINCT t._id)', 'transactionCount')
+      .addSelect('MIN(t.transaction_date)', 'periodStart')
+      .addSelect('MAX(t.transaction_date)', 'periodEnd')
+      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
+      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .where('apt.clinic_id = :managerId', { managerId })
+      .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
+      .andWhere('t.deleted_at IS NULL')
+      .groupBy('period')
+      .orderBy('period', 'ASC')
+      .getRawMany();
+
+    return results.map((item) => ({
+      period: item.period,
+      revenue: parseInt(item.revenue || '0', 10),
+      transactionCount: parseInt(item.transactionCount || '0', 10),
+      periodStart: formatToVietnamTime(item.periodStart),
+      periodEnd: formatToVietnamTime(item.periodEnd),
+    }));
+  }
+
+  private async calculateBranchStatusBreakdown(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<TransactionStatusBreakdownDto> {
+    const result = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select(`COUNT(CASE WHEN t.status = 'SUCCESS' THEN t._id END)`, 'successCount')
+      .addSelect(`COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.amount ELSE 0 END), 0)`, 'successAmount')
+      .addSelect(`COUNT(CASE WHEN t.status = 'PENDING' THEN t._id END)`, 'pendingCount')
+      .addSelect(`COALESCE(SUM(CASE WHEN t.status = 'PENDING' THEN t.amount ELSE 0 END), 0)`, 'pendingAmount')
+      .addSelect(`COUNT(CASE WHEN t.status = 'FAILED' THEN t._id END)`, 'failedCount')
+      .addSelect(`COALESCE(SUM(CASE WHEN t.status = 'FAILED' THEN t.amount ELSE 0 END), 0)`, 'failedAmount')
+      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
+      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .where('apt.clinic_id = :managerId', { managerId })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
+      .andWhere('t.deleted_at IS NULL')
+      .getRawOne();
+
+    return {
+      success: {
+        count: parseInt(result.successcount || result.successCount || '0', 10),
+        amount: parseInt(result.successamount || result.successAmount || '0', 10),
+      },
+      pending: {
+        count: parseInt(result.pendingcount || result.pendingCount || '0', 10),
+        amount: parseInt(result.pendingamount || result.pendingAmount || '0', 10),
+      },
+      failed: {
+        count: parseInt(result.failedcount || result.failedCount || '0', 10),
+        amount: parseInt(result.failedamount || result.failedAmount || '0', 10),
+      },
+    };
+  }
+
+  private async calculateBranchOperationalOverview(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<BranchOperationalOverviewDto> {
+    const [customerRow, doctorRow, serviceRow] = await Promise.all([
+      this.accountRepository.manager
+        .createQueryBuilder()
+        .select('COUNT(DISTINCT apt.patient_id)', 'totalCustomers')
+        .from('appointments', 'apt')
+        .where('apt.clinic_id = :managerId', { managerId })
+        .andWhere('apt.appointment_date >= :startDate::date', { startDate })
+        .andWhere('apt.appointment_date <= :endDate::date', { endDate })
+        .andWhere('apt.deleted_at IS NULL')
+        .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
+          excludedStatuses: this.excludedAppointmentStatuses,
+        })
+        .getRawOne(),
+      this.accountRepository.manager
+        .createQueryBuilder()
+        .select('COUNT(DISTINCT es.employee_id)', 'totalDoctors')
+        .from('employee_schedule', 'es')
+        .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+        .where('es.clinic_id = :managerId', { managerId })
+        .andWhere('es.work_date >= :startDate::date', { startDate })
+        .andWhere('es.work_date <= :endDate::date', { endDate })
+        .andWhere('es.deleted_at IS NULL')
+        .andWhere('doctor.role = :doctorRole', { doctorRole: AccountRole.DOCTOR })
+        .andWhere('doctor.status = :doctorStatus', { doctorStatus: 'ACTIVE' })
+        .andWhere('doctor.deleted_at IS NULL')
+        .getRawOne(),
+      this.accountRepository.manager
+        .createQueryBuilder()
+        .select('COUNT(sa._id)', 'totalServices')
+        .from('service_appointments', 'sa')
+        .innerJoin('appointment_package', 'ap', 'ap._id = sa.appointment_package_id')
+        .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+        .where('apt.clinic_id = :managerId', { managerId })
+        .andWhere('apt.appointment_date >= :startDate::date', { startDate })
+        .andWhere('apt.appointment_date <= :endDate::date', { endDate })
+        .andWhere('apt.deleted_at IS NULL')
+        .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
+          excludedStatuses: this.excludedAppointmentStatuses,
+        })
+        .getRawOne(),
+    ]);
+
+    return {
+      totalCustomers: parseInt(customerRow.totalCustomers || '0', 10),
+      totalDoctors: parseInt(doctorRow.totalDoctors || '0', 10),
+      totalServices: parseInt(serviceRow.totalServices || '0', 10),
+    };
+  }
+
+  private async getBranchCustomerStats(
+    managerId: string,
+    filterDto: ClinicRevenueFilterDto,
+  ): Promise<BranchCustomerStatsItemDto[]> {
+    const dateGroupBy = this.getCustomerDateFormat(filterDto.groupBy || RevenueGroupBy.DAY);
+
+    const rows = await this.accountRepository.manager
+      .createQueryBuilder()
+      .select(dateGroupBy, 'label')
+      .addSelect('COUNT(DISTINCT appointment.patient_id)', 'count')
+      .from('appointments', 'appointment')
+      .where('appointment.clinic_id = :managerId', { managerId })
+      .andWhere('appointment.appointment_date >= :startDate::date', {
+        startDate: filterDto.startDate,
+      })
+      .andWhere('appointment.appointment_date <= :endDate::date', {
+        endDate: filterDto.endDate,
+      })
+      .andWhere('appointment.deleted_at IS NULL')
+      .andWhere('NOT appointment.status = ANY(:excludedStatuses)', {
+        excludedStatuses: this.excludedAppointmentStatuses,
+      })
+      .groupBy(dateGroupBy)
+      .orderBy('label', 'ASC')
+      .getRawMany();
+
+    return rows.map((item) => ({
+      label: item.label,
+      count: parseInt(item.count || '0', 10),
+    }));
+  }
+
+  private async getBranchDoctorsWorkingAndFeedback(
+    managerId: string,
+    date: string,
+  ): Promise<BranchDoctorFeedbackDto[]> {
+    const doctorsWithStats = await this.accountRepository.manager.query(
+      `
+        SELECT 
+          acc._id as "doctorId",
+          ga.full_name as "fullName",
+          ga.profile_picture as "profilePicture",
+          COALESCE(AVG(fb.rating)::NUMERIC(3,2), 0) as "avgRating",
+          COUNT(fb._id) as "totalFeedback"
+        FROM appointments apt
+        JOIN accounts acc ON acc._id = apt.doctor_id
+        LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+        LEFT JOIN feedbacks fb ON fb.doctor_id = acc._id AND fb.type = 'DOCTOR'
+        WHERE apt.clinic_id = $1 
+          AND apt.appointment_date = $2
+          AND apt.status NOT IN ('CANCELLED', 'ABSENT')
+        GROUP BY acc._id, ga.full_name, ga.profile_picture
+        ORDER BY ga.full_name ASC
+      `,
+      [managerId, date],
+    );
+
+    if (doctorsWithStats.length === 0) {
+      return [];
+    }
+
+    const doctorIds = doctorsWithStats.map((item: { doctorId: string }) => item.doctorId);
+    const recentFeedbacksRaw = await this.accountRepository.manager.query(
+      `
+        SELECT 
+          fb.doctor_id as "doctorId",
+          fb.rating,
+          fb.description,
+          ga.full_name as "patientName"
+        FROM feedbacks fb
+        LEFT JOIN appointments apt ON apt._id = fb.appointment_id
+        LEFT JOIN accounts acc ON acc._id = apt.patient_id
+        LEFT JOIN general_accounts ga ON ga.account_id = acc._id
+        WHERE fb.doctor_id = ANY($1) AND fb.type = 'DOCTOR'
+        ORDER BY fb.created_at DESC
+      `,
+      [doctorIds],
+    );
+
+    const feedbacksByDoctor = new Map<string, Array<{ rating: number; description: string | null; patientName: string | null }>>();
+    for (const fb of recentFeedbacksRaw) {
+      if (!feedbacksByDoctor.has(fb.doctorId)) {
+        feedbacksByDoctor.set(fb.doctorId, []);
+      }
+      if (feedbacksByDoctor.get(fb.doctorId)!.length < 5) {
+        feedbacksByDoctor.get(fb.doctorId)!.push({
+          rating: fb.rating,
+          description: fb.description,
+          patientName: fb.patientName,
+        });
+      }
+    }
+
+    return doctorsWithStats.map((doc: any) => ({
+      doctorId: doc.doctorId,
+      fullName: doc.fullName,
+      profilePicture: doc.profilePicture,
+      avgRating: parseFloat(doc.avgRating || '0'),
+      totalFeedback: parseInt(doc.totalFeedback || '0', 10),
+      recentFeedbacks: feedbacksByDoctor.get(doc.doctorId) || [],
+    }));
+  }
+
+  private async getBranchServiceStats(
+    managerId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<BranchServiceStatsDto[]> {
+    const data = await this.accountRepository.manager.query(
+      `
+        SELECT 
+          cs.service_name as "serviceName",
+          COUNT(sa._id) as "registrationCount"
+        FROM service_appointments sa
+        JOIN appointment_package ap ON ap._id = sa.appointment_package_id
+        JOIN appointments apt ON apt._id = ap.appointment_id
+        JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
+        JOIN clinic_services cs ON cs._id = csc.service_id
+        WHERE apt.clinic_id = $1
+          AND apt.status NOT IN ('CANCELLED', 'ABSENT')
+          AND apt.appointment_date >= $2
+          AND apt.appointment_date <= $3
+        GROUP BY cs.service_name
+        ORDER BY "registrationCount" DESC
+      `,
+      [managerId, startDate, endDate],
+    );
+
+    return data.map((item: any) => ({
+      serviceName: item.serviceName,
+      registrationCount: parseInt(item.registrationCount || '0', 10),
+    }));
+  }
+
   private async calculateTopServices(
     branchIds: string[],
     startDate: string,
@@ -675,23 +860,15 @@ export class ClinicRevenueService {
       .addSelect('cs.service_code', 'serviceCode')
       .addSelect('SUM(t.amount)', 'revenue')
       .addSelect('COUNT(sa._id)', 'count')
-      .leftJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
-      .leftJoin('appointments', 'a', 'a._id = ap.appointment_id')
-      .leftJoin(
-        'service_appointments',
-        'sa',
-        'sa.appointment_package_id = ap._id',
-      )
-      .leftJoin(
-        'clinic_service_config',
-        'csc_config',
-        'csc_config._id = sa.clinic_service_id',
-      )
+      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id')
+      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
+      .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
+      .leftJoin('clinic_service_config', 'csc_config', 'csc_config._id = sa.clinic_service_id')
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
-      .where('a.clinic_id = ANY(:branchIds)', { branchIds })
+      .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status = :status', { status: PaymentStatus.SUCCESS })
-      .andWhere('t.transaction_date >= :startDate', { startDate })
-      .andWhere('t.transaction_date <= :endDate', { endDate })
+      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
+      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
       .andWhere('cs.service_name IS NOT NULL')
       .groupBy('cs.service_name')
@@ -706,5 +883,27 @@ export class ClinicRevenueService {
       revenue: parseInt(item.revenue || '0', 10),
       count: parseInt(item.count || '0', 10),
     }));
+  }
+
+  private getRevenueDateFormat(groupBy: RevenueGroupBy): string {
+    switch (groupBy) {
+      case RevenueGroupBy.WEEK:
+        return 'IYYY-IW';
+      case RevenueGroupBy.MONTH:
+        return 'YYYY-MM';
+      default:
+        return 'YYYY-MM-DD';
+    }
+  }
+
+  private getCustomerDateFormat(groupBy: RevenueGroupBy): string {
+    switch (groupBy) {
+      case RevenueGroupBy.WEEK:
+        return `TO_CHAR(appointment.appointment_date, 'IYYY-IW')`;
+      case RevenueGroupBy.MONTH:
+        return `TO_CHAR(appointment.appointment_date, 'YYYY-MM')`;
+      default:
+        return `TO_CHAR(appointment.appointment_date, 'YYYY-MM-DD')`;
+    }
   }
 }
