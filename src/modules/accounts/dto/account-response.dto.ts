@@ -504,6 +504,13 @@ export class AccountResponseDto {
     nullable: true,
   })
   googleMapIframe?: string;
+  
+  @ApiProperty({
+    description: 'Legal documents associated with the account',
+    required: false,
+    nullable: true,
+  })
+  legalDocuments?: any;
 
   constructor(
     account: Partial<Account>,
@@ -529,6 +536,7 @@ export class AccountResponseDto {
     this.createdAt = account.createdAt;
     this.updatedAt = account.updatedAt;
     this.deletedAt = account.deletedAt;
+    this.legalDocuments = account.legalDocuments;
 
     // GeneralAccount data
     if (generalAccount) {

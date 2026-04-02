@@ -5,6 +5,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { Account } from './entities/accounts.entity';
@@ -97,6 +99,7 @@ import {
   PaymentStatus,
 } from '../transactions/entities/transaction.entity';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
+import { ContractPackageRepository } from '../contracts/repositories/contract-package.repository';
 
 /**
  * Accounts Service
@@ -169,10 +172,13 @@ export class AccountsService {
     private readonly clinicSubscriptionRepository: ClinicSubscriptionRepository,
     private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
     private readonly subscriptionServiceRepository: SubscriptionServiceRepository,
+    @Inject(forwardRef(() => MailerService))
     private readonly mailerService: MailerService,
     private readonly clinicLegalDocsRepository: ClinicsLegalDocumentsRepository,
     private readonly transactionRepository: TransactionRepository,
     private readonly zaloWebhookService: ZaloWebhookService,
+    @Inject(forwardRef(() => ContractPackageRepository))
+    private readonly contractPackageRepository: ContractPackageRepository,
   ) {}
 
   async generateUserKeys(
@@ -2601,6 +2607,7 @@ export class AccountsService {
     managerAccountId?: string;
     notice?: string;
     expirationDate?: string;
+    newestContractStatus?: string;
   }> {
     const clinicRoles = [
       AccountRole.CLINIC_ADMIN,
@@ -2621,6 +2628,10 @@ export class AccountsService {
       onboardingStatus === RegistrationStatus.ACTIVE ||
       onboardingStatus === RegistrationStatus.NON_RENEWING;
 
+    // Get newest contract status for the employee
+    const newestContract = await this.contractPackageRepository.findNewestByEmployeeId(account._id);
+    const newestContractStatus = newestContract?.clinicContractInformation?.contractStatus || 'NO_CONTRACT_YET';
+
     return {
       onboardingStatus,
       registrationStep: registrationStatus.currentStep,
@@ -2629,6 +2640,7 @@ export class AccountsService {
       managerAccountId: registrationStatus.managerAccountId,
       notice: registrationStatus.notice,
       expirationDate: registrationStatus.expirationDate,
+      newestContractStatus,
     };
   }
 

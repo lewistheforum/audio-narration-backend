@@ -49,9 +49,11 @@ export class ClinicManagerInformationRepository {
    * Find clinic manager information by account ID
    */
   async findByAccountId(accountId: string): Promise<ClinicManagerInformation | null> {
-    return this.repository.findOne({
-      where: { accountId },
-    });
+    return this.repository.createQueryBuilder('manager')
+      .leftJoinAndSelect('manager.account', 'account')
+      .leftJoinAndSelect('account.legalDocuments', 'legal')
+      .where('manager.accountId = :accountId', { accountId })
+      .getOne();
   }
 
   /**
@@ -60,10 +62,12 @@ export class ClinicManagerInformationRepository {
   async findByAccountIdWithDeleted(
     accountId: string,
   ): Promise<ClinicManagerInformation | null> {
-    return this.repository.findOne({
-      where: { accountId },
-      withDeleted: true,
-    });
+    return this.repository.createQueryBuilder('manager')
+      .withDeleted()
+      .leftJoinAndSelect('manager.account', 'account')
+      .leftJoinAndSelect('account.legalDocuments', 'legal')
+      .where('manager.accountId = :accountId', { accountId })
+      .getOne();
   }
 
   /**
