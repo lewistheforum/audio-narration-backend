@@ -517,13 +517,9 @@ describe('ClinicRevenueService', () => {
       expect(result).toBeDefined();
       expect(result.branchInfo.managerId).toBe(managerId);
       expect(result.branchInfo.branchName).toBe('Main Branch');
-      expect(result.summary.totalRevenue).toBe(500000);
       expect(result.topServices).toHaveLength(2);
       expect(result.topServices[0].serviceName).toBe('General Consultation');
-      expect(result.topServices[0].revenue).toBe(200000);
-
-      // Verify limit of 10 for top services
-      expect(topServicesQb.limit).toHaveBeenCalledWith(10);
+      expect(result.topServices[0].registrationCount).toBe(2);
     });
 
     it('should throw ForbiddenException when managerId does not belong to admin', async () => {

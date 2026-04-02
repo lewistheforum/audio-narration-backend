@@ -40,6 +40,9 @@ export enum PaymentDirection {
 @Index('idx_transactions_seepay_transaction_id', ['seepayTransactionId'])
 @Index('idx_transactions_transaction_date', ['transactionDate'])
 @Index('idx_transactions_clinic_date_status', ['clinicId', 'transactionDate', 'status'])
+@Index('idx_transactions_deleted_at', ['deletedAt'])
+@Index('idx_transactions_gateway', ['gateway'])
+@Index('idx_transactions_clinic_status_deleted', ['clinicId', 'status', 'deletedAt'])
 export class Transaction {
   @PrimaryGeneratedColumn('uuid', { name: '_id' })
   id: string;
