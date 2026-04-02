@@ -22,7 +22,7 @@ import dayjs from 'dayjs';
  * Number of appointments to create per patient
  * Adjust this to control how many appointments each patient will have
  */
-export const APPOINTMENTS_PER_PATIENT = 3;
+export const APPOINTMENTS_PER_PATIENT = 10;
 
 /**
  * Number of ERMs to create per appointment (random between min and max)

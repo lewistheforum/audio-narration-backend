@@ -10,7 +10,7 @@ export class ReportSeederService {
   private readonly logger = new Logger(ReportSeederService.name);
 
   // Number of reports to create
-  private readonly TOTAL_REPORTS = 20;
+  private readonly TOTAL_REPORTS = 80;
 
   // Image URLs for reports
   private readonly IMAGE_URLS = [
