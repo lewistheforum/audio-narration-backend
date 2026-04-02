@@ -154,8 +154,26 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Services', type: [ServiceDetailDto], required: false })
   services?: ServiceDetailDto[];
 
-  @ApiProperty({ description: 'Feedbacks associated with this appointment', type: [FeedbackSynopsisDto], required: false })
+  @ApiProperty({
+    description: 'Feedbacks associated with this appointment',
+    type: [FeedbackSynopsisDto],
+    required: false,
+  })
   feedbacks?: FeedbackSynopsisDto[];
+
+  @ApiProperty({
+    description: 'Clinic feedback ID if exists',
+    required: false,
+    type: Object,
+  })
+  clinicFeedback?: { id: string | null };
+
+  @ApiProperty({
+    description: 'Doctor feedback ID if exists',
+    required: false,
+    type: Object,
+  })
+  doctorFeedback?: { id: string | null };
 
   @ApiProperty({ description: 'Appointment date' })
   @Transform(({ value }) => formatToVietnamTime(value))

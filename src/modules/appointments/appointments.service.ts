@@ -6329,6 +6329,8 @@ export class AppointmentsService {
     let servicesMap: Map<string, any[]> = new Map();
     let ermsMap: Map<string, any[]> = new Map();
     let ePrescriptionMap: Map<string, any> = new Map();
+    let clinicFeedbackMap: Map<string, { id: string | null }> = new Map();
+    let doctorFeedbackMap: Map<string, { id: string | null }> = new Map();
     let packagePricingMap: Map<
       string,
       {
@@ -6494,6 +6496,29 @@ export class AppointmentsService {
           created_at: ep.ep_created_at,
         });
       });
+
+      // Fetch Feedback IDs
+      const feedbacksRaw = await this.dataSource
+        .createQueryBuilder()
+        .select([
+          'f.appointment_id AS appointment_id',
+          'f._id AS feedback_id',
+          'f.doctor_id AS doctor_id',
+        ])
+        .from('feedbacks', 'f')
+        .where('f.appointment_id = ANY(:appointmentIds)', { appointmentIds })
+        .andWhere('f.deleted_at IS NULL')
+        .getRawMany();
+
+      feedbacksRaw.forEach((f) => {
+        const aptId = f.appointment_id;
+
+        if (f.doctor_id) {
+          doctorFeedbackMap.set(aptId, { id: f.feedback_id });
+        } else {
+          clinicFeedbackMap.set(aptId, { id: f.feedback_id });
+        }
+      });
     }
 
     // Map to response DTO structure
@@ -6539,6 +6564,12 @@ export class AppointmentsService {
         erms: ermsMap.get(apt.appointment_id) || [],
         e_prescription_summary:
           ePrescriptionMap.get(apt.appointment_id) || null,
+        clinicFeedback: clinicFeedbackMap.get(apt.appointment_id) || {
+          id: null,
+        },
+        doctorFeedback: doctorFeedbackMap.get(apt.appointment_id) || {
+          id: null,
+        },
       };
     });
 

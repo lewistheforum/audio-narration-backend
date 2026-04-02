@@ -70,7 +70,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 export class SubscriptionServicesController {
   constructor(
     private readonly subscriptionServicesService: SubscriptionServicesService,
-  ) { }
+  ) {}
 
   /**
    * Get All Subscription Services
@@ -111,6 +111,52 @@ export class SubscriptionServicesController {
     message: string;
   }> {
     const services = await this.subscriptionServicesService.findAll();
+    return {
+      data: services,
+      message: 'Subscription services retrieved successfully',
+    };
+  }
+
+  /**
+   * Get All Subscription Services
+   *
+   * Retrieves a list of all ACTIVE subscription services in the system.
+   * Returns ACTIVE services ordered by newest first (createdAt DESC).
+   * Excludes soft-deleted records (deletedAt IS NULL).
+   * Excludes INACTIVE, archived, or deleted services.
+   * No pagination, search, or filters.
+   *
+   * Response Format:
+   * - Returns array of SubscriptionServiceResponseDto objects
+   * - Ordered by createdAt DESC (newest first)
+   *
+   * Access Control:
+   * - Public endpoint (no authentication required)
+   *
+   * Use Cases:
+   * - Pricing screen display
+   * - Subscription plan listing
+   * - Public subscription browsing
+   *
+   * @returns {Promise<{data: SubscriptionServiceResponseDto[], message: string}>} List of all subscription services
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved subscription services
+   */
+  @Get('services-admin')
+  @ApiOperation({ summary: 'Get all ACTIVE subscription services' })
+  @ApiResponseData({
+    type: SubscriptionServiceResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Subscription services retrieved successfully',
+    isArray: true,
+  })
+  async findAllSubscriptionServices(): Promise<{
+    data: SubscriptionServiceResponseDto[];
+    message: string;
+  }> {
+    const services =
+      await this.subscriptionServicesService.findAllSubscriptionServices();
     return {
       data: services,
       message: 'Subscription services retrieved successfully',

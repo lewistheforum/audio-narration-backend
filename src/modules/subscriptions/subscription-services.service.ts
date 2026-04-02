@@ -59,7 +59,7 @@ export class SubscriptionServicesService {
     private readonly clinicSubscriptionHistoryRepository: ClinicSubscriptionHistoryRepository,
     private readonly clinicSubscriptionRenewalQueueRepository: ClinicSubscriptionRenewalQueueRepository,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   /**
    * Find All Subscription Services
@@ -87,6 +87,34 @@ export class SubscriptionServicesService {
       false,
       SubscriptionServiceStatus.ACTIVE,
     );
+    return services.map((service) => this.toResponseDto(service));
+  }
+
+  /**
+   * Find All Subscription Services
+   *
+   * Retrieves all active subscription services from the system.
+   * Excludes soft-deleted records (deletedAt IS NULL).
+   * Filters by status = 'ACTIVE' by default.
+   * Orders by createdAt DESC (newest first).
+   *
+   * Use Cases:
+   * - Pricing screen display
+   * - Subscription plan listing
+   * - Public subscription browsing
+   *
+   * @returns {Promise<SubscriptionServiceResponseDto[]>} Array of subscription service DTOs
+   *
+   * @example
+   * ```typescript
+   * const services = await subscriptionServicesService.findAll();
+   * // Returns array of active services ordered by newest first
+   * ```
+   */
+  async findAllSubscriptionServices(): Promise<
+    SubscriptionServiceResponseDto[]
+  > {
+    const services = await this.subscriptionServiceRepository.findAll(false);
     return services.map((service) => this.toResponseDto(service));
   }
 
@@ -347,17 +375,18 @@ export class SubscriptionServicesService {
    * @throws {BadRequestException} If subscription is not ACTIVE
    */
   async cancelCurrentSubscription(clinicAdminId: string): Promise<any> {
-    const subscription = await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
+    const subscription =
+      await this.clinicSubscriptionRepository.findByClinicId(clinicAdminId);
 
     if (!subscription) {
-      throw new NotFoundException(
-        'No active subscription found.',
-      );
+      throw new NotFoundException('No active subscription found.');
     }
 
     if (subscription.subscriptionStatus !== RegistrationStatus.ACTIVE) {
       throw new BadRequestException(
-        'Cannot cancel subscription in status ' + subscription.subscriptionStatus + '. Only active subscriptions can be cancelled.',
+        'Cannot cancel subscription in status ' +
+          subscription.subscriptionStatus +
+          '. Only active subscriptions can be cancelled.',
       );
     }
 
@@ -368,9 +397,7 @@ export class SubscriptionServicesService {
     try {
       // 1. Update status to NON_RENEWING
       subscription.subscriptionStatus = RegistrationStatus.NON_RENEWING;
-      const updatedSubscription = await queryRunner.manager.save(
-        subscription,
-      );
+      const updatedSubscription = await queryRunner.manager.save(subscription);
 
       // 2. Log History
       const history = this.clinicSubscriptionHistoryRepository.create({
@@ -602,11 +629,15 @@ export class SubscriptionServicesService {
       // Determine Current Expiration in VN Time
       // currentExpirationDate is already stored as Wall-Clock UTC (representing VN time)
       const currentExpirationDate = new Date(subscription.expirationDate);
-      const targetStartDate = getStartOfDay(addToDate(currentExpirationDate, 60, 'second'));
+      const targetStartDate = getStartOfDay(
+        addToDate(currentExpirationDate, 60, 'second'),
+      );
 
       // Determine Next End Date
       // Inclusive full period: Start + Duration - 1 day
-      const targetEndDate = getEndOfDay(addToDate(targetStartDate, DURATION_MONTHS, 'month'));
+      const targetEndDate = getEndOfDay(
+        addToDate(targetStartDate, DURATION_MONTHS, 'month'),
+      );
       targetEndDate.setUTCDate(targetEndDate.getUTCDate() - 1); // Make inclusive 23:59:59
 
       // Create or Update Queue Record
@@ -650,7 +681,9 @@ export class SubscriptionServicesService {
       const startDate = getStartOfDay();
 
       // 2. Get End Date (Start + Duration - 1 day at 23:59:59.999)
-      const expirationDate = getEndOfDay(addToDate(startDate, DURATION_MONTHS, 'month'));
+      const expirationDate = getEndOfDay(
+        addToDate(startDate, DURATION_MONTHS, 'month'),
+      );
       expirationDate.setUTCDate(expirationDate.getUTCDate() - 1); // Make inclusive
 
       console.log(`[DEBUG] Date Calculation (VN Wall Clock stored as UTC):`);
