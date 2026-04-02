@@ -73,13 +73,13 @@ export class Message {
   @JoinColumn({ name: 'receiver_id' })
   receiver: Account;
 
-  @CreateDateColumn({ name: 'validated_at' })
+  @Column({ name: 'validated_at', type: 'timestamptz' })
   validatedAt: Date;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @Column({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @Column({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at' })

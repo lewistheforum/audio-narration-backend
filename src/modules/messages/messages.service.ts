@@ -241,6 +241,7 @@ export class MessagesService {
   async markAsRead(id: string): Promise<MessageResponseDto> {
     const updatedMessage = await this.messageRepository.updateMessage(id, {
       isRead: true,
+      updatedAt: getCurrentVietnamTime(),
     });
     return new MessageResponseDto(updatedMessage);
   }
@@ -248,9 +249,11 @@ export class MessagesService {
   async markMultipleAsRead(
     messageIds: string[],
   ): Promise<MessageResponseDto[]> {
+    const now = getCurrentVietnamTime();
     const messages = await this.messageRepository.findMessagesByIds(messageIds);
     const updatedMessages = messages.map((message) => {
       message.isRead = true;
+      message.updatedAt = now;
       return message;
     });
     const savedMessages = await this.messageRepository.bulkSaveMessages(updatedMessages);

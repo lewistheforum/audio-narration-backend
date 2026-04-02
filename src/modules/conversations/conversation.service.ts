@@ -14,6 +14,7 @@ import { Conversation } from './entities/conversation.entity';
 import { ConversationRepository } from './repositories';
 import { AccountsService } from '../accounts/accounts.service';
 import { MessagesService } from '../messages/messages.service';
+import { getCurrentVietnamTime } from 'src/common/utils/date.util';
 
 @Injectable()
 export class ConversationService {
@@ -71,10 +72,13 @@ export class ConversationService {
       );
     }
 
+    const now = getCurrentVietnamTime();
     const savedConversation =
-      await this.conversationRepository.createConversation(
-        createConversationDto,
-      );
+      await this.conversationRepository.createConversation({
+        ...createConversationDto,
+        createdAt: now,
+        updatedAt: now,
+      });
     return this.conversationRepository.findConversationByIdWithParticipants(
       savedConversation._id,
     );
@@ -129,10 +133,10 @@ export class ConversationService {
     id: string,
     updateConversationDto: UpdateConversationDto,
   ): Promise<any> {
-    await this.conversationRepository.updateConversation(
-      id,
-      updateConversationDto,
-    );
+    await this.conversationRepository.updateConversation(id, {
+      ...updateConversationDto,
+      updatedAt: getCurrentVietnamTime(),
+    });
 
     return this.conversationRepository.findConversationByIdWithParticipants(id);
   }
