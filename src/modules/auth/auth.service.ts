@@ -4,6 +4,8 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
@@ -36,6 +38,7 @@ import { RegistrationStatus } from '../subscriptions/enums/subscription-status.e
 @Injectable()
 export class AuthService {
   constructor(
+    @Inject(forwardRef(() => AccountsService))
     private AccountsService: AccountsService,
     private jwtService: JwtService,
     private socketGatewayService: SocketGatewayService,

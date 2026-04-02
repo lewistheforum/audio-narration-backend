@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContractsController } from './contracts.controller';
 import { ContractsService } from './contracts.service';
@@ -14,8 +14,8 @@ import { ContractsCronService } from './contracts-cron.service';
 @Module({
     imports: [
         TypeOrmModule.forFeature([ContractPackage, ClinicContractInformation]),
-        AccountsModule,
-        MailerModule,
+        forwardRef(() => MailerModule),
+        forwardRef(() => AccountsModule),
     ],
     controllers: [ContractsController],
     providers: [

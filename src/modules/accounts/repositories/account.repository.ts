@@ -120,9 +120,10 @@ export class AccountRepository {
    * ```
    */
   async findAccountById(id: string): Promise<Account | null> {
-    return this.accountRepository.findOne({
-      where: { _id: id },
-    });
+    return this.accountRepository.createQueryBuilder('account')
+      .leftJoinAndSelect('account.legalDocuments', 'legalDocuments')
+      .where('account._id = :id', { id })
+      .getOne();
   }
 
   /**
