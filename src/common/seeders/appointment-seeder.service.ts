@@ -75,7 +75,7 @@ type ClinicRoomAssignment = {
 @Injectable()
 export class AppointmentSeederService {
   private readonly logger = new Logger(AppointmentSeederService.name);
-  private readonly OVERTIME_APPOINTMENTS_PER_PATIENT = 1;
+  private readonly OVERTIME_APPOINTMENTS_PER_PATIENT = 2;
 
   constructor(
     @InjectRepository(Appointment)
@@ -119,10 +119,10 @@ export class AppointmentSeederService {
             .filter((acc) => acc.role === AccountRole.CLINIC_ADMIN)
             .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
         );
-      
+
       // Get Admin 1's ID for SEPAY transactions
       const admin1Id = clinicAdmins.length > 0 ? clinicAdmins[0]._id : null;
-      const clinicAdminIds = clinicAdmins.map(admin => admin._id);
+      const clinicAdminIds = clinicAdmins.map((admin) => admin._id);
 
       // Get active subscriptions
       const activeClinicIds =
@@ -739,7 +739,10 @@ export class AppointmentSeederService {
     }
 
     // Determine if this clinic belongs to Admin 1 (first CLINIC_ADMIN)
-    const isAdmin1Clinic = clinicAdminIds && clinicAdminIds.length > 0 && clinic.parentId === clinicAdminIds[0];
+    const isAdmin1Clinic =
+      clinicAdminIds &&
+      clinicAdminIds.length > 0 &&
+      clinic.parentId === clinicAdminIds[0];
 
     // Determine number of services
     const numServices = getRandomInt(
@@ -760,7 +763,11 @@ export class AppointmentSeederService {
       const txType =
         paymentType === PaymentType.ONLINE ? txTypes.online : txTypes.cash;
       // Use SEPAY for Admin 1 clinics, otherwise use ONLINE/CASH based on payment type
-      const gateway = isAdmin1Clinic ? 'SEPAY' : (paymentType === PaymentType.ONLINE ? 'SEPAY' : 'CASH');
+      const gateway = isAdmin1Clinic
+        ? 'SEPAY'
+        : paymentType === PaymentType.ONLINE
+          ? 'SEPAY'
+          : 'CASH';
       const transaction = this.transactionRepository.create({
         clinicId: clinic._id,
         transactionTypeId: txType._id,
