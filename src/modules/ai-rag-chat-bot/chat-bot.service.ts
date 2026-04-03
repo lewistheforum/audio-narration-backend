@@ -391,10 +391,9 @@ export class AiRagChatBotService {
 
     // Check for time conflicts
     const existingAppointments = await this.appointmentRepository.find({
-      clinicId: clinicId,
-      appointmentDate: appointmentDate,
-      appointmentHour: appointmentHour,
-      deletedAt: null,
+      clinicId,
+      appointmentDate,
+      appointmentHour,
       status: AppointmentStatus.PENDING,
     });
 
@@ -418,7 +417,7 @@ export class AiRagChatBotService {
         .addSelect('config.discount', 'discount')
         .from('clinic_service_config', 'config')
         .where(
-          '(config._id = ANY(:serviceIds) OR config.service_id = ANY(:serviceIds))',
+          '(config._id IN (:...serviceIds) OR config.service_id IN (:...serviceIds))',
           { serviceIds },
         )
         .andWhere('config.clinic_id = :clinicId', { clinicId })
@@ -427,9 +426,11 @@ export class AiRagChatBotService {
         .getRawMany();
 
       // Validate all services exist and are active
-      if (serviceConfigs.length !== serviceIds.length) {
+      // Note: We use unique serviceIds check in case of duplicates in input
+      const uniqueServiceIdsCount = new Set(serviceIds).size;
+      if (serviceConfigs.length < uniqueServiceIdsCount) {
         throw new BadRequestException(
-          `One or more services not found or inactive for this clinic. Expected ${serviceIds.length} services, found ${serviceConfigs.length}`,
+          `One or more services not found or inactive for this clinic. Expected ${uniqueServiceIdsCount} unique services, found ${serviceConfigs.length}`,
         );
       }
 
@@ -438,17 +439,18 @@ export class AiRagChatBotService {
       serviceConfigs.forEach((config) => {
         const configData = {
           id: config.id, // The UUID from clinic_service_config
-          price: parseFloat(config.price),
-          discount: parseFloat(config.discount || 0),
+          price: parseFloat(config.price) || 0,
+          discount: parseFloat(config.discount || 0) || 0,
         };
         serviceConfigLookupMap.set(config.id, configData);
-        serviceConfigLookupMap.set(config.serviceId, configData);
+        // Postgres lowercases unquoted aliases, so we check for both
+        serviceConfigLookupMap.set(config.serviceId || config.serviceid, configData);
       });
 
       // Calculate package amount from services (price - discount)
       const packageAmount = serviceConfigs.reduce((sum, config) => {
-        const price = parseFloat(config.price);
-        const discount = parseFloat(config.discount || 0);
+        const price = parseFloat(config.price) || 0;
+        const discount = parseFloat(config.discount || 0) || 0;
         const finalPrice = (price * (100 - discount)) / 100;
         return sum + finalPrice;
       }, 0);
@@ -517,11 +519,11 @@ export class AiRagChatBotService {
       const servicesRaw = await manager
         .createQueryBuilder()
         .select([
-          'clinicService._id AS id',
-          'clinicService.service_name AS serviceName',
-          'clinicService.description AS description',
-          'serviceAppointment.price AS price',
-          'serviceAppointment.discount AS discount',
+          'clinicService._id AS "id"',
+          'clinicService.service_name AS "serviceName"',
+          'clinicService.description AS "description"',
+          'serviceAppointment.price AS "price"',
+          'serviceAppointment.discount AS "discount"',
         ])
         .from('service_appointments', 'serviceAppointment')
         .innerJoin(
@@ -542,9 +544,9 @@ export class AiRagChatBotService {
 
       const services = servicesRaw.map((row) => ({
         id: row.id,
-        serviceName: row.servicename,
+        serviceName: row.serviceName,
         description: row.description,
-        price: parseFloat(row.price),
+        price: parseFloat(row.price) || 0,
         discount: row.discount ? parseFloat(row.discount) : 0,
       }));
 
@@ -555,7 +557,7 @@ export class AiRagChatBotService {
         // Query clinic rooms directly without needing appointment_id
         const roomsResult = await manager
           .createQueryBuilder()
-          .select('cr._id', 'roomId')
+          .select('cr._id', 'id')
           .addSelect('cr.room_name', 'roomName')
           .from('clinic_shift_hour', 'csh')
           .innerJoin('clinic_shift', 'cs', 'cs._id = csh.shift_id')
@@ -580,8 +582,8 @@ export class AiRagChatBotService {
           .getRawMany();
 
         clinicRooms = roomsResult.map((row) => ({
-          id: row.roomId,
-          roomName: row.roomName,
+          id: row.id || row.roomId,
+          roomName: row.roomName || row.roomname,
         }));
       }
 
