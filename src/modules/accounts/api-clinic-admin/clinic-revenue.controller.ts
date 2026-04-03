@@ -36,7 +36,7 @@ import { Account } from '../entities/accounts.entity';
  * Enables detailed financial analysis across all branches
  */
 @ApiTags('Clinic Admin - Revenue Reports')
-@Controller('api/clinic-admin/revenue')
+@Controller('clinic-admin/revenue')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 @Roles(AccountRole.CLINIC_ADMIN)

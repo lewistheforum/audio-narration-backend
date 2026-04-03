@@ -42,7 +42,7 @@ export class TransactionHistorySeederService {
     @InjectRepository(ClinicAdminInformation)
     private readonly clinicAdminInformationRepository: Repository<ClinicAdminInformation>,
     private readonly accountRepository: AccountRepository,
-  ) { }
+  ) {}
 
   async seed(): Promise<void> {
     try {
@@ -75,7 +75,7 @@ export class TransactionHistorySeederService {
         (acc) => acc.role === AccountRole.CLINIC_ADMIN,
       );
       const adminClinicMap = new Map<string, number>(); // clinicId -> adminIndex (1-based)
-      
+
       // Get all clinic managers
       const clinicManagers = allAccounts.filter(
         (acc) => acc.role === AccountRole.CLINIC_MANAGER,
@@ -85,7 +85,9 @@ export class TransactionHistorySeederService {
       for (const admin of clinicAdmins) {
         const adminIndex = clinicAdmins.indexOf(admin) + 1; // 1-10
         // Find managers belonging to this admin
-        const adminManagers = clinicManagers.filter(m => m.parentId === admin._id);
+        const adminManagers = clinicManagers.filter(
+          (m) => m.parentId === admin._id,
+        );
         for (const manager of adminManagers) {
           managerAdminMap.set(manager._id, adminIndex);
           adminClinicMap.set(manager._id, adminIndex);
@@ -108,7 +110,7 @@ export class TransactionHistorySeederService {
       for (const sub of subscriptions) {
         // Determine admin group for this subscription
         const adminIndex = adminClinicMap.get(sub.clinicId) || 0;
-        
+
         // Group A (Admins 1-4): ACTIVE - create successful transactions
         // Group B (Admins 5-6): EXPIRED - create past successful transactions
         // Group C (Admins 7-8): PENDING - mixed status transactions
@@ -121,19 +123,20 @@ export class TransactionHistorySeederService {
           RegistrationStatus.PENDING_APPROVAL,
           RegistrationStatus.PENDING_PAYMENT,
         ];
-        
+
         // For PENDING subscriptions (Group C/D), create PENDING transaction
         if (pendingStatuses.includes(sub.subscriptionStatus)) {
-          const currentService = await this.subscriptionServiceRepository.findOne({
-            where: { _id: sub.serviceId },
-          });
-          
+          const currentService =
+            await this.subscriptionServiceRepository.findOne({
+              where: { _id: sub.serviceId },
+            });
+
           if (currentService) {
             // Check if transaction already exists for this subscription
             const existingTx = await this.transactionRepository.findOne({
               where: { subscriptionId: sub._id },
             });
-            
+
             if (!existingTx) {
               const transaction = this.transactionRepository.create({
                 clinicId: sub.clinicId,
@@ -148,10 +151,10 @@ export class TransactionHistorySeederService {
                 transferType: PaymentDirection.OUT,
                 gateway: 'SEPAY',
               });
-              
+
               await this.transactionRepository.save(transaction);
               totalTransactionsCreated++;
-              
+
               this.logger.log(
                 `Created PENDING transaction for subscription ${sub._id} (Admin Group ${adminIndex})`,
               );
@@ -232,8 +235,8 @@ export class TransactionHistorySeederService {
           continue;
         }
 
-        // Generate 5-10 history records for each subscription
-        const historyCount = Math.floor(Math.random() * 6) + 5; // 5-10 records
+        // Generate 15-30 history records for each subscription
+        const historyCount = Math.floor(Math.random() * 16) + 15; // 15-30 records
 
         for (let i = 1; i <= historyCount; i++) {
           // Calculate dates going back in time

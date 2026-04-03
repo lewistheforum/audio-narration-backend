@@ -26,7 +26,7 @@ interface CsvRow {
 /**
  * Feedback Seeder Service
  * - Runs on application startup
- * - Seeds 45 feedback records (15 per clinic) for 3 clinics
+ * - Seeds 150 feedback records (50 per clinic) for 3 clinics
  * - Uses data from test.csv file
  * - Dynamically retrieves clinic and patient IDs from database
  */
@@ -35,7 +35,7 @@ export class FeedbackSeederService {
   private readonly logger = new Logger(FeedbackSeederService.name);
 
   // Number of feedbacks to create per clinic
-  private readonly FEEDBACKS_PER_CLINIC = 15;
+  private readonly FEEDBACKS_PER_CLINIC = 50;
 
   // Number of feedbacks with images per clinic (random between 6 and 7)
   private readonly MIN_IMAGES_PER_CLINIC = 6;
@@ -64,7 +64,7 @@ export class FeedbackSeederService {
    * 1. Retrieve CLINIC_MANAGER accounts (clinics)
    * 2. Retrieve PATIENT accounts
    * 3. Read data from test.csv
-   * 4. Create 15 feedbacks per clinic
+   * 4. Create 50 feedbacks per clinic
    * 5. Randomly assign patients, images
    *
    * This method is called by SeederOrchestratorService during application bootstrap.
