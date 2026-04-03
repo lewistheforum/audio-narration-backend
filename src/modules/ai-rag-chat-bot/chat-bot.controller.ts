@@ -7,7 +7,6 @@ import {
   HttpStatus,
   Request,
   Query,
-  UseGuards,
   HttpCode,
 } from '@nestjs/common';
 import { AiRagChatBotService } from './chat-bot.service';
