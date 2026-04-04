@@ -20,7 +20,6 @@ import {
   PaymentDirection,
 } from '../../modules/transactions/entities/transaction.entity';
 import { TransactionTypeCode } from '../../modules/transactions/entities/transaction-type.entity';
-import { Account } from '../../modules/accounts/entities/accounts.entity';
 import { AccountRepository } from '../../modules/accounts/repositories/account.repository';
 import { AccountRole } from '../../modules/accounts/enums';
 
@@ -48,18 +47,32 @@ export class TransactionHistorySeederService {
     try {
       this.logger.log('Starting to seed transaction history...');
 
-      // Get or Create Transaction Type
-      let transactionType = await this.transactionTypeRepository.findOne({
-        where: { code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
-      });
-
-      if (!transactionType) {
-        transactionType = this.transactionTypeRepository.create({
+      // Get or Create Transaction Types
+      const typesToSeed = [
+        { name: 'SUBSCRIPTION', code: TransactionTypeCode.SUBSCRIPTION },
+        { name: 'VERIFICATION', code: TransactionTypeCode.VERIFICATION },
+        { name: 'ONLINE', code: TransactionTypeCode.ONLINE },
+        { name: 'CASH', code: TransactionTypeCode.CASH },
+        {
           name: 'Subscription Payment',
           code: TransactionTypeCode.SUBSCRIPTION_PAYMENT,
+        },
+      ];
+
+      for (const type of typesToSeed) {
+        const existing = await this.transactionTypeRepository.findOne({
+          where: { code: type.code },
         });
-        await this.transactionTypeRepository.save(transactionType);
+        if (!existing) {
+          await this.transactionTypeRepository.save(
+            this.transactionTypeRepository.create(type),
+          );
+        }
       }
+
+      const transactionType = await this.transactionTypeRepository.findOne({
+        where: { code: TransactionTypeCode.SUBSCRIPTION_PAYMENT },
+      });
 
       // Get all subscription services for random package changes
       const allServices = await this.subscriptionServiceRepository.find();
