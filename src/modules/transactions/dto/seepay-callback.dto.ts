@@ -75,4 +75,9 @@ export class SeepayCallbackDto {
   @IsOptional()
   @IsString()
   apiKey?: string;
+
+  @ApiProperty({ description: 'SePay API Key Alias (Multi-key support)', required: false })
+  @IsOptional()
+  @IsString()
+  seepayKey?: string;
 }

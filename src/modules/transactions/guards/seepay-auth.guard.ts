@@ -33,8 +33,8 @@ export class SeepayAuthGuard implements CanActivate {
         }
 
         // 2. Fallback: Extract from Body Payload
-        if (!extractedKey && body?.apiKey) {
-            extractedKey = body.apiKey;
+        if (!extractedKey) {
+            extractedKey = body?.apiKey || body?.seepayKey;
         }
 
         this.logger.debug(`Extracted Key: [${extractedKey}]`);
