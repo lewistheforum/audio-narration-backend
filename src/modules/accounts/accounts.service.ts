@@ -2629,8 +2629,11 @@ export class AccountsService {
       onboardingStatus === RegistrationStatus.NON_RENEWING;
 
     // Get newest contract status for the employee
-    const newestContract = await this.contractPackageRepository.findNewestByEmployeeId(account._id);
-    const newestContractStatus = newestContract?.clinicContractInformation?.contractStatus || 'NO_CONTRACT_YET';
+    const newestContract =
+      await this.contractPackageRepository.findNewestByEmployeeId(account._id);
+    const newestContractStatus =
+      newestContract?.clinicContractInformation?.contractStatus ||
+      'NO_CONTRACT_YET';
 
     return {
       onboardingStatus,
@@ -3783,27 +3786,27 @@ export class AccountsService {
         'doctorInfo',
         'doctorInfo.deleted_at IS NULL',
       )
-      .leftJoinAndSelect(
-        'clinic.clinicSchedules',
-        'clinicSchedule',
-        'clinicSchedule.deleted_at IS NULL',
-      )
-      .leftJoinAndSelect(
-        'clinicSchedule.clinicShift',
-        'clinicShift',
-        'clinicShift.deleted_at IS NULL',
-      )
-      .leftJoinAndSelect(
-        'clinicShift.hours',
-        'clinicShiftHour',
-        'clinicShiftHour.deleted_at IS NULL',
-      )
+      // .leftJoinAndSelect(
+      //   'clinic.clinicSchedules',
+      //   'clinicSchedule',
+      //   'clinicSchedule.deleted_at IS NULL',
+      // )
+      // .leftJoinAndSelect(
+      //   'clinicSchedule.clinicShift',
+      //   'clinicShift',
+      //   'clinicShift.deleted_at IS NULL',
+      // )
+      // .leftJoinAndSelect(
+      //   'clinicShift.hours',
+      //   'clinicShiftHour',
+      //   'clinicShiftHour.deleted_at IS NULL',
+      // )
       .where('clinic._id = :id', { id })
       .andWhere('clinic.role = :role', { role: AccountRole.CLINIC_MANAGER })
       .andWhere('clinic.status = :status', { status: AccountStatus.ACTIVE })
       .andWhere('clinic.deleted_at IS NULL')
-      .orderBy('clinicSchedule.weekDay', 'ASC')
-      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      // .orderBy('clinicSchedule.weekDay', 'ASC')
+      // .addOrderBy('clinicShiftHour.startHour', 'ASC')
       .getOne();
 
     if (!clinic) {
@@ -3826,47 +3829,47 @@ export class AccountsService {
       addressDetails.push(new AddressDetailDto(address, googleIframe));
     }
 
-    const workingScheduleMap = new Map<string, ClinicWorkingScheduleDto>();
-    const dayOrder = {
-      MONDAY: 1,
-      TUESDAY: 2,
-      WEDNESDAY: 3,
-      THURSDAY: 4,
-      FRIDAY: 5,
-      SATURDAY: 6,
-      SUNDAY: 7,
-    } as const;
+    // const workingScheduleMap = new Map<string, ClinicWorkingScheduleDto>();
+    // const dayOrder = {
+    //   MONDAY: 1,
+    //   TUESDAY: 2,
+    //   WEDNESDAY: 3,
+    //   THURSDAY: 4,
+    //   FRIDAY: 5,
+    //   SATURDAY: 6,
+    //   SUNDAY: 7,
+    // } as const;
 
-    for (const schedule of clinic.clinicSchedules || []) {
-      for (const hour of schedule.clinicShift?.hours || []) {
-        const key = `${schedule.weekDay}-${hour.startHour}-${hour.endHour}`;
+    // for (const schedule of clinic.clinicSchedules || []) {
+    //   for (const hour of schedule.clinicShift?.hours || []) {
+    //     const key = `${schedule.weekDay}-${hour.startHour}-${hour.endHour}`;
 
-        if (!workingScheduleMap.has(key)) {
-          workingScheduleMap.set(
-            key,
-            new ClinicWorkingScheduleDto({
-              dayOfWeek: schedule.weekDay,
-              startTime: hour.startHour,
-              endTime: hour.endHour,
-            }),
-          );
-        }
-      }
-    }
+    //     if (!workingScheduleMap.has(key)) {
+    //       workingScheduleMap.set(
+    //         key,
+    //         new ClinicWorkingScheduleDto({
+    //           dayOfWeek: schedule.weekDay,
+    //           startTime: hour.startHour,
+    //           endTime: hour.endHour,
+    //         }),
+    //       );
+    //     }
+    //   }
+    // }
 
-    const workingSchedules = Array.from(workingScheduleMap.values()).sort(
-      (left, right) => {
-        const dayDelta =
-          dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
-          dayOrder[right.dayOfWeek as keyof typeof dayOrder];
+    // const workingSchedules = Array.from(workingScheduleMap.values()).sort(
+    //   (left, right) => {
+    //     const dayDelta =
+    //       dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
+    //       dayOrder[right.dayOfWeek as keyof typeof dayOrder];
 
-        if (dayDelta !== 0) {
-          return dayDelta;
-        }
+    //     if (dayDelta !== 0) {
+    //       return dayDelta;
+    //     }
 
-        return left.startTime.localeCompare(right.startTime);
-      },
-    );
+    //     return left.startTime.localeCompare(right.startTime);
+    //   },
+    // );
 
     const doctorAccounts = (clinic.children || []).filter(
       (doctor) =>
@@ -4011,7 +4014,7 @@ export class AccountsService {
       clinicInfo,
       addressDetails,
       doctors,
-      workingSchedules,
+      [],
       subscription,
       clinicAdmin,
       clinicAdminInfo,
@@ -4139,48 +4142,67 @@ export class AccountsService {
    * @returns {Promise<PublicDoctorDetailData>} Public doctor details data with security controls
    * @throws {NotFoundException} If doctor not found or not eligible
    */
-  async getPublicDoctorById(id: string): Promise<PublicDoctorDetailData> {
-    const doctor = await this.accountRepository
+  /**
+   * Get Doctor Details by ID (Public)
+   *
+   * @param {string} id - Doctor account UUID
+   * @param {boolean} includeSchedules - Whether to include working schedules (default: false)
+   * @returns {Promise<PublicDoctorDetailData>} Full doctor details
+   * @throws {NotFoundException} If doctor not found
+   */
+  async getPublicDoctorById(
+    id: string,
+    // includeSchedules = false,
+  ): Promise<PublicDoctorDetailData> {
+    const query = this.accountRepository
       .createQueryBuilder('doctor')
       .leftJoinAndSelect('doctor.parent', 'clinic')
-      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo')
-      .leftJoinAndSelect(
-        'doctor.employeeSchedules',
-        'employeeSchedule',
-        'employeeSchedule.deleted_at IS NULL',
-      )
-      .leftJoinAndSelect(
-        'employeeSchedule.clinicShift',
-        'clinicShift',
-        'clinicShift.deleted_at IS NULL',
-      )
-      .leftJoinAndSelect(
-        'clinicShift.hours',
-        'clinicShiftHour',
-        'clinicShiftHour.deleted_at IS NULL',
-      )
+      .leftJoinAndSelect('clinic.clinicManagerInformation', 'clinicInfo');
+
+    // if (includeSchedules) {
+    //   query
+    //     .leftJoinAndSelect(
+    //       'doctor.employeeSchedules',
+    //       'employeeSchedule',
+    //       'employeeSchedule.deleted_at IS NULL',
+    //     )
+    //     .leftJoinAndSelect(
+    //       'employeeSchedule.clinicShift',
+    //       'clinicShift',
+    //       'clinicShift.deleted_at IS NULL',
+    //     )
+    //     .leftJoinAndSelect(
+    //       'clinicShift.hours',
+    //       'clinicShiftHour',
+    //       'clinicShiftHour.deleted_at IS NULL',
+    //     );
+    // }
+
+    const doctor = await query
       .where('doctor._id = :id', { id })
       .andWhere('doctor.role = :role', { role: AccountRole.DOCTOR })
       .andWhere('doctor.status = :status', { status: AccountStatus.ACTIVE })
       .andWhere('doctor.deleted_at IS NULL')
-      .orderBy('employeeSchedule.weekDay', 'ASC')
-      .addOrderBy('clinicShiftHour.startHour', 'ASC')
+      .orderBy('doctor.createdAt', 'DESC') // Standard ordering
       .getOne();
+
+    // if (includeSchedules && doctor) {
+    //   // Re-apply ordering for schedules if they were joined
+    //   doctor.employeeSchedules?.sort((a, b) => {
+    //     // Simple day order sort if needed, or rely on QueryBuilder
+    //     return 0; // We'll handle this in processWorkingSchedules better
+    //   });
+    // }
 
     if (!doctor) {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Get doctor information with security controls (allowlist approach)
+    // Get doctor information with security controls
     const doctorInfo =
       await this.doctorInfoRepository.findPublicByDoctorAccountId(id);
-    if (!doctorInfo) {
+    if (!doctorInfo || doctorInfo.deletedAt) {
       throw new NotFoundException('Doctor information not found');
-    }
-
-    // Check if doctor information is soft-deleted
-    if (doctorInfo.deletedAt) {
-      throw new NotFoundException('Doctor not found');
     }
 
     let clinicInfo = null;
@@ -4192,59 +4214,12 @@ export class AccountsService {
       };
     }
 
-    const workingScheduleMap = new Map<string, DoctorWorkingScheduleDto>();
-    const dayOrder = {
-      MONDAY: 1,
-      TUESDAY: 2,
-      WEDNESDAY: 3,
-      THURSDAY: 4,
-      FRIDAY: 5,
-      SATURDAY: 6,
-      SUNDAY: 7,
-    } as const;
-
-    for (const schedule of doctor.employeeSchedules || []) {
-      for (const hour of schedule.clinicShift?.hours || []) {
-        const key = `${schedule.weekDay}-${schedule.clinicShift?.shift || ''}-${hour.startHour}-${hour.endHour}`;
-
-        if (!workingScheduleMap.has(key)) {
-          workingScheduleMap.set(
-            key,
-            new DoctorWorkingScheduleDto({
-              dayOfWeek: schedule.weekDay,
-              shift: schedule.clinicShift?.shift,
-              startTime: hour.startHour,
-              endTime: hour.endHour,
-            }),
-          );
-        }
-      }
-    }
-
-    const workingSchedules = Array.from(workingScheduleMap.values()).sort(
-      (left, right) => {
-        const dayDelta =
-          dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
-          dayOrder[right.dayOfWeek as keyof typeof dayOrder];
-
-        if (dayDelta !== 0) {
-          return dayDelta;
-        }
-
-        if ((left.shift || '') !== (right.shift || '')) {
-          return (left.shift || '').localeCompare(right.shift || '');
-        }
-
-        return left.startTime.localeCompare(right.startTime);
-      },
-    );
+    // const workingSchedules = includeSchedules ? this.processWorkingSchedules(doctor.employeeSchedules) : [];
 
     // Create modified account object with field priority handling
     const modifiedAccount = {
       ...doctor,
-      // profilePicture comes from doctor_information
       profilePicture: doctorInfo.profilePicture,
-      // dob comes from doctor_information
       dob: doctorInfo.dob,
     };
 
@@ -4311,17 +4286,104 @@ export class AccountsService {
       feedbacks = [];
     }
 
-    // Create PublicDoctorDetailData with modified account and doctor info
-    const publicDoctorDetailData = new PublicDoctorDetailData(
+    return new PublicDoctorDetailData(
       modifiedAccount,
       doctorInfo,
       clinicInfo,
-      workingSchedules,
+      [],
       averageRating,
       feedbacks,
     );
+  }
 
-    return publicDoctorDetailData;
+  /**
+   * Get Doctor Detail Schedule by ID (Public)
+   *
+   * @param {string} id - Doctor account UUID
+   * @returns {Promise<DoctorWorkingScheduleDto[]>} Doctor working schedules
+   */
+  async getPublicDoctorDetailScheduleById(
+    id: string,
+  ): Promise<DoctorWorkingScheduleDto[]> {
+    const doctor = await this.accountRepository
+      .createQueryBuilder('doctor')
+      .leftJoinAndSelect(
+        'doctor.employeeSchedules',
+        'employeeSchedule',
+        'employeeSchedule.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'employeeSchedule.clinicShift',
+        'clinicShift',
+        'clinicShift.deleted_at IS NULL',
+      )
+      .leftJoinAndSelect(
+        'clinicShift.hours',
+        'clinicShiftHour',
+        'clinicShiftHour.deleted_at IS NULL',
+      )
+      .where('doctor._id = :id', { id })
+      .andWhere('doctor.role = :role', { role: AccountRole.DOCTOR })
+      .andWhere('doctor.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('doctor.deleted_at IS NULL')
+      .getOne();
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    return this.processWorkingSchedules(doctor.employeeSchedules);
+  }
+
+  /**
+   * Helper to process employee schedules into DoctorWorkingScheduleDto
+   * @private
+   */
+  private processWorkingSchedules(
+    employeeSchedules: any[],
+  ): DoctorWorkingScheduleDto[] {
+    const workingScheduleMap = new Map<string, DoctorWorkingScheduleDto>();
+    const dayOrder = {
+      MONDAY: 1,
+      TUESDAY: 2,
+      WEDNESDAY: 3,
+      THURSDAY: 4,
+      FRIDAY: 5,
+      SATURDAY: 6,
+      SUNDAY: 7,
+    } as const;
+
+    for (const schedule of employeeSchedules || []) {
+      for (const hour of schedule.clinicShift?.hours || []) {
+        const key = `${schedule.weekDay}-${schedule.clinicShift?.shift || ''}-${hour.startHour}-${hour.endHour}`;
+
+        if (!workingScheduleMap.has(key)) {
+          workingScheduleMap.set(
+            key,
+            new DoctorWorkingScheduleDto({
+              dayOfWeek: schedule.weekDay,
+              shift: schedule.clinicShift?.shift,
+              startTime: hour.startHour,
+              endTime: hour.endHour,
+            }),
+          );
+        }
+      }
+    }
+
+    return Array.from(workingScheduleMap.values()).sort((left, right) => {
+      const dayDelta =
+        dayOrder[left.dayOfWeek as keyof typeof dayOrder] -
+        dayOrder[right.dayOfWeek as keyof typeof dayOrder];
+
+      if (dayDelta !== 0) return dayDelta;
+
+      if ((left.shift || '') !== (right.shift || '')) {
+        return (left.shift || '').localeCompare(right.shift || '');
+      }
+
+      return left.startTime.localeCompare(right.startTime);
+    });
   }
 
   /**

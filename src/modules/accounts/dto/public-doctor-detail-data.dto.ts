@@ -190,3 +190,15 @@ export class PublicDoctorDetailData {
     this.feedbacks = feedbacks;
   }
 }
+
+export class PublicDoctorWorkingSchedulesResponseDto {
+  @ApiProperty({
+    description: 'Doctor working schedules',
+    type: [DoctorWorkingScheduleDto],
+  })
+  workingSchedules: DoctorWorkingScheduleDto[];
+
+  constructor(workingSchedules: DoctorWorkingScheduleDto[]) {
+    this.workingSchedules = workingSchedules;
+  }
+}
