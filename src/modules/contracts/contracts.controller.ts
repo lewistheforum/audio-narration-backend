@@ -39,16 +39,18 @@ export class ContractsController {
     @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Get all contract packages for the logged-in clinic' })
     @ApiQuery({ name: 'employeeName', required: false, description: 'Search by employee name' })
+    @ApiQuery({ name: 'status', required: false, description: 'Filter by contract status' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
     async getPackages(
         @Req() req,
         @Query('employeeName') employeeName?: string,
+        @Query('status') status?: string,
         @Query('page') page: number = 1,
         @Query('limit') limit: number = 10,
     ) {
         const clinicManagerId = req.user._id;
-        return this.contractsService.getPackagesByManager(clinicManagerId, employeeName, page, limit);
+        return this.contractsService.getPackagesByManager(clinicManagerId, employeeName, page, limit, status);
     }
 
     /**
