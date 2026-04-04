@@ -572,12 +572,14 @@ export class ContractsService {
         employeeName?: string,
         page: number = 1,
         limit: number = 10,
+        status?: string,
     ) {
         const [packages, total] = await this.contractPackageRepository.findPackagesByManagerWithFilters(
             clinicManagerId,
             employeeName,
             page,
             limit,
+            status,
         );
 
         const packagesToVerify = packages.filter(

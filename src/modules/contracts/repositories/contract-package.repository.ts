@@ -156,6 +156,7 @@ export class ContractPackageRepository {
     employeeName?: string,
     page: number = 1,
     limit: number = 10,
+    status?: string,
   ): Promise<[ContractPackage[], number]> {
     const queryBuilder = this.repository.createQueryBuilder('contractPackage');
 
@@ -172,6 +173,11 @@ export class ContractPackageRepository {
     // Optional Filter: Employee Name search
     if (employeeName) {
       queryBuilder.andWhere('generalAccount.fullName ILIKE :name', { name: `%${employeeName}%` });
+    }
+
+    // Optional Filter: Contract Status
+    if (status) {
+      queryBuilder.andWhere('info.contractStatus = :status', { status });
     }
 
     // Pagination
