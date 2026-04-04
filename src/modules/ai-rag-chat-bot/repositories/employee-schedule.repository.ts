@@ -57,9 +57,14 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       });
     }
 
-    if (options.from && options.to) {
-      queryBuilder.andWhere('schedule.workDate BETWEEN :from AND :to', {
+    if (options.from) {
+      queryBuilder.andWhere('schedule.workDate >= :from', {
         from: options.from,
+      });
+    }
+
+    if (options.to) {
+      queryBuilder.andWhere('schedule.workDate <= :to', {
         to: options.to,
       });
     }
@@ -149,9 +154,14 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       });
     }
 
-    if (options.from && options.to) {
-      queryBuilder.andWhere('schedule.workDate BETWEEN :from AND :to', {
+    if (options.from) {
+      queryBuilder.andWhere('schedule.workDate >= :from', {
         from: options.from,
+      });
+    }
+
+    if (options.to) {
+      queryBuilder.andWhere('schedule.workDate <= :to', {
         to: options.to,
       });
     }

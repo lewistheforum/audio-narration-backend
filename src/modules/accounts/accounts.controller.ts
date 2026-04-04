@@ -35,6 +35,7 @@ import {
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
+  PublicDoctorWorkingSchedulesResponseDto,
   PublicDoctorInfo,
   PublicClinicInfo,
   CancelRegistrationResponseDto,
@@ -95,12 +96,13 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
   UpdateClinicAdminProfileDto,
   PublicDoctorDetailResponseDto,
   PublicDoctorDetailData,
+  PublicDoctorWorkingSchedulesResponseDto,
   PublicDoctorInfo,
   PublicClinicInfo,
   PatientSearchResponseDto,
 )
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) { }
+  constructor(private readonly accountsService: AccountsService) {}
 
   @Post(':id/keys/generate')
   // @UseGuards(JwtAuthGuard, RolesGuard)
@@ -514,11 +516,26 @@ export class AccountsController {
     return this.accountsService.getPublicDoctorById(id);
   }
 
+  @Get('doctors/doctor-detail-schedule/:id')
+  @ApiOperation({ summary: 'Get doctor details by ID' })
+  @ApiResponseData({
+    type: PublicDoctorWorkingSchedulesResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Doctor details retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
+  async getDoctorDetailScheduleById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PublicDoctorWorkingSchedulesResponseDto> {
+    const workingSchedules = await this.accountsService.getPublicDoctorDetailScheduleById(id);
+    return new PublicDoctorWorkingSchedulesResponseDto(workingSchedules);
+  }
+
   @Get('staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get list of staff for the manager\'s clinic' })
+  @ApiOperation({ summary: "Get list of staff for the manager's clinic" })
   @ApiResponseData({
     type: StaffListResponseDto,
     status: 200,
@@ -570,7 +587,7 @@ export class AccountsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AccountRole.CLINIC_MANAGER)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get list of doctors for the manager\'s clinic' })
+  @ApiOperation({ summary: "Get list of doctors for the manager's clinic" })
   @ApiResponseData({
     type: DoctorListResponseDto,
     status: 200,
@@ -595,7 +612,6 @@ export class AccountsController {
       message: 'Doctor list retrieved successfully',
     };
   }
-
 
   @Get('clinic/:clinicId/employees')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -799,7 +815,7 @@ export class AccountsController {
    *
    * Access Control:
    * - Users can change their own password
-    * - Admins can change any password (consider security implications)
+   * - Admins can change any password (consider security implications)
    *
    * @param {string} id - Account UUID
    * @param {UpdatePasswordDto} updatePasswordDto - Old and new password
@@ -1531,6 +1547,4 @@ export class AccountsController {
       message: 'Patient search completed',
     };
   }
-
 }
-
