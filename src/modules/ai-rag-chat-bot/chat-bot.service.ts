@@ -10,7 +10,12 @@ import { AiConversation } from './entities/ai-conversation.entity';
 import { AiMessage } from './entities/ai-message.entity';
 import { AiMessageRepository } from './repositories/ai-message.repository';
 import { AccountsService } from '../accounts/accounts.service';
-import { AccountRole, AccountStatus } from '../accounts/enums';
+import {
+  AccountRole,
+  AccountStatus,
+  LegalDocumentVerificationStatus,
+} from '../accounts/enums';
+import { RegistrationStatus } from '../subscriptions/enums';
 import { EmployeeScheduleRepository } from './repositories/employee-schedule.repository';
 import { ClinicServicesService } from '../clinic-services/clinic-services.service';
 import { AiCreateAppointmentDto } from './dto/ai-create-appointment.dto';
@@ -29,6 +34,7 @@ import {
   ServiceAppointment,
 } from '../appointments/entities';
 import { DataSource } from 'typeorm';
+import { getDateString, addToVietnamTime } from 'src/common/utils/date.util';
 
 @Injectable()
 export class AiRagChatBotService {
@@ -92,16 +98,18 @@ export class AiRagChatBotService {
       patientEmail: appointment.patient?.email,
       patientPhone: appointment.patient?.phone,
       patientProfileImage,
-      patientAddress: patientAddress ? {
-        id: patientAddress._id,
-        address: patientAddress.address,
-        ward: patientAddress.ward,
-        wardName: patientAddress.wardName,
-        district: patientAddress.district,
-        districtName: patientAddress.districtName,
-        province: patientAddress.province,
-        provinceName: patientAddress.provinceName,
-      } : null,
+      patientAddress: patientAddress
+        ? {
+            id: patientAddress._id,
+            address: patientAddress.address,
+            ward: patientAddress.ward,
+            wardName: patientAddress.wardName,
+            district: patientAddress.district,
+            districtName: patientAddress.districtName,
+            province: patientAddress.province,
+            provinceName: patientAddress.provinceName,
+          }
+        : null,
       clinicId: appointment.clinicId,
       clinicName,
       doctorId: appointment.doctorId,
@@ -125,7 +133,7 @@ export class AiRagChatBotService {
    *
    * internal helper to transform entity structure to DTO response format
    */
- private mapSchedules(schedules: any[]) {
+  private mapSchedules(schedules: any[]) {
     const now = new Date();
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
@@ -243,20 +251,34 @@ export class AiRagChatBotService {
   async findClinicSchedules(clinicId: string, user: any, query: any) {
     let filterEmployeeId = query.employeeId;
 
-    // If Doctor, restrict to own schedule
-    // if (user.role === AccountRole.DOCTOR) {
-    //   filterEmployeeId = user._id;
-    // }
-
     if (!clinicId) {
       throw new BadRequestException('Clinic ID is required');
     }
 
+    // Show from tomorrow from current date to the future
+    const tomorrowStr = getDateString(addToVietnamTime(1, 'day'));
+
+    let searchDate = query.date;
+    let searchFrom = query.from;
+    let searchTo = query.to;
+
+    if (searchDate) {
+      // If user asks for a date in the past or today, we don't show it
+      if (searchDate < tomorrowStr) {
+        return [];
+      }
+    } else {
+      // If no range is specified, default to showing from tomorrow
+      if (!searchFrom || searchFrom < tomorrowStr) {
+        searchFrom = tomorrowStr;
+      }
+    }
+
     return this.mapSchedules(
       await this.scheduleRepository.findScheduleHours(clinicId, {
-        date: query.date,
-        from: query.from,
-        to: query.to,
+        date: searchDate,
+        from: searchFrom,
+        to: searchTo,
         employeeId: filterEmployeeId,
         roomId: query.roomId,
         shiftId: query.shiftId,
@@ -272,7 +294,8 @@ export class AiRagChatBotService {
    * OPTIMIZED: Uses single query with LEFT JOINs instead of N+1 Promise.all
    */
   async findAllClinicManagers() {
-    const rawData = await this.dataSource.query(`
+    const rawData = await this.dataSource.query(
+      `
       SELECT 
         m._id as manager_id,
         m.email as email,
@@ -283,19 +306,34 @@ export class AiRagChatBotService {
         ga.full_name as general_full_name,
         ga.profile_picture as general_profile_picture
       FROM accounts m
+      INNER JOIN accounts p ON m.parent_id = p._id AND p.deleted_at IS NULL
+      INNER JOIN clinic_subcriptions cs ON p._id = cs.clinic_id AND cs.deleted_at IS NULL
+      INNER JOIN clinics_legal_documents ld ON m._id = ld.account_id AND ld.deleted_at IS NULL
       LEFT JOIN clinic_manager_information cmi ON cmi.account_id = m._id AND cmi.deleted_at IS NULL
       LEFT JOIN general_accounts ga ON ga.account_id = m._id AND ga.deleted_at IS NULL
       WHERE m.role = $1 AND m.status = $2 AND m.deleted_at IS NULL
+      AND p.status = $2
+      AND cs.subscription_status = $3
+      AND ld.verification_status = $4
       ORDER BY cmi.full_name ASC
-    `, [AccountRole.CLINIC_MANAGER, AccountStatus.ACTIVE]);
+    `,
+      [
+        AccountRole.CLINIC_MANAGER,
+        AccountStatus.ACTIVE,
+        RegistrationStatus.ACTIVE,
+        LegalDocumentVerificationStatus.APPROVED,
+      ],
+    );
 
     return rawData.map((row: Record<string, unknown>) => ({
       accountId: row.manager_id,
       email: row.email,
       username: row.username,
-      fullName: row.full_name || row.general_full_name || row.email || 'Unknown',
+      fullName:
+        row.full_name || row.general_full_name || row.email || 'Unknown',
       clinicBranchName: row.clinic_branch_name || '',
-      profilePicture: row.profile_picture || row.general_profile_picture || null,
+      profilePicture:
+        row.profile_picture || row.general_profile_picture || null,
     }));
   }
 
@@ -321,7 +359,8 @@ export class AiRagChatBotService {
    * @returns List of clinic managers
    */
   async findManagersByWorkDate(date: string) {
-    const rawData = await this.dataSource.query(`
+    const rawData = await this.dataSource.query(
+      `
       SELECT DISTINCT 
         m._id as manager_id,
         m.email as email,
@@ -331,21 +370,39 @@ export class AiRagChatBotService {
         cmi.profile_picture as profile_picture,
         ga.full_name as general_full_name,
         ga.profile_picture as general_profile_picture
-      FROM employee_schedule es
-      JOIN accounts m ON m._id = es.clinic_id
+      FROM accounts m
+      INNER JOIN employee_schedule es ON es.clinic_id = m._id AND es.deleted_at IS NULL
+      INNER JOIN accounts p ON m.parent_id = p._id AND p.deleted_at IS NULL
+      INNER JOIN clinic_subcriptions cs ON p._id = cs.clinic_id AND cs.deleted_at IS NULL
+      INNER JOIN clinics_legal_documents ld ON m._id = ld.account_id AND ld.deleted_at IS NULL
       LEFT JOIN clinic_manager_information cmi ON cmi.account_id = m._id AND cmi.deleted_at IS NULL
       LEFT JOIN general_accounts ga ON ga.account_id = m._id AND ga.deleted_at IS NULL
-      WHERE es.work_date = $1 AND es.deleted_at IS NULL AND m.deleted_at IS NULL
+      WHERE m.role = $1 AND m.status = $2 AND m.deleted_at IS NULL
+      AND es.work_date = $3
+      AND p.status = $4
+      AND cs.subscription_status = $5
+      AND ld.verification_status = $6
       ORDER BY cmi.full_name ASC
-    `, [date]);
+    `,
+      [
+        AccountRole.CLINIC_MANAGER,
+        AccountStatus.ACTIVE,
+        date,
+        AccountStatus.ACTIVE,
+        RegistrationStatus.ACTIVE,
+        LegalDocumentVerificationStatus.APPROVED,
+      ],
+    );
 
     return rawData.map((row: Record<string, unknown>) => ({
       accountId: row.manager_id,
       email: row.email,
       username: row.username,
-      fullName: row.full_name || row.general_full_name || row.email || 'Unknown',
+      fullName:
+        row.full_name || row.general_full_name || row.email || 'Unknown',
       clinicBranchName: row.clinic_branch_name || '',
-      profilePicture: row.profile_picture || row.general_profile_picture || null,
+      profilePicture:
+        row.profile_picture || row.general_profile_picture || null,
     }));
   }
 
@@ -444,7 +501,10 @@ export class AiRagChatBotService {
         };
         serviceConfigLookupMap.set(config.id, configData);
         // Postgres lowercases unquoted aliases, so we check for both
-        serviceConfigLookupMap.set(config.serviceId || config.serviceid, configData);
+        serviceConfigLookupMap.set(
+          config.serviceId || config.serviceid,
+          configData,
+        );
       });
 
       // Calculate package amount from services (price - discount)
