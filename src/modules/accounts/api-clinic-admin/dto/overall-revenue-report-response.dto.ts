@@ -36,23 +36,6 @@ export class PaymentMethodBreakdownDto {
   cash: PaymentMethodRevenueDto;
 }
 
-export class ServiceCategoryRevenueDto {
-  @ApiProperty({ description: 'Service category name', example: 'General Consultation' })
-  categoryName: string;
-
-  @ApiProperty({ description: 'Revenue from this category (in VND)', example: 45000000 })
-  revenue: number;
-
-  @ApiProperty({ description: 'Number of services sold', example: 180 })
-  serviceCount: number;
-
-  @ApiProperty({ description: 'Percentage of total revenue', example: 36.0 })
-  percentage: number;
-
-  @ApiProperty({ description: 'Top 3 services in this category', type: [String], example: ['Initial Consultation'] })
-  topServices: string[];
-}
-
 export class RevenueTrendDataPointDto {
   @ApiProperty({ description: 'Period label', example: '2026-03-01' })
   period: string;
@@ -101,6 +84,28 @@ export class BranchOperationalSummaryDto {
   totalServices: number;
 }
 
+export class TransactionTypeItemDto {
+  @ApiProperty({ description: 'Transaction type name', example: 'ONLINE' })
+  typeName: string;
+
+  @ApiProperty({ description: 'Number of transactions of this type', example: 200 })
+  count: number;
+
+  @ApiProperty({ description: 'Revenue amount for this type (in VND)', example: 85000000 })
+  amount: number;
+
+  @ApiProperty({ description: 'Percentage of total transactions', example: 44.44 })
+  percentage: number;
+}
+
+export class TransactionTypeBreakdownDto {
+  @ApiProperty({ description: 'Breakdown of transactions by type', type: [TransactionTypeItemDto], isArray: true })
+  items: TransactionTypeItemDto[];
+
+  @ApiProperty({ description: 'Total transaction count across all types', example: 450 })
+  totalCount: number;
+}
+
 export class OverallRevenueReportResponseDto {
   @ApiProperty({
     description: 'Query period metadata',
@@ -125,14 +130,14 @@ export class OverallRevenueReportResponseDto {
   @ApiProperty({ description: 'Revenue breakdown by payment method', type: PaymentMethodBreakdownDto })
   paymentMethodBreakdown: PaymentMethodBreakdownDto;
 
-  @ApiProperty({ description: 'Revenue breakdown by service category', type: [ServiceCategoryRevenueDto], isArray: true })
-  serviceCategoryBreakdown: ServiceCategoryRevenueDto[];
-
   @ApiProperty({ description: 'Revenue trend over time', type: [RevenueTrendDataPointDto], isArray: true })
   revenueTrend: RevenueTrendDataPointDto[];
 
   @ApiProperty({ description: 'Transaction status distribution', type: TransactionStatusBreakdownDto })
   statusBreakdown: TransactionStatusBreakdownDto;
+
+  @ApiProperty({ description: 'Transaction type breakdown', type: TransactionTypeBreakdownDto })
+  transactionTypeBreakdown: TransactionTypeBreakdownDto;
 
   @ApiProperty({ description: 'Lightweight branch operational stats', type: [BranchOperationalSummaryDto], isArray: true })
   branchBreakdown: BranchOperationalSummaryDto[];
