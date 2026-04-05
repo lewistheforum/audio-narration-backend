@@ -2,9 +2,12 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from '../../config/redis.config';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { AppointmentWebhookService } from '../appointments/appointment-webhook.service';
 import { ConfigService } from '@nestjs/config';
@@ -60,10 +63,13 @@ import { ChangeSeepayDto } from './dto/change-seepay.dto';
  */
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name);
   private readonly qrBaseUrl: string;
   private readonly seepayAccount: string;
   private readonly seepayBank: string;
   private readonly qrExpireMinutes: number;
+  private readonly SEPAY_PENDING_PREFIX = 'sepay:pending:';
+  private readonly SEPAY_PENDING_TTL = 900; // 15 minutes
 
   constructor(
     private readonly transactionRepository: TransactionRepository,
@@ -87,6 +93,7 @@ export class TransactionsService {
     @Inject(forwardRef(() => AppointmentsService))
     private readonly appointmentsService: AppointmentsService,
     private readonly appointmentWebhookService: AppointmentWebhookService,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
   ) {
     this.qrBaseUrl = this.configService.get<string>('SEEPAY_QR_BASE') || '';
     this.seepayAccount = this.configService.get<string>('SEEPAY_ACC') || '';
@@ -781,7 +788,29 @@ export class TransactionsService {
     const savedTransaction =
       await this.transactionRepository.save(pendingTransaction);
 
-    // 4. Generate QR with Transaction ID as content
+    // 4. Lưu tạm thông tin SePay mới vào Redis để SeepayAuthGuard xác thực callback
+    const pendingSepayData = {
+      clinicId,
+      bankName: dto.bankName,
+      bankBranch: dto.bankBranch,
+      bankNumber: dto.bankNumber,
+      seepayVA: dto.seepayVA,
+      seepayKey: dto.seepayKey,
+      transactionId: savedTransaction.id,
+      createdAt: new Date().toISOString(),
+    };
+
+    await this.redisClient.setex(
+      `${this.SEPAY_PENDING_PREFIX}${savedTransaction.id}`,
+      this.SEPAY_PENDING_TTL,
+      JSON.stringify(pendingSepayData),
+    );
+
+    this.logger.log(
+      `Stored pending SePay config in Redis for transaction ${savedTransaction.id} (TTL: ${this.SEPAY_PENDING_TTL}s)`,
+    );
+
+    // 5. Generate QR with Transaction ID as content
     // Use the Transaction ID (savedTransaction.id) as the description
     const description = savedTransaction.id;
 
@@ -801,6 +830,17 @@ export class TransactionsService {
       qrPayload,
       expiresAt,
     });
+  }
+
+  /**
+   * Get pending SePay config from Redis
+   * Used by SeepayAuthGuard to validate callback apiKey
+   */
+  async getPendingSepayConfig(transactionId: string): Promise<any | null> {
+    const data = await this.redisClient.get(
+      `${this.SEPAY_PENDING_PREFIX}${transactionId}`,
+    );
+    return data ? JSON.parse(data) : null;
   }
 
   /**
