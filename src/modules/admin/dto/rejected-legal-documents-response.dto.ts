@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PaginationMetaDto } from './pagination-meta.dto';
+import { PaginationDto } from './pagination.dto';
 
 /**
  * Rejected Legal Document Item DTO
@@ -7,6 +7,9 @@ import { PaginationMetaDto } from './pagination-meta.dto';
 export class RejectedLegalDocumentItemDto {
   @ApiProperty()
   id: string;
+
+  @ApiProperty({ description: 'Clinic Admin Account ID' })
+  clinicAdminId: string;
 
   @ApiProperty()
   subscriptionId: string;
@@ -34,6 +37,6 @@ export class RejectedLegalDocumentsResponseDto {
   @ApiProperty({ type: [RejectedLegalDocumentItemDto] })
   data: RejectedLegalDocumentItemDto[];
 
-  @ApiProperty({ type: PaginationMetaDto })
-  meta: PaginationMetaDto;
+  @ApiProperty({ type: PaginationDto })
+  pagination: PaginationDto;
 }

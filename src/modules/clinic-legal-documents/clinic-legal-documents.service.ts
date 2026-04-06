@@ -11,6 +11,7 @@ import { CreateClinicLegalDocumentDto } from './dto/create-clinic-legal-document
 import { LegalDocumentVerificationStatus } from '../accounts/enums/legal-document-verification-status.enum';
 import { AccountRole } from '../accounts/enums/account-role.enum';
 import { AccountStatus } from '../accounts/enums/account-status.enum';
+import { RegistrationStatus } from '../subscriptions/enums/subscription-status.enum';
 import { decrypt } from '../../common/utils/encryption.util';
 
 @Injectable()
@@ -78,11 +79,22 @@ export class ClinicLegalDocumentsService {
         'managerInfo',
         'managerInfo.account_id = managerAccount._id',
       )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('legalDocs.verification_status = :status', {
         status: LegalDocumentVerificationStatus.PENDING_REVIEW,
       })
       .andWhere('adminAccount.status = :adminStatus', {
         adminStatus: AccountStatus.ACTIVE,
+      })
+      .andWhere('subscription.subscription_status IN (:...subscriptionStatuses)', {
+        subscriptionStatuses: [
+          RegistrationStatus.ACTIVE,
+          RegistrationStatus.EXPIRED,
+        ],
       })
       .andWhere('managerAccount.role = :role', {
         role: AccountRole.CLINIC_MANAGER,
@@ -115,7 +127,7 @@ export class ClinicLegalDocumentsService {
     }));
 
     // Count total pending docs with active admin
-    const totalItems = await this.clinicRepo
+    const total = await this.clinicRepo
       .createQueryBuilder('legalDocs')
       .leftJoin('legalDocs.account', 'managerAccount')
       .leftJoin(
@@ -123,11 +135,22 @@ export class ClinicLegalDocumentsService {
         'adminAccount',
         'adminAccount._id = managerAccount.parent_id',
       )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('legalDocs.verification_status = :status', {
         status: LegalDocumentVerificationStatus.PENDING_REVIEW,
       })
       .andWhere('adminAccount.status = :adminStatus', {
         adminStatus: AccountStatus.ACTIVE,
+      })
+      .andWhere('subscription.subscription_status IN (:...subscriptionStatuses)', {
+        subscriptionStatuses: [
+          RegistrationStatus.ACTIVE,
+          RegistrationStatus.EXPIRED,
+        ],
       })
       .andWhere('managerAccount.role = :role', {
         role: AccountRole.CLINIC_MANAGER,
@@ -139,11 +162,11 @@ export class ClinicLegalDocumentsService {
 
     return {
       data,
-      meta: {
+      pagination: {
         page,
         limit,
-        totalItems,
-        totalPages: Math.ceil(totalItems / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
@@ -283,8 +306,8 @@ export class ClinicLegalDocumentsService {
   // ============================================
 
   /**
-   * Get list of ACTIVE clinic admins with their clinic managers and legal doc statuses
-   * OPTIMIZED: Uses single LEFT JOIN query instead of N+1 Promise.all
+   * Get list of ALL clinic admins with their clinic managers and legal doc statuses
+   * PAGINATION FIXED: Fetches admin IDs first to ensure correct limit/offset
    */
   async getClinicAdminsWithManagers(
     page: number = 1,
@@ -292,14 +315,38 @@ export class ClinicLegalDocumentsService {
   ): Promise<any> {
     const skip = (page - 1) * limit;
 
-    // Count total admins first (without managers subquery for pagination)
-    const totalResult = await this.accountRepository
+    // 1. Count total admins and get paginated admin IDs first to fix pagination bug
+    const total = await this.accountRepository
       .createQueryBuilder('admin')
       .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
       .andWhere('admin.deleted_at IS NULL')
       .getCount();
 
-    // Fetch admins with their managers in a single LEFT JOIN query
+    const paginatedAdmins = await this.accountRepository
+      .createQueryBuilder('admin')
+      .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
+      .andWhere('admin.deleted_at IS NULL')
+      .select(['admin._id'])
+      .orderBy('admin.created_at', 'DESC')
+      .offset(skip)
+      .limit(limit)
+      .getMany();
+
+    const adminIds = paginatedAdmins.map((a) => a._id);
+
+    if (adminIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: 0,
+        },
+      };
+    }
+
+    // 2. Fetch all related data for these specific admin IDs in a single query
     const rawData = await this.accountRepository
       .createQueryBuilder('admin')
       .leftJoin(
@@ -323,13 +370,18 @@ export class ClinicLegalDocumentsService {
         'legalDocs',
         'legalDocs.account_id = manager._id',
       )
-      .where('admin.role = :role', { role: AccountRole.CLINIC_ADMIN })
-      .andWhere('admin.deleted_at IS NULL')
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = admin._id',
+      )
+      .where('admin._id IN (:...adminIds)', { adminIds })
       .select([
         'admin._id as "adminAccountId"',
         'admin.email as "adminEmail"',
         'admin.status as "adminAccountStatus"',
         'clinicAdminInfo.clinic_name as "clinicName"',
+        'subscription.subscription_status as "subscriptionStatus"',
         'manager._id as "managerAccountId"',
         'manager.email as "managerEmail"',
         'manager.status as "managerAccountStatus"',
@@ -341,43 +393,27 @@ export class ClinicLegalDocumentsService {
         'legalDocs.created_at as "submittedAt"',
       ])
       .orderBy('admin.created_at', 'DESC')
-      .offset(skip)
-      .limit(limit)
       .getRawMany();
 
-    // Group managers by admin in memory
-    const adminMap = new Map<string, {
-      adminAccountId: string;
-      adminEmail: string | null;
-      adminAccountStatus: string;
-      clinicName: string;
-      managers: Array<{
-        accountId: string;
-        email: string | null;
-        accountStatus: string;
-        fullName: string;
-        clinicBranchName: string;
-        legalDocumentId: string | null;
-        verificationStatus: string | null;
-        rejectionReason: string | null;
-        submittedAt: Date | null;
-      }>;
-    }>();
+    // 3. Group results by admin in memory (preserving adminIds order)
+    const adminMap = new Map<string, any>();
+    adminIds.forEach((id) => adminMap.set(id, null));
 
     for (const row of rawData) {
-      if (!adminMap.has(row.adminAccountId)) {
+      if (!adminMap.get(row.adminAccountId)) {
         adminMap.set(row.adminAccountId, {
           adminAccountId: row.adminAccountId,
           adminEmail: row.adminEmail,
           adminAccountStatus: row.adminAccountStatus,
           clinicName: row.clinicName || '',
+          subscriptionStatus: row.subscriptionStatus,
           managers: [],
         });
       }
 
       // Only add manager if exists (LEFT JOIN can return NULL)
       if (row.managerAccountId) {
-        adminMap.get(row.adminAccountId)!.managers.push({
+        adminMap.get(row.adminAccountId).managers.push({
           accountId: row.managerAccountId,
           email: row.managerEmail,
           accountStatus: row.managerAccountStatus,
@@ -391,14 +427,13 @@ export class ClinicLegalDocumentsService {
       }
     }
 
-    const totalItems = totalResult;
     return {
-      data: Array.from(adminMap.values()),
-      meta: {
+      data: Array.from(adminMap.values()).filter((v) => v !== null),
+      pagination: {
         page,
         limit,
-        totalItems,
-        totalPages: Math.ceil(totalItems / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
@@ -553,11 +588,22 @@ export class ClinicLegalDocumentsService {
         'managerInfo',
         'managerInfo.account_id = managerAccount._id',
       )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('legalDocs.verification_status = :status', {
         status: LegalDocumentVerificationStatus.REJECTED,
       })
       .andWhere('adminAccount.status = :adminStatus', {
         adminStatus: AccountStatus.ACTIVE,
+      })
+      .andWhere('subscription.subscription_status IN (:...subscriptionStatuses)', {
+        subscriptionStatuses: [
+          RegistrationStatus.ACTIVE,
+          RegistrationStatus.EXPIRED,
+        ],
       })
       .andWhere('managerAccount.role = :role', {
         role: AccountRole.CLINIC_MANAGER,
@@ -581,7 +627,7 @@ export class ClinicLegalDocumentsService {
 
     const data = await queryBuilder.getRawMany();
 
-    const totalItems = await this.clinicRepo
+    const total = await this.clinicRepo
       .createQueryBuilder('legalDocs')
       .leftJoin('legalDocs.account', 'managerAccount')
       .leftJoin(
@@ -589,11 +635,22 @@ export class ClinicLegalDocumentsService {
         'adminAccount',
         'adminAccount._id = managerAccount.parent_id',
       )
+      .leftJoin(
+        'clinic_subcriptions',
+        'subscription',
+        'subscription.clinic_id = adminAccount._id',
+      )
       .where('legalDocs.verification_status = :status', {
         status: LegalDocumentVerificationStatus.REJECTED,
       })
       .andWhere('adminAccount.status = :adminStatus', {
         adminStatus: AccountStatus.ACTIVE,
+      })
+      .andWhere('subscription.subscription_status IN (:...subscriptionStatuses)', {
+        subscriptionStatuses: [
+          RegistrationStatus.ACTIVE,
+          RegistrationStatus.EXPIRED,
+        ],
       })
       .andWhere('managerAccount.role = :role', {
         role: AccountRole.CLINIC_MANAGER,
@@ -605,11 +662,11 @@ export class ClinicLegalDocumentsService {
 
     return {
       data,
-      meta: {
+      pagination: {
         page,
         limit,
-        totalItems,
-        totalPages: Math.ceil(totalItems / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }

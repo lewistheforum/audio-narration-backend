@@ -9,6 +9,9 @@ export class LegalDocumentListItemDto {
   @ApiProperty({ description: 'Legal document record ID' })
   id: string;
 
+  @ApiProperty({ description: 'Clinic Admin Account ID' })
+  clinicAdminId: string;
+
   @ApiProperty({ description: 'Subscription ID' })
   subscriptionId: string;
 
