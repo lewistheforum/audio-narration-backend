@@ -4003,12 +4003,14 @@ export class AppointmentsService {
       );
     }
 
-    const appointmentStartTime = new Date(
-      appointment.appointmentHour,
+    const appointmentCreatedAt = new Date(
+      appointment.createdAt,
     ).getTime();
     const serviceCreatedTime = new Date(serviceAppointment.createdAt).getTime();
 
-    if (serviceCreatedTime <= appointmentStartTime) {
+    // Only additional services added during/after the initial appointment creation can be removed
+    // We add a 120-second buffer to ensure original services (saved in the same txn) are kept
+    if (serviceCreatedTime <= appointmentCreatedAt + 120000) {
       throw new BadRequestException(
         'Only additional services added during examination can be removed',
       );

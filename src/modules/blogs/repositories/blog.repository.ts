@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { Blog } from '../entities/blog.entity';
+import { BlogType } from '../enums';
 import { BlogNotification } from '../../notifications/entities/blog-notification.entity';
 
 /**
@@ -65,12 +66,22 @@ export class BlogRepository {
    * Excludes soft-deleted records.
    * Orders by newest first (createdAt DESC).
    *
-   * @returns {Promise<Blog[]>} Array of blog entities with clinic relations
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @param {BlogType} [type] - Optional blog type category filter
+   * @returns {Promise<[Blog[], number]>} Array of blog entities and total count
    */
-  async findAllWithClinic(): Promise<Blog[]> {
-    return this.blogRepository.find({
+  async findAllWithClinic(
+    page: number = 1,
+    limit: number = 6,
+    type?: BlogType,
+  ): Promise<[Blog[], number]> {
+    return this.blogRepository.findAndCount({
+      where: type ? { type } : {},
       relations: ['clinic', 'clinic.clinicManagerInformation'],
       order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
   }
 
