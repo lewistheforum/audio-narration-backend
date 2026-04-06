@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ClinicManagerInformation } from '../entities/clinic_manager_information.entity';
+import { Account } from '../entities/accounts.entity';
 import { AccountRole } from '../enums/account-role.enum';
 
 /**
@@ -176,6 +177,9 @@ export class ClinicManagerInformationRepository {
    * Find Managers by Parent Admin with Pagination and Filters
    * Used for manager list endpoint
    * 
+   * Uses PostgreSQL subqueries for staffCount/doctorCount to eliminate N+1.
+   * All array filters use PostgreSQL ANY() operator.
+   * 
    * @param clinicAdminId - Parent CLINIC_ADMIN account ID
    * @param query - Query parameters (pagination, sorting, filters)
    * @returns Tuple of [managers, totalCount]
@@ -214,7 +218,6 @@ export class ClinicManagerInformationRepository {
 
     const queryBuilder = this.repository.createQueryBuilder('manager')
       .leftJoinAndSelect('manager.account', 'account')
-      .leftJoin('account.children', 'children')
       .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
       .leftJoin('addresses', 'address', 'address.account_id = account._id')
       .where('account.parent_id = :clinicAdminId', { clinicAdminId })
@@ -259,33 +262,44 @@ export class ClinicManagerInformationRepository {
       });
     }
 
+    // Subquery for staff count (N+1 elimination)
+    queryBuilder.addSelect((subQuery) => {
+      return subQuery
+        .select('COUNT(acc._id)')
+        .from(Account, 'acc')
+        .where('acc.parent_id = account._id')
+        .andWhere('acc.role = :staffRole')
+        .andWhere('acc.deleted_at IS NULL');
+    }, 'staffCount');
+
+    // Subquery for doctor count (N+1 elimination)
+    queryBuilder.addSelect((subQuery) => {
+      return subQuery
+        .select('COUNT(acc._id)')
+        .from(Account, 'acc')
+        .where('acc.parent_id = account._id')
+        .andWhere('acc.role = :doctorRole')
+        .andWhere('acc.deleted_at IS NULL');
+    }, 'doctorCount');
+
     queryBuilder
-      .select([
-        'manager._id',
-        'manager.fullName',
-        'manager.clinicBranchName',
-        'manager.createdAt',
-        'account._id',
-        'account.email',
-        'account.status',
-        'legal.verificationStatus',
-        'address.provinceName',
-      ])
-      .addSelect('COUNT(DISTINCT CASE WHEN children.role = :staffRole THEN children._id END)', 'staffCount')
-      .addSelect('COUNT(DISTINCT CASE WHEN children.role = :doctorRole THEN children._id END)', 'doctorCount')
       .setParameter('staffRole', AccountRole.CLINIC_STAFF)
       .setParameter('doctorRole', AccountRole.DOCTOR)
-      .groupBy('manager._id')
-      .addGroupBy('account._id')
-      .addGroupBy('legal.verificationStatus')
-      .addGroupBy('address.provinceName')
       .orderBy(sortField, sortOrder)
       .skip(skip)
       .take(limit);
 
-    const [data, totalCount] = await queryBuilder.getManyAndCount();
+    const result = await queryBuilder.getRawAndEntities();
+    const countResult = await queryBuilder.getCount();
 
-    return [data, totalCount];
+    // Attach raw count values to each entity for service layer mapping
+    const managersWithCounts = result.entities.map((manager, index) => {
+      (manager as any).staffCount = result.raw[index]?.staffCount ?? '0';
+      (manager as any).doctorCount = result.raw[index]?.doctorCount ?? '0';
+      return manager;
+    });
+
+    return [managersWithCounts, countResult];
   }
 
   /**
