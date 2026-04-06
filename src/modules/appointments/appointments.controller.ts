@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   Request,
+  Req,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
@@ -2239,10 +2240,12 @@ export class AppointmentsController {
     description: 'Filter by specific date (YYYY-MM-DD, optional)',
   })
   async getClinicSchedules(
+    @Req() req: any,
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Query('working_date') workingDate?: string,
   ) {
-    return this.appointmentsService.getClinicSchedules(clinicId, workingDate);
+    const patientId = req.user?._id;
+    return this.appointmentsService.getClinicSchedules(clinicId, workingDate, patientId);
   }
 
   /**
@@ -3268,10 +3271,12 @@ export class AppointmentsController {
     description: 'Clinic UUID (required)',
   })
   async getDoctorSchedules(
+    @Req() req: any,
     @Param('doctorId', ParseUUIDPipe) doctorId: string,
     @Query('clinic_id', ParseUUIDPipe) clinicId: string,
   ) {
-    return this.appointmentsService.getDoctorSchedules(doctorId, clinicId);
+    const patientId = req.user?._id;
+    return this.appointmentsService.getDoctorSchedules(doctorId, clinicId, patientId);
   }
 
   /**

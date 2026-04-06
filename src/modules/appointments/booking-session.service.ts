@@ -99,6 +99,8 @@ export class BookingSessionService {
     AppointmentStatus.CANCELLED,
     AppointmentStatus.ABSENT,
   ];
+  private readonly ONE_APPOINTMENT_PER_DAY_MESSAGE =
+    'Bạn đã có lịch hẹn trong ngày này. Mỗi ngày chỉ được đặt tối đa 1 lịch hẹn.';
   private readonly MIN_ADVANCE_BOOKING_MESSAGE =
     'Appointments must be booked at least 1 day in advance';
 
@@ -131,6 +133,15 @@ export class BookingSessionService {
         createDto.initial_data as Record<string, unknown>,
       ),
     );
+
+    // Strict "one appointment per day" check
+    const initialData = createDto.initial_data as Record<string, unknown>;
+    if (initialData?.appointment_date && typeof initialData.appointment_date === 'string') {
+      await this.checkPatientAppointmentPerDay(
+        patientId,
+        initialData.appointment_date as string,
+      );
+    }
 
     // Generate session ID
     const sessionId = uuidv4();
@@ -333,6 +344,8 @@ export class BookingSessionService {
 
         this.validateMinimumBookingLeadTime(data.appointment_date);
 
+        await this.checkPatientAppointmentPerDay(patientId, data.appointment_date);
+
         await this.checkPatientAppointmentOverlap(
           patientId,
           await this.resolveRequestedStartTime({
@@ -424,6 +437,8 @@ export class BookingSessionService {
         }
 
         this.validateMinimumBookingLeadTime(data.appointment_date);
+
+        await this.checkPatientAppointmentPerDay(patientId, data.appointment_date);
 
         await this.checkPatientAppointmentOverlap(
           patientId,
@@ -535,6 +550,8 @@ export class BookingSessionService {
         }
 
         await this.checkPatientAppointmentOverlap(patientId, extraHourDate);
+
+        await this.checkPatientAppointmentPerDay(patientId, data.appointment_date);
 
         const normalizedAppointmentDate = getDateString(
           getStartOfVietnamDate(data.appointment_date),
@@ -678,6 +695,35 @@ export class BookingSessionService {
 
     if (existingAppointment) {
       throw new ConflictException(this.APPOINTMENT_CONFLICT_MESSAGE);
+    }
+  }
+
+  /**
+   * Strict "One Appointment Per Day Per Patient" validation.
+   * Checks for ANY existing appointment on the requested date,
+   * REGARDLESS of status (even cancelled or failed).
+   */
+  private async checkPatientAppointmentPerDay(
+    patientId: string,
+    requestedDate: string,
+  ): Promise<void> {
+    if (!requestedDate) {
+      return;
+    }
+
+    const existingAppointment = await this.dataSource
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .select('appointment._id')
+      .where('appointment.patient_id = :patientId', { patientId })
+      .andWhere('DATE(appointment.appointment_date) = DATE(:requestedDate)', {
+        requestedDate,
+      })
+      .limit(1)
+      .getOne();
+
+    if (existingAppointment) {
+      throw new ConflictException(this.ONE_APPOINTMENT_PER_DAY_MESSAGE);
     }
   }
 
