@@ -32,6 +32,7 @@ import { dateOnlyTransformer } from '../../../common/transformers/date-only.tran
 @Index('idx_appointments_clinic_date', ['clinicId', 'appointmentDate'])
 @Index('idx_appointments_patient_id', ['patientId'])
 @Index('idx_appointments_patient_appointment_hour', ['patientId', 'appointmentHour'])
+@Index('idx_appointments_patient_appointment_date', ['patientId', 'appointmentDate'])
 export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   _id: string;

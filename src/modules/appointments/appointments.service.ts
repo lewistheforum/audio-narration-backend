@@ -150,6 +150,8 @@ export class AppointmentsService {
     'You already have a confirmed appointment at this time. Please select a different time slot.';
   private readonly RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE =
     'You already have a confirmed appointment at this new time. Please select a different time slot.';
+  private readonly ONE_APPOINTMENT_PER_DAY_MESSAGE =
+    'Bạn đã có lịch hẹn trong ngày này. Mỗi ngày chỉ được đặt tối đa 1 lịch hẹn.';
   private readonly logger = new Logger(AppointmentsService.name);
   private readonly APPOINTMENT_CONFLICT_EXCLUDED_STATUSES = [
     AppointmentStatus.CANCELLED,
@@ -256,6 +258,36 @@ export class AppointmentsService {
           ? this.RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE
           : this.APPOINTMENT_CONFLICT_MESSAGE,
       );
+    }
+  }
+
+  /**
+   * Strict "One Appointment Per Day Per Patient" validation.
+   * Checks for ANY existing appointment on the requested date,
+   * REGARDLESS of status (even cancelled or failed).
+   */
+  private async checkPatientAppointmentPerDay(
+    manager: any,
+    patientId: string,
+    requestedDate: string,
+  ): Promise<void> {
+    if (!requestedDate) {
+      return;
+    }
+
+    const existingAppointment = await manager
+      .getRepository(Appointment)
+      .createQueryBuilder('appointment')
+      .select('appointment._id')
+      .where('appointment.patient_id = :patientId', { patientId })
+      .andWhere('DATE(appointment.appointment_date) = DATE(:requestedDate)', {
+        requestedDate,
+      })
+      .limit(1)
+      .getOne();
+
+    if (existingAppointment) {
+      throw new ConflictException(this.ONE_APPOINTMENT_PER_DAY_MESSAGE);
     }
   }
 
@@ -606,6 +638,14 @@ export class AppointmentsService {
           'Patient already has an active appointment in this shift on the selected date.',
         );
       }
+
+      // Strict "one appointment per day" check (regardless of status)
+      const dateString = getDateString(appointmentDate);
+      await this.checkPatientAppointmentPerDay(
+        manager,
+        createDto.patientId,
+        dateString,
+      );
 
       // Query service prices and discounts from clinic_service_config
       const serviceIds = createDto.services.map((s) => s.clinicServiceId);
@@ -4371,6 +4411,13 @@ export class AppointmentsService {
         extraHourDate,
       );
 
+      // Strict "one appointment per day" check for out-of-hours
+      await this.checkPatientAppointmentPerDay(
+        this.dataSource.manager,
+        patientId,
+        appointmentDate,
+      );
+
       // Out-of-hours validation passed, now process it
       if (session.paymentMethod === 'cod') {
         return await this.createAppointmentOutOfHours(
@@ -4431,6 +4478,13 @@ export class AppointmentsService {
           'Appointment date must be in YYYY-MM-DD format',
         );
       }
+
+      // Strict "one appointment per day" check
+      await this.checkPatientAppointmentPerDay(
+        this.dataSource.manager,
+        patientId,
+        dateString,
+      );
 
       // Parse to Date object for comparison only
       const appointmentDate = getStartOfVietnamDate(dateString);
@@ -8132,7 +8186,7 @@ export class AppointmentsService {
    * @param workingDate - Optional date filter (YYYY-MM-DD)
    * @returns Nested schedule structure: dates -> shifts -> slots
    */
-  async getClinicSchedules(clinicId: string, workingDate?: string) {
+  async getClinicSchedules(clinicId: string, workingDate?: string, patientId?: string) {
     const startOfTomorrow = getStartOfTomorrow();
     const maxDate = addToVietnamTime(30, 'day');
     const startOfTomorrowDateString = this.toVietnamDateString(startOfTomorrow);
@@ -8269,6 +8323,35 @@ export class AppointmentsService {
 
     const rawSlots = await scheduleQuery.getRawMany();
 
+    // Fetch patient's booked dates for filtering (one appointment per day rule)
+    let patientBookedDates = new Set<string>();
+    if (patientId) {
+      const bookedQuery = this.dataSource
+        .createQueryBuilder()
+        .select('DISTINCT DATE(appointment_date) AS booked_date')
+        .from('appointments', 'apt')
+        .where('apt.patient_id = :patientId', { patientId });
+
+      if (normalizedWorkingDate) {
+        bookedQuery.andWhere('DATE(appointment_date) = DATE(:workingDate)', {
+          workingDate: normalizedWorkingDate,
+        });
+      } else {
+        bookedQuery
+          .andWhere('DATE(appointment_date) >= DATE(:startOfTomorrowDate)', {
+            startOfTomorrowDate: startOfTomorrowDateString,
+          })
+          .andWhere('DATE(appointment_date) <= DATE(:maxDate)', {
+            maxDate: maxDateString,
+          });
+      }
+
+      const bookedRows = await bookedQuery.getRawMany();
+      patientBookedDates = new Set(
+        bookedRows.map((row) => this.toVietnamDateString(row.booked_date)),
+      );
+    }
+
     if (!rawSlots || rawSlots.length === 0) {
       return { data: [] };
     }
@@ -8315,11 +8398,17 @@ export class AppointmentsService {
       });
     }
 
-    const result = Array.from(dateMap.values()).map((dateData) => ({
-      date: this.toVietnamDateString(dateData.date),
-      week_day: dateData.week_day,
-      shifts: Array.from(dateData.shifts.values()),
-    }));
+    const result = Array.from(dateMap.values())
+      .filter((dateData) => {
+        if (patientBookedDates.size === 0) return true;
+        const dateKey = this.toVietnamDateString(dateData.date);
+        return !patientBookedDates.has(dateKey);
+      })
+      .map((dateData) => ({
+        date: this.toVietnamDateString(dateData.date),
+        week_day: dateData.week_day,
+        shifts: Array.from(dateData.shifts.values()),
+      }));
 
     return { data: result };
   }
@@ -8341,7 +8430,7 @@ export class AppointmentsService {
    * @param clinicId - Clinic UUID (REQUIRED)
    * @returns Nested schedule structure only (no services)
    */
-   async getDoctorSchedules(doctorId: string, clinicId: string) {
+   async getDoctorSchedules(doctorId: string, clinicId: string, patientId?: string) {
      if (!clinicId) {
        throw new BadRequestException('clinic_id is required');
      }
@@ -8427,23 +8516,51 @@ export class AppointmentsService {
          )`,
        );
 
-     const rawSlots = await queryBuilder
-       .orderBy('es.work_date', 'ASC')
-       .addOrderBy('cs.shift', 'ASC')
-       .addOrderBy('csh.start_hour', 'ASC')
-       .getRawMany();
+      const rawSlots = await queryBuilder
+        .orderBy('es.work_date', 'ASC')
+        .addOrderBy('cs.shift', 'ASC')
+        .addOrderBy('csh.start_hour', 'ASC')
+        .getRawMany();
 
-     if (rawSlots.length === 0) {
-       return { data: [] };
-     }
+      // Fetch patient's booked dates for filtering (one appointment per day rule)
+      let patientBookedDates = new Set<string>();
+      if (patientId) {
+        const startOfTomorrowStr = this.toVietnamDateString(startOfTomorrow);
+        const maxDateStr = this.toVietnamDateString(maxDate);
+        const bookedQuery = this.dataSource
+          .createQueryBuilder()
+          .select('DISTINCT DATE(appointment_date) AS booked_date')
+          .from('appointments', 'apt')
+          .where('apt.patient_id = :patientId', { patientId })
+          .andWhere('DATE(appointment_date) >= DATE(:startOfTomorrow)', {
+            startOfTomorrow: startOfTomorrowStr,
+          })
+          .andWhere('DATE(appointment_date) <= DATE(:maxDate)', {
+            maxDate: maxDateStr,
+          });
 
-     // Calculate available_slots from pre-aggregated booked_count
-     const availableSlots = rawSlots
-       .map((slot) => ({
-         ...slot,
-         available_slots: slot.limit - slot.booked_count,
-       }))
-       .filter((s) => s.available_slots > 0);
+        const bookedRows = await bookedQuery.getRawMany();
+        patientBookedDates = new Set(
+          bookedRows.map((row) => this.toVietnamDateString(row.booked_date)),
+        );
+      }
+
+      if (rawSlots.length === 0) {
+        return { data: [] };
+      }
+
+      // Calculate available_slots from pre-aggregated booked_count
+      const availableSlots = rawSlots
+        .filter((slot) => {
+          if (patientBookedDates.size === 0) return true;
+          const dateKey = this.toVietnamDateString(slot.work_date);
+          return !patientBookedDates.has(dateKey);
+        })
+        .map((slot) => ({
+          ...slot,
+          available_slots: slot.limit - slot.booked_count,
+        }))
+        .filter((s) => s.available_slots > 0);
 
      // DATA TRANSFORMATION: Group by Date -> Shift -> Slots
      const dateMap = new Map<string, any>();
