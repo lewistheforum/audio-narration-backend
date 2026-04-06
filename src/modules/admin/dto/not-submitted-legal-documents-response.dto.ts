@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PaginationMetaDto } from './pagination-meta.dto';
+import { PaginationDto } from './pagination.dto';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
 
 /**
@@ -8,6 +8,9 @@ import { RegistrationStatus } from '../../subscriptions/enums/subscription-statu
 export class NotSubmittedLegalDocumentItemDto {
   @ApiProperty()
   clinicName: string;
+
+  @ApiProperty({ description: 'Clinic Admin Account ID' })
+  clinicAdminId: string;
 
   @ApiProperty()
   adminEmail: string;
@@ -32,6 +35,6 @@ export class NotSubmittedLegalDocumentsResponseDto {
   @ApiProperty({ type: [NotSubmittedLegalDocumentItemDto] })
   data: NotSubmittedLegalDocumentItemDto[];
 
-  @ApiProperty({ type: PaginationMetaDto })
-  meta: PaginationMetaDto;
+  @ApiProperty({ type: PaginationDto })
+  pagination: PaginationDto;
 }

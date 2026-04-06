@@ -89,17 +89,13 @@ export class AdminController {
   })
   async getPendingLegalDocuments(
     @Query() query: PaginationQueryDto,
-  ): Promise<{ data: PendingLegalDocumentsResponseDto; message: string }> {
-    const result = await this.adminService.getPendingLegalDocuments(
+  ): Promise<PendingLegalDocumentsResponseDto> {
+    return await this.adminService.getPendingLegalDocuments(
       query.page,
       query.limit,
       query.sortBy,
       query.sortOrder,
     );
-    return {
-      data: result,
-      message: 'Pending legal documents retrieved successfully',
-    };
   }
 
   /**
@@ -117,17 +113,13 @@ export class AdminController {
   })
   async getApprovedLegalDocuments(
     @Query() query: PaginationQueryDto,
-  ): Promise<{ data: ApprovedLegalDocumentsResponseDto; message: string }> {
-    const result = await this.adminService.getApprovedLegalDocuments(
+  ): Promise<ApprovedLegalDocumentsResponseDto> {
+    return await this.adminService.getApprovedLegalDocuments(
       query.page,
       query.limit,
       query.sortBy,
       query.sortOrder,
     );
-    return {
-      data: result,
-      message: 'Approved legal documents retrieved successfully',
-    };
   }
 
   /**
@@ -145,17 +137,13 @@ export class AdminController {
   })
   async getRejectedLegalDocuments(
     @Query() query: PaginationQueryDto,
-  ): Promise<{ data: RejectedLegalDocumentsResponseDto; message: string }> {
-    const result = await this.adminService.getRejectedLegalDocuments(
+  ): Promise<RejectedLegalDocumentsResponseDto> {
+    return await this.adminService.getRejectedLegalDocuments(
       query.page,
       query.limit,
       query.sortBy,
       query.sortOrder,
     );
-    return {
-      data: result,
-      message: 'Rejected legal documents retrieved successfully',
-    };
   }
 
   /**
@@ -173,17 +161,13 @@ export class AdminController {
   })
   async getNotSubmittedRegistrations(
     @Query() query: PaginationQueryDto,
-  ): Promise<{ data: NotSubmittedLegalDocumentsResponseDto; message: string }> {
-    const result = await this.adminService.getNotSubmittedRegistrations(
+  ): Promise<NotSubmittedLegalDocumentsResponseDto> {
+    return await this.adminService.getNotSubmittedRegistrations(
       query.page,
       query.limit,
       query.sortBy,
       query.sortOrder,
     );
-    return {
-      data: result,
-      message: 'Not submitted registrations retrieved successfully',
-    };
   }
 
   // ============================================

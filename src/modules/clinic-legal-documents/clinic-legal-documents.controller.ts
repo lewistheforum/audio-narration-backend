@@ -75,14 +75,10 @@ export class ClinicLegalDocumentsController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    const result = await this.clinicLegalDocumentsService.getPendingDocuments(
+    return await this.clinicLegalDocumentsService.getPendingDocuments(
       Number(page) || 1,
       Number(limit) || 10,
     );
-    return {
-      data: result,
-      message: 'Pending clinic manager legal documents retrieved successfully',
-    };
   }
 
   /**
@@ -101,18 +97,14 @@ export class ClinicLegalDocumentsController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    const result = await this.clinicLegalDocumentsService.getRejectedDocuments(
+    return await this.clinicLegalDocumentsService.getRejectedDocuments(
       Number(page) || 1,
       Number(limit) || 10,
     );
-    return {
-      data: result,
-      message: 'Rejected clinic manager legal documents retrieved successfully',
-    };
   }
 
   /**
-   * Get list of ACTIVE clinic admins with their managers and legal doc statuses
+   * Get list of ALL clinic admins with their managers and legal doc statuses
    */
   @Get('clinic-admins')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -120,7 +112,7 @@ export class ClinicLegalDocumentsController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary:
-      'Get ACTIVE clinic admins with their clinic managers and legal document statuses',
+      'Get ALL clinic admins with their clinic managers and legal document statuses',
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -128,15 +120,10 @@ export class ClinicLegalDocumentsController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    const result =
-      await this.clinicLegalDocumentsService.getClinicAdminsWithManagers(
-        Number(page) || 1,
-        Number(limit) || 10,
-      );
-    return {
-      data: result,
-      message: 'Clinic admins with managers retrieved successfully',
-    };
+    return await this.clinicLegalDocumentsService.getClinicAdminsWithManagers(
+      Number(page) || 1,
+      Number(limit) || 10,
+    );
   }
 
   /**
@@ -149,11 +136,7 @@ export class ClinicLegalDocumentsController {
   @ApiOperation({ summary: 'Get detail of a clinic manager legal document' })
   @ApiParam({ name: 'id', type: 'string', description: 'Legal document ID' })
   async getDocumentDetail(@Param('id', ParseUUIDPipe) id: string) {
-    const result = await this.clinicLegalDocumentsService.getDocumentDetail(id);
-    return {
-      data: result,
-      message: 'Legal document detail retrieved successfully',
-    };
+    return await this.clinicLegalDocumentsService.getDocumentDetail(id);
   }
 
   /**

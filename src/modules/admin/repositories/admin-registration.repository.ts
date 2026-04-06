@@ -240,8 +240,17 @@ export class AdminRegistrationRepository {
         'subscription.clinic_id = adminAccount._id',
       )
       .where('legalDocs.verification_status = :status', {
-        status: 'PENDING_REVIEW',
+        status: LegalDocumentVerificationStatus.PENDING_REVIEW,
       })
+      .andWhere(
+        'subscription.subscription_status NOT IN (:...excludedStatuses)',
+        {
+          excludedStatuses: [
+            RegistrationStatus.ACTIVE,
+            RegistrationStatus.EXPIRED,
+          ],
+        },
+      )
       .andWhere(
         `(SELECT COUNT(*) FROM accounts "childAccount"
           WHERE "childAccount"."parent_id" = "adminAccount"."_id"
@@ -254,11 +263,12 @@ export class AdminRegistrationRepository {
     const dataQueryBuilder = baseQueryBuilder
       .clone()
       .select([
-        'adminAccount._id as "id"',
-        'legalDocs._id as "legalDocumentId"',
+        'legalDocs._id as "id"',
         'subscription._id as "subscriptionId"',
-        'clinicInfo.clinic_name as "clinicName"',
+        'legalDocs._id as "legalDocumentId"',
         'managerAccount._id as "clinicManagerId"',
+        'adminAccount._id as "clinicAdminId"',
+        'clinicInfo.clinic_name as "clinicName"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.operating_license as "operatingLicense"',
@@ -302,10 +312,10 @@ export class AdminRegistrationRepository {
   ): Promise<[any[], number]> {
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.legalDocumentsRepository
+    const baseQueryBuilder = this.legalDocumentsRepository
       .createQueryBuilder('legalDocs')
-      .leftJoinAndSelect('legalDocs.account', 'managerAccount')
-      .leftJoin(
+      .innerJoin('legalDocs.account', 'managerAccount')
+      .innerJoin(
         'accounts',
         'adminAccount',
         'adminAccount._id = managerAccount.parent_id',
@@ -316,13 +326,29 @@ export class AdminRegistrationRepository {
         'subscription',
         'subscription.clinic_id = adminAccount._id',
       )
-      .where('legalDocs.verification_status = :status', { status: 'APPROVED' })
+      .where('legalDocs.verification_status = :status', {
+        status: LegalDocumentVerificationStatus.APPROVED,
+      })
+      .andWhere(
+        `legalDocs._id = (
+          SELECT ld2._id 
+          FROM clinics_legal_documents ld2
+          INNER JOIN accounts ma2 ON ma2._id = ld2.account_id
+          WHERE ma2.parent_id = "adminAccount"."_id"
+            AND ld2.verification_status = :status
+          ORDER BY ld2.created_at ASC
+          LIMIT 1
+        )`,
+      );
+
+    const dataQueryBuilder = baseQueryBuilder
+      .clone()
       .select([
-        'adminAccount._id as "id"',
-        'legalDocs._id as "legalDocumentId"',
+        'legalDocs._id as "id"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
         'managerAccount._id as "clinicManagerId"',
+        'adminAccount._id as "clinicAdminId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.updated_at as "approvedAt"',
@@ -335,10 +361,8 @@ export class AdminRegistrationRepository {
       .limit(limit);
 
     const [data, total] = await Promise.all([
-      queryBuilder.getRawMany(),
-      this.legalDocumentsRepository.count({
-        where: { verificationStatus: LegalDocumentVerificationStatus.APPROVED },
-      }),
+      dataQueryBuilder.getRawMany(),
+      baseQueryBuilder.clone().getCount(),
     ]);
 
     return [data, total];
@@ -371,6 +395,15 @@ export class AdminRegistrationRepository {
       )
       .where('legalDocs.verification_status = :status', { status: 'REJECTED' })
       .andWhere(
+        'subscription.subscription_status NOT IN (:...excludedStatuses)',
+        {
+          excludedStatuses: [
+            RegistrationStatus.ACTIVE,
+            RegistrationStatus.EXPIRED,
+          ],
+        },
+      )
+      .andWhere(
         `(SELECT COUNT(*) FROM accounts "childAccount"
           WHERE "childAccount"."parent_id" = "adminAccount"."_id"
             AND "childAccount"."role" = :managerRole) = 1`,
@@ -382,11 +415,11 @@ export class AdminRegistrationRepository {
     const queryBuilder = baseQueryBuilder
       .clone()
       .select([
-        'adminAccount._id as "id"',
-        'legalDocs._id as "legalDocumentId"',
+        'legalDocs._id as "id"',
         'subscription._id as "subscriptionId"',
         'clinicInfo.clinic_name as "clinicName"',
         'managerAccount._id as "clinicManagerId"',
+        'adminAccount._id as "clinicAdminId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.email as "adminEmail"',
         'legalDocs.rejection_reason as "rejectionReason"',
@@ -445,6 +478,7 @@ export class AdminRegistrationRepository {
         'clinicInfo.clinic_name as "clinicName"',
         'adminAccount.email as "adminEmail"',
         'managerAccount._id as "clinicManagerId"',
+        'adminAccount._id as "clinicAdminId"',
         'managerAccount.email as "managerEmail"',
         'adminAccount.created_at as "registrationDate"',
         'subscription.subscription_status as "currentStatus"',
