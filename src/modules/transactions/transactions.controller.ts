@@ -49,6 +49,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { SeepayAuthGuard } from './guards/seepay-auth.guard';
 import { CreateTransactionAtClinicDto } from './dto/create-transaction-at-clinic.dto';
+import { ChangeSeepayDto } from './dto/change-seepay.dto';
 
 /**
  * Transactions Controller
@@ -60,7 +61,7 @@ import { CreateTransactionAtClinicDto } from './dto/create-transaction-at-clinic
 @Controller('transactions')
 @ApiExtraModels(PaymentResponseDto)
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) { }
+  constructor(private readonly transactionsService: TransactionsService) {}
 
   /**
    * Create payment QR for a specific prescription
@@ -112,10 +113,7 @@ export class TransactionsController {
   @Post('qr/at-clinic')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @Roles(
-    AccountRole.CLINIC_STAFF,
-    AccountRole.CLINIC_MANAGER,
-  )
+  @Roles(AccountRole.CLINIC_STAFF, AccountRole.CLINIC_MANAGER)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create payment QR at clinic' })
   @ApiResponseData({
@@ -127,12 +125,9 @@ export class TransactionsController {
     type: CreateTransactionAtClinicDto,
     description: 'Transaction payload (appointmentId is provided from body)',
   })
-  async createStaffQrPayment(
-    @Body() body: CreateTransactionAtClinicDto,
-  ) {
-    const payment = await this.transactionsService.createDynamicQrAtClinic(
-      body,
-    );
+  async createStaffQrPayment(@Body() body: CreateTransactionAtClinicDto) {
+    const payment =
+      await this.transactionsService.createDynamicQrAtClinic(body);
     return {
       data: payment,
       message: 'Payment QR created successfully',
@@ -287,7 +282,9 @@ export class TransactionsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create verification QR (10k) for logged-in clinic user' })
+  @ApiOperation({
+    summary: 'Create verification QR (10k) for logged-in clinic user',
+  })
   @ApiResponseData({
     type: PaymentResponseDto,
     status: HttpStatus.CREATED,
@@ -296,6 +293,32 @@ export class TransactionsController {
   async createVerificationQr(@User() user: Account) {
     const payment = await this.transactionsService.createVerificationQr(
       user._id,
+    );
+    return {
+      data: payment,
+      message: 'Verification QR created successfully',
+    };
+  }
+
+  @Post('clinic/change-sepay-qr')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create verification QR (10k) for logged-in clinic user',
+  })
+  @ApiResponseData({
+    type: PaymentResponseDto,
+    status: HttpStatus.CREATED,
+    message: 'Verification QR created successfully',
+  })
+  async createChangeSepayQr(
+    @User() user: Account,
+    @Body() payload: ChangeSeepayDto,
+  ) {
+    const payment = await this.transactionsService.createChangeSepayQr(
+      user._id,
+      payload,
     );
     return {
       data: payment,

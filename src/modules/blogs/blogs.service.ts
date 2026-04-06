@@ -10,10 +10,12 @@ import { BlogNotification } from '../notifications/entities/blog-notification.en
 import { BlogRepository } from './repositories/blog.repository';
 import {
   BlogResponseDto,
+  BlogListResponseDto,
   CreateBlogDto,
   UpdateBlogDto,
   BlogNotificationResponseDto,
 } from './dto';
+import { BlogType } from './enums';
 import { Account } from '../accounts/entities/accounts.entity';
 import { AccountRole, AccountStatus } from '../accounts/enums';
 import { AccountsService } from '../accounts/accounts.service';
@@ -58,27 +60,41 @@ export class BlogsService {
   /**
    * Find All Blogs
    *
-   * Retrieves all blog posts from the system.
+   * Retrieves a paginated list of blog posts from the system.
    * Excludes soft-deleted records (deletedAt IS NULL).
    * Orders by newest first (createdAt DESC).
    * Includes clinic information for each blog via ORM relation join.
    *
-   * Use Cases:
-   * - Blog listing page
-   * - Public blog browsing
-   * - Blog feed display
-   *
-   * @returns {Promise<BlogResponseDto[]>} Array of blog DTOs with clinic information
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 6)
+   * @param {BlogType} [type] - Optional blog type category filter
+   * @returns {Promise<BlogListResponseDto>} Paginated blog DTOs with clinic information
    *
    * @example
    * ```typescript
-   * const blogs = await blogsService.findAll();
-   * // Returns array of blogs ordered by newest first
+   * const result = await blogsService.findAll(1, 6, BlogType.HEALTH);
+   * // Returns first page of health-related blogs
    * ```
    */
-  async findAll(): Promise<BlogResponseDto[]> {
-    const blogs = await this.blogRepository.findAllWithClinic();
-    return blogs.map((blog) => new BlogResponseDto(blog));
+  async findAll(
+    page: number = 1,
+    limit: number = 6,
+    type?: BlogType,
+  ): Promise<BlogListResponseDto> {
+    const [blogs, total] = await this.blogRepository.findAllWithClinic(
+      page,
+      limit,
+      type,
+    );
+    return {
+      data: blogs.map((blog) => new BlogResponseDto(blog)),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   /**

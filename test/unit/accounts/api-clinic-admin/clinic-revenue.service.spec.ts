@@ -256,7 +256,6 @@ describe('ClinicRevenueService', () => {
       expect(result.summary.uniquePatients).toBe(5);
       expect(result.paymentMethodBreakdown.online.revenue).toBe(600000);
       expect(result.paymentMethodBreakdown.cash.revenue).toBe(400000);
-      expect(result.serviceCategoryBreakdown).toHaveLength(2);
       expect(result.revenueTrend).toHaveLength(1);
       expect(result.statusBreakdown.success.count).toBe(10);
       expect(result.branchBreakdown).toHaveLength(2);

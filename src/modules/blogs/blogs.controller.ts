@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   ParseUUIDPipe,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,6 +16,7 @@ import {
   ApiResponse,
   ApiExtraModels,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { BlogsService } from './blogs.service';
 import {
@@ -24,6 +26,7 @@ import {
   UpdateBlogDto,
   BlogNotificationResponseDto,
 } from './dto';
+import { BlogType } from './enums';
 import { ApiResponseData } from 'src/common/decorators/api-response.decorator';
 import { MESSAGES } from 'src/common/message';
 import { Account } from '../accounts/entities/accounts.entity';
@@ -83,16 +86,37 @@ export class BlogsController {
    */
   @Get()
   @ApiOperation({ summary: 'Get all blogs' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 6)',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: BlogType,
+    description: 'Filter blogs by category type',
+  })
   @ApiResponseData({
-    type: BlogResponseDto,
+    type: BlogListResponseDto,
     status: MESSAGES.statusCode.success,
     message: 'Blogs retrieved successfully',
-    isArray: true,
   })
-  async findAll(): Promise<{ data: BlogResponseDto[]; message: string }> {
-    const blogs = await this.blogsService.findAll();
+  async findAll(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 6,
+    @Query('type') type?: BlogType,
+  ): Promise<{ data: BlogListResponseDto; message: string }> {
+    const result = await this.blogsService.findAll(page, limit, type);
     return {
-      data: blogs,
+      data: result,
       message: 'Blogs retrieved successfully',
     };
   }

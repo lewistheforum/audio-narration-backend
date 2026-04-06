@@ -15,6 +15,7 @@ import seepayConfig from '../../config/seepay.config';
 import { TransactionRepository } from './repositories/transaction.repository';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
+import { RedisModule } from '../../config/redis.config';
 
 /**
  * Transactions Module
@@ -36,6 +37,7 @@ import { AppointmentsModule } from '../appointments/appointments.module';
     ConfigModule.forFeature(seepayConfig),
     SubscriptionsModule,
     forwardRef(() => AppointmentsModule),
+    RedisModule,
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService, TransactionRepository],
