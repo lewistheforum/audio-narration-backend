@@ -82,8 +82,8 @@ export class ClinicManagerService {
       email: manager.account.email,
       status: manager.account.status,
       legalDocStatus: manager.legalDocuments?.verificationStatus || 'NOT_SUBMITTED',
-      staffCount: manager.staffCount || 0,
-      doctorCount: manager.doctorCount || 0,
+      staffCount: parseInt(manager.staffCount, 10) || 0,
+      doctorCount: parseInt(manager.doctorCount, 10) || 0,
       province: manager.address?.provinceName || 'N/A',
       createdAt: manager.createdAt,
     }));
