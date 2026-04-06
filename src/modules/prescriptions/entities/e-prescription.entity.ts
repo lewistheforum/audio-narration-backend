@@ -12,6 +12,7 @@ import {
 } from 'typeorm';
 import { ERM } from './erm.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
+import { ERMStatus } from '../enums';
 import { DetailEPrescription } from './detail-e-prescription.entity';
 
 /**
@@ -42,6 +43,14 @@ export class EPrescription {
 
   @Column({ name: 'doctor_note', type: 'text', nullable: true })
   doctorNote?: string;
+
+  @Column({
+    name: 'status',
+    type: 'enum',
+    enum: ERMStatus,
+    default: ERMStatus.DRAFT,
+  })
+  status: ERMStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

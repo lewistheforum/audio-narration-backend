@@ -56,7 +56,7 @@ export class ClinicsLegalDocuments {
   taxIdUrl?: string;
 
   @Column({ name: 'other_docs', type: 'jsonb', nullable: true })
-  otherDocs?: string[];
+  otherDocs?: any;
 
   @Column({
     name: 'verification_status',
