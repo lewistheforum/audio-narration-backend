@@ -527,7 +527,8 @@ export class AccountsController {
   async getDoctorDetailScheduleById(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<PublicDoctorWorkingSchedulesResponseDto> {
-    const workingSchedules = await this.accountsService.getPublicDoctorDetailScheduleById(id);
+    const workingSchedules =
+      await this.accountsService.getPublicDoctorDetailScheduleById(id);
     return new PublicDoctorWorkingSchedulesResponseDto(workingSchedules);
   }
 
