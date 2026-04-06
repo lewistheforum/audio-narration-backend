@@ -3672,13 +3672,54 @@ export class AccountsService {
       ratingMap.set(row.clinic_id, parseFloat(row.avg_rating) || 0);
     }
 
+    // Batch fetch addresses from active branches (CLINIC_MANAGER) as fallback for CLINIC_ADMIN
+    const adminIds = clinics.map((c) => c._id);
+    let branchAddressMap = new Map<string, any>();
+    
+    if (adminIds.length > 0) {
+      const branchAddresses = await this.dataSource.query(
+        `
+        SELECT a.parent_id, addr.*
+        FROM accounts a
+        JOIN addresses addr ON addr.account_id = a._id
+        WHERE a.parent_id = ANY($1) 
+          AND a.role = 'CLINIC_MANAGER' 
+          AND a.status = 'ACTIVE'
+          AND a.deleted_at IS NULL
+        `,
+        [adminIds],
+      );
+
+      for (const row of branchAddresses) {
+        if (!branchAddressMap.has(row.parent_id)) {
+          branchAddressMap.set(row.parent_id, row);
+        }
+      }
+    }
+
     const clinicItems: ClinicItemDto[] = [];
 
     for (const clinic of clinics) {
       const clinicAdminInfo = clinic.clinicAdminInformation;
-      const address = clinic.address;
+      let address = clinic.address;
 
       if (!clinicAdminInfo) continue;
+
+      if (!address || !address.address) {
+        const branchAddr = branchAddressMap.get(clinic._id);
+        if (branchAddr) {
+          address = {
+            _id: branchAddr._id,
+            address: branchAddr.address,
+            ward: branchAddr.ward,
+            wardName: branchAddr.ward_name,
+            district: branchAddr.district,
+            districtName: branchAddr.district_name,
+            province: branchAddr.province,
+            provinceName: branchAddr.province_name,
+          } as any;
+        }
+      }
 
       const averageRating = ratingMap.get(clinic._id) || 0;
 

@@ -80,7 +80,7 @@ export class AdminService {
     sortBy: string = 'createdAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
   ): Promise<any> {
-    const [data, totalItems] =
+    const [data, total] =
       await this.adminRegistrationRepository.findPendingLegalDocuments(
         page,
         limit,
@@ -88,14 +88,14 @@ export class AdminService {
         sortOrder,
       );
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(total / limit);
 
     return {
       data,
-      meta: {
+      pagination: {
         page,
         limit,
-        totalItems,
+        total,
         totalPages,
       },
     };
@@ -110,7 +110,7 @@ export class AdminService {
     sortBy: string = 'createdAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
   ): Promise<any> {
-    const [data, totalItems] =
+    const [data, total] =
       await this.adminRegistrationRepository.findApprovedLegalDocuments(
         page,
         limit,
@@ -118,14 +118,14 @@ export class AdminService {
         sortOrder,
       );
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(total / limit);
 
     return {
       data,
-      meta: {
+      pagination: {
         page,
         limit,
-        totalItems,
+        total,
         totalPages,
       },
     };
@@ -140,7 +140,7 @@ export class AdminService {
     sortBy: string = 'createdAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
   ): Promise<any> {
-    const [data, totalItems] =
+    const [data, total] =
       await this.adminRegistrationRepository.findRejectedLegalDocuments(
         page,
         limit,
@@ -148,14 +148,14 @@ export class AdminService {
         sortOrder,
       );
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(total / limit);
 
     return {
       data,
-      meta: {
+      pagination: {
         page,
         limit,
-        totalItems,
+        total,
         totalPages,
       },
     };
@@ -170,7 +170,7 @@ export class AdminService {
     sortBy: string = 'createdAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
   ): Promise<any> {
-    const [data, totalItems] =
+    const [data, total] =
       await this.adminRegistrationRepository.findNotSubmittedRegistrations(
         page,
         limit,
@@ -178,14 +178,14 @@ export class AdminService {
         sortOrder,
       );
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(total / limit);
 
     return {
       data,
-      meta: {
+      pagination: {
         page,
         limit,
-        totalItems,
+        total,
         totalPages,
       },
     };

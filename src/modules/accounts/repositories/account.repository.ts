@@ -120,7 +120,8 @@ export class AccountRepository {
    * ```
    */
   async findAccountById(id: string): Promise<Account | null> {
-    return this.accountRepository.createQueryBuilder('account')
+    return this.accountRepository
+      .createQueryBuilder('account')
       .leftJoinAndSelect('account.legalDocuments', 'legalDocuments')
       .where('account._id = :id', { id })
       .getOne();
@@ -644,7 +645,10 @@ export class AccountRepository {
       .innerJoinAndSelect('account.subscription', 'subscription')
       .where('account.role = :role', { role })
       .andWhere('subscription.subscriptionStatus = ANY(:validStatuses)', {
-        validStatuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
+        validStatuses: [
+          RegistrationStatus.ACTIVE,
+          RegistrationStatus.NON_RENEWING,
+        ],
       })
       .andWhere('subscription.expirationDate >= :now', { now });
 
@@ -683,11 +687,44 @@ export class AccountRepository {
         );
     }
 
-    // Apply search filter (ILIKE on clinicName AND description from clinic admin info)
+    // Apply search filter (address, clinicName, clinicPhone, description, paraclinical, pros, specializedIn)
     if (search) {
       queryBuilder.andWhere(
-        '(clinicAdminInfo.clinicName ILIKE :search OR clinicAdminInfo.description ILIKE :search)',
-        { search: `%${search}%` },
+        new Brackets((qb) => {
+          qb.where('clinicAdminInfo.clinicName ILIKE :search', {
+            search: `%${search}%`,
+          })
+            .orWhere('clinicAdminInfo.description ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('clinicAdminInfo.clinicPhone ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('address.address ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('address.provinceName ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('address.districtName ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('address.wardName ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.specialized_in, '[]'::jsonb))), ', '), '') ILIKE :search",
+              { search: `%${search}%` }
+            )
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.pros, '[]'::jsonb))), ', '), '') ILIKE :search",
+              { search: `%${search}%` }
+            )
+            .orWhere(
+              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.paraclinical, '[]'::jsonb))), ', '), '') ILIKE :search",
+              { search: `%${search}%` }
+            );
+        }),
       );
     }
 
@@ -1045,8 +1082,3 @@ export class AccountRepository {
     return { staffCount, doctorCount };
   }
 }
-
-
-
-
-
