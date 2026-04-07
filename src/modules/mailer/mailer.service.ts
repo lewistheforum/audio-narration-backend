@@ -195,7 +195,9 @@ export class MailerService {
           'handlebars',
         );
         if (fs.existsSync(candidatePath)) {
-          this.handlebarsCompiler = require(candidatePath) as HandlebarsCompiler;
+          this.handlebarsCompiler = require(
+            candidatePath,
+          ) as HandlebarsCompiler;
           return this.handlebarsCompiler;
         }
       }
@@ -243,7 +245,11 @@ export class MailerService {
       },
       to: email,
       subject: '⚠️ Account Warning - Medicare',
-      html: this.renderTemplate('moderation/account-warning.hbs', { name, reason, strikes })
+      html: this.renderTemplate('moderation/account-warning.hbs', {
+        name,
+        reason,
+        strikes,
+      }),
     };
 
     try {
@@ -269,7 +275,10 @@ export class MailerService {
       },
       to: email,
       subject: '🚫 Account Suspended - Medicare',
-      html: this.renderTemplate('moderation/account-banned.hbs', { name, reason })
+      html: this.renderTemplate('moderation/account-banned.hbs', {
+        name,
+        reason,
+      }),
     };
 
     try {
@@ -291,7 +300,12 @@ export class MailerService {
       },
       to: email,
       subject: '✅ Account Restored - Medicare',
-      html: this.renderTemplate('moderation/account-unbanned.hbs', { name, loginUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
+      html: this.renderTemplate('moderation/account-unbanned.hbs', {
+        name,
+        loginUrl:
+          this.configService.get<string>('FRONTEND_URL') ||
+          'http://localhost:5173',
+      }),
     };
 
     try {
@@ -318,7 +332,11 @@ export class MailerService {
       },
       to: email,
       subject: '⚠️ Clinic Account Warning - Medicare',
-      html: this.renderTemplate('moderation/clinic-warning.hbs', { name, reason, strikes })
+      html: this.renderTemplate('moderation/clinic-warning.hbs', {
+        name,
+        reason,
+        strikes,
+      }),
     };
 
     try {
@@ -344,7 +362,10 @@ export class MailerService {
       },
       to: email,
       subject: '🚫 Clinic Account Suspended - Medicare',
-      html: this.renderTemplate('moderation/clinic-banned.hbs', { name, reason })
+      html: this.renderTemplate('moderation/clinic-banned.hbs', {
+        name,
+        reason,
+      }),
     };
 
     try {
@@ -369,7 +390,12 @@ export class MailerService {
       },
       to: email,
       subject: '✅ Clinic Account Restored - Medicare',
-      html: this.renderTemplate('moderation/clinic-unbanned.hbs', { name, loginUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
+      html: this.renderTemplate('moderation/clinic-unbanned.hbs', {
+        name,
+        loginUrl:
+          this.configService.get<string>('FRONTEND_URL') ||
+          'http://localhost:5173',
+      }),
     };
 
     try {
@@ -398,7 +424,10 @@ export class MailerService {
       },
       to: email,
       subject: 'Verify Your Email - Medicare',
-      html: this.renderTemplate('auth/verification-code.hbs', { displayName, code })
+      html: this.renderTemplate('auth/verification-code.hbs', {
+        displayName,
+        code,
+      }),
     };
 
     try {
@@ -433,7 +462,7 @@ export class MailerService {
         displayName,
         code,
         role,
-      })
+      }),
     };
 
     try {
@@ -464,7 +493,11 @@ export class MailerService {
       },
       to: email,
       subject: 'Contract Signing OTP - Medicare',
-      html: this.renderTemplate('auth/contract-signing-code.hbs', { displayName, contractCode, code })
+      html: this.renderTemplate('auth/contract-signing-code.hbs', {
+        displayName,
+        contractCode,
+        code,
+      }),
     };
 
     try {
@@ -494,7 +527,12 @@ export class MailerService {
       },
       to: email,
       subject: 'Welcome to Medicare',
-      html: this.renderTemplate('auth/welcome.hbs', { fullName, frontendUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
+      html: this.renderTemplate('auth/welcome.hbs', {
+        fullName,
+        frontendUrl:
+          this.configService.get<string>('FRONTEND_URL') ||
+          'http://localhost:5173',
+      }),
     };
 
     try {
@@ -555,7 +593,7 @@ export class MailerService {
       },
     });
 
-    const html = this.renderTemplate('auth/verification-email.hbs', { code })
+    const html = this.renderTemplate('auth/verification-email.hbs', { code });
 
     const mailOptions = {
       from: `"Bonix App" <${user}>`,
@@ -586,7 +624,10 @@ export class MailerService {
       },
     });
 
-    const html = this.renderTemplate('auth/reset-password-email.hbs', { email, code })
+    const html = this.renderTemplate('auth/reset-password-email.hbs', {
+      email,
+      code,
+    });
 
     const mailOptions = {
       from: `"Bonix App" <${user}>`,
@@ -617,7 +658,9 @@ export class MailerService {
       },
       to: email,
       subject: 'Welcome to Medicare - Clinic Registration Initiated',
-      html: this.renderTemplate('onboarding/clinic-admin-welcome.hbs', { displayName })
+      html: this.renderTemplate('onboarding/clinic-admin-welcome.hbs', {
+        displayName,
+      }),
     };
 
     try {
@@ -647,7 +690,11 @@ export class MailerService {
       },
       to: email,
       subject: `Action Required: Employee Signed Contract #${contractCode}`,
-      html: this.renderTemplate('contracts/signed-manager.hbs', { employeeName, contractCode, actionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}` })
+      html: this.renderTemplate('contracts/signed-manager.hbs', {
+        employeeName,
+        contractCode,
+        actionUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:3000'}/?tab=contract&id=${contractId}`,
+      }),
     };
 
     try {
@@ -676,7 +723,10 @@ export class MailerService {
       },
       to: email,
       subject: `Contract #${contractCode} is Now Active`,
-      html: this.renderTemplate('contracts/completed-employee.hbs', { contractCode, managerName })
+      html: this.renderTemplate('contracts/completed-employee.hbs', {
+        contractCode,
+        managerName,
+      }),
     };
 
     try {
@@ -686,64 +736,73 @@ export class MailerService {
     }
   }
 
+  async sendContractRejectNotification(
+    email: string,
+    signerName: string,
+    contractId: string,
+    reason: string,
+  ) {
+    const transporter = this.mailTransport();
+    const contractCode = contractId.substring(0, 8).toUpperCase();
+    const subject = `[Medicare] Contract #${contractCode} Has Been Rejected`;
 
-    async sendContractRejectNotification(
-        email: string,
-        signerName: string,
-        contractId: string,
-        reason: string
-    ) {
-        const transporter = this.mailTransport();
-        const contractCode = contractId.substring(0, 8).toUpperCase();
-        const subject = `[Medicare] Contract #${contractCode} Has Been Rejected`;
-        
-        const mailOptions = {
-            from: {
-                name: 'Medicare',
-                address: this.configService.get<string>('EMAIL_USER'),
-            },
-            to: email,
-            subject,
-            html: this.renderTemplate('contracts/rejected.hbs', { contractCode, signerName, reason })
-        };
+    const mailOptions = {
+      from: {
+        name: 'Medicare',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject,
+      html: this.renderTemplate('contracts/rejected.hbs', {
+        contractCode,
+        signerName,
+        reason,
+      }),
+    };
 
-        try {
-            await transporter.sendMail(mailOptions);
-        } catch (error) {
-            console.error('❌ Failed to send contract rejection email:', error);
-        }
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('❌ Failed to send contract rejection email:', error);
     }
+  }
 
-    /**
-     * Send Contract Cancelled Notification
-     * Notifies parties that the contract has been cancelled (e.g., due to tampering)
-     */
-    async sendContractCancelledNotification(
-        email: string,
-        contractId: string,
-        reason: string
-    ) {
-        const transporter = this.mailTransport();
-        const contractCode = contractId.substring(0, 8).toUpperCase();
-        const subject = `[Medicare] ⚠️ ALERT: Contract #${contractCode} has been CANCELLED`;
-        
-        const mailOptions = {
-            from: {
-                name: 'Bonix Security',
-                address: this.configService.get<string>('EMAIL_USER'),
-            },
-            to: email,
-            subject,
-            html: this.renderTemplate('contracts/cancelled.hbs', { contractCode, reason })
-        };
+  /**
+   * Send Contract Cancelled Notification
+   * Notifies parties that the contract has been cancelled (e.g., due to tampering)
+   */
+  async sendContractCancelledNotification(
+    email: string,
+    contractId: string,
+    reason: string,
+  ) {
+    const transporter = this.mailTransport();
+    const contractCode = contractId.substring(0, 8).toUpperCase();
+    const subject = `[Medicare] ⚠️ ALERT: Contract #${contractCode} has been CANCELLED`;
 
-        try {
-            await transporter.sendMail(mailOptions);
-            this.logger.log(`✅ Contract cancellation email sent to ${email}`);
-        } catch (error) {
-            this.logger.error(`❌ Failed to send contract cancellation email to ${email}:`, error);
-        }
+    const mailOptions = {
+      from: {
+        name: 'Bonix Security',
+        address: this.configService.get<string>('EMAIL_USER'),
+      },
+      to: email,
+      subject,
+      html: this.renderTemplate('contracts/cancelled.hbs', {
+        contractCode,
+        reason,
+      }),
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Contract cancellation email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to send contract cancellation email to ${email}:`,
+        error,
+      );
     }
+  }
 
   /**
    * Sends generated credentials to Clinic Manager
@@ -764,7 +823,12 @@ export class MailerService {
       },
       to: managerEmail,
       subject: 'Your Clinic Manager Account Credentials - Medicare',
-      html: this.renderTemplate('onboarding/manager-credentials.hbs', { displayName, username, password, loginUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/login` })
+      html: this.renderTemplate('onboarding/manager-credentials.hbs', {
+        displayName,
+        username,
+        password,
+        loginUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/login`,
+      }),
     };
 
     try {
@@ -793,7 +857,10 @@ export class MailerService {
       },
       to: adminEmail,
       subject: '🎉 Registration Approved - Medicare',
-      html: this.renderTemplate('onboarding/registration-approved.hbs', { displayName, paymentUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/payment` })
+      html: this.renderTemplate('onboarding/registration-approved.hbs', {
+        displayName,
+        paymentUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/payment`,
+      }),
     };
 
     try {
@@ -823,7 +890,11 @@ export class MailerService {
       },
       to: adminEmail,
       subject: 'Registration Update - Medicare',
-      html: this.renderTemplate('onboarding/registration-rejected.hbs', { displayName, reason, documentsUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/documents` })
+      html: this.renderTemplate('onboarding/registration-rejected.hbs', {
+        displayName,
+        reason,
+        documentsUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/documents`,
+      }),
     };
 
     try {
@@ -861,7 +932,20 @@ export class MailerService {
       },
       to,
       subject: `${urgentFlag}Your Medicare Subscription Expires in ${daysText}`,
-      html: this.renderTemplate('subscription/warning.hbs', { titleText: isUrgent ? 'Immediate Attention Required' : 'Subscription Reminder', clinicName: context.clinicName, planName: context.planName, daysText, expirationDate: context.expirationDate, highlightMessage: isUrgent ? 'Your subscription will expire tomorrow. Please renew promptly to avoid any interruption to your services.' : 'Please renew in advance to ensure uninterrupted access to your Medicare services.', renewalLink: context.renewalLink, ctaText: isUrgent ? 'Renew Now' : 'Renew Subscription' })
+      html: this.renderTemplate('subscription/warning.hbs', {
+        titleText: isUrgent
+          ? 'Immediate Attention Required'
+          : 'Subscription Reminder',
+        clinicName: context.clinicName,
+        planName: context.planName,
+        daysText,
+        expirationDate: context.expirationDate,
+        highlightMessage: isUrgent
+          ? 'Your subscription will expire tomorrow. Please renew promptly to avoid any interruption to your services.'
+          : 'Please renew in advance to ensure uninterrupted access to your Medicare services.',
+        renewalLink: context.renewalLink,
+        ctaText: isUrgent ? 'Renew Now' : 'Renew Subscription',
+      }),
     };
 
     try {
@@ -896,7 +980,13 @@ export class MailerService {
       },
       to,
       subject: `✅ Your Medicare Subscription Renews ${daysText}`,
-      html: this.renderTemplate('subscription/reassurance.hbs', { clinicName: context.clinicName, currentPlan: context.currentPlan, nextPlan: context.nextPlan, activationText, subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription` })
+      html: this.renderTemplate('subscription/reassurance.hbs', {
+        clinicName: context.clinicName,
+        currentPlan: context.currentPlan,
+        nextPlan: context.nextPlan,
+        activationText,
+        subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`,
+      }),
     };
 
     try {
@@ -927,7 +1017,12 @@ export class MailerService {
       },
       to,
       subject: '❌ Your Medicare Subscription Has Expired',
-      html: this.renderTemplate('subscription/subscription-expired.hbs', { clinicName: context.clinicName, planName: context.planName, expirationDate: context.expirationDate, renewalLink: context.renewalLink })
+      html: this.renderTemplate('subscription/subscription-expired.hbs', {
+        clinicName: context.clinicName,
+        planName: context.planName,
+        expirationDate: context.expirationDate,
+        renewalLink: context.renewalLink,
+      }),
     };
 
     try {
@@ -955,7 +1050,15 @@ export class MailerService {
       },
       to,
       subject: '✅ Your Medicare Subscription Has Been Renewed',
-      html: this.renderTemplate('subscription/renewal-success.hbs', { clinicName: context.clinicName, planName: context.planName, startDate: context.startDate, endDate: context.endDate, transactionId: context.transactionId, invoiceLink: context.invoiceLink, subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription` })
+      html: this.renderTemplate('subscription/renewal-success.hbs', {
+        clinicName: context.clinicName,
+        planName: context.planName,
+        startDate: context.startDate,
+        endDate: context.endDate,
+        transactionId: context.transactionId,
+        invoiceLink: context.invoiceLink,
+        subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`,
+      }),
     };
 
     try {
@@ -988,7 +1091,26 @@ export class MailerService {
       },
       to,
       subject: `${icon} Your Medicare Subscription Plan Has Changed`,
-      html: this.renderTemplate('subscription/plan-change-success.hbs', { icon, changeType, clinicName: context.clinicName, summaryText: isUpgrade ? 'Your enhanced plan benefits are now available.' : 'Your updated plan is now active.', oldPlan: context.oldPlan, newPlan: context.newPlan, startDate: context.startDate, endDate: context.endDate, highlightMessage: isUpgrade ? 'You now have access to the enhanced capabilities included with your updated plan.' : 'Your updated subscription plan is now active and ready for use.', subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`, buttonText: isUpgrade ? 'Explore New Features' : 'View Subscription', featureNote: isUpgrade ? 'Additional premium capabilities are now available to your clinic.' : 'The benefits of your updated plan are now available to your clinic.' })
+      html: this.renderTemplate('subscription/plan-change-success.hbs', {
+        icon,
+        changeType,
+        clinicName: context.clinicName,
+        summaryText: isUpgrade
+          ? 'Your enhanced plan benefits are now available.'
+          : 'Your updated plan is now active.',
+        oldPlan: context.oldPlan,
+        newPlan: context.newPlan,
+        startDate: context.startDate,
+        endDate: context.endDate,
+        highlightMessage: isUpgrade
+          ? 'You now have access to the enhanced capabilities included with your updated plan.'
+          : 'Your updated subscription plan is now active and ready for use.',
+        subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`,
+        buttonText: isUpgrade ? 'Explore New Features' : 'View Subscription',
+        featureNote: isUpgrade
+          ? 'Additional premium capabilities are now available to your clinic.'
+          : 'The benefits of your updated plan are now available to your clinic.',
+      }),
     };
 
     try {
@@ -1018,7 +1140,13 @@ export class MailerService {
       },
       to: email,
       subject: '🗑️ Incomplete Registration Data Removed - Medicare',
-      html: this.renderTemplate('onboarding/stale-registration-deleted.hbs', { greeting: clinicName ? `Dear ${clinicName},` : 'Dear Valued Clinic,', status, reRegisterUrl: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173' })
+      html: this.renderTemplate('onboarding/stale-registration-deleted.hbs', {
+        greeting: clinicName ? `Dear ${clinicName},` : 'Dear Valued Clinic,',
+        status,
+        reRegisterUrl:
+          this.configService.get<string>('FRONTEND_URL') ||
+          'http://localhost:5173',
+      }),
     };
 
     try {
@@ -1050,7 +1178,10 @@ export class MailerService {
       },
       to: email,
       subject: 'Update on Your Report - Medicare',
-      html: this.renderTemplate('support/report-response.hbs', { name, responseHtml: responseDescription.replace(/\n/g, '<br>') })
+      html: this.renderTemplate('support/report-response.hbs', {
+        name,
+        responseHtml: responseDescription.replace(/\n/g, '<br>'),
+      }),
     };
 
     try {
@@ -1063,12 +1194,12 @@ export class MailerService {
 
   /**
    * Send Welcome Email with Password (for Walk-in Patients)
-   * 
+   *
    * Sends welcome email to patients created by clinic staff containing:
    * - Login credentials (username/email + temporary password)
    * - Instructions to change password on first login
    * - Reminder to update profile information
-   * 
+   *
    * @param email - Patient email address
    * @param fullName - Patient full name
    * @param username - Username (usually email)
@@ -1091,7 +1222,12 @@ export class MailerService {
       },
       to: email,
       subject: 'Welcome to Medicare - Access Credentials',
-      html: this.renderTemplate('patient/welcome-with-password.hbs', { fullName, username, temporaryPassword, loginUrl: `${frontendUrl}/login` })
+      html: this.renderTemplate('patient/welcome-with-password.hbs', {
+        fullName,
+        username,
+        temporaryPassword,
+        loginUrl: `${frontendUrl}/login`,
+      }),
     };
 
     try {
@@ -1117,7 +1253,9 @@ export class MailerService {
       },
       to: email,
       subject: `[${context.clinicName}] Appointment Reminder for ${context.appointmentDate}`,
-      html: this.renderTemplate('appointment/appointment-reminder.hbs', { ...context })
+      html: this.renderTemplate('appointment/appointment-reminder.hbs', {
+        ...context,
+      }),
     };
 
     try {
@@ -1150,7 +1288,10 @@ export class MailerService {
       },
       to: data.email,
       subject: '✨ Your Medicare Account Is Ready',
-      html: this.renderTemplate('patient/account-notification.hbs', { ...data, frontendUrl })
+      html: this.renderTemplate('patient/account-notification.hbs', {
+        ...data,
+        frontendUrl,
+      }),
     };
 
     try {
