@@ -46,6 +46,15 @@ export class SubscriptionServiceRepository {
   }
 
   /**
+   * Find subscription service by name
+   */
+  async findByName(name: string): Promise<SubscriptionService | null> {
+    return this.repository.findOne({
+      where: { serviceName: name },
+    });
+  }
+
+  /**
    * Find subscription service by ID including soft-deleted
    */
   async findByIdWithDeleted(id: string): Promise<SubscriptionService | null> {
