@@ -141,7 +141,8 @@ export class AuthController {
   async googleAuthRedirect(@Req() req: any, @Res() res: any): Promise<void> {
     const tokenData = await this.authService.googleLogin(req.user);
     const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get<string>('FRONTEND_LANDING_URL') ||
+      'http://localhost:3000';
 
     const redirectUrl = new URL(`${frontendUrl}/`);
 
