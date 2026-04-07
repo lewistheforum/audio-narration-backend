@@ -30,6 +30,12 @@ async function checkSchemaDiff(): Promise<void> {
     entities: [join(__dirname, '../../**/*.entity{.ts,.js}')],
     synchronize: false,
     logging: false,
+    ssl:
+      process.env.POSTGRES_SSL === 'true'
+        ? {
+          rejectUnauthorized: false,
+        }
+        : false,
   });
 
   try {
