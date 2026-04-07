@@ -160,6 +160,14 @@ export class SubscriptionServicesService {
   async create(
     createDto: CreateSubscriptionServiceDto,
   ): Promise<SubscriptionServiceResponseDto> {
+    const existing = await this.subscriptionServiceRepository.findByName(
+      createDto.serviceName,
+    );
+
+    if (existing) {
+      throw new BadRequestException('Subscription service name already taken');
+    }
+
     const service = this.subscriptionServiceRepository.create(createDto);
     const savedService = await this.subscriptionServiceRepository.save(service);
     return this.toResponseDto(savedService);
@@ -183,6 +191,18 @@ export class SubscriptionServicesService {
 
     if (!service) {
       throw new NotFoundException('Subscription service not found');
+    }
+
+    if (updateDto.serviceName && updateDto.serviceName !== service.serviceName) {
+      const existing = await this.subscriptionServiceRepository.findByName(
+        updateDto.serviceName,
+      );
+
+      if (existing) {
+        throw new BadRequestException(
+          'Subscription service name already taken',
+        );
+      }
     }
 
     // Merge updates
