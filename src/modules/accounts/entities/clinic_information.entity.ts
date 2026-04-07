@@ -39,13 +39,13 @@ export class ClinicInformation {
   description?: string;
 
   @Column({ name: 'specialized_in', type: 'jsonb', nullable: true })
-  specializedIn?: string[];
+  specializedIn?: any;
 
   @Column({ name: 'pros', type: 'jsonb', nullable: true })
-  pros?: string[];
+  pros?: any;
 
   @Column({ name: 'paraclinical', type: 'jsonb', nullable: true })
-  paraclinical?: string[];
+  paraclinical?: any;
 
   @Column({ name: 'dob', type: 'date', nullable: true })
   dob?: Date;

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID, IsString, IsOptional, IsArray, ValidateNested, IsNumber, IsDate } from 'class-validator';
+import { IsUUID, IsString, IsOptional, IsArray, ValidateNested, IsNumber, IsDate, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ERMStatus } from '../enums';
 
 /**
  * Medicine Detail DTO
@@ -138,6 +139,14 @@ export class PatientEPrescriptionDetailResponseDto {
   @ValidateNested({ each: true })
   @Type(() => DetailEPrescriptionItemDto)
   detail_e_prescriptions: DetailEPrescriptionItemDto[];
+
+  @ApiProperty({
+    description: 'Prescription status',
+    enum: ERMStatus,
+    example: ERMStatus.COMPLETED,
+  })
+  @IsEnum(ERMStatus)
+  status: ERMStatus;
 
   @ApiProperty({
     description: 'Prescription creation timestamp',

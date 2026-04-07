@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { EPrescription } from '../../modules/prescriptions/entities/e-prescription.entity';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
 import { AppointmentStatus } from '../../modules/appointments/enums';
+import { ERMStatus } from '../../modules/prescriptions/enums';
 import {
   getRandomItem,
   PRESCRIPTION_DOCTOR_NOTES,
@@ -111,6 +112,7 @@ export class EPrescriptionSeederService {
       appointmentId: appointment._id,
       referenceId,
       doctorNote,
+      status: ERMStatus.COMPLETED,
     });
   }
 
@@ -185,15 +187,21 @@ export class EPrescriptionSeederService {
       }
     }
 
-    // Check: All e-prescriptions reference valid COMPLETED appointments
+    // Check: All e-prescriptions reference valid COMPLETED appointments and have COMPLETED status
     for (const ePrescription of ePrescriptions) {
       if (!ePrescription.appointment) {
         errors.push(
           `E-prescription ${ePrescription._id} references non-existent appointment: ${ePrescription.appointmentId}`,
         );
-      } else if (ePrescription.appointment.status !== 'COMPLETED') {
+      } else if (ePrescription.appointment.status !== AppointmentStatus.COMPLETED) {
         errors.push(
           `E-prescription ${ePrescription._id} references appointment ${ePrescription.appointmentId} with status ${ePrescription.appointment.status}. Must be COMPLETED.`,
+        );
+      }
+
+      if (ePrescription.status !== ERMStatus.COMPLETED) {
+        errors.push(
+          `E-prescription ${ePrescription._id} has status ${ePrescription.status}. Must be COMPLETED for consistency with appointment.`,
         );
       }
     }

@@ -501,6 +501,12 @@ export class PrescriptionsService {
       throw new NotFoundException('E-Prescription not found');
     }
 
+    if (ePrescription.status !== ERMStatus.COMPLETED) {
+      throw new ForbiddenException(
+        'E-Prescription is not yet available (must be COMPLETED)',
+      );
+    }
+
     // Filter out soft-deleted details (defensive programming)
     const activeDetails =
       ePrescription.detailEPrescriptions?.filter((d) => !d.deletedAt) || [];
@@ -523,6 +529,7 @@ export class PrescriptionsService {
         check_out: detail.checkOut,
         note: detail.note,
       })),
+      status: ePrescription.status,
       created_at: ePrescription.createdAt,
     };
   }

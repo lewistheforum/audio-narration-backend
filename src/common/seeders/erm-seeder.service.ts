@@ -10,6 +10,7 @@ import { ERMBoneDensity } from '../../modules/prescriptions/entities/erm-bone-de
 import { ERMProcedure } from '../../modules/prescriptions/entities/erm-procedure.entity';
 import { ServiceAppointment } from '../../modules/appointments/entities/service-appointment.entity';
 import { Appointment } from '../../modules/appointments/entities/appointment.entity';
+import { AppointmentStatus } from '../../modules/appointments/enums';
 import { getCurrentVietnamTime, subtractFromVietnamTime, addToDate } from '../utils/date.util';
 import {
   ERMStatus,
@@ -210,7 +211,7 @@ export class ERMSeederService {
     const recordType = getRandomItem(ERM_RECORD_TYPES);
 
     // Pick random valid status
-    const status = getRandomItem(VALID_ERM_STATUSES);
+    const status = ERMStatus.COMPLETED;
 
     // Pick random service code
     const serviceCode = getRandomItem(SERVICE_CODES);
@@ -299,55 +300,35 @@ export class ERMSeederService {
         pastMedicalHistory: 'Hypertension controlled with medication',
         medicationHistory: 'Ibuprofen 400mg PRN for pain',
         familyHistory: 'Mother with osteoarthritis',
-        redFlags: JSON.stringify({
-          fever: false,
-          unexplained_weight_loss: false,
-          bowel_bladder_dysfunction: false,
-          progressive_neurological_deficit: false,
-        }),
-        vitalSigns: JSON.stringify({
-          blood_pressure: `${getRandomInt(110, 140)}/${getRandomInt(70, 90)}`,
-          heart_rate: getRandomInt(60, 85),
-          temperature: (36 + Math.random()).toFixed(1),
-          respiratory_rate: getRandomInt(14, 18),
-        }),
+        redFlags: {
+          desc: 'No fever, no unexplained weight loss, no bowel/bladder dysfunction, no progressive neurological deficit',
+        },
+        vitalSigns: {
+          desc: `BP: ${getRandomInt(110, 140)}/${getRandomInt(70, 90)} mmHg, HR: ${getRandomInt(60, 85)} bpm, Temp: ${(36 + Math.random()).toFixed(1)}°C, RR: ${getRandomInt(14, 18)} bpm`,
+        },
         inspectionFindings: getRandomItem(INSPECTION_FINDINGS),
         palpationFindings: 'Tenderness to palpation over affected area. No warmth or crepitus.',
-        rangeOfMotion: JSON.stringify({
-          flexion: `${getRandomInt(80, 120)} degrees`,
-          extension: `${getRandomInt(20, 45)} degrees`,
-          limitation: 'Moderate limitation with painful arc',
-        }),
-        specialTests: JSON.stringify([
-          {
-            test_name: 'Straight Leg Raise',
-            result: getRandomItem(['Positive', 'Negative']),
-          },
-          {
-            test_name: 'McMurray Test',
-            result: getRandomItem(['Positive', 'Negative']),
-          },
-        ]),
+        rangeOfMotion: {
+          desc: `Flexion: ${getRandomInt(80, 120)} degrees, Extension: ${getRandomInt(20, 45)} degrees. Moderate limitation with painful arc`,
+        },
+        specialTests: {
+          desc: `Straight Leg Raise: ${getRandomItem(['Positive', 'Negative'])}, McMurray Test: ${getRandomItem(['Positive', 'Negative'])}`,
+        },
         neuroExam: 'Sensation intact. Motor strength 5/5 in all extremities. Reflexes normal and symmetric.',
         gaitAssessment: getRandomItem([
           'Normal gait pattern',
           'Antalgic gait favoring affected side',
           'Decreased stride length noted',
         ]),
-        workingDiagnosis: JSON.stringify([
-          {
-            diagnosis: getRandomItem(WORKING_DIAGNOSES),
-            icd10_code: 'M25.5',
-          },
-        ]),
+        workingDiagnosis: {
+          desc: `${getRandomItem(WORKING_DIAGNOSES)} (ICD-10: M25.5)`,
+        },
         severity: getSequentialItem(SEVERITIES, 'severity') as Severity,
         comorbidImpact: 'Mild functional impairment affecting daily activities',
         riskFactors: 'Age, obesity, previous injury',
-        physiotherapyPlan: JSON.stringify({
-          frequency: '2-3 times per week',
-          duration: '6-8 weeks',
-          focus_areas: ['Strengthening', 'Flexibility', 'Pain management'],
-        }),
+        physiotherapyPlan: {
+          desc: 'Frequency: 2-3 times per week, Duration: 6-8 weeks. Focus: Strengthening, Flexibility, Pain management',
+        },
         educationAdvice: getRandomItem(EDUCATION_ADVICE),
         followUpDate: `${getRandomInt(2, 6)} weeks`,
         followUpCondition: 'Return sooner if symptoms worsen or new neurological symptoms develop',
@@ -379,10 +360,9 @@ export class ERMSeederService {
           'Follow-up imaging in 6-8 weeks if symptoms persist.',
           'Physical therapy consultation advised.',
         ]),
-        imageUrls: JSON.stringify([
-          `https://example.com/xray/${erm._id}_view1.jpg`,
-          `https://example.com/xray/${erm._id}_view2.jpg`,
-        ]),
+        imageUrls: {
+          desc: `https://example.com/xray/${erm._id}_view1.jpg, https://example.com/xray/${erm._id}_view2.jpg`,
+        },
         createdAt: erm.createdAt,
       });
 
@@ -404,10 +384,9 @@ export class ERMSeederService {
         side: getSequentialItem(BODY_SIDES, 'bodySideUltrasound') as BodySide,
         technique: 'High-frequency linear array transducer utilized. Multiple planes of imaging obtained.',
         findings: getRandomItem(ULTRASOUND_FINDINGS),
-        measurements: JSON.stringify({
-          tendon_thickness: `${(Math.random() * 3 + 4).toFixed(1)} mm`,
-          effusion_depth: `${(Math.random() * 8 + 2).toFixed(1)} mm`,
-        }),
+        measurements: {
+          desc: `Tendon thickness: ${(Math.random() * 3 + 4).toFixed(1)} mm, Effusion depth: ${(Math.random() * 8 + 2).toFixed(1)} mm`,
+        },
         conclusion: getRandomItem(ULTRASOUND_CONCLUSIONS),
         recommendations: getRandomItem([
           'Recommend orthopedic consultation.',
@@ -415,10 +394,9 @@ export class ERMSeederService {
           'Consider MRI if symptoms progress.',
           'Repeat ultrasound in 6 weeks if no improvement.',
         ]),
-        imageUrls: JSON.stringify([
-          `https://example.com/ultrasound/${erm._id}_longitudinal.jpg`,
-          `https://example.com/ultrasound/${erm._id}_transverse.jpg`,
-        ]),
+        imageUrls: {
+          desc: `https://example.com/ultrasound/${erm._id}_longitudinal.jpg, https://example.com/ultrasound/${erm._id}_transverse.jpg`,
+        },
         createdAt: erm.createdAt,
       });
 
@@ -510,7 +488,9 @@ export class ERMSeederService {
         collectedAt,
         receivedAt,
         reportedAt,
-        results,
+        results: {
+          desc: Object.entries(results).map(([key, val]: [string, any]) => `${key}: ${val.value} ${val.unit} (${val.flag})`).join('; '),
+        },
         abnormalSummary,
         conclusion: getRandomItem(LAB_CONCLUSIONS),
         recommendations: getRandomItem(LAB_RECOMMENDATIONS),
@@ -575,29 +555,17 @@ export class ERMSeederService {
         anesthesiaType: getRandomItem(ANESTHESIA_TYPES),
         performedStart,
         performedEnd,
-        medications: JSON.stringify([
-          {
-            name: 'Triamcinolone acetonide',
-            dose: '40 mg',
-            route: 'Intra-articular',
-          },
-          {
-            name: 'Lidocaine',
-            dose: '1%',
-            volume: '2 mL',
-          },
-        ]),
+        medications: {
+          desc: 'Triamcinolone acetonide 40 mg (Intra-articular), Lidocaine 1% 2 mL',
+        },
         devices: '22-gauge needle, sterile technique',
         description: getRandomItem(PROCEDURE_DESCRIPTIONS),
         painScoreBefore: getRandomInt(6, 9),
         painScoreAfter: getRandomInt(2, 5),
         immediateOutcome: getSequentialItem(IMMEDIATE_OUTCOMES, 'immediateOutcome') as ImmediateOutcome,
-        complications: JSON.stringify({
-          bleeding: false,
-          infection: false,
-          nerve_injury: false,
-          vasovagal_reaction: false,
-        }),
+        complications: {
+          desc: 'No bleeding, no infection, no nerve injury, no vasovagal reaction',
+        },
         postCareInstructions: getRandomItem(POST_CARE_INSTRUCTIONS),
         followUpPlan: getRandomItem(FOLLOW_UP_PLANS),
         createdAt: erm.createdAt,
@@ -654,6 +622,13 @@ export class ERMSeederService {
       if (!erm.serviceAppointment) {
         errors.push(
           `ERM ${erm._id} references non-existent service appointment: ${erm.serviceAppointmentsId}`,
+        );
+      }
+
+      // Check status consistency: COMPLETED appointments must have COMPLETED ERMs
+      if (erm.appointment.status === AppointmentStatus.COMPLETED && erm.status !== ERMStatus.COMPLETED) {
+        errors.push(
+          `ERM ${erm._id} has status ${erm.status} but appointment ${erm.appointmentId} is COMPLETED. Must be COMPLETED.`,
         );
       }
 
