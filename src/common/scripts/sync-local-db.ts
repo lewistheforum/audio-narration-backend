@@ -64,6 +64,12 @@ async function main(): Promise<void> {
     migrations: [join(__dirname, '../../database/migrations/*{.ts,.js}')],
     synchronize: false,
     logging: false,
+    ssl:
+      process.env.POSTGRES_SSL === 'true'
+        ? {
+          rejectUnauthorized: false,
+        }
+        : false,
   });
 
   try {

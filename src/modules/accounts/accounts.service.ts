@@ -3635,6 +3635,138 @@ export class AccountsService {
    * @param {string} [specialty] - Filter by medical specialization
    * @returns {Promise<ClinicListResponseDto>} Clinics with pagination
    */
+  async findAllClinicsManagerByClinicAdminId(
+    clinicAdminId: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    province?: string,
+    specialty?: string,
+  ): Promise<ClinicListResponseDto> {
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
+      .leftJoinAndSelect(
+        'account.clinicManagerInformation',
+        'clinicManagerInfo',
+      )
+      .leftJoinAndSelect('account.address', 'address')
+      .where('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
+      .andWhere('account.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('account.parentId = :clinicAdminId', { clinicAdminId })
+      .andWhere('account.deletedAt IS NULL');
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(clinicManagerInfo.clinicBranchName ILIKE :search OR clinicManagerInfo.description ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (province) {
+      queryBuilder.andWhere(
+        '(address.provinceName = :province OR address.province = :province)',
+        { province },
+      );
+    }
+
+    queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('account.createdAt', 'DESC');
+
+    const [clinics, total] = await queryBuilder.getManyAndCount();
+
+    if (clinics.length === 0) {
+      return {
+        clinics: [],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const clinicIds = clinics.map((c) => c._id);
+
+    const ratingResults = await this.dataSource.query(
+      `
+      SELECT f.clinic_id, AVG(f.rating)::NUMERIC(3,2) as avg_rating
+      FROM feedbacks f
+      WHERE f.clinic_id = ANY($1)
+        AND f.type = 'CLINIC'
+        AND f.deleted_at IS NULL
+      GROUP BY f.clinic_id
+    `,
+      [clinicIds],
+    );
+
+    const ratingMap = new Map<string, number>();
+    for (const row of ratingResults) {
+      ratingMap.set(row.clinic_id, parseFloat(row.avg_rating) || 0);
+    }
+
+    const clinicItems: ClinicItemDto[] = [];
+
+    for (const clinic of clinics) {
+      const clinicInfo = (clinic as any).clinicManagerInformation;
+      const address = (clinic as any).address;
+      const averageRating = ratingMap.get(clinic._id) || 0;
+
+      if (clinicInfo && address) {
+        clinicItems.push(
+          new ClinicItemDto(
+            clinic,
+            clinicInfo,
+            address,
+            undefined,
+            averageRating,
+          ),
+        );
+      }
+    }
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      clinics: clinicItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  /**
+   * Find All Clinics with Pagination, Search and Filters
+   *
+   * Retrieves clinic accounts with pagination support and optional search/filter capabilities.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Data Sources:
+   * - accounts table: Core account data
+   * - clinic_manager_information table: Clinic manager details
+   * - addresses table: Address information
+   * - accounts table (parent): CLINIC_ADMIN account linked via parentId
+   * - clinic_admin_information table: Clinic admin details
+   *
+   * Filtering Logic:
+   * - search: Case-insensitive match on clinicBranchName AND description
+   * - province: Exact match on provinceName or province code
+   * - specialty: JSONB containment query on specializedIn array
+   * - All filters work together with AND logic
+   *
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   * @param {string} [search] - Search keyword for clinic name or description
+   * @param {string} [province] - Filter by province name or code
+   * @param {string} [specialty] - Filter by medical specialization
+   * @returns {Promise<ClinicListResponseDto>} Clinics with pagination
+   */
   async findAllClinicsAdmin(
     page: number = 1,
     limit: number = 10,
@@ -3675,7 +3807,7 @@ export class AccountsService {
     // Batch fetch addresses from active branches (CLINIC_MANAGER) as fallback for CLINIC_ADMIN
     const adminIds = clinics.map((c) => c._id);
     let branchAddressMap = new Map<string, any>();
-    
+
     if (adminIds.length > 0) {
       const branchAddresses = await this.dataSource.query(
         `

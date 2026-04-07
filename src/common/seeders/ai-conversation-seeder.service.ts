@@ -50,7 +50,7 @@ export class AiConversationSeederService {
             title: 'Welcome to Bonix AI',
             description: 'Initial consultation and welcome message',
             participants: [patient._id],
-            metadata: { seeded: true },
+            metadata: { desc: 'seeded: true' },
           });
 
         // Create initial AI message
@@ -58,7 +58,7 @@ export class AiConversationSeederService {
           conversationId: conversation._id,
           role: 'assistant',
           content: `Hello ${patient.username}, I am your Bonix AI assistant. How can I help you today?`,
-          metadata: { type: 'welcome' },
+          metadata: { desc: 'type: welcome' },
         });
 
         // Create user response (mock)
@@ -67,7 +67,7 @@ export class AiConversationSeederService {
           senderId: patient._id,
           role: 'user',
           content: 'I would like to know more about your services.',
-          metadata: { type: 'inquiry' },
+          metadata: { desc: 'type: inquiry' },
         });
       }
 

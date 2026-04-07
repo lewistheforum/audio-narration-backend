@@ -70,7 +70,7 @@ export class ClinicAdminInformation {
    * Medical specializations offered by the clinic
    */
   @Column({ name: 'specialized_in', type: 'jsonb', nullable: true })
-  specializedIn?: string[];
+  specializedIn?: any;
 
   /**
    * Pros/Advantages
@@ -78,7 +78,7 @@ export class ClinicAdminInformation {
    * Advantages or strengths of the clinic
    */
   @Column({ name: 'pros', type: 'jsonb', nullable: true })
-  pros?: string[];
+  pros?: any;
 
   /**
    * Paraclinical Services
@@ -86,7 +86,7 @@ export class ClinicAdminInformation {
    * Paraclinical services offered by the clinic
    */
   @Column({ name: 'paraclinical', type: 'jsonb', nullable: true })
-  paraclinical?: string[];
+  paraclinical?: any;
 
   /**
    * Date of Birth

@@ -240,7 +240,9 @@ export class FeedbackSeederService {
         rating: parseInt(row.rating, 10),
         description: row.review_text,
         descriptionLabel: null,
-        feedbackImages: hasImages ? this.getRandomImages() : null,
+        feedbackImages: hasImages
+          ? { desc: this.getRandomImages().join(', ') }
+          : null,
         feedbackImagesLabel: null,
         type: isDoctorFeedback ? FeedbackType.DOCTOR : FeedbackType.CLINIC,
       };
