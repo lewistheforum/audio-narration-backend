@@ -4,6 +4,8 @@ import { Repository, DeepPartial } from 'typeorm';
 import { ClinicManagerInformation } from '../entities/clinic_manager_information.entity';
 import { Account } from '../entities/accounts.entity';
 import { AccountRole } from '../enums/account-role.enum';
+import { LegalDocumentVerificationStatus } from '../enums/legal-document-verification-status.enum';
+import { AccountStatus } from '../enums';
 
 /**
  * ClinicManagerInformation Repository
@@ -312,6 +314,8 @@ export class ClinicManagerInformationRepository {
   async findManagerDetailById(managerId: string): Promise<any> {
     const manager = await this.repository.createQueryBuilder('manager')
       .leftJoinAndSelect('manager.account', 'account')
+      .leftJoinAndSelect('account.parent', 'clinicAdmin')
+      .leftJoinAndSelect('clinicAdmin.clinicSubscription', 'clinicSubscription')
       .leftJoinAndSelect('account.children', 'children')
       .leftJoinAndSelect('children.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('children.clinicStaffInformation', 'staffInfo')
@@ -319,6 +323,10 @@ export class ClinicManagerInformationRepository {
       .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('address.googleIframe', 'iframe')
       .where('account._id = :managerId', { managerId })
+      .andWhere('account.status = :status', { status: AccountStatus.ACTIVE })
+      .andWhere('clinicAdmin.status = :adminStatus', { adminStatus: AccountStatus.ACTIVE })
+      .andWhere('clinicSubscription.status = :subscriptionStatus', { subscriptionStatus: AccountStatus.ACTIVE })
+      .andWhere('legal.verification_status = :legalDocStatus', { legalDocStatus: LegalDocumentVerificationStatus.APPROVED })
       .andWhere('account.deleted_at IS NULL')
       .getOne();
     

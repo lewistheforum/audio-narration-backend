@@ -541,9 +541,16 @@ export class AccountRepository {
       )
       .where('account.role = :role', { role })
       .andWhere('account.status = :status', { status })
+      .andWhere('parentAccount.status = :status', { status })
       .andWhere('parentAccount.role = :parentRole', {
         parentRole: AccountRole.CLINIC_ADMIN,
       })
+      .innerJoin(
+        'clinic_subscriptions',
+        'subscription',
+        'subscription.clinic_id = parentAccount._id AND subscription.status = :subStatus',
+        { subStatus: AccountStatus.ACTIVE }
+      )
       .andWhere('legalDoc.verification_status = :verifiedStatus', {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       })

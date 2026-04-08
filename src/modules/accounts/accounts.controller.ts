@@ -406,6 +406,96 @@ export class AccountsController {
   }
 
   /**
+   * Get All Clinics Managers
+   *
+   * Retrieves a paginated list of all active clinics.
+   * Only returns accounts with role: CLINIC_MANAGER and status: ACTIVE
+   * Excludes soft-deleted records (deletedAt is null)
+   *
+   * Query Parameters:
+   * - page: Page number (default: 1)
+   * - limit: Items per page (default: 10)
+   *
+   * Response Format:
+   * - Returns ClinicListResponseDto with clinics array and pagination metadata
+   * - Combines data from accounts + clinic_manager_information + addresses tables
+   *
+   * Access Control:
+   * - Admin endpoint (authentication required)
+   *
+   * Use Cases:
+   * - Clinic directory listing
+   * - Clinic search results
+   * - Clinic browsing
+   *
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @returns {Promise<{data: ClinicListResponseDto, message: string}>} Clinics with pagination
+   *
+   * @swagger
+   * @response 200 - Successfully retrieved clinics
+   */
+  @Get('clinics-managers')
+  @ApiOperation({
+    summary: 'Get all clinics with pagination, search and filters',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description:
+      'Search keyword to match clinic name or description (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'province',
+    required: false,
+    type: String,
+    description: 'Filter clinics by province name or code',
+  })
+  @ApiQuery({
+    name: 'specialty',
+    required: false,
+    type: String,
+    description: 'Filter clinics by medical specialization',
+  })
+  @ApiResponseData({
+    type: ClinicListResponseDto,
+    status: MESSAGES.statusCode.success,
+    message: 'Clinics retrieved successfully',
+  })
+  async getAllClinicsManagers(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string,
+    @Query('province') province?: string,
+    @Query('specialty') specialty?: string,
+  ): Promise<{ data: ClinicListResponseDto; message: string }> {
+    const result = await this.accountsService.findAllClinicsManagers(
+      page,
+      limit,
+      search,
+      province,
+      specialty,
+    );
+    return {
+      data: result,
+      message: 'Clinics retrieved successfully',
+    };
+  }
+
+  /**
    * Get All Clinics Admin (Admin)
    *
    * Retrieves a paginated list of all active clinics.
