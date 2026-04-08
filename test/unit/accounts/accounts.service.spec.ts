@@ -12,6 +12,7 @@ import { AddressRepository } from '../../../src/modules/accounts/repositories/ad
 import { GoogleIframeRepository } from '../../../src/modules/accounts/repositories/google-iframe.repository';
 import { ClinicSubscriptionRepository } from '../../../src/modules/subscriptions/repositories/clinic-subscription.repository';
 import { ClinicSubscriptionHistoryRepository } from '../../../src/modules/subscriptions/repositories/clinic-subscription-history.repository';
+import { ContractPackageRepository } from '../../../src/modules/contracts/repositories/contract-package.repository';
 import { SubscriptionServiceRepository } from '../../../src/modules/subscriptions/repositories/subscription-service.repository';
 import { TransactionRepository } from '../../../src/modules/transactions/repositories/transaction.repository';
 import { MailerService } from '../../../src/modules/mailer/mailer.service';
@@ -352,6 +353,7 @@ describe('AccountsService - Registration Flow', () => {
           useValue: clinicSubscriptionRepository,
         },
         { provide: ClinicSubscriptionHistoryRepository, useValue: {} },
+        { provide: ContractPackageRepository, useValue: {} },
         { provide: SubscriptionServiceRepository, useValue: {} },
         { provide: TransactionRepository, useValue: transactionRepository },
         { provide: MailerService, useValue: mailerService },

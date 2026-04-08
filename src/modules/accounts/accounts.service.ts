@@ -3651,13 +3651,13 @@ export class AccountsService {
       )
       .leftJoinAndSelect('account.address', 'address')
       .leftJoin('account.parent', 'clinicAdmin')
-      .leftJoin('clinicAdmin.clinicSubscription', 'clinicSubscription')
+      .leftJoin('clinicAdmin.subscription', 'clinicSubscription')
       .leftJoin('account.legalDocuments', 'legalDocuments')
       .where('account.role = :role', { role: AccountRole.CLINIC_MANAGER })
       .andWhere('account.status = :status', { status: AccountStatus.ACTIVE })
       .andWhere('account.parentId = :clinicAdminId', { clinicAdminId })
       .andWhere('clinicAdmin.status = :adminStatus', { adminStatus: AccountStatus.ACTIVE })
-      .andWhere('clinicSubscription.status = :subscriptionStatus', { subscriptionStatus: AccountStatus.ACTIVE })
+      .andWhere('"clinicSubscription"."subscription_status" = :subscriptionStatus', { subscriptionStatus: RegistrationStatus.ACTIVE })
       .andWhere('legalDocuments.verificationStatus = :legalDocStatus', { legalDocStatus: LegalDocumentVerificationStatus.APPROVED })
       .andWhere('account.deletedAt IS NULL');
 

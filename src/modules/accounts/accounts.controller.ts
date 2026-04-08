@@ -435,7 +435,7 @@ export class AccountsController {
    * @swagger
    * @response 200 - Successfully retrieved clinics
    */
-  @Get('clinics-managers')
+  @Get('clinics-managers-list')
   @ApiOperation({
     summary: 'Get all clinics with pagination, search and filters',
   })
