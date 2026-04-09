@@ -447,11 +447,14 @@ export class AiRagChatBotService {
 
     const clinicId = createDto.clinicId;
 
-    // Convert date strings to Date objects using Vietnam timezone
+    // Convert date strings to Date objects using Vietnam timezone.
+    // The AI might send UTC strings (e.g., "2026-04-10T17:00:00.000Z") intending them as local time.
+    // We strip the timezone identifier to ensure it's evaluated strictly as Vietnam time.
     const appointmentDate = getStartOfVietnamDate(createDto.appointmentDate);
-    const appointmentHour = parseVietnamTime(createDto.appointmentHour);
+    const appointmentHourStr = createDto.appointmentHour.replace(/(Z|[+-]\d{2}:\d{2})$/i, '');
+    const appointmentHour = parseVietnamTime(appointmentHourStr);
     const extraHour = createDto.extraHour
-      ? parseVietnamTime(createDto.extraHour)
+      ? parseVietnamTime(createDto.extraHour.replace(/(Z|[+-]\d{2}:\d{2})$/i, ''))
       : null;
 
     // Check for time conflicts
