@@ -34,7 +34,14 @@ import {
   ServiceAppointment,
 } from '../appointments/entities';
 import { DataSource } from 'typeorm';
-import { getDateString, addToVietnamTime } from 'src/common/utils/date.util';
+import {
+  getDateString,
+  addToVietnamTime,
+  getCurrentVietnamTime,
+  parseVietnamTime,
+  getStartOfVietnamDate,
+  buildVietnamDateTime,
+} from 'src/common/utils/date.util';
 
 @Injectable()
 export class AiRagChatBotService {
@@ -134,7 +141,7 @@ export class AiRagChatBotService {
    * internal helper to transform entity structure to DTO response format
    */
   private mapSchedules(schedules: any[]) {
-    const now = new Date();
+    const now = getCurrentVietnamTime();
     return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
@@ -154,9 +161,10 @@ export class AiRagChatBotService {
           hours:
             schedule.clinicShift?.hours
               ?.map((hour: any) => {
-                const [endH, endM] = hour.endHour.split(':').map(Number);
-                const slotEndTime = new Date(schedule.workDate);
-                slotEndTime.setHours(endH, endM, 0, 0);
+                const slotEndTime = buildVietnamDateTime(
+                  schedule.workDate,
+                  hour.endHour,
+                );
 
                 return {
                   id: hour._id,
@@ -439,11 +447,11 @@ export class AiRagChatBotService {
 
     const clinicId = createDto.clinicId;
 
-    // Convert date strings to Date objects
-    const appointmentDate = new Date(createDto.appointmentDate);
-    const appointmentHour = new Date(createDto.appointmentHour);
+    // Convert date strings to Date objects using Vietnam timezone
+    const appointmentDate = getStartOfVietnamDate(createDto.appointmentDate);
+    const appointmentHour = parseVietnamTime(createDto.appointmentHour);
     const extraHour = createDto.extraHour
-      ? new Date(createDto.extraHour)
+      ? parseVietnamTime(createDto.extraHour)
       : null;
 
     // Check for time conflicts
