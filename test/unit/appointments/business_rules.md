@@ -711,6 +711,26 @@ await dataSource.transaction('SERIALIZABLE', async (manager) => {
 
 ---
 
+## 📅 Quy Tắc Tự Động Hủy Lịch Hết Hạn (Auto-Cancel Expired Appointments)
+
+**Trạng Thái:** **✅ PRODUCTION READY** (V6.5)
+
+**Luồng Xử Lý:**
+
+1. **Cron Job (Tự động):**
+   - **Tần suất:** Chạy hàng ngày lúc nửa đêm (`CronExpression.EVERY_DAY_AT_MIDNIGHT`).
+   - **Múi giờ:** 'Asia/Ho_Chi_Minh' (Việt Nam).
+
+2. **Logic Hủy Lịch:**
+   - **Trạng thái áp dụng:** `PENDING`, `CONFIRMED`.
+   - **Điều kiện thời gian:** Ngày hẹn đã qua (`appointment_date < CURRENT_DATE`).
+   - **Ngoại lệ quan trọng:** KHÔNG hủy các bản ghi có trạng thái `PENDING` và là loại đặt lịch ngoài giờ (`extra_hour IS NOT NULL`).
+
+3. **Kích hoạt thủ công (Trigger):**
+   - **Endpoint:** `POST /api/appointments/reminders/trigger-auto-cancel` (Sử dụng cho kiểm thử hoặc kích hoạt thủ công).
+
+---
+
 ## 📚 References
 
 ### Related Documents

@@ -14,4 +14,16 @@ export class AppointmentCronController {
   async triggerReminders() {
     return await this.appointmentCronService.processReminders();
   }
+
+  @Post('trigger-auto-cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manually trigger auto-cancel of expired appointments' })
+  @ApiResponse({ status: 200, description: 'Auto-cancel processed successfully' })
+  async triggerAutoCancel() {
+    const affected = await this.appointmentCronService.handleAutoCancelExpiredAppointments();
+    return {
+      message: 'Auto-cancel processed successfully',
+      affected_appointments: affected,
+    };
+  }
 }
