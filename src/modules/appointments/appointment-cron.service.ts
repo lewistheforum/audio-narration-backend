@@ -10,13 +10,13 @@ export class AppointmentCronService {
   constructor(
     private readonly appointmentRepository: AppointmentRepository,
     private readonly mailerService: MailerService,
-  ) {}
+  ) { }
 
   /**
    * Cron job that runs every 12 hours to check for appointments needing reminders.
    * Vietnam timezone (Asia/Ho_Chi_Minh)
    */
-  @Cron(CronExpression.EVERY_12_HOURS, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     timeZone: 'Asia/Ho_Chi_Minh',
   })
   async handleAppointmentReminders() {
@@ -34,14 +34,14 @@ export class AppointmentCronService {
    */
   async processReminders(): Promise<{ processed: number; success: number; failed: number }> {
     const appointments = await this.appointmentRepository.findAppointmentsNeedingReminder();
-    
+
     if (!appointments || appointments.length === 0) {
       this.logger.log('No appointments needing reminder found.');
       return { processed: 0, success: 0, failed: 0 };
     }
 
     this.logger.log(`Found ${appointments.length} appointments to remind. Sample data: ${JSON.stringify(appointments[0]).substring(0, 200)}...`);
-    
+
     let successCount = 0;
     let failedCount = 0;
 
@@ -102,26 +102,26 @@ export class AppointmentCronService {
       (part) => part && part !== 'null' && String(part).trim() !== '',
     );
     const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Address pending update';
-    
+
     const contactPhone = clinic_admin_phone || manager_phone || 'N/A';
 
     // Format date and hour
     const formattedDate = appointment_date ? new Date(appointment_date).toLocaleDateString('vi-VN') : 'N/A';
-    const formattedHour = appointment_hour 
+    const formattedHour = appointment_hour
       ? new Date(appointment_hour).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       : 'N/A';
 
     // Handle doctor name (SQL now provides 'Bác sĩ trực' as COALESCE fallback)
-    const finalDoctorName = (doctor_name && doctor_name !== 'null') 
-      ? String(doctor_name) 
+    const finalDoctorName = (doctor_name && doctor_name !== 'null')
+      ? String(doctor_name)
       : 'Bác sĩ trực';
 
     // Handle service names
     const services = (service_names && service_names !== 'null')
       ? String(service_names).split(', ').map((name: string) => ({
-          serviceName: name,
-          serviceType: 'Medical service',
-        }))
+        serviceName: name,
+        serviceType: 'Medical service',
+      }))
       : [];
 
     this.logger.log(`📧 Sending reminder to ${patient_email}: Doctor="${finalDoctorName}", ServicesCount=${services.length}, Address="${fullAddress}"`);
@@ -139,5 +139,98 @@ export class AppointmentCronService {
         services: services,
       },
     );
+  }
+
+  /**
+   * Cron job that runs every day at midnight to automatically cancel expired appointments.
+   * Vietnam timezone (Asia/Ho_Chi_Minh)
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  })
+  async handleAutoCancelExpiredAppointments() {
+    this.logger.log('⏰ Starting Auto-Cancel Expired Appointments Cron Job...');
+    try {
+      // 1. Get details of appointments that are about to be cancelled
+      const appointments = await this.appointmentRepository.findExpiredAppointmentsDetails();
+
+      if (!appointments || appointments.length === 0) {
+        this.logger.log('No expired appointments found to cancel.');
+        return 0;
+      }
+
+      // 2. Perform the bulk update
+      const affected = await this.appointmentRepository.autoCancelExpiredAppointments();
+      this.logger.log(`✅ Bulk update complete. ${affected} appointments were cancelled.`);
+
+      // 3. Send cancellation emails to patients
+      this.logger.log(`📧 Sending cancellation emails to ${appointments.length} patients...`);
+      const emailPromises = appointments.map(async (appointment) => {
+        try {
+          await this.sendCancellationEmail(appointment);
+        } catch (error) {
+          this.logger.error(
+            `Failed to send cancellation email for appointment ${appointment.appointment_id}: ${error.message}`,
+          );
+        }
+      });
+
+      await Promise.allSettled(emailPromises);
+      this.logger.log(`✅ Email notification process complete.`);
+
+      return affected;
+    } catch (error) {
+      this.logger.error('❌ Auto-Cancel Expired Appointments Cron Job failed', error.stack);
+      throw error;
+    }
+  }
+
+  private async sendCancellationEmail(appointment: any): Promise<void> {
+    const {
+      patient_email,
+      patient_name,
+      clinic_name,
+      appointment_date,
+      appointment_hour,
+      address,
+      ward_name,
+      district_name,
+      province_name,
+      clinic_admin_phone,
+      manager_phone,
+    } = appointment;
+
+    if (!patient_email || patient_email === 'null') {
+      this.logger.warn(
+        `Skipping cancellation email for appointment ${appointment.appointment_id} - Invalid email: ${patient_email}`,
+      );
+      return;
+    }
+
+    // Build address robustly
+    const addressParts = [address, ward_name, district_name, province_name].filter(
+      (part) => part && part !== 'null' && String(part).trim() !== '',
+    );
+    const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Medicare Clinic';
+
+    const contactPhone = clinic_admin_phone || manager_phone || 'N/A';
+
+    // Format date and hour
+    const formattedDate = appointment_date ? new Date(appointment_date).toLocaleDateString('vi-VN') : 'N/A';
+    const formattedHour = appointment_hour
+      ? new Date(appointment_hour).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      : 'N/A';
+
+    this.logger.log(`📧 Sending cancellation notice to ${patient_email} for past appointment on ${formattedDate}`);
+
+    await this.mailerService.sendAppointmentCancelledEmail(patient_email, {
+      patientName: patient_name && patient_name !== 'null' ? patient_name : 'Valued customer',
+      clinicName: clinic_name && clinic_name !== 'null' ? clinic_name : 'Medicare Clinic',
+      clinicAddress: fullAddress,
+      clinicPhone: contactPhone,
+      appointmentDate: formattedDate,
+      appointmentHour: formattedHour,
+      reason: 'The appointment date has passed and the patient did not attend (No-show).',
+    });
   }
 }
