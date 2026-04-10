@@ -100,7 +100,7 @@ export class BookingSessionService {
     AppointmentStatus.ABSENT,
   ];
   private readonly ONE_APPOINTMENT_PER_DAY_MESSAGE =
-    'Bạn đã có lịch hẹn trong ngày này. Mỗi ngày chỉ được đặt tối đa 1 lịch hẹn.';
+    'You have an appointment scheduled for this day. You can only book one appointment per day.';
   private readonly MIN_ADVANCE_BOOKING_MESSAGE =
     'Appointments must be booked at least 1 day in advance';
 
