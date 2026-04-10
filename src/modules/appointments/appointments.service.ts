@@ -1526,14 +1526,6 @@ export class AppointmentsService {
       throw new BadRequestException('Extra hour must be in the future');
     }
 
-    // Validate extra_hour is outside business hours (before 7am or after 6pm)
-    const hour = parseInt(formatToTimeOnly(newExtraHour).split(':')[0], 10);
-    if (hour >= 7 && hour < 18) {
-      throw new BadRequestException(
-        'Extra hour must be outside business hours (before 7:00 AM or after 6:00 PM)',
-      );
-    }
-
     // Check for conflicts using QueryBuilder (avoids raw SQL parameter issues)
     const conflict = await this.dataSource
       .createQueryBuilder(Appointment, 'a')
