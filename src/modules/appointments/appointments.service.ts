@@ -151,7 +151,7 @@ export class AppointmentsService {
   private readonly RESCHEDULE_APPOINTMENT_CONFLICT_MESSAGE =
     'You already have a confirmed appointment at this new time. Please select a different time slot.';
   private readonly ONE_APPOINTMENT_PER_DAY_MESSAGE =
-    'Bạn đã có lịch hẹn trong ngày này. Mỗi ngày chỉ được đặt tối đa 1 lịch hẹn.';
+    'You have an appointment scheduled for this day. You can only book one appointment per day.';
   private readonly logger = new Logger(AppointmentsService.name);
   private readonly APPOINTMENT_CONFLICT_EXCLUDED_STATUSES = [
     AppointmentStatus.CANCELLED,
