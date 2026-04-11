@@ -325,9 +325,93 @@ export class AppointmentRepository {
       .set({ isRemider: true })
       .where("_id = :id", { id })
       .execute();
-    
     if (result.affected === 0) {
       throw new Error(`No appointment found with ID ${id} to mark as reminded`);
     }
+  }
+
+  /**
+   * Automatically cancel appointments whose date has passed.
+   * 
+   * Targeted statuses: PENDING, CONFIRMED
+   * Logic: appointment_date < CURRENT_DATE
+   * Exception: PENDING appointments with extra_hour are NOT cancelled automatically
+   * 
+   * @returns Total number of updated appointments
+   */
+  async autoCancelExpiredAppointments(): Promise<number> {
+    const result = await this.repository.createQueryBuilder()
+      .update(Appointment)
+      .set({ status: AppointmentStatus.CANCELLED })
+      .where('deleted_at IS NULL')
+      .andWhere('status IN (:...statuses)', { 
+        statuses: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] 
+      })
+      .andWhere('appointment_date < CURRENT_DATE')
+      .andWhere(
+        'NOT (status = :pendingStatus AND extra_hour IS NOT NULL)', 
+        { pendingStatus: AppointmentStatus.PENDING }
+      )
+      .execute();
+
+    return result.affected || 0;
+  }
+
+  /**
+   * Find details of appointments that are expired and ready to be cancelled.
+   * Includes patient email and clinic contact info for sending notifications.
+   */
+  async findExpiredAppointmentsDetails(): Promise<Array<Record<string, unknown>>> {
+    const rawQuery = `
+      SELECT
+          a._id AS appointment_id,
+          a.patient_id,
+          a.appointment_date,
+          a.appointment_hour,
+          a.status,
+          COALESCE(ga.full_name, p.username) AS patient_name,
+          p.phone    AS patient_phone,
+          p.email    AS patient_email,
+          -- Combine Clinic Name (Admin) and Clinic Branch Name (Manager)
+          COALESCE(cai.clinic_name || ' - ' || cmi.clinic_branch_name, cai.clinic_name, cmi.clinic_branch_name, 'Medicare Clinic') AS clinic_name,
+          cacc.phone AS manager_phone,
+          COALESCE(cai.clinic_phone, 'N/A') AS clinic_admin_phone,
+          -- Address fallbacks (Manager address -> Admin address)
+          COALESCE(ad_m.address, ad_a.address) AS address,
+          COALESCE(ad_m.ward_name, ad_a.ward_name) AS ward_name,
+          COALESCE(ad_m.district_name, ad_a.district_name) AS district_name,
+          COALESCE(ad_m.province_name, ad_a.province_name) AS province_name
+      FROM appointments a
+      JOIN accounts p ON p._id = a.patient_id
+      LEFT JOIN general_accounts ga ON ga.account_id = p._id AND ga.deleted_at IS NULL
+      LEFT JOIN accounts cacc ON cacc._id = a.clinic_id AND cacc.deleted_at IS NULL
+      LEFT JOIN clinic_manager_information cmi ON cmi.account_id = cacc._id AND cmi.deleted_at IS NULL
+      LEFT JOIN accounts admin_acc ON admin_acc._id = cacc.parent_id AND admin_acc.deleted_at IS NULL
+      LEFT JOIN clinic_admin_information cai ON cai.account_id = admin_acc._id AND cai.deleted_at IS NULL
+      -- Addresses
+      LEFT JOIN (
+          SELECT DISTINCT ON (account_id) * FROM addresses
+          WHERE deleted_at IS NULL ORDER BY account_id, created_at DESC
+      ) ad_m ON ad_m.account_id = cacc._id
+      LEFT JOIN (
+          SELECT DISTINCT ON (account_id) * FROM addresses
+          WHERE deleted_at IS NULL ORDER BY account_id, created_at DESC
+      ) ad_a ON ad_a.account_id = admin_acc._id
+      WHERE a.deleted_at IS NULL
+        AND a.status IN ('PENDING', 'CONFIRMED')
+        AND a.appointment_date < CURRENT_DATE
+        AND NOT (a.status = 'PENDING' AND a.extra_hour IS NOT NULL)
+      GROUP BY
+          a._id, a.patient_id, a.appointment_date, a.appointment_hour, a.status,
+          ga.full_name, p.username, p.phone, p.email,
+          cai.clinic_name, cmi.clinic_branch_name,
+          cacc.phone, cai.clinic_phone,
+          ad_m.address, ad_a.address,
+          ad_m.ward_name, ad_a.ward_name,
+          ad_m.district_name, ad_a.district_name,
+          ad_m.province_name, ad_a.province_name
+      ORDER BY a.appointment_date DESC;
+    `;
+    return this.repository.query(rawQuery);
   }
 }
