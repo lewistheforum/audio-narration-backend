@@ -143,6 +143,21 @@ export class AiRagChatBotService {
   private mapSchedules(schedules: any[]) {
     const now = getCurrentVietnamTime();
     return schedules.map((schedule) => {
+      const mapped = this.mapSingleSchedule(schedule, now);
+      return {
+        ...mapped,
+        shift: mapped.shift ? [mapped.shift] : [],
+      };
+    });
+  }
+
+  /**
+   * Map Schedules Plain Response
+   *
+   * internal helper to transform entity structure to DTO response format without shift details
+   */
+  private mapSchedulesPlain(schedules: any[]) {
+    return schedules.map((schedule) => {
       const emp: any = schedule.employee;
       const doctorInfo = emp?.doctorInformation;
 
@@ -155,29 +170,6 @@ export class AiRagChatBotService {
           fullName: doctorInfo?.fullName || emp?.username || 'Unknown',
           avatar: doctorInfo?.profilePicture || null,
         },
-        shift: {
-          id: schedule.clinicShift?._id,
-          name: schedule.clinicShift?.shift,
-          hours:
-            schedule.clinicShift?.hours
-              ?.map((hour: any) => {
-                const slotEndTime = buildVietnamDateTime(
-                  schedule.workDate,
-                  hour.endHour,
-                );
-
-                return {
-                  id: hour._id,
-                  startHour: hour.startHour,
-                  endHour: hour.endHour,
-                  limit: hour.limit,
-                  bookedCount: hour.bookedCount || 0,
-                  isFull:
-                    (hour.bookedCount || 0) >= hour.limit || now > slotEndTime,
-                };
-              })
-              .sort((a, b) => a.startHour.localeCompare(b.startHour)) || [],
-        },
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
@@ -187,6 +179,125 @@ export class AiRagChatBotService {
             : null,
       };
     });
+  }
+
+  /**
+   * Map Schedules Grouped Response
+   *
+   * groups schedules by employee and work date
+   */
+  private mapSchedulesGrouped(schedules: any[]) {
+    const now = getCurrentVietnamTime();
+    const mappedSchedules = schedules.map((s) =>
+      this.mapSingleSchedule(s, now),
+    );
+
+    const grouped = new Map<string, any>();
+
+    for (const item of mappedSchedules) {
+      const key = `${item.employee.id}_${item.workDate}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          ...item,
+          shift: item.shift ? [item.shift] : [],
+          // Keep a list of schedule IDs if needed, otherwise item.id is the first one
+          ids: [item.id],
+        });
+      } else {
+        const existing = grouped.get(key);
+        if (item.shift) {
+          existing.shift.push(item.shift);
+        }
+        existing.ids.push(item.id);
+      }
+    }
+
+    return Array.from(grouped.values()).map((item) => {
+      // Sort shifts by their first hour's startHour
+      item.shift.sort((a: any, b: any) => {
+        const aStart = a.hours?.[0]?.startHour || '';
+        const bStart = b.hours?.[0]?.startHour || '';
+        return aStart.localeCompare(bStart);
+      });
+
+      // Simplify shift details for "overall" view: consolidate hours into a single range
+      item.shift = item.shift.map((s: any) => {
+        if (!s.hours || s.hours.length === 0) {
+          return { name: s.name, hours: [] };
+        }
+
+        // hours are already sorted in mapSingleSchedule, but we'll be safe
+        const sortedHours = [...s.hours].sort((a: any, b: any) =>
+          a.startHour.localeCompare(b.startHour),
+        );
+
+        return {
+          name: s.name,
+          hours: [
+            {
+              startHour: sortedHours[0].startHour,
+              endHour: sortedHours[sortedHours.length - 1].endHour,
+            },
+          ],
+        };
+      });
+
+      return item;
+    });
+  }
+
+  /**
+   * Helper to map a single schedule entity to response format
+   */
+  private mapSingleSchedule(schedule: any, now: Date) {
+    const emp: any = schedule.employee;
+    const doctorInfo = emp?.doctorInformation;
+
+    return {
+      id: schedule._id,
+      workDate: schedule.workDate,
+      weekDay: schedule.weekDay,
+      employee: {
+        id: emp?._id,
+        fullName: doctorInfo?.fullName || emp?.username || 'Unknown',
+        avatar: doctorInfo?.profilePicture || null,
+      },
+      shift: schedule.clinicShift
+        ? {
+            id: schedule.clinicShift._id,
+            name: schedule.clinicShift.shift,
+            hours:
+              schedule.clinicShift.hours
+                ?.map((hour: any) => {
+                  const slotEndTime = buildVietnamDateTime(
+                    schedule.workDate,
+                    hour.endHour,
+                  );
+
+                  return {
+                    id: hour._id,
+                    startHour: hour.startHour,
+                    endHour: hour.endHour,
+                    limit: hour.limit,
+                    bookedCount: hour.bookedCount || 0,
+                    isFull:
+                      (hour.bookedCount || 0) >= hour.limit ||
+                      now > slotEndTime,
+                  };
+                })
+                .sort((a: any, b: any) =>
+                  a.startHour.localeCompare(b.startHour),
+                ) || [],
+          }
+        : null,
+      room:
+        schedule.rooms && schedule.rooms.length > 0
+          ? {
+              id: schedule.rooms[0]._id,
+              name: schedule.rooms[0].roomName,
+            }
+          : null,
+    };
   }
 
   async createConversation(
@@ -282,7 +393,84 @@ export class AiRagChatBotService {
       }
     }
 
+    return this.mapSchedulesPlain(
+      await this.scheduleRepository.findSchedulesPlain(clinicId, {
+        date: searchDate,
+        from: searchFrom,
+        to: searchTo,
+        employeeId: filterEmployeeId,
+        roomId: query.roomId,
+        role: AccountRole.DOCTOR,
+      }),
+    );
+  }
+
+  async findClinicSchedulesShift(clinicId: string, user: any, query: any) {
+    let filterEmployeeId = query.employeeId;
+
+    if (!clinicId) {
+      throw new BadRequestException('Clinic ID is required');
+    }
+
+    // Show from tomorrow from current date to the future
+    const tomorrowStr = getDateString(addToVietnamTime(1, 'day'));
+
+    let searchDate = query.date;
+    let searchFrom = query.from;
+    let searchTo = query.to;
+
+    if (searchDate) {
+      // If user asks for a date in the past or today, we don't show it
+      if (searchDate < tomorrowStr) {
+        return [];
+      }
+    } else {
+      // If no range is specified, default to showing from tomorrow
+      if (!searchFrom || searchFrom < tomorrowStr) {
+        searchFrom = tomorrowStr;
+      }
+    }
+
     return this.mapSchedules(
+      await this.scheduleRepository.findScheduleHours(clinicId, {
+        date: searchDate,
+        from: searchFrom,
+        to: searchTo,
+        employeeId: filterEmployeeId,
+        roomId: query.roomId,
+        shiftId: query.shiftId,
+        role: AccountRole.DOCTOR,
+      }),
+    );
+  }
+
+  async findClinicSchedulesOverall(clinicId: string, user: any, query: any) {
+    let filterEmployeeId = query.employeeId;
+
+    if (!clinicId) {
+      throw new BadRequestException('Clinic ID is required');
+    }
+
+    // Show from tomorrow from current date to the future
+    const tomorrowStr = getDateString(addToVietnamTime(1, 'day'));
+
+    let searchDate = query.date;
+    let searchFrom = query.from;
+    let searchTo = query.to;
+
+    if (searchDate) {
+      // If user asks for a date in the past or today, we don't show it
+      if (searchDate < tomorrowStr) {
+        return [];
+      }
+    } else {
+      // If no range is specified, default to showing from tomorrow
+      if (!searchFrom || searchFrom < tomorrowStr) {
+        searchFrom = tomorrowStr;
+      }
+    }
+
+    return this.mapSchedulesGrouped(
       await this.scheduleRepository.findScheduleHours(clinicId, {
         date: searchDate,
         from: searchFrom,
@@ -342,6 +530,71 @@ export class AiRagChatBotService {
       clinicBranchName: row.clinic_branch_name || '',
       profilePicture:
         row.profile_picture || row.general_profile_picture || null,
+    }));
+  }
+
+  /**
+   * Find Clinic Managers by Doctor Name
+   *
+   * Retrieves clinic managers whose doctors have names matching the search query.
+   *
+   * @param name - The doctor name to search for (partial match)
+   */
+  async findClinicManagersByDoctorName(name: string) {
+    const rawData = await this.dataSource.query(
+      `
+      SELECT 
+        m._id as manager_id,
+        m.email as email,
+        m.username as username,
+        cmi.full_name as full_name,
+        cmi.clinic_branch_name as clinic_branch_name,
+        cmi.profile_picture as profile_picture,
+        ga.full_name as general_full_name,
+        ga.profile_picture as general_profile_picture,
+        d._id as doctor_id,
+        di.full_name as doctor_full_name,
+        di.profile_picture as doctor_profile_picture
+      FROM accounts d
+      INNER JOIN doctor_information di ON di.account_id = d._id AND di.deleted_at IS NULL
+      INNER JOIN accounts m ON d.parent_id = m._id AND m.deleted_at IS NULL
+      INNER JOIN accounts p ON m.parent_id = p._id AND p.deleted_at IS NULL
+      INNER JOIN clinic_subcriptions cs ON p._id = cs.clinic_id AND cs.deleted_at IS NULL
+      INNER JOIN clinics_legal_documents ld ON m._id = ld.account_id AND ld.deleted_at IS NULL
+      LEFT JOIN clinic_manager_information cmi ON cmi.account_id = m._id AND cmi.deleted_at IS NULL
+      LEFT JOIN general_accounts ga ON ga.account_id = m._id AND ga.deleted_at IS NULL
+      WHERE d.role = $1 AND d.status = $2 AND d.deleted_at IS NULL
+      AND m.role = $3 AND m.status = $2
+      AND p.status = $2
+      AND cs.subscription_status = $4
+      AND ld.verification_status = $5
+      AND di.full_name ILIKE $6
+      ORDER BY cmi.full_name ASC, di.full_name ASC
+    `,
+      [
+        AccountRole.DOCTOR,
+        AccountStatus.ACTIVE,
+        AccountRole.CLINIC_MANAGER,
+        RegistrationStatus.ACTIVE,
+        LegalDocumentVerificationStatus.APPROVED,
+        `%${name}%`,
+      ],
+    );
+
+    return rawData.map((row: Record<string, unknown>) => ({
+      accountId: row.manager_id,
+      email: row.email,
+      username: row.username,
+      fullName:
+        row.full_name || row.general_full_name || row.email || 'Unknown',
+      clinicBranchName: row.clinic_branch_name || '',
+      profilePicture:
+        row.profile_picture || row.general_profile_picture || null,
+      doctor: {
+        accountId: row.doctor_id,
+        fullName: row.doctor_full_name,
+        profilePicture: row.doctor_profile_picture || null,
+      },
     }));
   }
 
@@ -451,10 +704,15 @@ export class AiRagChatBotService {
     // The AI might send UTC strings (e.g., "2026-04-10T17:00:00.000Z") intending them as local time.
     // We strip the timezone identifier to ensure it's evaluated strictly as Vietnam time.
     const appointmentDate = getStartOfVietnamDate(createDto.appointmentDate);
-    const appointmentHourStr = createDto.appointmentHour.replace(/(Z|[+-]\d{2}:\d{2})$/i, '');
+    const appointmentHourStr = createDto.appointmentHour.replace(
+      /(Z|[+-]\d{2}:\d{2})$/i,
+      '',
+    );
     const appointmentHour = parseVietnamTime(appointmentHourStr);
     const extraHour = createDto.extraHour
-      ? parseVietnamTime(createDto.extraHour.replace(/(Z|[+-]\d{2}:\d{2})$/i, ''))
+      ? parseVietnamTime(
+          createDto.extraHour.replace(/(Z|[+-]\d{2}:\d{2})$/i, ''),
+        )
       : null;
 
     // Check for time conflicts
