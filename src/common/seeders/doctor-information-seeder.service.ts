@@ -220,10 +220,14 @@ export class DoctorInformationSeederService {
   private generateWorkProcess(index: number): Record<string, any> {
     const startYear = 2010 + (index % 15);
     const hospital = this.getRandomClinicName(index);
-    const position = this.POSITIONS_TEMPLATES[index % this.POSITIONS_TEMPLATES.length];
+    const position =
+      this.POSITIONS_TEMPLATES[index % this.POSITIONS_TEMPLATES.length];
 
     return {
-      desc: `Current: ${hospital}, Position: ${position} (since ${startYear}); Previous: ${this.getRandomClinicName((index + 1) % 5)}, Position: Orthopedic Surgeon (${startYear - 5}-${startYear})`,
+      list: [
+        `Current: ${hospital}, Position: ${position} (since ${startYear})`,
+        `Previous: ${this.getRandomClinicName((index + 1) % 5)}, Position: Orthopedic Surgeon (${startYear - 5}-${startYear})`,
+      ],
     };
   }
 
@@ -231,12 +235,18 @@ export class DoctorInformationSeederService {
    * Generate study process (deterministic based on index)
    */
   private generateStudyProcess(index: number): Record<string, any> {
-    const degree = this.ACADEMIC_DEGREES_TEMPLATES[index % this.ACADEMIC_DEGREES_TEMPLATES.length];
+    const degree =
+      this.ACADEMIC_DEGREES_TEMPLATES[
+        index % this.ACADEMIC_DEGREES_TEMPLATES.length
+      ];
     const undergradStart = 2000 + (index % 10);
     const postgradStart = 2007 + (index % 10);
 
     return {
-      desc: `Undergraduate: Hanoi Medical University, Doctor of Medicine (${undergradStart}-${undergradStart + 6}); Postgraduate: University of Medicine and Pharmacy, ${degree} (${postgradStart}-${postgradStart + 3})`,
+      list: [
+        `Undergraduate: Hanoi Medical University, Doctor of Medicine (${undergradStart}-${undergradStart + 6})`,
+        `Postgraduate: University of Medicine and Pharmacy, ${degree} (${postgradStart}-${postgradStart + 3})`,
+      ],
     };
   }
 
@@ -252,7 +262,7 @@ export class DoctorInformationSeederService {
       'Sports Medicine Association',
     ];
     return {
-      desc: memberships.slice(0, 2 + (index % 3)).join(', '),
+      list: memberships.slice(0, 2 + (index % 3)),
     };
   }
 
@@ -263,7 +273,12 @@ export class DoctorInformationSeederService {
     const title = `Study on ${MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length]} Treatment`;
     const year = 2020 + (index % 5);
     return {
-      desc: `${title} (${year}), Published in: Vietnamese Journal of Orthopedics`,
+      list: [
+        {
+          title: `${title} (${year})`,
+          link: 'https://vietnamorthopedicjournal.com/study-' + index,
+        },
+      ],
     };
   }
 
@@ -274,7 +289,12 @@ export class DoctorInformationSeederService {
     const title = `Advanced Techniques in ${MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length]}`;
     const year = 2021 + (index % 4);
     return {
-      desc: `${title} (${year}), Presented at: International Orthopedic Conference`,
+      list: [
+        {
+          title: `${title} (${year})`,
+          link: 'https://congress.orthopedic.vn/paper-' + index,
+        },
+      ],
     };
   }
 
@@ -289,18 +309,21 @@ export class DoctorInformationSeederService {
    * Generate professional license (deterministic based on index)
    */
   private generateProfessionalLicense(index: number): Record<string, any> {
-    const expiryYear = 2030 + (index % 10);
     return {
-      desc: `License: PL-${20200000 + index}, Issued by: Ministry of Health, Expiry: 01-01-${expiryYear}`,
+      type: 'img',
+      url: 'https://images.unsplash.com/photo-1586772002160-b7ca5caed130?w=800&h=1100&fit=crop',
     };
   }
 
   /**
    * Generate certificate of practical training (deterministic based on index)
    */
-  private generateCertificatePracticalTraining(index: number): Record<string, any> {
+  private generateCertificatePracticalTraining(
+    index: number,
+  ): Record<string, any> {
     return {
-      desc: `Certificate: CPT-${20210000 + index}, Institution: Hanoi Medical University Hospital, Duration: 12 months`,
+      type: 'img',
+      url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&h=1100&fit=crop',
     };
   }
 
@@ -308,10 +331,9 @@ export class DoctorInformationSeederService {
    * Generate medical license (deterministic based on index)
    */
   private generateMedicalLicense(index: number): Record<string, any> {
-    const specialization = MEDICAL_SPECIALIZATIONS[index % MEDICAL_SPECIALIZATIONS.length];
-    const expiryYear = 2035 + (index % 10);
     return {
-      desc: `License: ML-${20220000 + index}, Specialization: ${specialization}, Issued by: Ministry of Health, Valid until: 01-01-${expiryYear}`,
+      type: 'img',
+      url: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&h=1100&fit=crop',
     };
   }
 
