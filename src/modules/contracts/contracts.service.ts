@@ -535,7 +535,7 @@ export class ContractsService {
             const formData = new FormData();
             formData.append('file', fileDataUri);
             formData.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
-            formData.append('folder', 'bonix-file-pdf');
+            formData.append('folder', 'medicare-file-pdf');
 
             const response = await axios.post(process.env.CLOUDINARY_UPLOAD_URL, formData, {
                 headers: {

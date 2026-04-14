@@ -3,7 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 import axios from 'axios';
 
 async function checkPdfFields() {
-    const pdfUrl = 'http://res.cloudinary.com/dfdzphroa/image/upload/v1768839193/bonix-file-pdf/a7vj7ubbttt7onvbwvye.pdf';
+    const pdfUrl = 'http://res.cloudinary.com/dfdzphroa/image/upload/v1768839193/medicare-file-pdf/a7vj7ubbttt7onvbwvye.pdf';
     console.log(`Downloading PDF from: ${pdfUrl}`);
 
     try {

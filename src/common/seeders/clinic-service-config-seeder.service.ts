@@ -9,7 +9,7 @@ import { AccountRole } from '../../modules/accounts/enums';
 import { ServiceCategoryType } from '../../modules/clinic-services/enums';
 import { SERVICE_NOTES } from '../constants/medical-terms';
 
-const TARGET_CLINIC_MANAGER_EMAIL = 'clinic_manager_1_1@bonix.test';
+const TARGET_CLINIC_MANAGER_EMAIL = 'clinic_manager_1_1@medicare.test';
 
 /**
  * ClinicServiceConfig Seeder Service
