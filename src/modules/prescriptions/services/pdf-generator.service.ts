@@ -441,7 +441,7 @@ export class PdfGeneratorService {
         margin: [0, 30, 0, 0],
       },
       {
-        text: `Tài liệu được tạo tự động bởi hệ thống Bonix - ${getCurrentVietnamTime().toLocaleDateString('vi-VN')}`,
+        text: `Tài liệu được tạo tự động bởi hệ thống Medicare - ${getCurrentVietnamTime().toLocaleDateString('vi-VN')}`,
         style: 'footer',
         margin: [0, 10, 0, 0],
       },

@@ -4,11 +4,11 @@
  */
 
 export const CLINIC_NAMES = [
-  'Bonix Orthopedic Clinic Hanoi',
-  'Bonix Trauma Orthopedics Clinic Ho Chi Minh City',
-  'Bonix Physical Therapy Clinic Da Nang',
-  'Bonix Sports Medicine Clinic Can Tho',
-  'Bonix Spine Clinic Hai Phong',
+  'Medicare Orthopedic Clinic Hanoi',
+  'Medicare Trauma Orthopedics Clinic Ho Chi Minh City',
+  'Medicare Physical Therapy Clinic Da Nang',
+  'Medicare Sports Medicine Clinic Can Tho',
+  'Medicare Spine Clinic Hai Phong',
 ];
 
 export const SPECIALIZATIONS = [
