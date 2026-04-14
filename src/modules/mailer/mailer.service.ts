@@ -561,7 +561,7 @@ export class MailerService {
       attachments: [
         {
           filename: 'logo-Medicare.png',
-          path: 'https://res.cloudinary.com/dfdzphroa/image/upload/v1776137626/bonix-file/fyrzyw5wpvogynswbysx.jpg',
+          path: 'https://res.cloudinary.com/dfdzphroa/image/upload/v1776139176/bonix-file/o64t8upajvxbccedplwc.jpg',
           contentType: 'image/png',
         },
       ],
