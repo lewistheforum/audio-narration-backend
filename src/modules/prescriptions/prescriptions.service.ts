@@ -18,7 +18,6 @@ import { ERMUltrasound } from './entities/erm-ultrasound.entity';
 import { ERMBoneDensity } from './entities/erm-bone-density.entity';
 import { ERMProcedure } from './entities/erm-procedure.entity';
 import { Appointment } from '../appointments/entities/appointment.entity';
-import { AppointmentStatus } from '../appointments/enums/appointment-status.enum';
 import { ERMRecordType, ERMStatus } from './enums';
 import { MedicineRepository } from './repositories';
 import { CreateMedicineDto } from './dto/create-medicine.dto';
@@ -457,7 +456,7 @@ export class PrescriptionsService {
    * @param {string} appointmentId - Appointment ID from route params
    * @returns {Promise<PatientEPrescriptionDetailResponseDto>} E-Prescription details
    * @throws {NotFoundException} Appointment or E-Prescription not found
-   * @throws {ForbiddenException} Appointment not COMPLETED or access denied
+   * @throws {NotFoundException} Appointment or E-Prescription not found or access denied
    */
   async getPatientEPrescription(
     patientId: string,
@@ -470,21 +469,14 @@ export class PrescriptionsService {
         patientId: patientId,
         deletedAt: IsNull(),
       },
-      select: ['_id', 'status'],
+      select: ['_id'],
     });
 
     if (!appointment) {
       throw new NotFoundException('Appointment not found or access denied');
     }
 
-    // Layer 2: Check status rule - E-Prescription only available for COMPLETED appointments
-    if (appointment.status !== AppointmentStatus.COMPLETED) {
-      throw new ForbiddenException(
-        'E-Prescription is only available for completed appointments',
-      );
-    }
-
-    // Layer 3: Load E-Prescription with details
+    // Layer 2: Load E-Prescription with details
     const ePrescription = await this.ePrescriptionRepository
       .createQueryBuilder('ep')
       .leftJoinAndSelect(
@@ -499,12 +491,6 @@ export class PrescriptionsService {
 
     if (!ePrescription) {
       throw new NotFoundException('E-Prescription not found');
-    }
-
-    if (ePrescription.status !== ERMStatus.COMPLETED) {
-      throw new ForbiddenException(
-        'E-Prescription is not yet available (must be COMPLETED)',
-      );
     }
 
     // Filter out soft-deleted details (defensive programming)
@@ -540,7 +526,7 @@ export class PrescriptionsService {
    * Exports electronic prescription as a PDF document with medical/legal compliance
    *
    * Validation & Data Flow:
-   * - Layer 1-2: Reuses getPatientEPrescription() for ownership + status validation
+   * - Layer 1-2: Reuses getPatientEPrescription() for ownership + data loading
    * - Layer 3: Aggregates clinic, doctor, patient metadata for PDF header/footer
    * - Layer 4: Generates PDF using PdfGeneratorService
    *
@@ -548,7 +534,6 @@ export class PrescriptionsService {
    * @param {string} appointmentId - Appointment ID from route params
    * @returns {Promise<Buffer>} PDF binary data
    * @throws {NotFoundException} Appointment or E-Prescription not found
-   * @throws {ForbiddenException} Appointment not COMPLETED
    */
   async generateEPrescriptionPdf(
     patientId: string,

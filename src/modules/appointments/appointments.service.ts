@@ -6937,57 +6937,55 @@ export class AppointmentsService {
       };
     }
 
-    // Layer 5: Business Rules - E-Prescription Detail (only when COMPLETED)
+    // Layer 5: Load E-Prescription Detail for the owned appointment when available
     let ePrescriptionDetails = undefined;
-    if (appointmentRaw.status === AppointmentStatus.COMPLETED) {
-      const ePrescriptionsRow = await this.dataSource
-        .createQueryBuilder()
-        .select([
-          'ep._id AS id',
-          'ep.reference_id AS reference_id',
-          'ep.doctor_note AS doctor_note',
-          'ep.created_at AS created_at',
-          'ep.updated_at AS updated_at',
-          'dp._id AS detail_id',
-          'dp.quantity AS detail_quantity',
-          'dp.note AS detail_note',
-          'm.id AS medicine_id',
-          'm.name AS medicine_name',
-        ])
-        .from('e_prescriptions', 'ep')
-        .leftJoin(
-          'detail_e_prescriptions',
-          'dp',
-          'dp.e_prescription_id = ep._id AND dp.deleted_at IS NULL',
-        )
-        .leftJoin(
-          'medicines',
-          'm',
-          'm.id = dp.medicine_id AND m.deleted_at IS NULL',
-        )
-        .where('ep.appointment_id = :appointmentId', { appointmentId })
-        .andWhere('ep.deleted_at IS NULL')
-        .getRawMany();
+    const ePrescriptionsRow = await this.dataSource
+      .createQueryBuilder()
+      .select([
+        'ep._id AS id',
+        'ep.reference_id AS reference_id',
+        'ep.doctor_note AS doctor_note',
+        'ep.created_at AS created_at',
+        'ep.updated_at AS updated_at',
+        'dp._id AS detail_id',
+        'dp.quantity AS detail_quantity',
+        'dp.note AS detail_note',
+        'm.id AS medicine_id',
+        'm.name AS medicine_name',
+      ])
+      .from('e_prescriptions', 'ep')
+      .leftJoin(
+        'detail_e_prescriptions',
+        'dp',
+        'dp.e_prescription_id = ep._id AND dp.deleted_at IS NULL',
+      )
+      .leftJoin(
+        'medicines',
+        'm',
+        'm.id = dp.medicine_id AND m.deleted_at IS NULL',
+      )
+      .where('ep.appointment_id = :appointmentId', { appointmentId })
+      .andWhere('ep.deleted_at IS NULL')
+      .getRawMany();
 
-      if (ePrescriptionsRow && ePrescriptionsRow.length > 0) {
-        const ep = ePrescriptionsRow[0];
-        ePrescriptionDetails = {
-          _id: ep.id,
-          reference_id: ep.reference_id,
-          doctor_note: ep.doctor_note,
-          created_at: ep.created_at,
-          updated_at: ep.updated_at,
-          details: ePrescriptionsRow
-            .filter((r) => r.detail_id)
-            .map((r) => ({
-              _id: r.detail_id,
-              quantity: r.detail_quantity,
-              note: r.detail_note,
-              medicine_id: r.medicine_id,
-              medicine_name: r.medicine_name,
-            })),
-        };
-      }
+    if (ePrescriptionsRow && ePrescriptionsRow.length > 0) {
+      const ep = ePrescriptionsRow[0];
+      ePrescriptionDetails = {
+        _id: ep.id,
+        reference_id: ep.reference_id,
+        doctor_note: ep.doctor_note,
+        created_at: ep.created_at,
+        updated_at: ep.updated_at,
+        details: ePrescriptionsRow
+          .filter((r) => r.detail_id)
+          .map((r) => ({
+            _id: r.detail_id,
+            quantity: r.detail_quantity,
+            note: r.detail_note,
+            medicine_id: r.medicine_id,
+            medicine_name: r.medicine_name,
+          })),
+      };
     }
 
     const appointmentPackages = packages.map((pkg) => {

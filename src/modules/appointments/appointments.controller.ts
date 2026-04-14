@@ -2436,7 +2436,6 @@ export class AppointmentsController {
    * Patient only - nested under appointment route
    *
    * Retrieves electronic prescription for a specific appointment
-   * Only accessible when appointment status is COMPLETED
    */
   @Get('patients/me/appointments/:id/e-prescription')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -2446,7 +2445,7 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Get E-Prescription for a specific appointment',
     description:
-      'Retrieves the electronic prescription details including all prescribed medicines. Only available for completed appointments.',
+      'Retrieves the electronic prescription details including all prescribed medicines for the authenticated patient appointment.',
   })
   @ApiParam({
     name: 'id',
@@ -2462,9 +2461,6 @@ export class AppointmentsController {
   })
   @ApiNotFoundResponse({
     description: 'Appointment or E-Prescription not found',
-  })
-  @ApiForbiddenResponse({
-    description: 'E-Prescription only available for completed appointments',
   })
   @ApiResponse({
     status: 401,
@@ -2496,7 +2492,7 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Export E-Prescription as PDF',
     description:
-      'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines. Only available for completed appointments.',
+      'Downloads the electronic prescription as a professionally formatted PDF document with clinic letterhead, doctor information, and all prescribed medicines for the authenticated patient appointment.',
   })
   @ApiParam({
     name: 'id',
@@ -2516,9 +2512,6 @@ export class AppointmentsController {
   })
   @ApiNotFoundResponse({
     description: 'Appointment or E-Prescription not found',
-  })
-  @ApiForbiddenResponse({
-    description: 'E-Prescription only available for completed appointments',
   })
   @ApiResponse({
     status: 401,
