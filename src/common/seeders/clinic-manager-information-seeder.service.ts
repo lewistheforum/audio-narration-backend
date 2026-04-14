@@ -30,11 +30,14 @@ export class ClinicManagerInformationSeederService {
 
   // Profile picture URLs for clinic managers
   private readonly PROFILE_PICTURE_URLS = [
-    'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
+    'https://ykhoacantho.com/wp-content/uploads/2022/09/kham-benh-xuong-khop-can-tho-2022-13.jpg',
+    'https://acc.vn/wp-content/uploads/2023/08/1.png',
+    'https://acc.vn/wp-content/uploads/2026/02/gallery-hcm-7.png',
+    'https://www.docosan.com/blog/wp-content/uploads/2021/06/samsungbestclinic.jpg',
+    'https://penviet.com/wp-content/uploads/2022/10/Thiet-ke-phong-kham-2-e1665646837372.png',
+    'https://pendecor.vn/uploads/files/2025/04/20/thiet-ke-phong-kham-tham-my-1.jpg',
+    'https://pendecor.vn/uploads/files/2022/08/30/thiet-ke-phong-kham-mat-1.jpg',
+    'https://anlocgroup.com/wp-content/uploads/2023/01/thiet-ke-phong-kham-23.jpg',
   ];
 
   constructor(
