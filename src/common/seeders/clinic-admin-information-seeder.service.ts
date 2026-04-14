@@ -31,13 +31,13 @@ export class ClinicAdminInformationSeederService {
 
   // Clinic names based on location - mapped to the 7 real addresses
   private readonly CLINIC_NAMES_BY_LOCATION = [
-    'Bonix Ho Chi Minh - D1',
-    'Bonix Ho Chi Minh - D4',
-    'Bonix Hanoi - Dong Da',
-    'Bonix Hanoi - Hoan Kiem',
-    'Bonix Nha Trang',
-    'Bonix Da Nang',
-    'Bonix Can Tho',
+    'Medicare Ho Chi Minh - D1',
+    'Medicare Ho Chi Minh - D4',
+    'Medicare Hanoi - Dong Da',
+    'Medicare Hanoi - Hoan Kiem',
+    'Medicare Nha Trang',
+    'Medicare Da Nang',
+    'Medicare Can Tho',
   ];
 
   private readonly ADMIN_CLINIC_MAPPING = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2];

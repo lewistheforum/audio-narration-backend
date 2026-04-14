@@ -11,7 +11,7 @@ import { AccountsModule } from '../accounts/accounts.module';
 /**
  * AI Module
  *
- * Provides AI integration services for the Bonix Backend.
+ * Provides AI integration services for the Medicare Backend.
  *
  * Features:
  * - Google Gemini API integration

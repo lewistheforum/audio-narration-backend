@@ -10,7 +10,7 @@ async function debugUpload() {
     console.log('--- START DEBUG CLOUDINARY UPLOAD ---');
     // Hardcoded for debugging because dotenv path resolution was failing
     const CLOUD_URL = 'https://api.cloudinary.com/v1_1/dfdzphroa/image/upload';
-    const CLOUD_PRESET = 'bonix-project';
+    const CLOUD_PRESET = 'medicare-project';
 
     console.log('URL:', CLOUD_URL);
     console.log('PRESET:', CLOUD_PRESET);

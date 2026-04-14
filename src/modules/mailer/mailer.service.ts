@@ -556,11 +556,11 @@ export class MailerService {
       },
       to: [targetMail],
       subject: 'New Contact Inquiry - Medicare',
-      text: 'Bonix Text',
+      text: 'Medicare Text',
       html: this.renderTemplate('legacy/send-mail.hbs', {}),
       attachments: [
         {
-          filename: 'logo-Bonix.png',
+          filename: 'logo-Medicare.png',
           path: 'https://res.cloudinary.com/dx1ejni0o/image/upload/v1758100904/crypto/ikz8lyq7dmaesm8atpxh.png',
           contentType: 'image/png',
         },
@@ -596,7 +596,7 @@ export class MailerService {
     const html = this.renderTemplate('auth/verification-email.hbs', { code });
 
     const mailOptions = {
-      from: `"Bonix App" <${user}>`,
+      from: `"Medicare App" <${user}>`,
       to: email,
       subject: 'Email Verification for Account Registration',
       text: `Your verification code is: ${code}. Code is valid for 10 minutes.`,
@@ -630,7 +630,7 @@ export class MailerService {
     });
 
     const mailOptions = {
-      from: `"Bonix App" <${user}>`,
+      from: `"Medicare App" <${user}>`,
       to: email,
       subject: 'Password Reset Request',
       text: `Your password reset code is: ${code}. Code is valid for 10 minutes.`,
@@ -782,7 +782,7 @@ export class MailerService {
 
     const mailOptions = {
       from: {
-        name: 'Bonix Security',
+        name: 'Medicare Security',
         address: this.configService.get<string>('EMAIL_USER'),
       },
       to: email,

@@ -32,7 +32,7 @@ import {
 /**
  * Subscription Services Service
  *
- * Centralized service layer for managing subscription service operations in the Bonix system.
+ * Centralized service layer for managing subscription service operations in the Medicare system.
  * This service implements the business logic layer between controllers and the data access layer (repository).
  *
  * Core Responsibilities:
