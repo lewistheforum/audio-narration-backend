@@ -63,7 +63,7 @@ import { ClinicDetailResponseDto } from './dto/clinic-detail-response.dto';
 /**
  * Accounts Management Controller
  *
- * RESTful API controller for managing user accounts in the Bonix system.
+ * RESTful API controller for managing user accounts in the Medicare system.
  * Provides comprehensive CRUD operations and account lifecycle management.
  *
  * Features:

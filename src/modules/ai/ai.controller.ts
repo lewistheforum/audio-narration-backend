@@ -20,7 +20,7 @@ import { AiChatImvFeedbackRequestDto } from './dto/ai-chat-imv-feedback-request.
 /**
  * AI Controller
  *
- * REST API endpoints for AI operations in the Bonix Backend.
+ * REST API endpoints for AI operations in the Medicare Backend.
  *
  * Endpoints:
  * - POST /ai/chat - Generate AI chat completions

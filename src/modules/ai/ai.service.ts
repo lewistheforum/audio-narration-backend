@@ -20,7 +20,7 @@ import { AccountRole } from '../accounts/enums';
 /**
  * AI Service
  *
- * Main service layer for AI operations in the Bonix Backend.
+ * Main service layer for AI operations in the Medicare Backend.
  *
  * Core Responsibilities:
  * - Route requests to appropriate AI provider (Gemini or ChatGPT)

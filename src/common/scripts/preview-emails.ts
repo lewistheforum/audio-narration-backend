@@ -12,14 +12,14 @@ const templatesDir = path.join(rootDir, 'src', 'modules', 'mailer', 'templates')
 const previewDir = path.join(rootDir, '.preview');
 
 const mockData: TemplateMap = {
-  logoUrl: 'https://via.placeholder.com/120x40?text=Bonix',
-  brandName: 'Bonix',
-  appName: 'Bonix',
-  companyName: 'Bonix Healthcare',
+  logoUrl: 'https://via.placeholder.com/120x40?text=Medicare',
+  brandName: 'Medicare',
+  appName: 'Medicare',
+  companyName: 'Medicare Healthcare',
   userName: 'Nguyen Van A',
   fullName: 'Nguyen Van A',
   patientName: 'Nguyen Van A',
-  clinicName: 'Phong kham Bonix',
+  clinicName: 'Phong kham Medicare',
   clinicAddress: '123 Nguyen Hue, Quan 1, TP.HCM',
   clinicPhone: '0901 234 567',
   planName: 'Premium Care',
@@ -39,7 +39,7 @@ const mockData: TemplateMap = {
   doctorSpecialization: 'Tim mach',
   serviceName: 'Kham tong quat',
   serviceType: 'CONSULTATION',
-  supportEmail: 'support@bonix.com',
+  supportEmail: 'support@medicare.com',
   totalAmount: '$1,200.00',
   amount: '$1,200.00',
   price: '$299.00',
