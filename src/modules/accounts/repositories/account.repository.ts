@@ -599,13 +599,31 @@ export class AccountRepository {
               },
             )
             .orWhere(
-              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.specialized_in, '[]'::jsonb))), ', '), '') ILIKE :search",
+              `COALESCE(
+                CASE 
+                  WHEN jsonb_typeof(clinicAdminInfo.specialized_in) = 'array' THEN 
+                    array_to_string(ARRAY(SELECT jsonb_array_elements_text(clinicAdminInfo.specialized_in)), ', ')
+                  WHEN jsonb_typeof(clinicAdminInfo.specialized_in) = 'object' THEN 
+                    clinicAdminInfo.specialized_in->>'desc'
+                  ELSE ''
+                END, 
+                ''
+              ) ILIKE :search`,
               {
                 search: `%${search}%`,
               },
             )
             .orWhere(
-              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.pros, '[]'::jsonb))), ', '), '') ILIKE :search",
+              `COALESCE(
+                CASE 
+                  WHEN jsonb_typeof(clinicAdminInfo.pros) = 'array' THEN 
+                    array_to_string(ARRAY(SELECT jsonb_array_elements_text(clinicAdminInfo.pros)), ', ')
+                  WHEN jsonb_typeof(clinicAdminInfo.pros) = 'object' THEN 
+                    clinicAdminInfo.pros->>'desc'
+                  ELSE ''
+                END, 
+                ''
+              ) ILIKE :search`,
               {
                 search: `%${search}%`,
               },
@@ -622,11 +640,17 @@ export class AccountRepository {
       );
     }
 
-    // Apply specialty filter (JSONB containment query on specializedIn from parent's clinic admin info)
+    // Apply specialty filter (handles both legacy array and new object with desc)
     if (specialty) {
-      queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
-        specialty: JSON.stringify([specialty]),
-      });
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          qb.where('clinicAdminInfo.specializedIn @> :specialtyArray', {
+            specialtyArray: JSON.stringify([specialty]),
+          }).orWhere('clinicAdminInfo.specializedIn->>\'desc\' ILIKE :specialtyText', {
+            specialtyText: `%${specialty}%`,
+          });
+        }),
+      );
     }
 
     // Apply pagination and ordering
@@ -720,15 +744,42 @@ export class AccountRepository {
               search: `%${search}%`,
             })
             .orWhere(
-              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.specialized_in, '[]'::jsonb))), ', '), '') ILIKE :search",
+              `COALESCE(
+                CASE 
+                  WHEN jsonb_typeof(clinicAdminInfo.specialized_in) = 'array' THEN 
+                    array_to_string(ARRAY(SELECT jsonb_array_elements_text(clinicAdminInfo.specialized_in)), ', ')
+                  WHEN jsonb_typeof(clinicAdminInfo.specialized_in) = 'object' THEN 
+                    clinicAdminInfo.specialized_in->>'desc'
+                  ELSE ''
+                END, 
+                ''
+              ) ILIKE :search`,
               { search: `%${search}%` }
             )
             .orWhere(
-              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.pros, '[]'::jsonb))), ', '), '') ILIKE :search",
+              `COALESCE(
+                CASE 
+                  WHEN jsonb_typeof(clinicAdminInfo.pros) = 'array' THEN 
+                    array_to_string(ARRAY(SELECT jsonb_array_elements_text(clinicAdminInfo.pros)), ', ')
+                  WHEN jsonb_typeof(clinicAdminInfo.pros) = 'object' THEN 
+                    clinicAdminInfo.pros->>'desc'
+                  ELSE ''
+                END, 
+                ''
+              ) ILIKE :search`,
               { search: `%${search}%` }
             )
             .orWhere(
-              "COALESCE(array_to_string(ARRAY(SELECT jsonb_array_elements_text(COALESCE(clinicAdminInfo.paraclinical, '[]'::jsonb))), ', '), '') ILIKE :search",
+              `COALESCE(
+                CASE 
+                  WHEN jsonb_typeof(clinicAdminInfo.paraclinical) = 'array' THEN 
+                    array_to_string(ARRAY(SELECT jsonb_array_elements_text(clinicAdminInfo.paraclinical)), ', ')
+                  WHEN jsonb_typeof(clinicAdminInfo.paraclinical) = 'object' THEN 
+                    clinicAdminInfo.paraclinical->>'desc'
+                  ELSE ''
+                END, 
+                ''
+              ) ILIKE :search`,
               { search: `%${search}%` }
             );
         }),
@@ -743,11 +794,17 @@ export class AccountRepository {
       );
     }
 
-    // Apply specialty filter (JSONB containment query on specializedIn from clinic admin info)
+    // Apply specialty filter (handles both legacy array and new object with desc)
     if (specialty) {
-      queryBuilder.andWhere('clinicAdminInfo.specializedIn @> :specialty', {
-        specialty: JSON.stringify([specialty]),
-      });
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          qb.where('clinicAdminInfo.specializedIn @> :specialtyArray', {
+            specialtyArray: JSON.stringify([specialty]),
+          }).orWhere('clinicAdminInfo.specializedIn->>\'desc\' ILIKE :specialtyText', {
+            specialtyText: `%${specialty}%`,
+          });
+        }),
+      );
     }
 
     // Apply pagination and ordering

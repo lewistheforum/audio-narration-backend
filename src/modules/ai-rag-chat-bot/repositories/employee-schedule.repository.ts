@@ -92,6 +92,70 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
   }
 
   /**
+   * Find Schedules Plain with Filters
+   *
+   * Retrieves a list of schedules without shift details.
+   */
+  async findSchedulesPlain(
+    clinicId: string,
+    options: {
+      date?: string;
+      from?: string;
+      to?: string;
+      employeeId?: string;
+      roomId?: string;
+      role?: string;
+    },
+  ): Promise<EmployeeSchedule[]> {
+    const queryBuilder = this.createQueryBuilder('schedule')
+      .leftJoinAndSelect('schedule.employee', 'employee')
+      .leftJoinAndSelect('schedule.rooms', 'rooms')
+      // Map doctor information manually
+      .leftJoinAndMapOne(
+        'employee.doctorInformation',
+        'DoctorInformation',
+        'doctorInfo',
+        'doctorInfo.accountId = employee._id',
+      )
+      .where('schedule.clinicId = :clinicId', { clinicId })
+      .andWhere('schedule.deletedAt IS NULL');
+
+    if (options.role) {
+      queryBuilder.andWhere('employee.role = :role', { role: options.role });
+    }
+
+    if (options.date) {
+      queryBuilder.andWhere('schedule.workDate = :date', {
+        date: options.date,
+      });
+    }
+
+    if (options.from) {
+      queryBuilder.andWhere('schedule.workDate >= :from', {
+        from: options.from,
+      });
+    }
+
+    if (options.to) {
+      queryBuilder.andWhere('schedule.workDate <= :to', {
+        to: options.to,
+      });
+    }
+
+    if (options.employeeId) {
+      queryBuilder.andWhere('schedule.employeeId = :employeeId', {
+        employeeId: options.employeeId,
+      });
+    }
+
+    if (options.roomId) {
+      queryBuilder.andWhere('rooms._id = :roomId', { roomId: options.roomId });
+    }
+
+    return queryBuilder.orderBy('schedule.workDate', 'ASC').getMany();
+  }
+
+  /**
    * Find Schedules Hours with Filters
    *
    * Retrieves a list of schedules based on clinic and additional filters.

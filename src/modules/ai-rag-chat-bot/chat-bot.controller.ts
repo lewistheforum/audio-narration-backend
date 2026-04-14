@@ -106,6 +106,59 @@ export class AiRagChatBotController {
       query,
     );
   }
+
+  /**
+   * Find Schedules of Clinic
+   *
+   * Retrieves a list of schedules based on filter criteria.
+   * Implements role-based visibility logic provided by the service.
+   *
+   * Roles: CLINIC_MANAGER, CLINIC_STAFF, DOCTOR
+   */
+  @Get('clinic-schedules-shift/:clinicId')
+  @ApiOperation({ summary: 'Get doctor schedules list' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of schedules',
+  })
+  findClinicSchedulesShift(
+    @Request() req,
+    @Param('clinicId') clinicId: string,
+    @Query() query: GetSchedulesDto,
+  ) {
+    return this.aiRagChatBotService.findClinicSchedulesShift(
+      clinicId,
+      req.user,
+      query,
+    );
+  }
+
+  /**
+   * Find Schedules of Clinic
+   *
+   * Retrieves a list of schedules based on filter criteria.
+   * Implements role-based visibility logic provided by the service.
+   *
+   * Roles: CLINIC_MANAGER, CLINIC_STAFF, DOCTOR
+   */
+  @Get('clinic-schedules-overall/:clinicId')
+  @ApiOperation({ summary: 'Get doctor schedules list' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of schedules',
+  })
+  findClinicSchedulesOverall(
+    @Request() req,
+    @Param('clinicId') clinicId: string,
+    @Query() query: GetSchedulesDto,
+  ) {
+    return this.aiRagChatBotService.findClinicSchedulesOverall(
+      clinicId,
+      req.user,
+      query,
+    );
+  }
+
   @Get('clinic-manager')
   @ApiOperation({
     summary: 'Get all clinic manager accounts',
@@ -117,6 +170,20 @@ export class AiRagChatBotController {
   })
   async getClinicManagers() {
     return this.aiRagChatBotService.findAllClinicManagers();
+  }
+
+  @Get('clinic-manager/search-by-doctor')
+  @ApiOperation({
+    summary: 'Search clinic managers by doctor name',
+    description:
+      'Retrieve clinic managers whose doctors have names matching the search query',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Clinic managers retrieved successfully',
+  })
+  async getClinicManagersByDoctor(@Query('name') name: string) {
+    return this.aiRagChatBotService.findClinicManagersByDoctorName(name);
   }
 
   @Get('clinic-manager/:managerId/services')
