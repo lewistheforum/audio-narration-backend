@@ -72,27 +72,35 @@ export class ClinicManagerService {
         query,
       );
 
-    const totalPages = Math.ceil(totalItems / query.limit);
+    const currentPage = query.page ?? 1;
+    const itemsPerPage = query.limit ?? 10;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
 
     // Transform to DTO
-    const data = managers.map((manager) => ({
-      managerId: manager.account._id,
-      fullName: manager.fullName,
-      clinicBranchName: manager.clinicBranchName,
-      email: manager.account.email,
-      status: manager.account.status,
-      legalDocStatus: manager.legalDocuments?.verificationStatus || 'NOT_SUBMITTED',
-      staffCount: parseInt(manager.staffCount, 10) || 0,
-      doctorCount: parseInt(manager.doctorCount, 10) || 0,
-      province: manager.address?.provinceName || 'N/A',
-      createdAt: manager.createdAt,
-    }));
+    const data = managers.map((manager) => {
+      const legalDocs = manager.account.legalDocuments;
+      const address = manager.account.address;
+
+      return {
+        managerId: manager.account._id,
+        fullName: manager.fullName,
+        clinicBranchName: manager.clinicBranchName,
+        email: manager.account.email,
+        status: manager.account.status,
+        legalDocStatus:
+          legalDocs?.verificationStatus || LegalDocumentVerificationStatus.NOT_SUBMITTED,
+        staffCount: parseInt(manager.staffCount, 10) || 0,
+        doctorCount: parseInt(manager.doctorCount, 10) || 0,
+        province: address?.provinceName || 'N/A',
+        createdAt: manager.createdAt,
+      };
+    });
 
     return {
       data,
       meta: {
-        currentPage: query.page,
-        itemsPerPage: query.limit,
+        currentPage,
+        itemsPerPage,
         totalItems,
         totalPages,
       },
@@ -181,7 +189,9 @@ export class ClinicManagerService {
         operatingLicense: legalDocs?.operatingLicense,
         businessLicense: legalDocs?.businessLicense,
         taxIdUrl: legalDocs?.taxIdUrl,
-        verificationStatus: legalDocs?.verificationStatus || 'NOT_SUBMITTED',
+        verificationStatus:
+          legalDocs?.verificationStatus ||
+          LegalDocumentVerificationStatus.NOT_SUBMITTED,
         rejectionReason: legalDocs?.rejectionReason,
         updatedAt: legalDocs?.updatedAt,
       },
