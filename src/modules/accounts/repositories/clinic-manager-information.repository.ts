@@ -5,8 +5,6 @@ import { ClinicManagerInformation } from '../entities/clinic_manager_information
 import { Account } from '../entities/accounts.entity';
 import { AccountRole } from '../enums/account-role.enum';
 import { LegalDocumentVerificationStatus } from '../enums/legal-document-verification-status.enum';
-import { AccountStatus } from '../enums';
-import { RegistrationStatus } from 'src/modules/subscriptions/enums';
 
 /**
  * ClinicManagerInformation Repository
@@ -221,9 +219,13 @@ export class ClinicManagerInformationRepository {
 
     const queryBuilder = this.repository.createQueryBuilder('manager')
       .leftJoinAndSelect('manager.account', 'account')
-      .leftJoin('clinics_legal_documents', 'legal', 'legal.account_id = account._id')
-      .leftJoin('addresses', 'address', 'address.account_id = account._id')
+      .leftJoinAndSelect('account.legalDocuments', 'legal')
+      .leftJoinAndSelect('account.address', 'address')
       .where('account.parent_id = :clinicAdminId', { clinicAdminId })
+      .andWhere('account.role = :managerRole', {
+        managerRole: AccountRole.CLINIC_MANAGER,
+      })
+      .andWhere('manager.deleted_at IS NULL')
       .andWhere('account.deleted_at IS NULL');
 
     // Apply filters dynamically
@@ -250,10 +252,10 @@ export class ClinicManagerInformationRepository {
     }
 
     if (legalDocStatus) {
-      if (legalDocStatus === 'NOT_SUBMITTED') {
-        queryBuilder.andWhere('legal.verificationStatus IS NULL');
+      if (legalDocStatus === LegalDocumentVerificationStatus.NOT_SUBMITTED) {
+        queryBuilder.andWhere('legal._id IS NULL');
       } else {
-        queryBuilder.andWhere('legal.verificationStatus = :legalDocStatus', {
+        queryBuilder.andWhere('legal.verification_status = :legalDocStatus', {
           legalDocStatus,
         });
       }
@@ -315,19 +317,21 @@ export class ClinicManagerInformationRepository {
   async findManagerDetailById(managerId: string): Promise<any> {
     const manager = await this.repository.createQueryBuilder('manager')
       .leftJoinAndSelect('manager.account', 'account')
-      .leftJoinAndSelect('account.parent', 'clinicAdmin')
-      .leftJoinAndSelect('clinicAdmin.subscription', 'clinicSubscription')
-      .leftJoinAndSelect('account.children', 'children')
+      .leftJoinAndSelect(
+        'account.children',
+        'children',
+        'children.deleted_at IS NULL',
+      )
       .leftJoinAndSelect('children.doctorInformation', 'doctorInfo')
       .leftJoinAndSelect('children.clinicStaffInformation', 'staffInfo')
       .leftJoinAndSelect('account.legalDocuments', 'legal')
       .leftJoinAndSelect('account.address', 'address')
       .leftJoinAndSelect('address.googleIframe', 'iframe')
-      .where('account._id = :managerId', { managerId })
-      .andWhere('account.status = :status', { status: AccountStatus.ACTIVE })
-      .andWhere('clinicAdmin.status = :adminStatus', { adminStatus: AccountStatus.ACTIVE })
-      .andWhere('"clinicSubscription"."subscription_status" = :subscriptionStatus', { subscriptionStatus: RegistrationStatus.ACTIVE })
-      .andWhere('legal.verification_status = :legalDocStatus', { legalDocStatus: LegalDocumentVerificationStatus.APPROVED })
+      .where('manager.account_id = :managerId', { managerId })
+      .andWhere('account.role = :managerRole', {
+        managerRole: AccountRole.CLINIC_MANAGER,
+      })
+      .andWhere('manager.deleted_at IS NULL')
       .andWhere('account.deleted_at IS NULL')
       .getOne();
     
