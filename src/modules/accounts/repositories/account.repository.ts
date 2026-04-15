@@ -1126,23 +1126,27 @@ export class AccountRepository {
   async countPersonnelByManager(
     managerId: string,
   ): Promise<{ staffCount: number; doctorCount: number }> {
-    const [staffCount, doctorCount] = await Promise.all([
-      this.accountRepository.count({
-        where: {
-          parentId: managerId,
-          role: AccountRole.CLINIC_STAFF,
-          deletedAt: IsNull(),
-        },
-      }),
-      this.accountRepository.count({
-        where: {
-          parentId: managerId,
-          role: AccountRole.DOCTOR,
-          deletedAt: IsNull(),
-        },
-      }),
-    ]);
+    const counts = await this.accountRepository
+      .createQueryBuilder('account')
+      .select(
+        'COALESCE(SUM(CASE WHEN account.role = :staffRole THEN 1 ELSE 0 END), 0)',
+        'staffCount',
+      )
+      .addSelect(
+        'COALESCE(SUM(CASE WHEN account.role = :doctorRole THEN 1 ELSE 0 END), 0)',
+        'doctorCount',
+      )
+      .where('account.parent_id = :managerId', { managerId })
+      .andWhere('account.deleted_at IS NULL')
+      .setParameters({
+        staffRole: AccountRole.CLINIC_STAFF,
+        doctorRole: AccountRole.DOCTOR,
+      })
+      .getRawOne<{ staffCount: string; doctorCount: string }>();
 
-    return { staffCount, doctorCount };
+    return {
+      staffCount: parseInt(counts?.staffCount ?? '0', 10),
+      doctorCount: parseInt(counts?.doctorCount ?? '0', 10),
+    };
   }
 }
