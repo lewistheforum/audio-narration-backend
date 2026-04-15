@@ -263,16 +263,7 @@ export class ConversationService {
         `EXISTS (
           SELECT 1 FROM appointments appt 
           WHERE appt.patient_id = :patientId 
-          AND (
-            appt.doctor_id = account._id 
-            OR EXISTS (
-              SELECT 1 FROM employee_schedule es 
-              JOIN clinic_shift_hour csh ON csh.shift_id = es.clinic_shift_id
-              WHERE es.employee_id = account._id 
-              AND csh._id = appt.clinic_shift_hour_id
-              AND es.work_date = appt.appointment_date
-            )
-          )
+          AND appt.doctor_id = account._id
         )`,
         { patientId },
       )
