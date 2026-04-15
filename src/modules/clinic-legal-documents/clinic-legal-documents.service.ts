@@ -100,7 +100,7 @@ export class ClinicLegalDocumentsService {
         role: AccountRole.CLINIC_MANAGER,
       })
       .andWhere(
-        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') >= 1`,
+        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') > 1`,
       )
       .select([
         'legalDocs._id as "id"',
@@ -156,7 +156,7 @@ export class ClinicLegalDocumentsService {
         role: AccountRole.CLINIC_MANAGER,
       })
       .andWhere(
-        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') >= 1`,
+        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') > 1`,
       )
       .getCount();
 
@@ -609,7 +609,7 @@ export class ClinicLegalDocumentsService {
         role: AccountRole.CLINIC_MANAGER,
       })
       .andWhere(
-        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') >= 1`,
+        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') > 1`,
       )
       .select([
         'legalDocs._id as "id"',
@@ -656,7 +656,7 @@ export class ClinicLegalDocumentsService {
         role: AccountRole.CLINIC_MANAGER,
       })
       .andWhere(
-        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') >= 1`,
+        `(SELECT COUNT(*) FROM accounts m WHERE m.parent_id = adminAccount._id AND m.role = '${AccountRole.CLINIC_MANAGER}') > 1`,
       )
       .getCount();
 
