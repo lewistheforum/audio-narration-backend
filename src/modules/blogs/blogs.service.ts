@@ -68,23 +68,26 @@ export class BlogsService {
    * @param {number} page - Page number (default: 1)
    * @param {number} limit - Items per page (default: 6)
    * @param {BlogType} [type] - Optional blog type category filter
+   * @param {string} [search] - Optional search query for title
    * @returns {Promise<BlogListResponseDto>} Paginated blog DTOs with clinic information
    *
    * @example
    * ```typescript
-   * const result = await blogsService.findAll(1, 6, BlogType.HEALTH);
-   * // Returns first page of health-related blogs
+   * const result = await blogsService.findAll(1, 6, BlogType.HEALTH, 'search term');
+   * // Returns first page of health-related blogs matching 'search term'
    * ```
    */
   async findAll(
     page: number = 1,
     limit: number = 6,
     type?: BlogType,
+    search?: string,
   ): Promise<BlogListResponseDto> {
     const [blogs, total] = await this.blogRepository.findAllWithClinic(
       page,
       limit,
       type,
+      search,
     );
     return {
       data: blogs.map((blog) => new BlogResponseDto(blog)),

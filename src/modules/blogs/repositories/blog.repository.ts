@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository, DeepPartial, ILike } from 'typeorm';
 import { Blog } from '../entities/blog.entity';
 import { BlogType } from '../enums';
 import { BlogNotification } from '../../notifications/entities/blog-notification.entity';
@@ -68,16 +68,25 @@ export class BlogRepository {
    *
    * @param {number} page - Page number
    * @param {number} limit - Items per page
-   * @param {BlogType} [type] - Optional blog type category filter
+   * @param {string} [search] - Optional search query for title
    * @returns {Promise<[Blog[], number]>} Array of blog entities and total count
    */
   async findAllWithClinic(
     page: number = 1,
     limit: number = 6,
     type?: BlogType,
+    search?: string,
   ): Promise<[Blog[], number]> {
+    const where: any = {};
+    if (type && (type as any) !== 'all' && (type as any) !== '') {
+      where.type = type;
+    }
+    if (search) {
+      where.title = ILike(`%${search}%`);
+    }
+
     return this.blogRepository.findAndCount({
-      where: type ? { type } : {},
+      where,
       relations: ['clinic', 'clinic.clinicManagerInformation'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
