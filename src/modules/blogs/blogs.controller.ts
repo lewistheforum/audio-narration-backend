@@ -104,6 +104,12 @@ export class BlogsController {
     enum: BlogType,
     description: 'Filter blogs by category type',
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search blogs by title',
+  })
   @ApiResponseData({
     type: BlogListResponseDto,
     status: MESSAGES.statusCode.success,
@@ -113,8 +119,9 @@ export class BlogsController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 6,
     @Query('type') type?: BlogType,
+    @Query('search') search?: string,
   ): Promise<{ data: BlogListResponseDto; message: string }> {
-    const result = await this.blogsService.findAll(page, limit, type);
+    const result = await this.blogsService.findAll(page, limit, type, search);
     return {
       data: result,
       message: 'Blogs retrieved successfully',
