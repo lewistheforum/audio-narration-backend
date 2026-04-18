@@ -15,7 +15,7 @@ import { AccountRole } from '../accounts/enums';
 @ApiTags('Internal - Subscriptions')
 @Controller('internal/subscriptions')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class SubscriptionInternalController {
   constructor(private readonly subscriptionCronService: SubscriptionCronService) {}
 
