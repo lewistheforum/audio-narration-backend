@@ -317,8 +317,19 @@ export class SubscriptionCronService {
         `Sending ${emailType} email to ${clinicEmail} (Clinic: ${clinicName})`,
       );
 
-      // TODO: Implement actual email sending with template
-      // For now, log the intent
+      await this.mailerService.sendSubscriptionReassurance(
+        clinicEmail,
+        daysRemaining === 7 ? '7_DAYS' : '1_DAY',
+        {
+          clinicName,
+          currentPlan,
+          nextPlan: upcomingPlan,
+          renewalDate: renewalQueue.targetStartDate
+            ? renewalQueue.targetStartDate.toLocaleDateString('en-GB')
+            : 'N/A',
+        },
+      );
+
       this.logger.debug(
         `Email Data: Clinic=${clinicName}, CurrentPlan=${currentPlan}, UpcomingPlan=${upcomingPlan}, Days=${daysRemaining}`,
       );
@@ -330,8 +341,20 @@ export class SubscriptionCronService {
         `Sending ${emailType} email to ${clinicEmail} (Clinic: ${clinicName})`,
       );
 
-      // TODO: Implement actual email sending with template
-      // For now, log the intent
+      const renewalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription`;
+      await this.mailerService.sendSubscriptionWarning(
+        clinicEmail,
+        daysRemaining === 7 ? '7_DAYS' : '1_DAY',
+        {
+          clinicName,
+          planName: currentPlan,
+          expirationDate: subscription.expirationDate
+            ? subscription.expirationDate.toLocaleDateString('en-GB')
+            : 'N/A',
+          renewalLink,
+        },
+      );
+
       this.logger.debug(
         `Email Data: Clinic=${clinicName}, CurrentPlan=${currentPlan}, ExpirationDate=${subscription.expirationDate}, Days=${daysRemaining}`,
       );
@@ -427,8 +450,33 @@ export class SubscriptionCronService {
       `Sending ${emailType} email to ${clinicEmail} (Clinic: ${clinicName})`,
     );
 
-    // TODO: Implement actual email sending with template
-    // For now, log the intent
+    const startDate = renewalQueue.targetStartDate
+      ? renewalQueue.targetStartDate.toLocaleDateString('en-GB')
+      : 'N/A';
+    const endDate = renewalQueue.targetEndDate
+      ? renewalQueue.targetEndDate.toLocaleDateString('en-GB')
+      : 'N/A';
+
+    if (isPlanChange) {
+      await this.mailerService.sendPlanChangeSuccess(clinicEmail, {
+        clinicName,
+        oldPlan: subscription.service?.serviceName || 'Current Plan',
+        newPlan: renewalQueue.nextService?.serviceName || 'New Plan',
+        startDate,
+        endDate,
+      });
+    } else {
+      const invoiceLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription/invoices/${renewalQueue._id}`;
+      await this.mailerService.sendRenewalSuccess(clinicEmail, {
+        clinicName,
+        planName: renewalQueue.nextService?.serviceName || subscription.service?.serviceName || 'Subscription Plan',
+        startDate,
+        endDate,
+        transactionId: renewalQueue._id,
+        invoiceLink,
+      });
+    }
+
     this.logger.debug(
       `Email Data: Clinic=${clinicName}, OldPlan=${subscription.service?.serviceName}, NewPlan=${renewalQueue.nextService?.serviceName}`,
     );
@@ -454,8 +502,16 @@ export class SubscriptionCronService {
       `Sending subscription_expired email to ${clinicEmail} (Clinic: ${clinicName})`,
     );
 
-    // TODO: Implement actual email sending with template
-    // For now, log the intent
+    const renewalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription`;
+    await this.mailerService.sendSubscriptionExpired(clinicEmail, {
+      clinicName,
+      planName: expiredPlan,
+      expirationDate: subscription.expirationDate
+        ? subscription.expirationDate.toLocaleDateString('en-GB')
+        : 'N/A',
+      renewalLink,
+    });
+
     this.logger.debug(
       `Email Data: Clinic=${clinicName}, ExpiredPlan=${expiredPlan}, ExpirationDate=${subscription.expirationDate}`,
     );
