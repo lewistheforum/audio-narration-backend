@@ -139,23 +139,36 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Google authentication failed' })
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req: any, @Res() res: any): Promise<void> {
-    const tokenData = await this.authService.googleLogin(req.user);
     const frontendUrl =
       this.configService.get<string>('FRONTEND_LANDING_URL') ||
       'http://localhost:3000';
 
-    const redirectUrl = new URL(`${frontendUrl}/`);
+    try {
+      const tokenData = await this.authService.googleLogin(req.user);
 
-    if (tokenData.requirePasswordSetup) {
-      redirectUrl.searchParams.set('requirePasswordSetup', 'true');
-      redirectUrl.searchParams.set('setupToken', tokenData.setupToken);
-      redirectUrl.searchParams.set('userId', tokenData.userId);
-    } else {
-      redirectUrl.searchParams.set('token', tokenData.accessToken);
-      redirectUrl.searchParams.set('userId', tokenData.userId);
+      const redirectUrl = new URL(`${frontendUrl}/`);
+
+      if (tokenData.requirePasswordSetup) {
+        redirectUrl.searchParams.set('requirePasswordSetup', 'true');
+        redirectUrl.searchParams.set('setupToken', tokenData.setupToken);
+        redirectUrl.searchParams.set('userId', tokenData.userId);
+      } else {
+        redirectUrl.searchParams.set('token', tokenData.accessToken);
+        redirectUrl.searchParams.set('userId', tokenData.userId);
+      }
+
+      return res.redirect(redirectUrl.toString());
+    } catch (error) {
+      const redirectUrl = new URL(`${frontendUrl}/`);
+      redirectUrl.searchParams.set('error', error.response?.error || 'AuthError');
+      redirectUrl.searchParams.set(
+        'message',
+        error.response?.message || error.message || 'Authentication failed',
+      );
+      redirectUrl.searchParams.set('openLogin', 'true');
+
+      return res.redirect(redirectUrl.toString());
     }
-
-    return res.redirect(redirectUrl.toString());
   }
 
   /**
