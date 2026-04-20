@@ -9,6 +9,7 @@ import {
   LegalDocumentVerificationStatus,
 } from '../enums';
 import { RegistrationStatus } from '../../subscriptions/enums/subscription-status.enum';
+import { ClinicSubscription } from '../../subscriptions/entities/clinic-subscription.entity';
 
 /**
  * Account Repository
@@ -546,11 +547,13 @@ export class AccountRepository {
         parentRole: AccountRole.CLINIC_ADMIN,
       })
       .innerJoin(
-        'clinic_subscriptions',
+        ClinicSubscription,
         'subscription',
-        'subscription.clinic_id = parentAccount._id AND subscription.status = :subStatus',
-        { subStatus: AccountStatus.ACTIVE }
+        'subscription.clinic_id = parentAccount._id',
       )
+      .andWhere('subscription.subscriptionStatus = :subStatus', {
+        subStatus: RegistrationStatus.ACTIVE,
+      })
       .andWhere('legalDoc.verification_status = :verifiedStatus', {
         verifiedStatus: LegalDocumentVerificationStatus.APPROVED,
       })
