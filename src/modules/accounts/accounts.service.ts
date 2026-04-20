@@ -100,6 +100,7 @@ import {
 } from '../transactions/entities/transaction.entity';
 import { ClinicSubscription } from '../subscriptions/entities/clinic-subscription.entity';
 import { ContractPackageRepository } from '../contracts/repositories/contract-package.repository';
+import { ContractStatus } from '../contracts/enums/contract-status.enum';
 
 /**
  * Accounts Service
@@ -4053,10 +4054,21 @@ export class AccountsService {
       'doctor.role = :doctorRole',
       'doctor.status = :doctorStatus',
       'doctor.deleted_at IS NULL',
+      `EXISTS (
+        SELECT 1
+        FROM contract_package cp
+        INNER JOIN clinic_contract_information cci ON cci.contract_id = cp._id
+        WHERE cp.employee_id = doctor._id
+          AND cp.clinic_manager_id = clinic._id
+          AND cp.deleted_at IS NULL
+          AND cci.deleted_at IS NULL
+          AND cci.contract_status = :contractStatus
+      )`,
     ];
     const doctorJoinParams: Record<string, string> = {
       doctorRole: AccountRole.DOCTOR,
       doctorStatus: AccountStatus.ACTIVE,
+      contractStatus: ContractStatus.CURRENT,
     };
 
     if (normalizedDoctorSearch) {

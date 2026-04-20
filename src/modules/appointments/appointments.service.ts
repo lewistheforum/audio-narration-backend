@@ -38,6 +38,7 @@ import {
   AccountRole,
   LegalDocumentVerificationStatus,
 } from '../accounts/enums';
+import { ContractStatus } from '../contracts/enums/contract-status.enum';
 import { EmployeeScheduleRepository } from '../schedules/repositories/employee-schedule.repository';
 import {
   QueryAppointmentDto,
@@ -117,6 +118,9 @@ import { EPrescription } from '../prescriptions/entities/e-prescription.entity';
 import { ClinicServiceConfig } from '../service-configs/entities/clinic-service-config.entity';
 import { ClinicShiftHour } from '../schedules/entities/clinic-shift-hour.entity';
 import { ClinicAdminInformation } from '../accounts/entities/clinic-admin-information.entity';
+import { Account } from '../accounts/entities/accounts.entity';
+import { ContractPackage } from '../contracts/entities/contract-package.entity';
+import { ClinicContractInformation } from '../contracts/entities/clinic-contract-information.entity';
 import { BookingSessionService } from './booking-session.service';
 import {
   MailerService,
@@ -5886,7 +5890,18 @@ export class AppointmentsService {
         'di.position AS doctor_position',
       ])
       .from('employee_schedule', 'es')
-      .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin(Account, 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin(
+        ContractPackage,
+        'cp',
+        'cp.employee_id = doctor._id AND cp.clinic_manager_id = es.clinic_id AND cp.deleted_at IS NULL',
+      )
+      .innerJoin(
+        ClinicContractInformation,
+        'cci',
+        'cci.contract_id = cp._id AND cci.deleted_at IS NULL AND cci.contract_status = :contractStatus',
+        { contractStatus: ContractStatus.CURRENT },
+      )
       .leftJoin('doctor_information', 'di', 'di.account_id = doctor._id')
       .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
       .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
@@ -7097,22 +7112,23 @@ export class AppointmentsService {
            )
          ) FILTER (WHERE clinic._id IS NOT NULL) AS clinics`,
       ])
-      .from('accounts', 'doctor')
+      .from(Account, 'doctor')
       .innerJoin('doctor_information', 'di', 'di.account_id = doctor._id')
-      .leftJoin(
-        'contract_package',
-        'cp',
-        'cp.employee_id = doctor._id AND cp.deleted_at IS NULL',
-      )
-      .leftJoin(
-        'clinic_contract_information',
-        'cci',
-        'cci.contract_id = cp._id AND cci.deleted_at IS NULL',
-      )
       .innerJoin(
         'employee_schedule',
         'es',
         'es.employee_id = doctor._id AND es.deleted_at IS NULL',
+      )
+      .innerJoin(
+        ContractPackage,
+        'cp',
+        'cp.employee_id = doctor._id AND cp.clinic_manager_id = es.clinic_id AND cp.deleted_at IS NULL',
+      )
+      .innerJoin(
+        ClinicContractInformation,
+        'cci',
+        'cci.contract_id = cp._id AND cci.deleted_at IS NULL AND cci.contract_status = :contractStatus',
+        { contractStatus: ContractStatus.CURRENT },
       )
       .innerJoin('accounts', 'clinic', 'clinic._id = es.clinic_id')
       .leftJoin(
@@ -8264,7 +8280,18 @@ export class AppointmentsService {
         'COUNT(DISTINCT a._id) AS booked_count',
       ])
       .from('employee_schedule', 'es')
-      .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin(Account, 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin(
+        ContractPackage,
+        'cp',
+        'cp.employee_id = doctor._id AND cp.clinic_manager_id = es.clinic_id AND cp.deleted_at IS NULL',
+      )
+      .innerJoin(
+        ClinicContractInformation,
+        'cci',
+        'cci.contract_id = cp._id AND cci.deleted_at IS NULL AND cci.contract_status = :contractStatus',
+        { contractStatus: ContractStatus.CURRENT },
+      )
       .leftJoin('doctor_information', 'di', 'di.account_id = doctor._id')
       .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
       .innerJoin('clinic_shift_hour', 'csh', 'csh.shift_id = cs._id')
@@ -8453,6 +8480,27 @@ export class AppointmentsService {
     ) {
       throw new BadRequestException(
         'This clinic is pending legal verification and is currently unavailable for booking.',
+      );
+    }
+
+    const hasValidContract = await this.dataSource
+      .createQueryBuilder()
+      .select('cp._id', 'contract_id')
+      .from(ContractPackage, 'cp')
+      .innerJoin(
+        ClinicContractInformation,
+        'cci',
+        'cci.contract_id = cp._id AND cci.deleted_at IS NULL AND cci.contract_status = :contractStatus',
+        { contractStatus: ContractStatus.CURRENT },
+      )
+      .where('cp.employee_id = :doctorId', { doctorId })
+      .andWhere('cp.clinic_manager_id = :clinicId', { clinicId })
+      .andWhere('cp.deleted_at IS NULL')
+      .getRawOne();
+
+    if (!hasValidContract) {
+      throw new NotFoundException(
+        'Doctor does not have an active contract with this clinic.',
       );
     }
 
@@ -8695,7 +8743,18 @@ export class AppointmentsService {
         'di.position AS position',
       ])
       .from('employee_schedule', 'es')
-      .innerJoin('accounts', 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin(Account, 'doctor', 'doctor._id = es.employee_id')
+      .innerJoin(
+        ContractPackage,
+        'cp',
+        'cp.employee_id = doctor._id AND cp.deleted_at IS NULL',
+      )
+      .innerJoin(
+        ClinicContractInformation,
+        'cci',
+        'cci.contract_id = cp._id AND cci.deleted_at IS NULL AND cci.contract_status = :contractStatus',
+        { contractStatus: ContractStatus.CURRENT },
+      )
       .leftJoin('doctor_information', 'di', 'di.account_id = doctor._id')
       .leftJoin(
         'appointments',
