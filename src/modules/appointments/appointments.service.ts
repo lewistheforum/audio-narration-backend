@@ -36,6 +36,7 @@ import {
 } from '../accounts/repositories';
 import {
   AccountRole,
+  AccountStatus,
   LegalDocumentVerificationStatus,
 } from '../accounts/enums';
 import { ContractStatus } from '../contracts/enums/contract-status.enum';
@@ -918,6 +919,12 @@ export class AppointmentsService {
       throw new NotFoundException('Appointment not found');
     }
 
+    if (appointment.doctor && appointment.doctor.status === AccountStatus.BAN) {
+      throw new BadRequestException(
+        'Cannot reschedule appointment for a doctor with a banned account.',
+      );
+    }
+
     // Check if appointment can be rescheduled
     const reschedulableStatuses = [
       AppointmentStatus.PENDING,
@@ -1256,6 +1263,12 @@ export class AppointmentsService {
 
     if (!appointment || appointment.deletedAt) {
       throw new NotFoundException('Appointment not found');
+    }
+
+    if (appointment.doctor && appointment.doctor.status === AccountStatus.BAN) {
+      throw new BadRequestException(
+        'Cannot reschedule appointment for a doctor with a banned account.',
+      );
     }
 
     // Verify patient owns this appointment
@@ -1600,6 +1613,12 @@ export class AppointmentsService {
 
     if (!appointment || appointment.deletedAt) {
       throw new NotFoundException('Appointment not found');
+    }
+
+    if (appointment.doctor && appointment.doctor.status === AccountStatus.BAN) {
+      throw new BadRequestException(
+        'Cannot reschedule appointment for a doctor with a banned account.',
+      );
     }
 
     // Check if appointment can be rescheduled
@@ -2712,6 +2731,7 @@ export class AppointmentsService {
       doctorId: appointment.doctorId,
       doctorFullName,
       doctorProfileImage,
+      doctorStatus: appointment.doctor?.status,
       clinicRooms: clinicRooms || [],
       services: services || [],
       extraRoom: appointment.extraRoom
@@ -2871,6 +2891,7 @@ export class AppointmentsService {
         academicDegree: doctorProfile?.academicDegree,
         experience: doctorProfile?.experience,
         position: doctorProfile?.position,
+        status: appointment.doctor.status,
       };
     }
 

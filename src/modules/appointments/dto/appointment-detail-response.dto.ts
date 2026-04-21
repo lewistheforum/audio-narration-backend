@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { PaymentType } from '../enums/payment-type.enum';
 import { AppointmentPackageStatus } from '../enums/appointment-package-status.enum';
+import { AccountStatus } from '../../accounts/enums';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
 import { AddressDto } from './appointment-response.dto';
 
@@ -79,6 +80,9 @@ export class DoctorDetailDto {
 
   @ApiProperty({ description: 'Doctor position', required: false })
   position?: string;
+
+  @ApiProperty({ description: 'Doctor account status', enum: AccountStatus, required: false })
+  status?: string;
 }
 
 /**
