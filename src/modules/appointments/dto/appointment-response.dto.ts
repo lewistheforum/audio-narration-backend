@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { AppointmentStatus } from '../enums';
 import { formatToVietnamTime } from '../../../common/utils/date.util';
+import { AccountStatus } from 'src/modules/accounts/enums';
 
 /**
  * Address DTO for Patient Information
@@ -58,7 +59,11 @@ export class ServiceDetailDto {
   @ApiProperty({ description: 'Service price', example: 200000 })
   price: number;
 
-  @ApiProperty({ description: 'Service discount', example: 10000, required: false })
+  @ApiProperty({
+    description: 'Service discount',
+    example: 10000,
+    required: false,
+  })
   discount?: number;
 }
 
@@ -127,7 +132,11 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Patient profile image URL', required: false })
   patientProfileImage?: string | null;
 
-  @ApiProperty({ description: 'Patient address', type: AddressDto, required: false })
+  @ApiProperty({
+    description: 'Patient address',
+    type: AddressDto,
+    required: false,
+  })
   patientAddress?: AddressDto;
 
   @ApiProperty({ description: 'Clinic ID' })
@@ -145,13 +154,32 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Doctor profile image URL', required: false })
   doctorProfileImage?: string | null;
 
-  @ApiProperty({ description: 'Clinic rooms', type: [ClinicRoomDto], required: false })
+  @ApiProperty({
+    description: 'Doctor account status',
+    enum: AccountStatus,
+    required: false,
+  })
+  doctorStatus?: string | null;
+
+  @ApiProperty({
+    description: 'Clinic rooms',
+    type: [ClinicRoomDto],
+    required: false,
+  })
   clinicRooms?: ClinicRoomDto[];
 
-  @ApiProperty({ description: 'Extra room for out-of-hours appointments', type: ClinicRoomDto, required: false })
+  @ApiProperty({
+    description: 'Extra room for out-of-hours appointments',
+    type: ClinicRoomDto,
+    required: false,
+  })
   extraRoom?: ClinicRoomDto | null;
 
-  @ApiProperty({ description: 'Services', type: [ServiceDetailDto], required: false })
+  @ApiProperty({
+    description: 'Services',
+    type: [ServiceDetailDto],
+    required: false,
+  })
   services?: ServiceDetailDto[];
 
   @ApiProperty({
@@ -184,7 +212,7 @@ export class AppointmentResponseDto {
   appointmentHour: Date;
 
   @ApiProperty({ description: 'Extra hour if applicable', required: false })
-  @Transform(({ value }) => value ? formatToVietnamTime(value) : value)
+  @Transform(({ value }) => (value ? formatToVietnamTime(value) : value))
   extraHour?: Date | null;
 
   @ApiProperty({ description: 'Total amount', example: 500000 })
@@ -199,7 +227,10 @@ export class AppointmentResponseDto {
   @ApiProperty({ description: 'Reject reason if cancelled', required: false })
   rejectReason?: string | null;
 
-  @ApiProperty({ description: 'Final diagnosis from doctor (COMPLETED appointments only)', required: false })
+  @ApiProperty({
+    description: 'Final diagnosis from doctor (COMPLETED appointments only)',
+    required: false,
+  })
   diagnosis?: string | null;
 
   @ApiProperty({ description: 'Creation timestamp' })

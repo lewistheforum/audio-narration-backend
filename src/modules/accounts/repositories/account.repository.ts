@@ -563,7 +563,7 @@ export class AccountRepository {
           SELECT 1 FROM accounts child
           WHERE child.parent_id = account._id
             AND child.role IN ('DOCTOR', 'CLINIC_STAFF')
-            AND child.status = 'ACTIVE'
+            AND child.status = '${AccountStatus.ACTIVE}'
             AND child.deleted_at IS NULL
         )`,
       )
@@ -696,7 +696,7 @@ export class AccountRepository {
             SELECT 1 FROM accounts branch
             WHERE branch.parent_id = account._id
               AND branch.role = 'CLINIC_MANAGER'
-              AND branch.status = 'ACTIVE'
+              AND branch.status = '${AccountStatus.ACTIVE}'
               AND branch.deleted_at IS NULL
           )`,
         )

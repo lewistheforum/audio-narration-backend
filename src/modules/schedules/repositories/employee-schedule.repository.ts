@@ -4,7 +4,7 @@ import { EmployeeSchedule } from '../entities/employee-schedule.entity';
 import { ClinicShiftHour } from '../entities/clinic-shift-hour.entity';
 import { WeekDay } from '../enums';
 import { getEndOfMonth, getStartOfMonth } from 'src/common/utils/date.util';
-import { AccountRole } from '../../accounts/enums';
+import { AccountRole, AccountStatus } from '../../accounts/enums';
 
 @Injectable()
 export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
@@ -36,6 +36,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       roomId?: string;
       shiftId?: string;
       role?: string;
+      status?: AccountStatus | AccountStatus[];
     },
   ): Promise<EmployeeSchedule[]> {
     const queryBuilder = this.createQueryBuilder('schedule')
@@ -63,6 +64,13 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
     if (options.role) {
       queryBuilder.andWhere('employee.role = :role', { role: options.role });
+    }
+
+    if (options.status) {
+      const statuses = Array.isArray(options.status)
+        ? options.status
+        : [options.status];
+      queryBuilder.andWhere('employee.status IN (:...statuses)', { statuses });
     }
 
     if (options.date) {
@@ -132,6 +140,7 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
       roomId?: string;
       shiftId?: string;
       role?: string;
+      status?: AccountStatus | AccountStatus[];
     },
   ): Promise<any[]> {
     const queryBuilder = this.createQueryBuilder('schedule')
@@ -174,6 +183,13 @@ export class EmployeeScheduleRepository extends Repository<EmployeeSchedule> {
 
     if (options.role) {
       queryBuilder.andWhere('employee.role = :role', { role: options.role });
+    }
+
+    if (options.status) {
+      const statuses = Array.isArray(options.status)
+        ? options.status
+        : [options.status];
+      queryBuilder.andWhere('employee.status IN (:...statuses)', { statuses });
     }
 
     if (options.date) {

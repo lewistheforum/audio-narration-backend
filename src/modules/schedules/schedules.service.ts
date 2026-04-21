@@ -29,7 +29,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 import { DoctorInformation } from '../accounts/entities/doctor_information.entity';
 import { GeneralAccount } from '../accounts/entities/general_accounts.entity';
 import { ClinicStaffInformation } from '../accounts/entities/clinic_staff_information.entity';
-import { AccountRole } from '../accounts/enums/account-role.enum';
+import { AccountRole, AccountStatus } from '../accounts/enums';
 import { EmployeeScheduleRepository } from './repositories/employee-schedule.repository';
 import { AppointmentStatus } from '../appointments/enums';
 
@@ -50,7 +50,7 @@ export class SchedulesService {
     @InjectRepository(ClinicStaffInformation)
     private readonly clinicStaffRepository: Repository<ClinicStaffInformation>,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   /**
    * Get Clinic Employees (Doctors & Staff)
@@ -159,8 +159,8 @@ export class SchedulesService {
           emp.role === AccountRole.DOCTOR
             ? doctorInfo?.profilePicture
             : staffInfo?.profilePicture ||
-            generalAccount?.profilePicture ||
-            null,
+              generalAccount?.profilePicture ||
+              null,
       };
     });
 
@@ -184,8 +184,7 @@ export class SchedulesService {
    */
   async getEmployeesLegal(user: any, search?: string) {
     const clinicId = await this.resolveClinicId(user);
-    if (!clinicId)
-      return [];
+    if (!clinicId) return [];
 
     let targetManagerId: string;
 
@@ -218,8 +217,7 @@ export class SchedulesService {
       })
       .getMany();
 
-    if (!employees.length)
-      return [];
+    if (!employees.length) return [];
 
     const employeeIds = employees.map((e) => e._id);
     const [doctorInfos, generalAccounts, staffInfos] = await Promise.all([
@@ -252,45 +250,50 @@ export class SchedulesService {
       staffInfoMap.set(info.accountId, info);
     });
 
-    let results = employees.map((emp) => {
-      const doctorInfo = doctorInfoMap.get(emp._id);
-      const generalAccount = generalAccountMap.get(emp._id);
-      const staffInfo = staffInfoMap.get(emp._id);
+    let results = employees
+      .map((emp) => {
+        const doctorInfo = doctorInfoMap.get(emp._id);
+        const generalAccount = generalAccountMap.get(emp._id);
+        const staffInfo = staffInfoMap.get(emp._id);
 
-      // Special Filtering Rule for DOCTOR: Must have all 3 legal docs
-      if (emp.role === AccountRole.DOCTOR) {
-        if (
-          !doctorInfo ||
-          !doctorInfo.medicalLicense ||
-          !doctorInfo.professionalLicense ||
-          !doctorInfo.certificatePracticalTraining
-        ) {
-          return null; // Filter out doctors with incomplete docs
+        // Special Filtering Rule for DOCTOR: Must have all 3 legal docs
+        if (emp.role === AccountRole.DOCTOR) {
+          if (
+            !doctorInfo ||
+            !doctorInfo.medicalLicense ||
+            !doctorInfo.professionalLicense ||
+            !doctorInfo.certificatePracticalTraining
+          ) {
+            return null; // Filter out doctors with incomplete docs
+          }
         }
-      }
 
-      let fullName = emp.username || 'Unknown';
-      if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
-        fullName = doctorInfo.fullName;
-      } else if (emp.role === AccountRole.CLINIC_STAFF && staffInfo?.fullName) {
-        fullName = staffInfo.fullName;
-      } else if (generalAccount?.fullName) {
-        fullName = generalAccount.fullName;
-      }
+        let fullName = emp.username || 'Unknown';
+        if (emp.role === AccountRole.DOCTOR && doctorInfo?.fullName) {
+          fullName = doctorInfo.fullName;
+        } else if (
+          emp.role === AccountRole.CLINIC_STAFF &&
+          staffInfo?.fullName
+        ) {
+          fullName = staffInfo.fullName;
+        } else if (generalAccount?.fullName) {
+          fullName = generalAccount.fullName;
+        }
 
-      return {
-        id: emp._id,
-        name: fullName,
-        role: emp.role,
-        username: emp.username,
-        profilePicture:
-          emp.role === AccountRole.DOCTOR
-            ? doctorInfo?.profilePicture
-            : staffInfo?.profilePicture ||
-            generalAccount?.profilePicture ||
-            null,
-      };
-    }).filter(e => e !== null);
+        return {
+          id: emp._id,
+          name: fullName,
+          role: emp.role,
+          username: emp.username,
+          profilePicture:
+            emp.role === AccountRole.DOCTOR
+              ? doctorInfo?.profilePicture
+              : staffInfo?.profilePicture ||
+                generalAccount?.profilePicture ||
+                null,
+        };
+      })
+      .filter((e) => e !== null);
 
     if (search) {
       const searchLower = search.toLowerCase();
@@ -376,7 +379,7 @@ export class SchedulesService {
             continue;
           }
 
-                    // Check room conflict in target
+          // Check room conflict in target
           if (schedule.rooms && schedule.rooms.length > 0) {
             const roomConflict = await this.scheduleRepository.findRoomConflict(
               schedule.rooms[0]._id,
@@ -501,7 +504,7 @@ export class SchedulesService {
           );
         }
 
-                // Room Occupancy Check
+        // Room Occupancy Check
         if (roomId) {
           const roomConflict = await this.scheduleRepository.findRoomConflict(
             roomId,
@@ -641,6 +644,7 @@ export class SchedulesService {
         roomId: query.roomId,
         shiftId: query.shiftId,
         role: AccountRole.DOCTOR,
+        status: [AccountStatus.ACTIVE, AccountStatus.BAN],
       }),
     );
   }
@@ -687,6 +691,7 @@ export class SchedulesService {
         roomId: query.roomId,
         shiftId: query.shiftId,
         role: AccountRole.DOCTOR,
+        status: [AccountStatus.ACTIVE, AccountStatus.BAN],
       }),
     );
   }
@@ -729,6 +734,7 @@ export class SchedulesService {
         roomId: query.roomId,
         shiftId: query.shiftId,
         role: AccountRole.DOCTOR,
+        status: [AccountStatus.ACTIVE, AccountStatus.BAN],
       }),
     );
   }
@@ -744,7 +750,6 @@ export class SchedulesService {
     const nowTimeStr = formatToTimeOnly();
 
     return schedules.map((schedule) => {
-
       const scheduleDateStr = formatToDateOnly(schedule.workDate);
       const isPastDate = scheduleDateStr < nowDateStr;
       const isToday = scheduleDateStr === nowDateStr;
@@ -769,8 +774,8 @@ export class SchedulesService {
         fullName = generalAccount.fullName;
       }
 
-      const sortedHours = (schedule.clinicShift?.hours || []).sort((a: any, b: any) =>
-        a.startHour.localeCompare(b.startHour),
+      const sortedHours = (schedule.clinicShift?.hours || []).sort(
+        (a: any, b: any) => a.startHour.localeCompare(b.startHour),
       );
 
       return {
@@ -784,8 +789,9 @@ export class SchedulesService {
             emp?.role === AccountRole.DOCTOR
               ? doctorInfo?.profilePicture
               : staffInfo?.profilePicture ||
-              generalAccount?.profilePicture ||
-              null,
+                generalAccount?.profilePicture ||
+                null,
+          status: emp?.status,
         },
         shift: {
           id: schedule.clinicShift?._id,
@@ -801,9 +807,9 @@ export class SchedulesService {
         room:
           schedule.rooms && schedule.rooms.length > 0
             ? {
-              id: schedule.rooms[0]._id,
-              name: schedule.rooms[0].roomName,
-            }
+                id: schedule.rooms[0]._id,
+                name: schedule.rooms[0].roomName,
+              }
             : null,
       };
     });
@@ -904,7 +910,7 @@ export class SchedulesService {
       }
     }
 
-        // Room Occupancy Check on Update
+    // Room Occupancy Check on Update
     if (roomId || clinicShiftId || workDate) {
       const roomToCheck =
         roomId ||
@@ -1362,6 +1368,7 @@ export class SchedulesService {
         'di.profile_picture AS doctor_avatar',
         'di.position AS specialization',
         'di.experience AS years_of_experience',
+        'a.status AS account_status',
       ])
       .from('employee_schedule', 'es')
       .innerJoin('clinic_shift', 'cs', 'cs._id = es.clinic_shift_id')
@@ -1392,7 +1399,7 @@ export class SchedulesService {
       .andWhere('a.role = :role', { role: AccountRole.DOCTOR })
       .andWhere('a.deleted_at IS NULL')
       .groupBy(
-        'es._id, es.employee_id, es.work_date, es.week_day, cs._id, cs.shift, csh._id, csh.start_hour, csh.end_hour, csh.limit, a._id, a.email, a.phone, ga.full_name, di.full_name, di.profile_picture, di.position, di.experience',
+        'es._id, es.employee_id, es.work_date, es.week_day, cs._id, cs.shift, csh._id, csh.start_hour, csh.end_hour, csh.limit, a._id, a.email, a.phone, a.status, ga.full_name, di.full_name, di.profile_picture, di.position, di.experience',
       );
     // Filter by shift type if provided
     if (shiftType) {
@@ -1466,6 +1473,7 @@ export class SchedulesService {
             avatar: schedule.doctor_avatar,
             specialization: schedule.specialization,
             yearsOfExperience: schedule.years_of_experience,
+            account_status: schedule.account_status,
           },
           schedules: [],
           totalSchedules: 0,
@@ -1581,6 +1589,7 @@ export class SchedulesService {
         'di.profile_picture AS doctor_avatar',
         'di.position AS doctor_specialty',
         'di.experience AS doctor_experience',
+        'a.status AS account_status',
         'cs._id AS shift_id',
         'cs.shift AS shift_type',
         'csh._id AS shift_hour_id',
@@ -1621,6 +1630,7 @@ export class SchedulesService {
           'es._id',
           'es.employee_id',
           'es.work_date',
+          'a.status',
           'ga.full_name',
           'di.full_name',
           'a.email',
@@ -1759,9 +1769,9 @@ export class SchedulesService {
           shiftEndTime: '00:00:00', // Will be calculated from slots
           room: scheduleRoom
             ? {
-              roomId: scheduleRoom.room_id,
-              roomName: scheduleRoom.room_name,
-            }
+                roomId: scheduleRoom.room_id,
+                roomName: scheduleRoom.room_name,
+              }
             : null,
           availableSlots: [],
           bookedSlots: [],
