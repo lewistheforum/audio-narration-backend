@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { Feedback } from './entities/feedback.entity';
 import { AppointmentStatus } from '../appointments/enums';
+import { AppointmentPackageStatus } from '../appointments/enums';
 import { BranchReportQueryDto, ReportPeriod } from './dto/branch-report-query.dto';
 import { Account } from '../accounts/entities/accounts.entity';
 
@@ -130,19 +131,20 @@ export class BranchReportService {
    */
   async getServiceStats(managerId: string, query: BranchReportQueryDto) {
     const { startDate, endDate } = query;
+    const paidStatusParamIndex = startDate && endDate ? 4 : startDate || endDate ? 3 : 2;
 
     const sql = `
       SELECT 
         cs.service_name as "serviceName",
         COUNT(sa._id) as "registrationCount",
-        SUM(sa.price * (1 - sa.discount / 100)) as "totalRevenue"
+        COALESCE(SUM(ap.amount), 0) as "totalRevenue"
       FROM service_appointments sa
       JOIN appointment_package ap ON ap._id = sa.appointment_package_id
       JOIN appointments apt ON apt._id = ap.appointment_id
       JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
       JOIN clinic_services cs ON cs._id = csc.service_id
       WHERE apt.clinic_id = $1
-        AND apt.status NOT IN ('CANCELLED', 'ABSENT')
+        AND ap.status = $${paidStatusParamIndex}
         AND apt.deleted_at IS NULL
         AND ap.deleted_at IS NULL
         AND csc.is_active = TRUE
@@ -156,6 +158,7 @@ export class BranchReportService {
     const params: any[] = [managerId];
     if (startDate) params.push(startDate);
     if (endDate) params.push(endDate);
+    params.push(AppointmentPackageStatus.PAID);
 
     const data = await this.dataSource.query(sql, params);
     
