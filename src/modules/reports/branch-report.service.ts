@@ -143,6 +143,10 @@ export class BranchReportService {
       JOIN clinic_services cs ON cs._id = csc.service_id
       WHERE apt.clinic_id = $1
         AND apt.status NOT IN ('CANCELLED', 'ABSENT')
+        AND apt.deleted_at IS NULL
+        AND ap.deleted_at IS NULL
+        AND csc.is_active = TRUE
+        AND csc.deleted_at IS NULL
         ${startDate ? 'AND apt.appointment_date >= $2' : ''}
         ${endDate ? 'AND apt.appointment_date <= ' + (startDate ? '$3' : '$2') : ''}
       GROUP BY cs.service_name

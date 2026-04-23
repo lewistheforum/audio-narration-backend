@@ -1,4 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  RevenueSummaryDto,
+  PaymentMethodBreakdownDto,
+  RevenueTrendDataPointDto,
+  TransactionStatusBreakdownDto,
+} from './overall-revenue-report-response.dto';
 
 export class BranchOperationalOverviewDto {
   @ApiProperty({ description: 'Unique customers in period', example: 320 })
@@ -116,4 +122,16 @@ export class BranchRevenueReportResponseDto {
     ],
   })
   topServices: BranchServiceStatsDto[];
+
+  @ApiProperty({ description: 'Revenue summary for branch', type: RevenueSummaryDto })
+  summary: RevenueSummaryDto;
+
+  @ApiProperty({ description: 'Revenue breakdown by payment method', type: PaymentMethodBreakdownDto })
+  paymentMethodBreakdown: PaymentMethodBreakdownDto;
+
+  @ApiProperty({ description: 'Revenue trend over time', type: [RevenueTrendDataPointDto], isArray: true })
+  revenueTrend: RevenueTrendDataPointDto[];
+
+  @ApiProperty({ description: 'Transaction status distribution', type: TransactionStatusBreakdownDto })
+  statusBreakdown: TransactionStatusBreakdownDto;
 }

@@ -152,18 +152,31 @@ export class TransactionRepository extends Repository<Transaction> {
     period: string,
   ): Promise<any[]> {
     return this.query(
-      `SELECT
-          DATE_TRUNC($1, a.appointment_date) as label,
-          ap.payment_type as payment_type,
-          SUM(ap.amount)::bigint as total_revenue,
-          COUNT(*)::int as transaction_count
-       FROM appointment_package ap
-       INNER JOIN appointments a ON a._id = ap.appointment_id
-       WHERE a.clinic_id = $2
-         AND a.status = 'COMPLETED'
-         AND ap.status = 'paid'
-         AND a.appointment_date >= $3
-         AND a.appointment_date <= $4
+      `WITH mapped_transactions AS (
+          SELECT
+            t._id AS transaction_id,
+            MIN(t.transaction_date) AS transaction_date,
+            MAX(ap.payment_type) AS payment_type,
+            MAX(t.amount) AS amount
+          FROM transactions t
+          INNER JOIN appointment_package ap ON ap.transaction_id = t._id
+          INNER JOIN appointments a ON a._id = ap.appointment_id
+          WHERE a.clinic_id = $2
+            AND t.status = 'SUCCESS'
+            AND t.deleted_at IS NULL
+            AND ap.deleted_at IS NULL
+            AND a.deleted_at IS NULL
+            AND a.status NOT IN ('CANCELLED', 'ABSENT')
+            AND t.transaction_date >= $3
+            AND t.transaction_date <= $4
+          GROUP BY t._id
+       )
+       SELECT
+          DATE_TRUNC($1, mt.transaction_date) as label,
+          mt.payment_type as payment_type,
+          SUM(mt.amount)::bigint as total_revenue,
+          COUNT(mt.transaction_id)::int as transaction_count
+       FROM mapped_transactions mt
        GROUP BY label, payment_type
        ORDER BY label ASC`,
       [period, clinicId, startDate, endDate],
@@ -184,22 +197,27 @@ export class TransactionRepository extends Repository<Transaction> {
   ): Promise<any[]> {
     return this.query(
       `SELECT
-          a.appointment_date as date,
-          ap._id as package_id,
-          ap.amount as amount,
-          ap.status as status,
-          ap.payment_type as payment_type,
-          a.patient_note as description,
-          ga.full_name as patient_name
-       FROM appointment_package ap
+          MIN(a.appointment_date) as date,
+          MIN(ap._id) as package_id,
+          MAX(t.amount) as amount,
+          MAX(t.status) as status,
+          MAX(ap.payment_type) as payment_type,
+          MAX(a.patient_note) as description,
+          MAX(ga.full_name) as patient_name
+       FROM transactions t
+       INNER JOIN appointment_package ap ON ap.transaction_id = t._id
        INNER JOIN appointments a ON a._id = ap.appointment_id
        LEFT JOIN general_accounts ga ON ga.account_id = a.patient_id
        WHERE a.clinic_id = $1
-         AND a.status = 'COMPLETED'
-         AND ap.status = 'paid'
-         AND a.appointment_date >= $2
-         AND a.appointment_date <= $3
-       ORDER BY a.appointment_date DESC`,
+         AND t.status = 'SUCCESS'
+         AND t.deleted_at IS NULL
+         AND ap.deleted_at IS NULL
+         AND a.deleted_at IS NULL
+         AND a.status NOT IN ('CANCELLED', 'ABSENT')
+         AND t.transaction_date >= $2
+         AND t.transaction_date <= $3
+       GROUP BY t._id
+       ORDER BY MIN(a.appointment_date) DESC`,
       [clinicId, startDate, endDate],
     );
   }
