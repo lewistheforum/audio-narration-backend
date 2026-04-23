@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AiController } from './ai.controller';
+import { AiCronController } from './ai.cron.controller';
 import { AiService } from './ai.service';
 import { GeminiService } from './services/gemini.service';
 import { ChatGptService } from './services/chatgpt.service';
@@ -35,7 +36,7 @@ import { AccountsModule } from '../accounts/accounts.module';
     forwardRef(() => AccountsModule),
   ],
   controllers: [AiController],
-  providers: [AiService, GeminiService, ChatGptService],
+  providers: [AiService, GeminiService, ChatGptService, AiCronController],
   exports: [AiService],
 })
 export class AiModule {}

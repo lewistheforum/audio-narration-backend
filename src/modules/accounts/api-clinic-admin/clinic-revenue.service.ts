@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Transaction, PaymentStatus } from '../../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  PaymentStatus,
+} from '../../transactions/entities/transaction.entity';
 import { Account } from '../entities/accounts.entity';
 import { AccountRole } from '../enums/account-role.enum';
 import { AccountStatus } from '../enums/account-status.enum';
@@ -27,7 +30,11 @@ import {
   BranchServiceStatsDto,
 } from './dto';
 import { BranchOperationalSummaryDto } from './dto/overall-revenue-report-response.dto';
-import { formatToVietnamTime, parseVietnamTime } from 'src/common/utils/date.util';
+import {
+  formatToVietnamTime,
+  parseVietnamTime,
+} from 'src/common/utils/date.util';
+import { AccountStatus } from '../enums';
 
 interface TopServiceItem {
   serviceName: string;
@@ -173,14 +180,18 @@ export class ClinicRevenueService {
   }
 
   private async validateClinicAdmin(adminId: string): Promise<void> {
-    const admin = await this.accountRepository.findOne({ where: { _id: adminId } });
+    const admin = await this.accountRepository.findOne({
+      where: { _id: adminId },
+    });
 
     if (!admin) {
       throw new NotFoundException('Admin account not found');
     }
 
     if (admin.role !== AccountRole.CLINIC_ADMIN) {
-      throw new ForbiddenException('Only CLINIC_ADMIN can access revenue reports');
+      throw new ForbiddenException(
+        'Only CLINIC_ADMIN can access revenue reports',
+      );
     }
   }
 
@@ -210,7 +221,10 @@ export class ClinicRevenueService {
     return branches.map((branch) => branch._id);
   }
 
-  private async validateManagerOwnership(adminId: string, managerId: string): Promise<Account> {
+  private async validateManagerOwnership(
+    adminId: string,
+    managerId: string,
+  ): Promise<Account> {
     const manager = await this.accountRepository.findOne({
       where: { _id: managerId },
       relations: ['clinicManagerInformation'],
@@ -221,7 +235,9 @@ export class ClinicRevenueService {
     }
 
     if (manager.role !== AccountRole.CLINIC_MANAGER) {
-      throw new BadRequestException('Specified account is not a CLINIC_MANAGER');
+      throw new BadRequestException(
+        'Specified account is not a CLINIC_MANAGER',
+      );
     }
 
     if (manager.parentId !== adminId) {
@@ -239,8 +255,10 @@ export class ClinicRevenueService {
   }> {
     return {
       managerId: manager._id,
-      branchName: manager.clinicManagerInformation?.clinicBranchName || 'Unknown Branch',
-      managerName: manager.clinicManagerInformation?.fullName || 'Unknown Manager',
+      branchName:
+        manager.clinicManagerInformation?.clinicBranchName || 'Unknown Branch',
+      managerName:
+        manager.clinicManagerInformation?.fullName || 'Unknown Manager',
       branchStatus: manager.status,
     };
   }
@@ -288,9 +306,7 @@ export class ClinicRevenueService {
       totalRevenue,
       transactionCount,
       averageTransactionValue:
-        transactionCount > 0
-          ? Math.round(totalRevenue / transactionCount)
-          : 0,
+        transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
     };
   }
 
@@ -319,7 +335,15 @@ export class ClinicRevenueService {
     branchIds: string[],
     startDate: string,
     endDate: string,
-  ): Promise<{ items: { typeName: string; count: number; amount: number; percentage: number }[]; totalCount: number }> {
+  ): Promise<{
+    items: {
+      typeName: string;
+      count: number;
+      amount: number;
+      percentage: number;
+    }[];
+    totalCount: number;
+  }> {
     const results = await this.transactionRepository
       .createQueryBuilder('t')
       .select('tt.name', 'typeName')
@@ -340,7 +364,10 @@ export class ClinicRevenueService {
       .orderBy('count', 'DESC')
       .getRawMany();
 
-    const totalCount = results.reduce((sum, item) => sum + parseInt(item.count || '0', 10), 0);
+    const totalCount = results.reduce(
+      (sum, item) => sum + parseInt(item.count || '0', 10),
+      0,
+    );
 
     const items = results.map((item) => {
       const count = parseInt(item.count || '0', 10);
@@ -349,7 +376,10 @@ export class ClinicRevenueService {
         typeName: item.typeName || 'Unknown',
         count,
         amount,
-        percentage: totalCount > 0 ? parseFloat(((count / totalCount) * 100).toFixed(2)) : 0,
+        percentage:
+          totalCount > 0
+            ? parseFloat(((count / totalCount) * 100).toFixed(2))
+            : 0,
       };
     });
 
@@ -397,9 +427,18 @@ export class ClinicRevenueService {
       ],
     );
 
-    const onlineRevenue = parseInt(result.onlinerevenue || result.onlineRevenue || '0', 10);
-    const onlineCount = parseInt(result.onlinecount || result.onlineCount || '0', 10);
-    const cashRevenue = parseInt(result.cashrevenue || result.cashRevenue || '0', 10);
+    const onlineRevenue = parseInt(
+      result.onlinerevenue || result.onlineRevenue || '0',
+      10,
+    );
+    const onlineCount = parseInt(
+      result.onlinecount || result.onlineCount || '0',
+      10,
+    );
+    const cashRevenue = parseInt(
+      result.cashrevenue || result.cashRevenue || '0',
+      10,
+    );
     const cashCount = parseInt(result.cashcount || result.cashCount || '0', 10);
     const totalRevenue = onlineRevenue + cashRevenue;
 
@@ -408,13 +447,19 @@ export class ClinicRevenueService {
         paymentMethod: 'Online Payment',
         revenue: onlineRevenue,
         transactionCount: onlineCount,
-        percentage: totalRevenue > 0 ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2)) : 0,
+        percentage:
+          totalRevenue > 0
+            ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2))
+            : 0,
       },
       cash: {
         paymentMethod: 'Cash on Delivery',
         revenue: cashRevenue,
         transactionCount: cashCount,
-        percentage: totalRevenue > 0 ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2)) : 0,
+        percentage:
+          totalRevenue > 0
+            ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2))
+            : 0,
       },
     };
   }
@@ -511,11 +556,17 @@ export class ClinicRevenueService {
     return {
       success: {
         count: parseInt(result.successcount || result.successCount || '0', 10),
-        amount: parseInt(result.successamount || result.successAmount || '0', 10),
+        amount: parseInt(
+          result.successamount || result.successAmount || '0',
+          10,
+        ),
       },
       pending: {
         count: parseInt(result.pendingcount || result.pendingCount || '0', 10),
-        amount: parseInt(result.pendingamount || result.pendingAmount || '0', 10),
+        amount: parseInt(
+          result.pendingamount || result.pendingAmount || '0',
+          10,
+        ),
       },
       failed: {
         count: parseInt(result.failedcount || result.failedCount || '0', 10),
@@ -536,7 +587,11 @@ export class ClinicRevenueService {
         .select('acc._id', 'managerId')
         .addSelect('cmi.clinic_branch_name', 'branchName')
         .addSelect('cmi.full_name', 'managerName')
-        .leftJoin('clinic_manager_information', 'cmi', 'cmi.account_id = acc._id')
+        .leftJoin(
+          'clinic_manager_information',
+          'cmi',
+          'cmi.account_id = acc._id',
+        )
         .where('acc.parent_id = :adminId', { adminId })
         .andWhere('acc.role::text = :role', { role: AccountRole.CLINIC_MANAGER })
         .andWhere('acc.deleted_at IS NULL')
@@ -585,9 +640,24 @@ export class ClinicRevenueService {
         .getRawMany(),
     ]);
 
-    const customerMap = new Map(customers.map((item) => [item.managerId, parseInt(item.totalCustomers || '0', 10)]));
-    const doctorMap = new Map(doctors.map((item) => [item.managerId, parseInt(item.totalDoctors || '0', 10)]));
-    const serviceMap = new Map(services.map((item) => [item.managerId, parseInt(item.totalServices || '0', 10)]));
+    const customerMap = new Map(
+      customers.map((item) => [
+        item.managerId,
+        parseInt(item.totalCustomers || '0', 10),
+      ]),
+    );
+    const doctorMap = new Map(
+      doctors.map((item) => [
+        item.managerId,
+        parseInt(item.totalDoctors || '0', 10),
+      ]),
+    );
+    const serviceMap = new Map(
+      services.map((item) => [
+        item.managerId,
+        parseInt(item.totalServices || '0', 10),
+      ]),
+    );
 
     return branches.map((branch) => ({
       managerId: branch.managerId,
@@ -644,7 +714,8 @@ export class ClinicRevenueService {
       totalRevenue,
       transactionCount,
       uniquePatients: parseInt(result.uniquePatients || '0', 10),
-      averageTransactionValue: transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
+      averageTransactionValue:
+        transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
     };
   }
 
@@ -689,9 +760,18 @@ export class ClinicRevenueService {
       ],
     );
 
-    const onlineRevenue = parseInt(result.onlinerevenue || result.onlineRevenue || '0', 10);
-    const onlineCount = parseInt(result.onlinecount || result.onlineCount || '0', 10);
-    const cashRevenue = parseInt(result.cashrevenue || result.cashRevenue || '0', 10);
+    const onlineRevenue = parseInt(
+      result.onlinerevenue || result.onlineRevenue || '0',
+      10,
+    );
+    const onlineCount = parseInt(
+      result.onlinecount || result.onlineCount || '0',
+      10,
+    );
+    const cashRevenue = parseInt(
+      result.cashrevenue || result.cashRevenue || '0',
+      10,
+    );
     const cashCount = parseInt(result.cashcount || result.cashCount || '0', 10);
     const totalRevenue = onlineRevenue + cashRevenue;
 
@@ -700,13 +780,19 @@ export class ClinicRevenueService {
         paymentMethod: 'Online Payment',
         revenue: onlineRevenue,
         transactionCount: onlineCount,
-        percentage: totalRevenue > 0 ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2)) : 0,
+        percentage:
+          totalRevenue > 0
+            ? parseFloat(((onlineRevenue / totalRevenue) * 100).toFixed(2))
+            : 0,
       },
       cash: {
         paymentMethod: 'Cash on Delivery',
         revenue: cashRevenue,
         transactionCount: cashCount,
-        percentage: totalRevenue > 0 ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2)) : 0,
+        percentage:
+          totalRevenue > 0
+            ? parseFloat(((cashRevenue / totalRevenue) * 100).toFixed(2))
+            : 0,
       },
     };
   }
@@ -803,11 +889,17 @@ export class ClinicRevenueService {
     return {
       success: {
         count: parseInt(result.successcount || result.successCount || '0', 10),
-        amount: parseInt(result.successamount || result.successAmount || '0', 10),
+        amount: parseInt(
+          result.successamount || result.successAmount || '0',
+          10,
+        ),
       },
       pending: {
         count: parseInt(result.pendingcount || result.pendingCount || '0', 10),
-        amount: parseInt(result.pendingamount || result.pendingAmount || '0', 10),
+        amount: parseInt(
+          result.pendingamount || result.pendingAmount || '0',
+          10,
+        ),
       },
       failed: {
         count: parseInt(result.failedcount || result.failedCount || '0', 10),
@@ -870,7 +962,9 @@ export class ClinicRevenueService {
     managerId: string,
     filterDto: ClinicRevenueFilterDto,
   ): Promise<BranchCustomerStatsItemDto[]> {
-    const dateGroupBy = this.getCustomerDateFormat(filterDto.groupBy || RevenueGroupBy.DAY);
+    const dateGroupBy = this.getCustomerDateFormat(
+      filterDto.groupBy || RevenueGroupBy.DAY,
+    );
 
     const rows = await this.accountRepository.manager
       .createQueryBuilder()
@@ -927,7 +1021,9 @@ export class ClinicRevenueService {
       return [];
     }
 
-    const doctorIds = doctorsWithStats.map((item: { doctorId: string }) => item.doctorId);
+    const doctorIds = doctorsWithStats.map(
+      (item: { doctorId: string }) => item.doctorId,
+    );
     const recentFeedbacksRaw = await this.accountRepository.manager.query(
       `
         SELECT 
@@ -945,7 +1041,14 @@ export class ClinicRevenueService {
       [doctorIds],
     );
 
-    const feedbacksByDoctor = new Map<string, Array<{ rating: number; description: string | null; patientName: string | null }>>();
+    const feedbacksByDoctor = new Map<
+      string,
+      Array<{
+        rating: number;
+        description: string | null;
+        patientName: string | null;
+      }>
+    >();
     for (const fb of recentFeedbacksRaw) {
       if (!feedbacksByDoctor.has(fb.doctorId)) {
         feedbacksByDoctor.set(fb.doctorId, []);
@@ -1018,8 +1121,16 @@ export class ClinicRevenueService {
       .addSelect('COUNT(sa._id)', 'count')
       .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id AND ap.deleted_at IS NULL')
       .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
-      .innerJoin('service_appointments', 'sa', 'sa.appointment_package_id = ap._id')
-      .leftJoin('clinic_service_config', 'csc_config', 'csc_config._id = sa.clinic_service_id')
+      .innerJoin(
+        'service_appointments',
+        'sa',
+        'sa.appointment_package_id = ap._id',
+      )
+      .leftJoin(
+        'clinic_service_config',
+        'csc_config',
+        'csc_config._id = sa.clinic_service_id',
+      )
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
       .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('t.status::text = :status', { status: PaymentStatus.SUCCESS })

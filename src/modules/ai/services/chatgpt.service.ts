@@ -134,10 +134,11 @@ export class ChatGptService {
             clinicId,
             parseVietnamTime(startDate),
             parseVietnamTime(endDate),
+            20,
           );
       } else {
         clinicFeedbacks =
-          await this.feedbackRepository.findFeedbacksByClinicId(clinicId);
+          await this.feedbackRepository.findFeedbacksByClinicId(clinicId, 20);
       }
 
       if (!clinicFeedbacks || clinicFeedbacks.length === 0) {

@@ -2629,12 +2629,17 @@ export class AccountsService {
       onboardingStatus === RegistrationStatus.ACTIVE ||
       onboardingStatus === RegistrationStatus.NON_RENEWING;
 
-    // Get newest contract status for the employee
-    const newestContract =
-      await this.contractPackageRepository.findNewestByEmployeeId(account._id);
-    const newestContractStatus =
-      newestContract?.clinicContractInformation?.contractStatus ||
-      'NO_CONTRACT_YET';
+    // Get contract status for the employee
+    const allContracts =
+      await this.contractPackageRepository.findByEmployeeId(account._id);
+    
+    let newestContractStatus = 'NO_CONTRACT_YET';
+    if (allContracts && allContracts.length > 0) {
+      const hasCurrent = allContracts.some(
+        (pkg) => pkg.clinicContractInformation?.contractStatus === ContractStatus.CURRENT
+      );
+      newestContractStatus = hasCurrent ? ContractStatus.CURRENT : ContractStatus.DRAFT;
+    }
 
     return {
       onboardingStatus,
@@ -3953,7 +3958,7 @@ export class AccountsService {
         JOIN addresses addr ON addr.account_id = a._id
         WHERE a.parent_id = ANY($1) 
           AND a.role = 'CLINIC_MANAGER' 
-          AND a.status = 'ACTIVE'
+          AND a.status = '${AccountStatus.ACTIVE}'
           AND a.deleted_at IS NULL
         `,
         [adminIds],
@@ -6149,7 +6154,7 @@ export class AccountsService {
     const [accounts, total] =
       await this.accountRepository.findDoctorsWithFilters(
         AccountRole.DOCTOR,
-        undefined,
+        AccountStatus.ACTIVE,
         (page - 1) * limit,
         limit,
         validParentIds,

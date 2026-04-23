@@ -184,7 +184,7 @@ export class StaffPatientsService {
         temporaryPassword, // Return password in response so staff can see it
         emailSent,
         emailSentAt,
-        activationStatus: 'ACTIVE',
+        activationStatus: AccountStatus.ACTIVE,
         message: emailSent
           ? `Account created successfully. Email with password has been sent to ${dto.email}`
           : `Account created successfully but failed to send email. Please provide password to customer directly.`,
@@ -537,7 +537,7 @@ export class StaffPatientsService {
         temporaryPassword, // Return password for staff to provide manually
         emailSent,
         emailSentAt,
-        activationStatus: 'ACTIVE',
+        activationStatus: AccountStatus.ACTIVE,
         message: emailSent
           ? 'Account created successfully. A notification has been sent to the generated email address.'
           : 'Account created successfully with temporary email. Customer can update real email later.',
