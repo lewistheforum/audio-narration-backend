@@ -50,7 +50,9 @@ export class ClinicContractInformationSeederService {
   private readonly DOCTOR_SPECIALTIES = DOCTOR_SPECIALTIES;
   private readonly NATIONALITIES = NATIONALITIES;
   // Extract province names from CLINIC_LOCATIONS for contract seeding
-  private readonly CURRENT_LIVING = [...new Set(CLINIC_LOCATIONS.map(loc => loc.province))];
+  private readonly CURRENT_LIVING = [
+    ...new Set(CLINIC_LOCATIONS.map((loc) => loc.province)),
+  ];
   private readonly WORK_SPECIALTY_AT_CLINIC = WORK_SPECIALTIES;
   private readonly JOB_DESCRIPTIONS = JOB_DESCRIPTIONS;
   private readonly REST_POLICIES = REST_POLICIES;
@@ -386,7 +388,8 @@ export class ClinicContractInformationSeederService {
   }
 
   // Valid dummy PDF for testing
-  private readonly VALID_CONTRACT_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+  private readonly VALID_CONTRACT_PDF =
+    'https://res.cloudinary.com/dfdzphroa/image/upload/v1776763354/medicare-file-pdf/vxgwx9fecqoei8tnnyvs.pdf';
 
   /**
    * Get random contract status
