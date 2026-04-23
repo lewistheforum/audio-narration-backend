@@ -245,6 +245,25 @@ export class ContractsController {
   }
 
   /**
+   * Cancel Contract
+   *
+   * Cancels the contract with a reason.
+   */
+  @Post(':id/reject-cancel')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Cancel a contract with a reason' })
+  @ApiBody({ type: RejectContractDto })
+  @ApiResponse({ status: 200, description: 'Contract cancelled successfully' })
+  async cancelContract(
+    @Param('id') id: string,
+    @Body() dto: RejectContractDto,
+    @Req() req,
+  ) {
+    return this.contractsService.cancelContract(id, req.user._id, dto.reason);
+  }
+
+  /**
    * Verify Contract
    *
    * Verifies the digital signatures and integrity of the contract file.
