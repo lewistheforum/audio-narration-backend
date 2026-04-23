@@ -109,11 +109,12 @@ export class FeedbackRepository {
    * @param {string} clinicId - Clinic UUID
    * @returns {Promise<Feedback[]>} Array of feedback entities
    */
-  async findFeedbacksByClinicId(clinicId: string): Promise<Feedback[]> {
+  async findFeedbacksByClinicId(clinicId: string, limit?: number): Promise<Feedback[]> {
     return this.feedbackRepository.find({
       where: { clinicId },
       relations: ['doctor', 'doctor.doctorInformation'],
       order: { createdAt: 'DESC' },
+      ...(limit ? { take: limit } : {}),
     });
   }
 
@@ -131,6 +132,7 @@ export class FeedbackRepository {
     clinicId: string,
     startDate: Date,
     endDate: Date,
+    limit?: number,
   ): Promise<Feedback[]> {
     return this.feedbackRepository.find({
       where: {
@@ -139,6 +141,7 @@ export class FeedbackRepository {
       },
       relations: ['doctor', 'doctor.doctorInformation'],
       order: { createdAt: 'DESC' },
+      ...(limit ? { take: limit } : {}),
     });
   }
 
