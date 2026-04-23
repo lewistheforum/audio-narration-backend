@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository, DeepPartial, Brackets } from 'typeorm';
 import { ContractPackage } from '../entities/contract-package.entity';
 import { ContractStatus } from '../enums/contract-status.enum';
 
@@ -15,7 +15,7 @@ export class ContractPackageRepository {
   constructor(
     @InjectRepository(ContractPackage)
     private readonly repository: Repository<ContractPackage>,
-  ) { }
+  ) {}
 
   /**
    * Find all contract packages
@@ -33,7 +33,11 @@ export class ContractPackageRepository {
   async findById(id: string): Promise<ContractPackage | null> {
     return this.repository.findOne({
       where: { _id: id },
-      relations: ['clinicAccount', 'employeeAccount', 'clinicContractInformation'],
+      relations: [
+        'clinicAccount',
+        'employeeAccount',
+        'clinicContractInformation',
+      ],
     });
   }
 
@@ -168,11 +172,20 @@ export class ContractPackageRepository {
       .leftJoinAndSelect('employee.generalAccount', 'generalAccount'); // Assuming name is in generalAccount
 
     // Filter by Clinic Manager ID
-    queryBuilder.where('contractPackage.clinicManagerId = :clinicManagerId', { clinicManagerId });
+    queryBuilder.where('contractPackage.clinicManagerId = :clinicManagerId', {
+      clinicManagerId,
+    });
 
-    // Optional Filter: Employee Name search
+    // Optional Filter: Employee Name, Email or Username search
     if (employeeName) {
-      queryBuilder.andWhere('generalAccount.fullName ILIKE :name', { name: `%${employeeName}%` });
+      const name = `%${employeeName.trim().toLowerCase()}%`;
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          qb.where('LOWER(employee.email) LIKE :name', { name })
+            .orWhere('LOWER(employee.username) LIKE :name', { name })
+            .orWhere('LOWER(generalAccount.fullName) LIKE :name', { name });
+        }),
+      );
     }
 
     // Optional Filter: Contract Status
@@ -213,12 +226,19 @@ export class ContractPackageRepository {
       .leftJoinAndSelect('clinic.generalAccount', 'clinicGeneralAccount'); // Assuming name is in generalAccount
 
     // Filter by Employee ID and exclude DRAFT status
-    queryBuilder.where('contractPackage.employeeId = :employeeId', { employeeId })
-      .andWhere('info.contractStatus != :draftStatus', { draftStatus: ContractStatus.DRAFT });
+    queryBuilder
+      .where('contractPackage.employeeId = :employeeId', { employeeId })
+      .andWhere('info.contractStatus != :draftStatus', {
+        draftStatus: ContractStatus.DRAFT,
+      });
 
-    // Optional Filter: Clinic Name search
+    // Optional Filter: Clinic Name or Email search
     if (clinicName) {
-      queryBuilder.andWhere('clinicGeneralAccount.fullName ILIKE :name', { name: `%${clinicName}%` });
+      const name = `%${clinicName.trim()}%`;
+      queryBuilder.andWhere(
+        '(clinicGeneralAccount.fullName ILIKE :name OR clinic.email ILIKE :name)',
+        { name },
+      );
     }
 
     // Pagination
@@ -236,8 +256,11 @@ export class ContractPackageRepository {
    * @param employeeId - Filter by Employee ID
    * @returns The newest ContractPackage entity with clinicContractInformation or null
    */
-  async findNewestByEmployeeId(employeeId: string): Promise<ContractPackage | null> {
-    return this.repository.createQueryBuilder('contractPackage')
+  async findNewestByEmployeeId(
+    employeeId: string,
+  ): Promise<ContractPackage | null> {
+    return this.repository
+      .createQueryBuilder('contractPackage')
       .leftJoinAndSelect('contractPackage.clinicContractInformation', 'info')
       .where('contractPackage.employeeId = :employeeId', { employeeId })
       .orderBy('contractPackage.createdAt', 'DESC')
