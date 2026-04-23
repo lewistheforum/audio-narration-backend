@@ -10,6 +10,14 @@ export class RevenueSummaryDto {
   @ApiProperty({ description: 'Number of unique patients', example: 320 })
   uniquePatients: number;
 
+  @ApiProperty({
+    description:
+      'Total active service configurations across all included branches',
+    example: 78,
+    required: false,
+  })
+  totalServices?: number;
+
   @ApiProperty({ description: 'Average transaction value (in VND)', example: 277778 })
   averageTransactionValue: number;
 }

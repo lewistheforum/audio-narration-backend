@@ -69,21 +69,17 @@ export class ClinicRevenueService {
     }
 
     const [
-      branchSummaries,
+      overviewSummary,
       paymentMethodBreakdown,
       revenueTrend,
       statusBreakdown,
       transactionTypeBreakdown,
       branchBreakdown,
     ] = await Promise.all([
-      Promise.all(
-        branchIds.map((branchId) =>
-          this.calculateBranchRevenueSummary(
-            branchId,
-            filterDto.startDate,
-            filterDto.endDate,
-          ),
-        ),
+      this.calculateOverviewRevenueSummary(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
       ),
       this.calculateOverviewPaymentMethodBreakdown(
         branchIds,
@@ -114,16 +110,14 @@ export class ClinicRevenueService {
       ),
     ]);
 
-    const totalRevenue = branchSummaries.reduce(
-      (sum, item) => sum + item.totalRevenue,
-      0,
-    );
-    const transactionCount = branchSummaries.reduce(
-      (sum, item) => sum + item.transactionCount,
-      0,
-    );
+    const totalRevenue = overviewSummary.totalRevenue;
+    const transactionCount = overviewSummary.transactionCount;
     const uniquePatients = branchBreakdown.reduce(
       (sum, item) => sum + item.totalCustomers,
+      0,
+    );
+    const totalServices = branchBreakdown.reduce(
+      (sum, item) => sum + item.totalServices,
       0,
     );
 
@@ -131,6 +125,7 @@ export class ClinicRevenueService {
       totalRevenue,
       transactionCount,
       uniquePatients,
+      totalServices,
       averageTransactionValue:
         transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
     };
@@ -354,7 +349,7 @@ export class ClinicRevenueService {
       .createQueryBuilder()
       .select('COUNT(DISTINCT apt.patient_id)', 'uniquePatients')
       .from('appointments', 'apt')
-      .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
+      .where('apt.clinic_id IN (:...branchIds)', { branchIds })
       .andWhere('apt.appointment_date >= :startDate::date', { startDate })
       .andWhere('apt.appointment_date <= :endDate::date', { endDate })
       .andWhere('apt.status::text = :completedStatus', {
@@ -387,7 +382,7 @@ export class ClinicRevenueService {
       .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id AND ap.deleted_at IS NULL')
       .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
       .leftJoin('transactions_type', 'tt', 'tt._id = t.transaction_type_id')
-      .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
+      .where('apt.clinic_id IN (:...branchIds)', { branchIds })
       .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
       .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
       .andWhere('t.deleted_at IS NULL')
@@ -627,7 +622,7 @@ export class ClinicRevenueService {
         'cmi.account_id = acc._id',
       )
       .where('acc.parent_id = :adminId', { adminId })
-      .andWhere('acc._id = ANY(:branchIds)', { branchIds })
+      .andWhere('acc._id IN (:...branchIds)', { branchIds })
       .andWhere('acc.role::text = :role', { role: AccountRole.CLINIC_MANAGER })
       .andWhere('acc.deleted_at IS NULL')
       .orderBy('cmi.clinic_branch_name', 'ASC')
@@ -1129,7 +1124,7 @@ export class ClinicRevenueService {
         'csc_config._id = sa.clinic_service_id',
       )
       .leftJoin('clinic_services', 'cs', 'cs._id = csc_config.service_id')
-      .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
+      .where('apt.clinic_id IN (:...branchIds)', { branchIds })
       .andWhere('t.status::text = :status', { status: PaymentStatus.SUCCESS })
       .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
       .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
