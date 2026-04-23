@@ -33,7 +33,7 @@ import {
   AppointmentPackage,
   ServiceAppointment,
 } from '../appointments/entities';
-import { DataSource } from 'typeorm';
+import { DataSource, Not, In } from 'typeorm';
 import {
   getDateString,
   addToVietnamTime,
@@ -715,18 +715,22 @@ export class AiRagChatBotService {
         )
       : null;
 
-    // Check for time conflicts
+    // Check if user already has an active appointment on this date
     const existingAppointments = await this.appointmentRepository.find({
-      clinicId,
+      patientId: createDto.patientId,
       appointmentDate,
-      appointmentHour,
-      status: AppointmentStatus.PENDING,
+      status: Not(
+        In([
+          AppointmentStatus.COMPLETED,
+          AppointmentStatus.CANCELLED,
+          AppointmentStatus.ABSENT,
+        ]),
+      ),
     });
 
     if (existingAppointments.length > 0) {
       throw new ConflictException(
-        MESSAGES.failMessage.appointmentTimeConflict ||
-          'This appointment time is already booked. Please choose another time.',
+        'You already have an appointment need to process in this day. Please book appointment on another day.',
       );
     }
 
