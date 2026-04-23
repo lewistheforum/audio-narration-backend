@@ -57,7 +57,7 @@ export class ContractPackageRepository {
   async findByEmployeeId(employeeId: string): Promise<ContractPackage[]> {
     return this.repository.find({
       where: { employeeId },
-      relations: ['clinicAccount', 'employeeAccount'],
+      relations: ['clinicAccount', 'employeeAccount', 'clinicContractInformation'],
     });
   }
 

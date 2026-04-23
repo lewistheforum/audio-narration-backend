@@ -2629,12 +2629,17 @@ export class AccountsService {
       onboardingStatus === RegistrationStatus.ACTIVE ||
       onboardingStatus === RegistrationStatus.NON_RENEWING;
 
-    // Get newest contract status for the employee
-    const newestContract =
-      await this.contractPackageRepository.findNewestByEmployeeId(account._id);
-    const newestContractStatus =
-      newestContract?.clinicContractInformation?.contractStatus ||
-      'NO_CONTRACT_YET';
+    // Get contract status for the employee
+    const allContracts =
+      await this.contractPackageRepository.findByEmployeeId(account._id);
+    
+    let newestContractStatus = 'NO_CONTRACT_YET';
+    if (allContracts && allContracts.length > 0) {
+      const hasCurrent = allContracts.some(
+        (pkg) => pkg.clinicContractInformation?.contractStatus === ContractStatus.CURRENT
+      );
+      newestContractStatus = hasCurrent ? ContractStatus.CURRENT : ContractStatus.DRAFT;
+    }
 
     return {
       onboardingStatus,
