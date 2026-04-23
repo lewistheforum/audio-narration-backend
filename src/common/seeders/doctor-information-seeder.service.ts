@@ -59,6 +59,22 @@ export class DoctorInformationSeederService {
     'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
   ];
 
+  private readonly SCIENCE_DIRECT_PAPER_URLS = [
+    'https://www.sciencedirect.com/science/article/pii/S0957417424010339',
+    'https://www.sciencedirect.com/science/article/pii/S2949882123000403',
+    'https://www.sciencedirect.com/science/article/pii/S2949882124000318',
+    'https://www.sciencedirect.com/science/article/pii/S2949882123000397',
+    'https://www.sciencedirect.com/science/article/abs/pii/S0022347616300701',
+  ];
+
+  private readonly INTRODUCTION_IMAGE_URLS = [
+    'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
+  ];
+
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly doctorInfoRepository: DoctorInformationRepository,
@@ -292,7 +308,9 @@ export class DoctorInformationSeederService {
       list: [
         {
           title: `${title} (${year})`,
-          link: 'https://congress.orthopedic.vn/paper-' + index,
+          link: this.SCIENCE_DIRECT_PAPER_URLS[
+            index % this.SCIENCE_DIRECT_PAPER_URLS.length
+          ],
         },
       ],
     };
@@ -302,7 +320,9 @@ export class DoctorInformationSeederService {
    * Get random introduction image URL (deterministic based on index)
    */
   private getRandomIntroductionImage(index: number): string {
-    return `https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=800&h=400&fit=crop&sig=${index}`;
+    return this.INTRODUCTION_IMAGE_URLS[
+      index % this.INTRODUCTION_IMAGE_URLS.length
+    ];
   }
 
   /**
@@ -311,7 +331,7 @@ export class DoctorInformationSeederService {
   private generateProfessionalLicense(index: number): Record<string, any> {
     return {
       type: 'img',
-      url: 'https://images.unsplash.com/photo-1586772002160-b7ca5caed130?w=800&h=1100&fit=crop',
+      url: 'https://images.template.net/512709/Blank-Professional-License-Certificate-Template-edit-online.png',
     };
   }
 
@@ -323,7 +343,7 @@ export class DoctorInformationSeederService {
   ): Record<string, any> {
     return {
       type: 'img',
-      url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&h=1100&fit=crop',
+      url: 'https://marketplace.canva.com/EAGpZi6tXeM/1/0/1600w/canva-blue-and-white-geometric-professional-completion-certificate-Q79VnHduaEI.jpg',
     };
   }
 
@@ -333,7 +353,7 @@ export class DoctorInformationSeederService {
   private generateMedicalLicense(index: number): Record<string, any> {
     return {
       type: 'img',
-      url: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&h=1100&fit=crop',
+      url: 'https://imgv2-1-f.scribdassets.com/img/document/726825773/original/b764da97c8/1?v=1',
     };
   }
 
