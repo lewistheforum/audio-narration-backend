@@ -34,7 +34,6 @@ import {
   formatToVietnamTime,
   parseVietnamTime,
 } from 'src/common/utils/date.util';
-import { AccountStatus } from '../enums';
 
 interface TopServiceItem {
   serviceName: string;
@@ -70,25 +69,43 @@ export class ClinicRevenueService {
     }
 
     const [
-      summary,
-      uniquePatients,
+      branchSummaries,
       paymentMethodBreakdown,
       revenueTrend,
       statusBreakdown,
       transactionTypeBreakdown,
       branchBreakdown,
     ] = await Promise.all([
-      this.calculateOverviewRevenueSummary(branchIds, filterDto.startDate, filterDto.endDate),
-      this.calculateOverviewUniquePatients(branchIds, filterDto.startDate, filterDto.endDate),
-      this.calculateOverviewPaymentMethodBreakdown(branchIds, filterDto.startDate, filterDto.endDate),
+      Promise.all(
+        branchIds.map((branchId) =>
+          this.calculateBranchRevenueSummary(
+            branchId,
+            filterDto.startDate,
+            filterDto.endDate,
+          ),
+        ),
+      ),
+      this.calculateOverviewPaymentMethodBreakdown(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
       this.calculateOverviewRevenueTrend(
         branchIds,
         filterDto.startDate,
         filterDto.endDate,
         filterDto.groupBy || RevenueGroupBy.DAY,
       ),
-      this.calculateOverviewStatusBreakdown(branchIds, filterDto.startDate, filterDto.endDate),
-      this.calculateOverviewTransactionTypeBreakdown(branchIds, filterDto.startDate, filterDto.endDate),
+      this.calculateOverviewStatusBreakdown(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
+      this.calculateOverviewTransactionTypeBreakdown(
+        branchIds,
+        filterDto.startDate,
+        filterDto.endDate,
+      ),
       this.calculateOverviewBranchOperationalBreakdown(
         adminId,
         branchIds,
@@ -97,6 +114,27 @@ export class ClinicRevenueService {
       ),
     ]);
 
+    const totalRevenue = branchSummaries.reduce(
+      (sum, item) => sum + item.totalRevenue,
+      0,
+    );
+    const transactionCount = branchSummaries.reduce(
+      (sum, item) => sum + item.transactionCount,
+      0,
+    );
+    const uniquePatients = branchBreakdown.reduce(
+      (sum, item) => sum + item.totalCustomers,
+      0,
+    );
+
+    const summary = {
+      totalRevenue,
+      transactionCount,
+      uniquePatients,
+      averageTransactionValue:
+        transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0,
+    };
+
     const finalPayload: OverallRevenueReportResponseDto = {
       period: {
         startDate: filterDto.startDate,
@@ -104,10 +142,7 @@ export class ClinicRevenueService {
         groupedBy: filterDto.groupBy || RevenueGroupBy.DAY,
         generatedAt: formatToVietnamTime(),
       },
-      summary: {
-        ...summary,
-        uniquePatients,
-      },
+      summary,
       paymentMethodBreakdown,
       revenueTrend,
       statusBreakdown,
@@ -322,10 +357,10 @@ export class ClinicRevenueService {
       .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
       .andWhere('apt.appointment_date >= :startDate::date', { startDate })
       .andWhere('apt.appointment_date <= :endDate::date', { endDate })
-      .andWhere('apt.deleted_at IS NULL')
-      .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
-        excludedStatuses: this.excludedAppointmentStatuses,
+      .andWhere('apt.status::text = :completedStatus', {
+        completedStatus: AppointmentStatus.COMPLETED,
       })
+      .andWhere('apt.deleted_at IS NULL')
       .getRawOne();
 
     return parseInt(result.uniquePatients || '0', 10);
@@ -581,91 +616,40 @@ export class ClinicRevenueService {
     startDate: string,
     endDate: string,
   ): Promise<BranchOperationalSummaryDto[]> {
-    const [branches, customers, doctors, services] = await Promise.all([
-      this.accountRepository
-        .createQueryBuilder('acc')
-        .select('acc._id', 'managerId')
-        .addSelect('cmi.clinic_branch_name', 'branchName')
-        .addSelect('cmi.full_name', 'managerName')
-        .leftJoin(
-          'clinic_manager_information',
-          'cmi',
-          'cmi.account_id = acc._id',
-        )
-        .where('acc.parent_id = :adminId', { adminId })
-        .andWhere('acc.role::text = :role', { role: AccountRole.CLINIC_MANAGER })
-        .andWhere('acc.deleted_at IS NULL')
-        .orderBy('cmi.clinic_branch_name', 'ASC')
-        .getRawMany(),
-      this.accountRepository.manager
-        .createQueryBuilder()
-        .select('apt.clinic_id', 'managerId')
-        .addSelect('COUNT(DISTINCT apt.patient_id)', 'totalCustomers')
-        .from('appointments', 'apt')
-        .where('apt.clinic_id = ANY(:branchIds)', { branchIds })
-        .andWhere('apt.appointment_date >= :startDate::date', { startDate })
-        .andWhere('apt.appointment_date <= :endDate::date', { endDate })
-        .andWhere('apt.deleted_at IS NULL')
-        .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
-          excludedStatuses: this.excludedAppointmentStatuses,
-        })
-        .groupBy('apt.clinic_id')
-        .getRawMany(),
-      this.accountRepository.manager
-        .createQueryBuilder()
-        .select('cp.clinic_manager_id', 'managerId')
-        .addSelect('COUNT(DISTINCT doctor._id)', 'totalDoctors')
-        .from('contract_package', 'cp')
-        .innerJoin('clinic_contract_information', 'cci', 'cci.contract_id = cp._id')
-        .innerJoin('accounts', 'doctor', 'doctor._id = cp.employee_id')
-        .where('cp.clinic_manager_id = ANY(:branchIds)', { branchIds })
-        .andWhere('cp.role::text = :doctorRole', { doctorRole: AccountRole.DOCTOR })
-        .andWhere('cp.deleted_at IS NULL')
-        .andWhere('cci.contract_status::text = :currentStatus', { currentStatus: ContractStatus.CURRENT })
-        .andWhere('cci.deleted_at IS NULL')
-        .andWhere('doctor.role::text = :doctorRole', { doctorRole: AccountRole.DOCTOR })
-        .andWhere('doctor.status::text = :doctorStatus', { doctorStatus: AccountStatus.ACTIVE })
-        .andWhere('doctor.deleted_at IS NULL')
-        .groupBy('cp.clinic_manager_id')
-        .getRawMany(),
-      this.accountRepository.manager
-        .createQueryBuilder()
-        .select('csc.clinic_id', 'managerId')
-        .addSelect('COUNT(csc._id)', 'totalServices')
-        .from('clinic_service_config', 'csc')
-        .where('csc.clinic_id = ANY(:branchIds)', { branchIds })
-        .andWhere('csc.is_active = :isActive', { isActive: true })
-        .andWhere('csc.deleted_at IS NULL')
-        .groupBy('csc.clinic_id')
-        .getRawMany(),
-    ]);
+    const branches = await this.accountRepository
+      .createQueryBuilder('acc')
+      .select('acc._id', 'managerId')
+      .addSelect('cmi.clinic_branch_name', 'branchName')
+      .addSelect('cmi.full_name', 'managerName')
+      .leftJoin(
+        'clinic_manager_information',
+        'cmi',
+        'cmi.account_id = acc._id',
+      )
+      .where('acc.parent_id = :adminId', { adminId })
+      .andWhere('acc._id = ANY(:branchIds)', { branchIds })
+      .andWhere('acc.role::text = :role', { role: AccountRole.CLINIC_MANAGER })
+      .andWhere('acc.deleted_at IS NULL')
+      .orderBy('cmi.clinic_branch_name', 'ASC')
+      .getRawMany();
 
-    const customerMap = new Map(
-      customers.map((item) => [
-        item.managerId,
-        parseInt(item.totalCustomers || '0', 10),
-      ]),
-    );
-    const doctorMap = new Map(
-      doctors.map((item) => [
-        item.managerId,
-        parseInt(item.totalDoctors || '0', 10),
-      ]),
-    );
-    const serviceMap = new Map(
-      services.map((item) => [
-        item.managerId,
-        parseInt(item.totalServices || '0', 10),
-      ]),
+    const branchOperationalRows = await Promise.all(
+      branches.map((branch) =>
+        this.calculateBranchOperationalOverview(
+          branch.managerId,
+          startDate,
+          endDate,
+        ),
+      ),
     );
 
-    return branches.map((branch) => ({
+    return branches.map((branch, index) => ({
       managerId: branch.managerId,
       branchName: branch.branchName || 'Unknown Branch',
       managerName: branch.managerName || 'Unknown Manager',
-      totalCustomers: customerMap.get(branch.managerId) || 0,
-      totalDoctors: doctorMap.get(branch.managerId) || 0,
-      totalServices: serviceMap.get(branch.managerId) || 0,
+      totalCustomers: branchOperationalRows[index].totalCustomers,
+      totalDoctors: branchOperationalRows[index].totalDoctors,
+      totalServices: branchOperationalRows[index].totalServices,
     }));
   }
 
@@ -921,10 +905,10 @@ export class ClinicRevenueService {
         .where('apt.clinic_id = :managerId', { managerId })
         .andWhere('apt.appointment_date >= :startDate::date', { startDate })
         .andWhere('apt.appointment_date <= :endDate::date', { endDate })
-        .andWhere('apt.deleted_at IS NULL')
-        .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
-          excludedStatuses: this.excludedAppointmentStatuses,
+        .andWhere('apt.status::text = :completedStatus', {
+          completedStatus: AppointmentStatus.COMPLETED,
         })
+        .andWhere('apt.deleted_at IS NULL')
         .getRawOne(),
       this.accountRepository.manager
         .createQueryBuilder()
@@ -971,6 +955,12 @@ export class ClinicRevenueService {
       .select(dateGroupBy, 'label')
       .addSelect('COUNT(DISTINCT appointment.patient_id)', 'count')
       .from('appointments', 'appointment')
+      .innerJoin(
+        'appointment_package',
+        'ap',
+        'ap.appointment_id = appointment._id AND ap.deleted_at IS NULL',
+      )
+      .innerJoin('transactions', 't', 't._id = ap.transaction_id')
       .where('appointment.clinic_id = :managerId', { managerId })
       .andWhere('appointment.appointment_date >= :startDate::date', {
         startDate: filterDto.startDate,
@@ -978,8 +968,12 @@ export class ClinicRevenueService {
       .andWhere('appointment.appointment_date <= :endDate::date', {
         endDate: filterDto.endDate,
       })
+      .andWhere('t.status::text = :successStatus', {
+        successStatus: PaymentStatus.SUCCESS,
+      })
+      .andWhere('t.deleted_at IS NULL')
       .andWhere('appointment.deleted_at IS NULL')
-      .andWhere('NOT appointment.status = ANY(:excludedStatuses)', {
+      .andWhere('NOT appointment.status::text = ANY(:excludedStatuses)', {
         excludedStatuses: this.excludedAppointmentStatuses,
       })
       .groupBy(dateGroupBy)
@@ -1085,12 +1079,15 @@ export class ClinicRevenueService {
         FROM service_appointments sa
         JOIN appointment_package ap ON ap._id = sa.appointment_package_id
         JOIN appointments apt ON apt._id = ap.appointment_id
+        JOIN transactions t ON t._id = ap.transaction_id
         JOIN clinic_service_config csc ON csc._id = sa.clinic_service_id
         JOIN clinic_services cs ON cs._id = csc.service_id
         WHERE apt.clinic_id = $1
-          AND apt.status NOT IN ('CANCELLED', 'ABSENT')
+          AND apt.status::text NOT IN ('CANCELLED', 'ABSENT')
           AND apt.appointment_date >= $2
           AND apt.appointment_date <= $3
+          AND t.status::text = $4
+          AND t.deleted_at IS NULL
           AND apt.deleted_at IS NULL
           AND ap.deleted_at IS NULL
           AND csc.is_active = TRUE
@@ -1098,7 +1095,7 @@ export class ClinicRevenueService {
         GROUP BY cs.service_name
         ORDER BY "registrationCount" DESC
       `,
-      [managerId, startDate, endDate],
+      [managerId, startDate, endDate, PaymentStatus.SUCCESS],
     );
 
     return data.map((item: any) => ({
