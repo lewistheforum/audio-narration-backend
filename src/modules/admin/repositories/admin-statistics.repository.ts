@@ -520,24 +520,30 @@ export class AdminStatisticsRepository {
         COUNT(t._id) AS transaction_count,
         COALESCE(SUM(t.amount), 0) AS total_spent,
         CASE
-          WHEN MAX(t.transaction_date) = MIN(t.transaction_date) THEN 'New (First Transaction)'
+          WHEN MAX(t.transaction_date) = MIN(t.transaction_date) THEN 'New'
           ELSE
             TRIM(BOTH FROM
               CASE
                 WHEN EXTRACT(YEAR FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) > 0
-                THEN EXTRACT(YEAR FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) || ' year '
+                THEN EXTRACT(YEAR FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) || 
+                  CASE WHEN EXTRACT(YEAR FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) > 1 THEN ' years ' ELSE ' year ' END
                 ELSE ''
               END ||
               CASE
                 WHEN EXTRACT(MONTH FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) > 0
-                THEN EXTRACT(MONTH FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) || ' months'
+                THEN EXTRACT(MONTH FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) || 
+                  CASE WHEN EXTRACT(MONTH FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) > 1 THEN ' months' ELSE ' month' END
                 ELSE ''
               END ||
               CASE
                 WHEN EXTRACT(YEAR FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) = 0
                 AND EXTRACT(MONTH FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) = 0
-                AND EXTRACT(DAY FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) > 0
-                THEN EXTRACT(DAY FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) || ' days'
+                THEN
+                  CASE
+                    WHEN EXTRACT(DAY FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) > 0
+                    THEN EXTRACT(DAY FROM AGE(MAX(t.transaction_date), MIN(t.transaction_date))) || ' days'
+                    ELSE 'New'
+                  END
                 ELSE ''
               END
             )
