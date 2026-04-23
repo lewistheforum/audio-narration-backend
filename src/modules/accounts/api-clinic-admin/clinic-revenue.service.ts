@@ -16,6 +16,10 @@ import { AccountStatus } from '../enums/account-status.enum';
 import { ContractStatus } from '../../contracts/enums/contract-status.enum';
 import { AppointmentStatus } from '../../appointments/enums/appointment-status.enum';
 import {
+  AppointmentPackageStatus,
+  PaymentType,
+} from '../../appointments/enums';
+import {
   ClinicRevenueFilterDto,
   RevenueGroupBy,
   OverallRevenueReportResponseDto,
@@ -300,33 +304,29 @@ export class ClinicRevenueService {
   ): Promise<{ totalRevenue: number; transactionCount: number; averageTransactionValue: number }> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH billable_packages AS (
+          SELECT
+            ap._id,
+            ap.amount
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND t.status = $2
-            AND t.transaction_date >= $3::timestamptz
-            AND t.transaction_date <= $4::timestamptz
-            AND t.deleted_at IS NULL
+            AND ap.status = $2
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($5)
         )
         SELECT
-          COALESCE(SUM(mt.amount), 0) as "totalRevenue",
-          COUNT(mt._id) as "transactionCount"
-        FROM mapped_transactions mt
+          COALESCE(SUM(bp.amount), 0) as "totalRevenue",
+          COUNT(bp._id) as "transactionCount"
+        FROM billable_packages bp
       `,
       [
         branchIds,
-        PaymentStatus.SUCCESS,
+        AppointmentPackageStatus.PAID,
         startDate,
         endDate,
-        this.excludedAppointmentStatuses,
       ],
     );
 
@@ -374,25 +374,36 @@ export class ClinicRevenueService {
     }[];
     totalCount: number;
   }> {
-    const results = await this.transactionRepository
-      .createQueryBuilder('t')
-      .select('tt.name', 'typeName')
-      .addSelect('COUNT(DISTINCT t._id)', 'count')
-      .addSelect('COALESCE(SUM(t.amount), 0)', 'amount')
-      .innerJoin('appointment_package', 'ap', 'ap.transaction_id = t._id AND ap.deleted_at IS NULL')
-      .innerJoin('appointments', 'apt', 'apt._id = ap.appointment_id')
-      .leftJoin('transactions_type', 'tt', 'tt._id = t.transaction_type_id')
-      .where('apt.clinic_id IN (:...branchIds)', { branchIds })
-      .andWhere('t.transaction_date >= :startDate::timestamptz', { startDate })
-      .andWhere('t.transaction_date <= :endDate::timestamptz', { endDate })
-      .andWhere('t.deleted_at IS NULL')
-      .andWhere('apt.deleted_at IS NULL')
-      .andWhere('NOT apt.status = ANY(:excludedStatuses)', {
-        excludedStatuses: this.excludedAppointmentStatuses,
-      })
-      .groupBy('tt.name')
-      .orderBy('count', 'DESC')
-      .getRawMany();
+    const results = await this.accountRepository.manager.query(
+      `
+        SELECT
+          CASE
+            WHEN (to_jsonb(apt)->>'payment_type') = $5 THEN 'ONLINE'
+            WHEN (to_jsonb(apt)->>'payment_type') = $6 THEN 'COD'
+            ELSE 'UNKNOWN'
+          END as "typeName",
+          COUNT(ap._id) as "count",
+          COALESCE(SUM(ap.amount), 0) as "amount"
+        FROM appointment_package ap
+        JOIN appointments apt ON apt._id = ap.appointment_id
+        WHERE apt.clinic_id = ANY($1)
+          AND ap.status = $2
+          AND apt.appointment_date >= $3::date
+          AND apt.appointment_date <= $4::date
+          AND ap.deleted_at IS NULL
+          AND apt.deleted_at IS NULL
+        GROUP BY 1
+        ORDER BY "count" DESC
+      `,
+      [
+        branchIds,
+        AppointmentPackageStatus.PAID,
+        startDate,
+        endDate,
+        PaymentType.ONLINE,
+        PaymentType.COD,
+      ],
+    );
 
     const totalCount = results.reduce(
       (sum, item) => sum + parseInt(item.count || '0', 10),
@@ -423,37 +434,34 @@ export class ClinicRevenueService {
   ): Promise<PaymentMethodBreakdownDto> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
-            t.gateway,
-            ap.payment_type
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH billable_packages AS (
+          SELECT
+            apt._id as appointment_id,
+            ap.amount,
+            (to_jsonb(apt)->>'payment_type') as payment_type
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND t.status = $2
-            AND t.transaction_date >= $3::timestamptz
-            AND t.transaction_date <= $4::timestamptz
-            AND t.deleted_at IS NULL
+            AND ap.status = $2
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($5)
         )
         SELECT
-          COALESCE(SUM(CASE WHEN mt.gateway IS NOT NULL THEN mt.amount ELSE 0 END), 0) as "onlineRevenue",
-          COUNT(CASE WHEN mt.gateway IS NOT NULL THEN mt._id END) as "onlineCount",
-          COALESCE(SUM(CASE WHEN mt.payment_type = 'cod' THEN mt.amount ELSE 0 END), 0) as "cashRevenue",
-          COUNT(CASE WHEN mt.payment_type = 'cod' THEN mt._id END) as "cashCount"
-        FROM mapped_transactions mt
+          COALESCE(SUM(CASE WHEN bp.payment_type = $5 THEN bp.amount ELSE 0 END), 0) as "onlineRevenue",
+          COUNT(DISTINCT CASE WHEN bp.payment_type = $5 THEN bp.appointment_id END) as "onlineCount",
+          COALESCE(SUM(CASE WHEN bp.payment_type = $6 THEN bp.amount ELSE 0 END), 0) as "cashRevenue",
+          COUNT(DISTINCT CASE WHEN bp.payment_type = $6 THEN bp.appointment_id END) as "cashCount"
+        FROM billable_packages bp
       `,
       [
         branchIds,
-        PaymentStatus.SUCCESS,
+        AppointmentPackageStatus.PAID,
         startDate,
         endDate,
-        this.excludedAppointmentStatuses,
+        PaymentType.ONLINE,
+        PaymentType.COD,
       ],
     );
 
@@ -503,39 +511,35 @@ export class ClinicRevenueService {
     const dateFormat = this.getRevenueDateFormat(groupBy);
     const results = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
-            t.transaction_date
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH billable_packages AS (
+          SELECT
+            ap._id,
+            ap.amount,
+            apt.appointment_date
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND t.status = $2
-            AND t.transaction_date >= $3::timestamptz
-            AND t.transaction_date <= $4::timestamptz
-            AND t.deleted_at IS NULL
+            AND ap.status = $2
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($5)
         )
         SELECT
-          TO_CHAR(mt.transaction_date, '${dateFormat}') as "period",
-          COALESCE(SUM(mt.amount), 0) as "revenue",
-          COUNT(mt._id) as "transactionCount",
-          MIN(mt.transaction_date) as "periodStart",
-          MAX(mt.transaction_date) as "periodEnd"
-        FROM mapped_transactions mt
+          TO_CHAR(bp.appointment_date, '${dateFormat}') as "period",
+          COALESCE(SUM(bp.amount), 0) as "revenue",
+          COUNT(bp._id) as "transactionCount",
+          MIN(bp.appointment_date)::timestamptz as "periodStart",
+          MAX(bp.appointment_date)::timestamptz as "periodEnd"
+        FROM billable_packages bp
         GROUP BY "period"
         ORDER BY "period" ASC
       `,
       [
         branchIds,
-        PaymentStatus.SUCCESS,
+        AppointmentPackageStatus.PAID,
         startDate,
         endDate,
-        this.excludedAppointmentStatuses,
       ],
     );
 
@@ -555,32 +559,36 @@ export class ClinicRevenueService {
   ): Promise<TransactionStatusBreakdownDto> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
-            t.status
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH package_statuses AS (
+          SELECT
+            ap._id,
+            ap.amount,
+            ap.status
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND t.transaction_date >= $2::timestamptz
-            AND t.transaction_date <= $3::timestamptz
-            AND t.deleted_at IS NULL
+            AND apt.appointment_date >= $2::date
+            AND apt.appointment_date <= $3::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($4)
         )
         SELECT
-          COUNT(CASE WHEN mt.status = 'SUCCESS' THEN mt._id END) as "successCount",
-          COALESCE(SUM(CASE WHEN mt.status = 'SUCCESS' THEN mt.amount ELSE 0 END), 0) as "successAmount",
-          COUNT(CASE WHEN mt.status = 'PENDING' THEN mt._id END) as "pendingCount",
-          COALESCE(SUM(CASE WHEN mt.status = 'PENDING' THEN mt.amount ELSE 0 END), 0) as "pendingAmount",
-          COUNT(CASE WHEN mt.status = 'FAILED' THEN mt._id END) as "failedCount",
-          COALESCE(SUM(CASE WHEN mt.status = 'FAILED' THEN mt.amount ELSE 0 END), 0) as "failedAmount"
-        FROM mapped_transactions mt
+          COUNT(CASE WHEN ps.status = $4 THEN ps._id END) as "successCount",
+          COALESCE(SUM(CASE WHEN ps.status = $4 THEN ps.amount ELSE 0 END), 0) as "successAmount",
+          COUNT(CASE WHEN ps.status = $5 THEN ps._id END) as "pendingCount",
+          COALESCE(SUM(CASE WHEN ps.status = $5 THEN ps.amount ELSE 0 END), 0) as "pendingAmount",
+          COUNT(CASE WHEN ps.status = $6 THEN ps._id END) as "failedCount",
+          COALESCE(SUM(CASE WHEN ps.status = $6 THEN ps.amount ELSE 0 END), 0) as "failedAmount"
+        FROM package_statuses ps
       `,
-      [branchIds, startDate, endDate, this.excludedAppointmentStatuses],
+      [
+        branchIds,
+        startDate,
+        endDate,
+        AppointmentPackageStatus.PAID,
+        AppointmentPackageStatus.PENDING_PAYMENT,
+        AppointmentPackageStatus.CANCELLED,
+      ],
     );
 
     return {
@@ -655,35 +663,31 @@ export class ClinicRevenueService {
   ): Promise<RevenueSummaryDto> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
+        WITH billable_packages AS (
+          SELECT
+            ap._id,
+            ap.amount,
             apt.patient_id
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = $1
-            AND t.status = $2
-            AND t.transaction_date >= $3::timestamptz
-            AND t.transaction_date <= $4::timestamptz
-            AND t.deleted_at IS NULL
+            AND ap.status = $2
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($5)
         )
         SELECT
-          COALESCE(SUM(mt.amount), 0) as "totalRevenue",
-          COUNT(mt._id) as "transactionCount",
-          COUNT(DISTINCT mt.patient_id) as "uniquePatients"
-        FROM mapped_transactions mt
+          COALESCE(SUM(bp.amount), 0) as "totalRevenue",
+          COUNT(bp._id) as "transactionCount",
+          COUNT(DISTINCT bp.patient_id) as "uniquePatients"
+        FROM billable_packages bp
       `,
       [
         managerId,
-        PaymentStatus.SUCCESS,
+        AppointmentPackageStatus.PAID,
         startDate,
         endDate,
-        this.excludedAppointmentStatuses,
       ],
     );
 
@@ -705,37 +709,34 @@ export class ClinicRevenueService {
   ): Promise<PaymentMethodBreakdownDto> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
-            t.gateway,
-            ap.payment_type
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH billable_packages AS (
+          SELECT
+            ap._id,
+            ap.amount,
+            (to_jsonb(apt)->>'payment_type') as payment_type
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = $1
-            AND t.status = $2
-            AND t.transaction_date >= $3::timestamptz
-            AND t.transaction_date <= $4::timestamptz
-            AND t.deleted_at IS NULL
+            AND ap.status = $2
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($5)
         )
         SELECT
-          COALESCE(SUM(CASE WHEN mt.gateway IS NOT NULL THEN mt.amount ELSE 0 END), 0) as "onlineRevenue",
-          COUNT(CASE WHEN mt.gateway IS NOT NULL THEN mt._id END) as "onlineCount",
-          COALESCE(SUM(CASE WHEN mt.payment_type = 'cod' THEN mt.amount ELSE 0 END), 0) as "cashRevenue",
-          COUNT(CASE WHEN mt.payment_type = 'cod' THEN mt._id END) as "cashCount"
-        FROM mapped_transactions mt
+          COALESCE(SUM(CASE WHEN bp.payment_type = $5 THEN bp.amount ELSE 0 END), 0) as "onlineRevenue",
+          COUNT(CASE WHEN bp.payment_type = $5 THEN bp._id END) as "onlineCount",
+          COALESCE(SUM(CASE WHEN bp.payment_type = $6 THEN bp.amount ELSE 0 END), 0) as "cashRevenue",
+          COUNT(CASE WHEN bp.payment_type = $6 THEN bp._id END) as "cashCount"
+        FROM billable_packages bp
       `,
       [
         managerId,
-        PaymentStatus.SUCCESS,
+        AppointmentPackageStatus.PAID,
         startDate,
         endDate,
-        this.excludedAppointmentStatuses,
+        PaymentType.ONLINE,
+        PaymentType.COD,
       ],
     );
 
@@ -785,39 +786,35 @@ export class ClinicRevenueService {
     const dateFormat = this.getRevenueDateFormat(groupBy);
     const results = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
-            t.transaction_date
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH billable_packages AS (
+          SELECT
+            ap._id,
+            ap.amount,
+            apt.appointment_date
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = $1
-            AND t.status = $2
-            AND t.transaction_date >= $3::timestamptz
-            AND t.transaction_date <= $4::timestamptz
-            AND t.deleted_at IS NULL
+            AND ap.status = $2
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($5)
         )
         SELECT
-          TO_CHAR(mt.transaction_date, '${dateFormat}') as "period",
-          COALESCE(SUM(mt.amount), 0) as "revenue",
-          COUNT(mt._id) as "transactionCount",
-          MIN(mt.transaction_date) as "periodStart",
-          MAX(mt.transaction_date) as "periodEnd"
-        FROM mapped_transactions mt
+          TO_CHAR(bp.appointment_date, '${dateFormat}') as "period",
+          COALESCE(SUM(bp.amount), 0) as "revenue",
+          COUNT(bp._id) as "transactionCount",
+          MIN(bp.appointment_date)::timestamptz as "periodStart",
+          MAX(bp.appointment_date)::timestamptz as "periodEnd"
+        FROM billable_packages bp
         GROUP BY "period"
         ORDER BY "period" ASC
       `,
       [
         managerId,
-        PaymentStatus.SUCCESS,
+        AppointmentPackageStatus.PAID,
         startDate,
         endDate,
-        this.excludedAppointmentStatuses,
       ],
     );
 
@@ -837,32 +834,36 @@ export class ClinicRevenueService {
   ): Promise<TransactionStatusBreakdownDto> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH mapped_transactions AS (
-          SELECT DISTINCT
-            t._id,
-            t.amount,
-            t.status
-          FROM transactions t
-          JOIN appointment_package ap ON ap.transaction_id = t._id AND ap.deleted_at IS NULL
+        WITH package_statuses AS (
+          SELECT
+            ap._id,
+            ap.amount,
+            ap.status
+          FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = $1
-            AND t.transaction_date >= $2::timestamptz
-            AND t.transaction_date <= $3::timestamptz
-            AND t.deleted_at IS NULL
+            AND apt.appointment_date >= $2::date
+            AND apt.appointment_date <= $3::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
-            AND NOT apt.status = ANY($4)
         )
         SELECT
-          COUNT(CASE WHEN mt.status = 'SUCCESS' THEN mt._id END) as "successCount",
-          COALESCE(SUM(CASE WHEN mt.status = 'SUCCESS' THEN mt.amount ELSE 0 END), 0) as "successAmount",
-          COUNT(CASE WHEN mt.status = 'PENDING' THEN mt._id END) as "pendingCount",
-          COALESCE(SUM(CASE WHEN mt.status = 'PENDING' THEN mt.amount ELSE 0 END), 0) as "pendingAmount",
-          COUNT(CASE WHEN mt.status = 'FAILED' THEN mt._id END) as "failedCount",
-          COALESCE(SUM(CASE WHEN mt.status = 'FAILED' THEN mt.amount ELSE 0 END), 0) as "failedAmount"
-        FROM mapped_transactions mt
+          COUNT(CASE WHEN ps.status = $4 THEN ps._id END) as "successCount",
+          COALESCE(SUM(CASE WHEN ps.status = $4 THEN ps.amount ELSE 0 END), 0) as "successAmount",
+          COUNT(CASE WHEN ps.status = $5 THEN ps._id END) as "pendingCount",
+          COALESCE(SUM(CASE WHEN ps.status = $5 THEN ps.amount ELSE 0 END), 0) as "pendingAmount",
+          COUNT(CASE WHEN ps.status = $6 THEN ps._id END) as "failedCount",
+          COALESCE(SUM(CASE WHEN ps.status = $6 THEN ps.amount ELSE 0 END), 0) as "failedAmount"
+        FROM package_statuses ps
       `,
-      [managerId, startDate, endDate, this.excludedAppointmentStatuses],
+      [
+        managerId,
+        startDate,
+        endDate,
+        AppointmentPackageStatus.PAID,
+        AppointmentPackageStatus.PENDING_PAYMENT,
+        AppointmentPackageStatus.CANCELLED,
+      ],
     );
 
     return {

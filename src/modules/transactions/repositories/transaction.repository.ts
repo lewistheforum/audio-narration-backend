@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Transaction } from '../entities/transaction.entity';
 import { parseVietnamTime } from '../../../common/utils/date.util';
+import { AppointmentPackageStatus, PaymentType } from '../../appointments/enums';
 
 @Injectable()
 export class TransactionRepository extends Repository<Transaction> {
@@ -152,34 +153,42 @@ export class TransactionRepository extends Repository<Transaction> {
     period: string,
   ): Promise<any[]> {
     return this.query(
-      `WITH mapped_transactions AS (
+      `WITH paid_packages AS (
           SELECT
-            t._id AS transaction_id,
-            MIN(t.transaction_date) AS transaction_date,
-            MAX(ap.payment_type) AS payment_type,
-            MAX(t.amount) AS amount
-          FROM transactions t
-          INNER JOIN appointment_package ap ON ap.transaction_id = t._id
+            ap._id AS package_id,
+            ap.amount AS amount,
+            a.appointment_date AS appointment_date,
+            (to_jsonb(a)->>'payment_type') AS payment_type
+          FROM appointment_package ap
           INNER JOIN appointments a ON a._id = ap.appointment_id
           WHERE a.clinic_id = $2
-            AND t.status = 'SUCCESS'
-            AND t.deleted_at IS NULL
+            AND ap.status = $5
             AND ap.deleted_at IS NULL
             AND a.deleted_at IS NULL
-            AND a.status NOT IN ('CANCELLED', 'ABSENT')
-            AND t.transaction_date >= $3
-            AND t.transaction_date <= $4
-          GROUP BY t._id
+            AND a.appointment_date >= $3::date
+            AND a.appointment_date <= $4::date
        )
        SELECT
-          DATE_TRUNC($1, mt.transaction_date) as label,
-          mt.payment_type as payment_type,
-          SUM(mt.amount)::bigint as total_revenue,
-          COUNT(mt.transaction_id)::int as transaction_count
-       FROM mapped_transactions mt
+          DATE_TRUNC($1, pp.appointment_date::timestamp) as label,
+          CASE
+            WHEN pp.payment_type = $6 THEN $6
+            WHEN pp.payment_type = $7 THEN $7
+            ELSE 'unknown'
+          END as payment_type,
+          SUM(pp.amount)::bigint as total_revenue,
+          COUNT(pp.package_id)::int as transaction_count
+       FROM paid_packages pp
        GROUP BY label, payment_type
        ORDER BY label ASC`,
-      [period, clinicId, startDate, endDate],
+      [
+        period,
+        clinicId,
+        startDate,
+        endDate,
+        AppointmentPackageStatus.PAID,
+        PaymentType.ONLINE,
+        PaymentType.COD,
+      ],
     );
   }
 
