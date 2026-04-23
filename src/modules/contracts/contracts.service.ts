@@ -158,6 +158,23 @@ export class ContractsService {
     if (!contractInfo) throw new NotFoundException('Contract info not found');
     if (!user) throw new NotFoundException('User not found');
 
+    // Check for active contracts
+    const existingPackages =
+      await this.contractPackageRepository.findByEmployeeId(
+        contractPackage.employeeId,
+      );
+    for (const pkg of existingPackages) {
+      if (pkg._id === contractId) continue;
+      const cInfo = await this.clinicContractInfoRepository.findByContractId(
+        pkg._id,
+      );
+      if (cInfo && cInfo.contractStatus === ContractStatus.CURRENT) {
+        throw new BadRequestException(
+          'There is currently an active contract. You need to deactivate that contract before you can sign a new one.',
+        );
+      }
+    }
+
     if (
       contractPackage.clinicManagerId !== userId &&
       contractPackage.employeeId !== userId
@@ -223,6 +240,23 @@ export class ContractsService {
       await this.contractPackageRepository.findById(packageId);
     if (!contractPackage) {
       throw new NotFoundException('Contract package not found');
+    }
+
+    // Check for active contracts
+    const existingPackages =
+      await this.contractPackageRepository.findByEmployeeId(
+        contractPackage.employeeId,
+      );
+    for (const pkg of existingPackages) {
+      if (pkg._id === packageId) continue;
+      const cInfo = await this.clinicContractInfoRepository.findByContractId(
+        pkg._id,
+      );
+      if (cInfo && cInfo.contractStatus === ContractStatus.CURRENT) {
+        throw new BadRequestException(
+          'There is currently an active contract. You need to deactivate that contract before you can create a new one.',
+        );
+      }
     }
 
     // 2. Check if info already exists - UPDATE if exists
@@ -355,6 +389,23 @@ export class ContractsService {
       if (!contractInfo)
         throw new NotFoundException('Contract information not found');
       if (!userAccount) throw new NotFoundException('User not found');
+
+      // Check for active contracts
+      const existingPackages =
+        await this.contractPackageRepository.findByEmployeeId(
+          contractPackage.employeeId,
+        );
+      for (const pkg of existingPackages) {
+        if (pkg._id === contractId) continue;
+        const cInfo = await this.clinicContractInfoRepository.findByContractId(
+          pkg._id,
+        );
+        if (cInfo && cInfo.contractStatus === ContractStatus.CURRENT) {
+          throw new BadRequestException(
+            'There is currently an active contract. You need to deactivate that contract before you can sign a new one.',
+          );
+        }
+      }
 
       // Security Check: Legal Documents for Doctors
       if (userAccount.role === AccountRole.DOCTOR) {
