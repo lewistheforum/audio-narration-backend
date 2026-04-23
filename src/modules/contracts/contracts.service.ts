@@ -1014,6 +1014,73 @@ export class ContractsService {
   }
 
   /**
+   * Reject Contract
+   *
+   * Allows a party (Employee or Manager) to reject the contract with a reason.
+   *
+   * @param contractId - UUID of contract
+   * @param userId - UUID of person rejecting
+   * @param reason - Rejection reason
+   */
+  async cancelContract(
+    contractId: string,
+    userId: string,
+    reason: string,
+  ): Promise<void> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const [contractPackage, contractInfo] = await Promise.all([
+        this.contractPackageRepository.findById(contractId),
+        this.clinicContractInfoRepository.findByContractId(contractId),
+      ]);
+
+      if (!contractPackage)
+        throw new NotFoundException('Contract package not found');
+      if (!contractInfo)
+        throw new NotFoundException('Contract information not found');
+
+      if (
+        contractPackage.clinicManagerId !== userId &&
+        contractPackage.employeeId !== userId
+      ) {
+        throw new UnauthorizedException('User is not a party in this contract');
+      }
+
+      contractInfo.contractStatus = ContractStatus.REJECTED;
+      contractInfo.rejectionReason = reason;
+      await queryRunner.manager.save(contractInfo);
+
+      const otherUserId =
+        contractPackage.employeeId === userId
+          ? contractPackage.clinicManagerId
+          : contractPackage.employeeId;
+      const [otherUser, currentUser] = await Promise.all([
+        this.accountsService.findAccountEntityById(otherUserId),
+        this.accountsService.findAccountEntityById(userId),
+      ]);
+
+      if (otherUser && otherUser.email) {
+        await this.mailerService.sendContractRejectNotification(
+          otherUser.email,
+          currentUser.username || 'User',
+          contractId,
+          reason,
+        );
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
    * Cancel Contract Package
    *
    * Marks the contract as CANCELLED and locks the employee if the contract was ACTIVE.
