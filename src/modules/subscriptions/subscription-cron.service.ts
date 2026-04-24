@@ -47,7 +47,11 @@ export class SubscriptionCronService {
   })
   async handleDailySweeper(): Promise<{
     phase1: { emailsSent: number; emailsFailed: number };
-    phase2: { renewalsApplied: number; subscriptionsExpired: number; errors: number };
+    phase2: {
+      renewalsApplied: number;
+      subscriptionsExpired: number;
+      errors: number;
+    };
   }> {
     this.logger.log('🔄 Starting Daily Subscription Sweeper...');
     const startTime = getVietnamTimestamp();
@@ -66,7 +70,9 @@ export class SubscriptionCronService {
       );
 
       const duration = getVietnamTimestamp() - startTime;
-      this.logger.log(`✅ Daily Subscription Sweeper completed in ${duration}ms`);
+      this.logger.log(
+        `✅ Daily Subscription Sweeper completed in ${duration}ms`,
+      );
 
       return {
         phase1: phase1Stats,
@@ -102,8 +108,10 @@ export class SubscriptionCronService {
 
     try {
       // Find subscriptions expiring in exactly 7 days or 1 day
-      const subscriptionsExpiring7Days = await this.findSubscriptionsExpiringInDays(7);
-      const subscriptionsExpiring1Day = await this.findSubscriptionsExpiringInDays(1);
+      const subscriptionsExpiring7Days =
+        await this.findSubscriptionsExpiringInDays(7);
+      const subscriptionsExpiring1Day =
+        await this.findSubscriptionsExpiringInDays(1);
 
       this.logger.log(
         `Found ${subscriptionsExpiring7Days.length} subscriptions expiring in 7 days`,
@@ -175,7 +183,9 @@ export class SubscriptionCronService {
     try {
       // Find all expired subscriptions (ACTIVE or NON_RENEWING)
       const expiredSubscriptions = await this.findExpiredSubscriptions();
-      this.logger.log(`Found ${expiredSubscriptions.length} expired subscriptions to process`);
+      this.logger.log(
+        `Found ${expiredSubscriptions.length} expired subscriptions to process`,
+      );
 
       // Process each subscription individually with atomic transaction
       for (const subscription of expiredSubscriptions) {
@@ -241,15 +251,17 @@ export class SubscriptionCronService {
       .getRepository(ClinicSubscription)
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.clinic', 'clinic')
-      .leftJoinAndSelect('clinic.clinicAdminInformation', 'clinicAdminInformation')
+      .leftJoinAndSelect(
+        'clinic.clinicAdminInformation',
+        'clinicAdminInformation',
+      )
       .leftJoinAndSelect('subscription.service', 'service')
       .where('subscription.subscriptionStatus = :status', {
         status: RegistrationStatus.ACTIVE,
       })
-      .andWhere(
-        `DATE(subscription.expiration_date) = :targetDate`,
-        { targetDate: getDateString(addToVietnamTime(days, 'day')) }
-      );
+      .andWhere(`DATE(subscription.expiration_date) = :targetDate`, {
+        targetDate: getDateString(addToVietnamTime(days, 'day')),
+      });
 
     return query.getMany();
   }
@@ -267,12 +279,17 @@ export class SubscriptionCronService {
       .getRepository(ClinicSubscription)
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.clinic', 'clinic')
-      .leftJoinAndSelect('clinic.clinicAdminInformation', 'clinicAdminInformation')
+      .leftJoinAndSelect(
+        'clinic.clinicAdminInformation',
+        'clinicAdminInformation',
+      )
       .leftJoinAndSelect('subscription.service', 'service')
       .where('subscription.subscriptionStatus = ANY(:statuses)', {
         statuses: [RegistrationStatus.ACTIVE, RegistrationStatus.NON_RENEWING],
       })
-      .andWhere('subscription.expiration_date < :now', { now: getCurrentVietnamTime() });
+      .andWhere('subscription.expiration_date < :now', {
+        now: getCurrentVietnamTime(),
+      });
 
     return query.getMany();
   }
@@ -335,13 +352,14 @@ export class SubscriptionCronService {
       );
     } else {
       // Warning email: Action required
-      const emailType = daysRemaining === 7 ? 'warning_7_days' : 'warning_1_day';
+      const emailType =
+        daysRemaining === 7 ? 'warning_7_days' : 'warning_1_day';
 
       this.logger.log(
         `Sending ${emailType} email to ${clinicEmail} (Clinic: ${clinicName})`,
       );
 
-      const renewalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription`;
+      const renewalLink = `${process.env.FRONTEND_LANDING_URL || 'http://localhost:5173'}/subscription`;
       await this.mailerService.sendSubscriptionWarning(
         clinicEmail,
         daysRemaining === 7 ? '7_DAYS' : '1_DAY',
@@ -394,7 +412,9 @@ export class SubscriptionCronService {
       clinicId: subscription.clinicId,
     });
 
-    this.logger.log(`✅ Renewal applied successfully for clinic ${subscription.clinicId}`);
+    this.logger.log(
+      `✅ Renewal applied successfully for clinic ${subscription.clinicId}`,
+    );
   }
 
   /**
@@ -408,7 +428,9 @@ export class SubscriptionCronService {
     subscription: ClinicSubscription,
     queryRunner: any,
   ): Promise<void> {
-    this.logger.log(`Marking subscription as EXPIRED for clinic ${subscription.clinicId}`);
+    this.logger.log(
+      `Marking subscription as EXPIRED for clinic ${subscription.clinicId}`,
+    );
 
     await queryRunner.manager.update(
       ClinicSubscription,
@@ -418,7 +440,9 @@ export class SubscriptionCronService {
       },
     );
 
-    this.logger.log(`✅ Subscription expired for clinic ${subscription.clinicId}`);
+    this.logger.log(
+      `✅ Subscription expired for clinic ${subscription.clinicId}`,
+    );
   }
 
   /**
@@ -466,10 +490,13 @@ export class SubscriptionCronService {
         endDate,
       });
     } else {
-      const invoiceLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription/invoices/${renewalQueue._id}`;
+      const invoiceLink = `${process.env.FRONTEND_LANDING_URL || 'http://localhost:5173'}/subscription/invoices/${renewalQueue._id}`;
       await this.mailerService.sendRenewalSuccess(clinicEmail, {
         clinicName,
-        planName: renewalQueue.nextService?.serviceName || subscription.service?.serviceName || 'Subscription Plan',
+        planName:
+          renewalQueue.nextService?.serviceName ||
+          subscription.service?.serviceName ||
+          'Subscription Plan',
         startDate,
         endDate,
         transactionId: renewalQueue._id,
@@ -485,11 +512,14 @@ export class SubscriptionCronService {
   /**
    * Send subscription expired email
    */
-  private async sendExpirationEmail(subscription: ClinicSubscription): Promise<void> {
+  private async sendExpirationEmail(
+    subscription: ClinicSubscription,
+  ): Promise<void> {
     const clinicEmail = subscription.clinic?.email;
     const clinicName =
       subscription.clinic?.clinicAdminInformation?.clinicName || 'Clinic';
-    const expiredPlan = subscription.service?.serviceName || 'Subscription Plan';
+    const expiredPlan =
+      subscription.service?.serviceName || 'Subscription Plan';
 
     if (!clinicEmail) {
       this.logger.warn(
@@ -502,7 +532,7 @@ export class SubscriptionCronService {
       `Sending subscription_expired email to ${clinicEmail} (Clinic: ${clinicName})`,
     );
 
-    const renewalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription`;
+    const renewalLink = `${process.env.FRONTEND_LANDING_URL || 'http://localhost:5173'}/subscription`;
     await this.mailerService.sendSubscriptionExpired(clinicEmail, {
       clinicName,
       planName: expiredPlan,

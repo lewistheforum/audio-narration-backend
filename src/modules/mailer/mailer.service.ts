@@ -303,7 +303,7 @@ export class MailerService {
       html: this.renderTemplate('moderation/account-unbanned.hbs', {
         name,
         loginUrl:
-          this.configService.get<string>('FRONTEND_URL') ||
+          this.configService.get<string>('FRONTEND_LANDING_URL') ||
           'http://localhost:5173',
       }),
     };
@@ -393,7 +393,7 @@ export class MailerService {
       html: this.renderTemplate('moderation/clinic-unbanned.hbs', {
         name,
         loginUrl:
-          this.configService.get<string>('FRONTEND_URL') ||
+          this.configService.get<string>('FRONTEND_LANDING_URL') ||
           'http://localhost:5173',
       }),
     };
@@ -530,7 +530,7 @@ export class MailerService {
       html: this.renderTemplate('auth/welcome.hbs', {
         fullName,
         frontendUrl:
-          this.configService.get<string>('FRONTEND_URL') ||
+          this.configService.get<string>('FRONTEND_LANDING_URL') ||
           'http://localhost:5173',
       }),
     };
@@ -827,7 +827,7 @@ export class MailerService {
         displayName,
         username,
         password,
-        loginUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/login`,
+        loginUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:5173'}/login`,
       }),
     };
 
@@ -859,7 +859,7 @@ export class MailerService {
       subject: '🎉 Registration Approved - Medicare',
       html: this.renderTemplate('onboarding/registration-approved.hbs', {
         displayName,
-        paymentUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/payment`,
+        paymentUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:5173'}/payment`,
       }),
     };
 
@@ -893,7 +893,7 @@ export class MailerService {
       html: this.renderTemplate('onboarding/registration-rejected.hbs', {
         displayName,
         reason,
-        documentsUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/documents`,
+        documentsUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:5173'}/documents`,
       }),
     };
 
@@ -985,7 +985,7 @@ export class MailerService {
         currentPlan: context.currentPlan,
         nextPlan: context.nextPlan,
         activationText,
-        subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`,
+        subscriptionUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:5173'}/subscription`,
       }),
     };
 
@@ -1057,7 +1057,7 @@ export class MailerService {
         endDate: context.endDate,
         transactionId: context.transactionId,
         invoiceLink: context.invoiceLink,
-        subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`,
+        subscriptionUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:5173'}/subscription`,
       }),
     };
 
@@ -1105,7 +1105,7 @@ export class MailerService {
         highlightMessage: isUpgrade
           ? 'You now have access to the enhanced capabilities included with your updated plan.'
           : 'Your updated subscription plan is now active and ready for use.',
-        subscriptionUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/subscription`,
+        subscriptionUrl: `${this.configService.get<string>('FRONTEND_LANDING_URL') || 'http://localhost:5173'}/subscription`,
         buttonText: isUpgrade ? 'Explore New Features' : 'View Subscription',
         featureNote: isUpgrade
           ? 'Additional premium capabilities are now available to your clinic.'
@@ -1144,7 +1144,7 @@ export class MailerService {
         greeting: clinicName ? `Dear ${clinicName},` : 'Dear Valued Clinic,',
         status,
         reRegisterUrl:
-          this.configService.get<string>('FRONTEND_URL') ||
+          this.configService.get<string>('FRONTEND_LANDING_URL') ||
           'http://localhost:5173',
       }),
     };
@@ -1213,7 +1213,8 @@ export class MailerService {
   ): Promise<void> {
     const transporter = this.mailTransport();
     const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      this.configService.get<string>('FRONTEND_LANDING_URL') ||
+      'http://localhost:5173';
 
     const mailOptions = {
       from: {
@@ -1279,7 +1280,8 @@ export class MailerService {
   }): Promise<void> {
     const transporter = this.mailTransport();
     const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      this.configService.get<string>('FRONTEND_LANDING_URL') ||
+      'http://localhost:5173';
 
     const mailOptions = {
       from: {
