@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Transaction } from '../entities/transaction.entity';
 import { parseVietnamTime } from '../../../common/utils/date.util';
+import { AppointmentPackageStatus, PaymentType } from '../../appointments/enums';
 
 @Injectable()
 export class TransactionRepository extends Repository<Transaction> {
@@ -152,34 +153,39 @@ export class TransactionRepository extends Repository<Transaction> {
     period: string,
   ): Promise<any[]> {
     return this.query(
-      `WITH mapped_transactions AS (
+      `WITH paid_packages AS (
           SELECT
-            t._id AS transaction_id,
-            MIN(t.transaction_date) AS transaction_date,
-            MAX(ap.payment_type) AS payment_type,
-            MAX(t.amount) AS amount
-          FROM transactions t
-          INNER JOIN appointment_package ap ON ap.transaction_id = t._id
-          INNER JOIN appointments a ON a._id = ap.appointment_id
-          WHERE a.clinic_id = $2
-            AND t.status = 'SUCCESS'
-            AND t.deleted_at IS NULL
+            ap._id AS package_id,
+            ap.amount AS amount,
+            apt.appointment_date AS appointment_date,
+            ap.payment_type AS payment_type
+          FROM appointment_package ap
+          INNER JOIN appointments apt ON apt._id = ap.appointment_id
+          WHERE apt.clinic_id = $2
+            AND ap.status = $5
+            AND ap.payment_type IN ($6, $7)
             AND ap.deleted_at IS NULL
-            AND a.deleted_at IS NULL
-            AND a.status NOT IN ('CANCELLED', 'ABSENT')
-            AND t.transaction_date >= $3
-            AND t.transaction_date <= $4
-          GROUP BY t._id
+            AND apt.deleted_at IS NULL
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
        )
        SELECT
-          DATE_TRUNC($1, mt.transaction_date) as label,
-          mt.payment_type as payment_type,
-          SUM(mt.amount)::bigint as total_revenue,
-          COUNT(mt.transaction_id)::int as transaction_count
-       FROM mapped_transactions mt
-       GROUP BY label, payment_type
+          DATE_TRUNC($1, pp.appointment_date::timestamp) as label,
+          pp.payment_type as payment_type,
+          SUM(pp.amount)::bigint as total_revenue,
+          COUNT(pp.package_id)::int as transaction_count
+       FROM paid_packages pp
+       GROUP BY label, pp.payment_type
        ORDER BY label ASC`,
-      [period, clinicId, startDate, endDate],
+      [
+        period,
+        clinicId,
+        startDate,
+        endDate,
+        AppointmentPackageStatus.PAID,
+        PaymentType.ONLINE,
+        PaymentType.COD,
+      ],
     );
   }
 

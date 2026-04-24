@@ -1408,25 +1408,32 @@ export class TransactionsService {
       period,
     );
 
-    const totalRevenue = stats.reduce(
-      (sum, s) => sum + Number(s.total_revenue),
-      0,
-    );
-    const totalOnlineRevenue = stats
+    const paymentTypeMap: Record<string, PaymentType> = {
+      [PaymentType.ONLINE]: PaymentType.ONLINE,
+      [PaymentType.COD]: PaymentType.COD,
+    };
+
+    const normalizedStats = stats.map((stat) => ({
+      ...stat,
+      payment_type: paymentTypeMap[String(stat.payment_type)] ?? stat.payment_type,
+    }));
+
+    const totalOnlineRevenue = normalizedStats
       .filter((s) => s.payment_type === PaymentType.ONLINE)
       .reduce((sum, s) => sum + Number(s.total_revenue), 0);
-    const totalCODRevenue = stats
+    const totalCODRevenue = normalizedStats
       .filter((s) => s.payment_type === PaymentType.COD)
       .reduce((sum, s) => sum + Number(s.total_revenue), 0);
+    const totalRevenue = totalOnlineRevenue + totalCODRevenue;
 
-    const totalTransactions = stats.reduce(
+    const totalTransactions = normalizedStats.reduce(
       (sum, s) => sum + Number(s.transaction_count),
       0,
     );
-    const onlineTransactions = stats
+    const onlineTransactions = normalizedStats
       .filter((s) => s.payment_type === PaymentType.ONLINE)
       .reduce((sum, s) => sum + Number(s.transaction_count), 0);
-    const codTransactions = stats
+    const codTransactions = normalizedStats
       .filter((s) => s.payment_type === PaymentType.COD)
       .reduce((sum, s) => sum + Number(s.transaction_count), 0);
 
@@ -1440,7 +1447,7 @@ export class TransactionsService {
       totalTransactions,
       onlineTransactions,
       codTransactions,
-      data: stats,
+      data: normalizedStats,
     };
   }
 
