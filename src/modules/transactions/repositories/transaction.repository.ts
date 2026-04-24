@@ -157,28 +157,25 @@ export class TransactionRepository extends Repository<Transaction> {
           SELECT
             ap._id AS package_id,
             ap.amount AS amount,
-            a.appointment_date AS appointment_date,
-            (to_jsonb(a)->>'payment_type') AS payment_type
+            apt.appointment_date AS appointment_date,
+            ap.payment_type AS payment_type
           FROM appointment_package ap
-          INNER JOIN appointments a ON a._id = ap.appointment_id
-          WHERE a.clinic_id = $2
+          INNER JOIN appointments apt ON apt._id = ap.appointment_id
+          WHERE apt.clinic_id = $2
             AND ap.status = $5
+            AND ap.payment_type IN ($6, $7)
             AND ap.deleted_at IS NULL
-            AND a.deleted_at IS NULL
-            AND a.appointment_date >= $3::date
-            AND a.appointment_date <= $4::date
+            AND apt.deleted_at IS NULL
+            AND apt.appointment_date >= $3::date
+            AND apt.appointment_date <= $4::date
        )
        SELECT
           DATE_TRUNC($1, pp.appointment_date::timestamp) as label,
-          CASE
-            WHEN pp.payment_type = $6 THEN $6
-            WHEN pp.payment_type = $7 THEN $7
-            ELSE 'unknown'
-          END as payment_type,
+          pp.payment_type as payment_type,
           SUM(pp.amount)::bigint as total_revenue,
           COUNT(pp.package_id)::int as transaction_count
        FROM paid_packages pp
-       GROUP BY label, payment_type
+       GROUP BY label, pp.payment_type
        ORDER BY label ASC`,
       [
         period,
