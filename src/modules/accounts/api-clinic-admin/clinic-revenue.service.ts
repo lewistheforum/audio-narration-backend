@@ -311,9 +311,11 @@ export class ClinicRevenueService {
           FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND ap.status = $2
-            AND apt.appointment_date >= $3::date
-            AND apt.appointment_date <= $4::date
+            AND apt.status::text = $2
+            AND ap.status::text = $3
+            AND ap.payment_type::text IN ($4, $5)
+            AND apt.appointment_date >= $6::date
+            AND apt.appointment_date <= $7::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
         )
@@ -324,7 +326,10 @@ export class ClinicRevenueService {
       `,
       [
         branchIds,
+        AppointmentStatus.COMPLETED,
         AppointmentPackageStatus.PAID,
+        PaymentType.ONLINE,
+        PaymentType.COD,
         startDate,
         endDate,
       ],
@@ -438,25 +443,28 @@ export class ClinicRevenueService {
           SELECT
             apt._id as appointment_id,
             ap.amount,
-            (to_jsonb(apt)->>'payment_type') as payment_type
+            ap.payment_type::text as payment_type
           FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND ap.status = $2
-            AND apt.appointment_date >= $3::date
-            AND apt.appointment_date <= $4::date
+            AND apt.status::text = $2
+            AND ap.status::text = $3
+            AND apt.appointment_date >= $4::date
+            AND apt.appointment_date <= $5::date
+            AND ap.payment_type::text IN ($6, $7)
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
         )
         SELECT
-          COALESCE(SUM(CASE WHEN bp.payment_type = $5 THEN bp.amount ELSE 0 END), 0) as "onlineRevenue",
-          COUNT(DISTINCT CASE WHEN bp.payment_type = $5 THEN bp.appointment_id END) as "onlineCount",
-          COALESCE(SUM(CASE WHEN bp.payment_type = $6 THEN bp.amount ELSE 0 END), 0) as "cashRevenue",
-          COUNT(DISTINCT CASE WHEN bp.payment_type = $6 THEN bp.appointment_id END) as "cashCount"
+          COALESCE(SUM(CASE WHEN bp.payment_type = $6 THEN bp.amount ELSE 0 END), 0) as "onlineRevenue",
+          COUNT(DISTINCT CASE WHEN bp.payment_type = $6 THEN bp.appointment_id END) as "onlineCount",
+          COALESCE(SUM(CASE WHEN bp.payment_type = $7 THEN bp.amount ELSE 0 END), 0) as "cashRevenue",
+          COUNT(DISTINCT CASE WHEN bp.payment_type = $7 THEN bp.appointment_id END) as "cashCount"
         FROM billable_packages bp
       `,
       [
         branchIds,
+        AppointmentStatus.COMPLETED,
         AppointmentPackageStatus.PAID,
         startDate,
         endDate,
@@ -519,9 +527,11 @@ export class ClinicRevenueService {
           FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND ap.status = $2
-            AND apt.appointment_date >= $3::date
-            AND apt.appointment_date <= $4::date
+            AND apt.status::text = $2
+            AND ap.status::text = $3
+            AND ap.payment_type::text IN ($4, $5)
+            AND apt.appointment_date >= $6::date
+            AND apt.appointment_date <= $7::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
         )
@@ -537,7 +547,10 @@ export class ClinicRevenueService {
       `,
       [
         branchIds,
+        AppointmentStatus.COMPLETED,
         AppointmentPackageStatus.PAID,
+        PaymentType.ONLINE,
+        PaymentType.COD,
         startDate,
         endDate,
       ],
@@ -559,35 +572,38 @@ export class ClinicRevenueService {
   ): Promise<TransactionStatusBreakdownDto> {
     const [result] = await this.accountRepository.manager.query(
       `
-        WITH package_statuses AS (
+        WITH billable_packages AS (
           SELECT
             ap._id,
-            ap.amount,
-            ap.status
+            ap.amount
           FROM appointment_package ap
           JOIN appointments apt ON apt._id = ap.appointment_id
           WHERE apt.clinic_id = ANY($1)
-            AND apt.appointment_date >= $2::date
-            AND apt.appointment_date <= $3::date
+            AND apt.status::text = $2
+            AND ap.status::text = $3
+            AND ap.payment_type::text IN ($4, $5)
+            AND apt.appointment_date >= $6::date
+            AND apt.appointment_date <= $7::date
             AND ap.deleted_at IS NULL
             AND apt.deleted_at IS NULL
         )
         SELECT
-          COUNT(CASE WHEN ps.status = $4 THEN ps._id END) as "successCount",
-          COALESCE(SUM(CASE WHEN ps.status = $4 THEN ps.amount ELSE 0 END), 0) as "successAmount",
-          COUNT(CASE WHEN ps.status = $5 THEN ps._id END) as "pendingCount",
-          COALESCE(SUM(CASE WHEN ps.status = $5 THEN ps.amount ELSE 0 END), 0) as "pendingAmount",
-          COUNT(CASE WHEN ps.status = $6 THEN ps._id END) as "failedCount",
-          COALESCE(SUM(CASE WHEN ps.status = $6 THEN ps.amount ELSE 0 END), 0) as "failedAmount"
-        FROM package_statuses ps
+          COUNT(bp._id) as "successCount",
+          COALESCE(SUM(bp.amount), 0) as "successAmount",
+          0 as "pendingCount",
+          0 as "pendingAmount",
+          0 as "failedCount",
+          0 as "failedAmount"
+        FROM billable_packages bp
       `,
       [
         branchIds,
+        AppointmentStatus.COMPLETED,
+        AppointmentPackageStatus.PAID,
+        PaymentType.ONLINE,
+        PaymentType.COD,
         startDate,
         endDate,
-        AppointmentPackageStatus.PAID,
-        AppointmentPackageStatus.PENDING_PAYMENT,
-        AppointmentPackageStatus.CANCELLED,
       ],
     );
 
