@@ -382,31 +382,30 @@ export class ClinicRevenueService {
     const results = await this.accountRepository.manager.query(
       `
         SELECT
-          CASE
-            WHEN (to_jsonb(apt)->>'payment_type') = $5 THEN 'ONLINE'
-            WHEN (to_jsonb(apt)->>'payment_type') = $6 THEN 'COD'
-            ELSE 'UNKNOWN'
-          END as "typeName",
+          UPPER(ap.payment_type::text) as "typeName",
           COUNT(ap._id) as "count",
           COALESCE(SUM(ap.amount), 0) as "amount"
         FROM appointment_package ap
         JOIN appointments apt ON apt._id = ap.appointment_id
         WHERE apt.clinic_id = ANY($1)
-          AND ap.status = $2
-          AND apt.appointment_date >= $3::date
-          AND apt.appointment_date <= $4::date
+          AND apt.status::text = $2
+          AND ap.status::text = $3
+          AND ap.payment_type::text IN ($4, $5)
+          AND apt.appointment_date >= $6::date
+          AND apt.appointment_date <= $7::date
           AND ap.deleted_at IS NULL
           AND apt.deleted_at IS NULL
-        GROUP BY 1
+        GROUP BY ap.payment_type
         ORDER BY "count" DESC
       `,
       [
         branchIds,
+        AppointmentStatus.COMPLETED,
         AppointmentPackageStatus.PAID,
-        startDate,
-        endDate,
         PaymentType.ONLINE,
         PaymentType.COD,
+        startDate,
+        endDate,
       ],
     );
 
@@ -419,7 +418,7 @@ export class ClinicRevenueService {
       const count = parseInt(item.count || '0', 10);
       const amount = parseInt(item.amount || '0', 10);
       return {
-        typeName: item.typeName || 'Unknown',
+        typeName: item.typeName,
         count,
         amount,
         percentage:
