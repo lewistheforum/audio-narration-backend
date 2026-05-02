@@ -10,6 +10,7 @@ import { GoogleStrategy } from './google.strategy';
 import { AccountsModule } from '../accounts/accounts.module';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { MailerModule } from '../mailer/mailer.module';
+import { RsaCryptoService } from 'src/common/services/rsa-crypto.service';
 
 /**
  * Authentication Module
@@ -41,7 +42,7 @@ import { MailerModule } from '../mailer/mailer.module';
     MailerModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],
-  exports: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy, RsaCryptoService],
+  exports: [AuthService, JwtStrategy, JwtAuthGuard, GoogleStrategy, RsaCryptoService],
 })
 export class AuthModule {}

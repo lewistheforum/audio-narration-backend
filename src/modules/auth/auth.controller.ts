@@ -12,8 +12,11 @@ import {
   Param,
   Res,
   ParseUUIDPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { RsaCryptoService } from 'src/common/services/rsa-crypto.service';
+import { EncryptedPayloadDto } from 'src/common/dto/encrypted-payload.dto';
 import {
   LoginDto,
   LoginResponseDto,
@@ -77,29 +80,73 @@ export class AuthController {
     private AccountsService: AccountsService,
     private mailerService: MailerService,
     private configService: ConfigService,
+    private rsaCryptoService: RsaCryptoService,
   ) {}
 
   /**
-   * User Login
-   * Authenticates user with email and password
+   * Expose RSA Public Key
    *
-   * @param loginDto - User credentials (email & password)
+   * Returns the server's RSA public key in PEM format.
+   * Clients must use this key to encrypt login credentials and blog payloads
+   * before sending them to the protected endpoints.
+   *
+   * @returns RSA public key PEM string
+   */
+  @Get('public-key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get server RSA public key',
+    description:
+      'Returns the RSA public key used to encrypt request payloads. ' +
+      'Use this key with RSA-OAEP-SHA256 padding before calling POST /auth/login or blog CUD endpoints.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'RSA public key in PEM format',
+    schema: { properties: { publicKey: { type: 'string' } } },
+  })
+  getPublicKey(): { publicKey: string } {
+    return { publicKey: this.rsaCryptoService.getPublicKey() };
+  }
+
+  /**
+   * User Login
+   *
+   * Authenticates user with email and password.
+   * The request body must be encrypted with the server RSA public key (OAEP SHA-256).
+   *
+   * Encrypted body shape (before encryption): { email: string, password: string, role: string }
+   *
+   * @param body - { encryptedData: string } — RSA-OAEP-SHA256 encrypted + base64-encoded LoginDto JSON
    * @returns JWT access token and user information
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
-  @ApiBody({ type: LoginDto })
+  @ApiOperation({
+    summary: 'Login with encrypted credentials (RSA-OAEP-SHA256)',
+    description:
+      'Accepts a base64-encoded RSA-OAEP-SHA256 encrypted JSON body. ' +
+      'Encrypt { email, password, role } JSON with the public key from GET /auth/public-key.',
+  })
+  @ApiBody({ type: EncryptedPayloadDto })
   @ApiResponseData({
     type: LoginResponseDto,
     status: MESSAGES.statusCode.success,
     message: MESSAGES.successMessage.loginSuccess,
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 400, description: 'Invalid or malformed encrypted payload' })
   async login(
-    @Body() loginDto: LoginDto,
+    @Body() body: EncryptedPayloadDto,
   ): Promise<{ data: any; message: string }> {
+    // Decrypt RSA payload → parse original LoginDto fields
+    const plaintext = this.rsaCryptoService.decryptWithPrivateKey(body.encryptedData);
+    let loginDto: LoginDto;
+    try {
+      loginDto = JSON.parse(plaintext);
+    } catch {
+      throw new BadRequestException('Invalid JSON payload after decryption');
+    }
     const result = await this.authService.login(loginDto);
     return { data: result.data, message: result.message };
   }

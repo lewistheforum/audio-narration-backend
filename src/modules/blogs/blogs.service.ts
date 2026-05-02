@@ -171,7 +171,7 @@ export class BlogsService {
    * @param {Account} user - Authenticated user (Clinic Admin)
    * @returns {Promise<BlogResponseDto>} Created blog dto
    */
-  async create(
+   async create(
     createBlogDto: CreateBlogDto,
     user: Account,
   ): Promise<BlogResponseDto> {
@@ -187,7 +187,7 @@ export class BlogsService {
     const savedBlog = await this.dataSource.transaction(async (manager) => {
       const blog = manager.create(Blog, {
         ...createBlogDto,
-        clinicId: user.parentId,
+        clinicId: user.parentId || user._id,
       });
 
       const newBlog = await manager.save(Blog, blog);
@@ -257,7 +257,7 @@ export class BlogsService {
       throw new NotFoundException('Blog not found');
     }
 
-    if (blog.clinicId !== user.parentId) {
+    if (blog.clinicId !== (user.parentId || user._id)) {
       throw new ForbiddenException('You can only update your own blogs');
     }
 
@@ -290,7 +290,7 @@ export class BlogsService {
       throw new NotFoundException('Blog not found');
     }
 
-    if (blog.clinicId !== user.parentId) {
+    if (blog.clinicId !== (user.parentId || user._id)) {
       throw new ForbiddenException('You can only delete your own blogs');
     }
 

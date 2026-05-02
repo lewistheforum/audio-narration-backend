@@ -9,6 +9,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -33,6 +34,8 @@ import { Account } from '../accounts/entities/accounts.entity';
 import { User } from 'src/common/decorators/user.decorator';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { RolesGuard } from 'src/common/guards/roles.guard';
+import { RsaCryptoService } from 'src/common/services/rsa-crypto.service';
+import { HybridEncryptedPayloadDto } from 'src/common/dto/encrypted-payload.dto';
 
 /**
  * Blogs Controller
@@ -56,7 +59,10 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 @ApiExtraModels(BlogResponseDto, BlogListResponseDto)
 @Controller('blogs')
 export class BlogsController {
-  constructor(private readonly blogsService: BlogsService) {}
+  constructor(
+    private readonly blogsService: BlogsService,
+    private readonly rsaCryptoService: RsaCryptoService,
+  ) {}
 
   /**
    * Get All Blogs
@@ -319,28 +325,50 @@ export class BlogsController {
    * Create Blog
    *
    * Creates a new blog post.
+   * The request body must be hybrid-encrypted (RSA+AES-GCM).
+   *
+   * Encrypted body shape (before encryption): CreateBlogDto
+   *
+   * How to encrypt:
+   *   1. Generate random AES-256-GCM key (32 bytes) + IV (12 bytes).
+   *   2. AES-GCM encrypt JSON.stringify(createBlogDto); append 16-byte auth tag to ciphertext.
+   *   3. RSA-OAEP-SHA256 encrypt the AES key with server public key from GET /auth/public-key.
+   *   4. Send { encryptedKey, iv, encryptedData } (all base64).
    *
    * Access Control:
    * - Protected endpoint (JWT required)
    * - Restricted to CLINIC_ADMIN role
    *
-   * @param {CreateBlogDto} createBlogDto - Blog creation data
-   * @param {Account} user - Authenticated user
+   * @param body - HybridEncryptedPayloadDto
+   * @param user - Authenticated user
    * @returns {Promise<{data: BlogResponseDto, message: string}>} Created blog
    */
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create a new blog' })
+  @ApiOperation({
+    summary: 'Create a new blog (hybrid RSA+AES-GCM encrypted body)',
+    description:
+      'Accepts a hybrid-encrypted body: { encryptedKey, iv, encryptedData }. ' +
+      'Encrypt the CreateBlogDto JSON with AES-GCM and wrap the AES key with RSA-OAEP-SHA256.',
+  })
   @ApiResponseData({
     type: BlogResponseDto,
     status: MESSAGES.statusCode.created,
     message: 'Blog created successfully',
   })
   async create(
-    @Body() createBlogDto: CreateBlogDto,
+    @Body() body: HybridEncryptedPayloadDto,
     @User() user: Account,
   ): Promise<{ data: BlogResponseDto; message: string }> {
+    // Hybrid-decrypt → parse original CreateBlogDto fields
+    const plaintext = this.rsaCryptoService.hybridDecrypt(body);
+    let createBlogDto: CreateBlogDto;
+    try {
+      createBlogDto = JSON.parse(plaintext);
+    } catch {
+      throw new BadRequestException('Invalid JSON payload after decryption');
+    }
     const blog = await this.blogsService.create(createBlogDto, user);
     return {
       data: blog,
@@ -352,6 +380,9 @@ export class BlogsController {
    * Update Blog
    *
    * Updates an existing blog post.
+   * The request body must be hybrid-encrypted (RSA+AES-GCM).
+   *
+   * Encrypted body shape (before encryption): UpdateBlogDto
    *
    * Access Control:
    * - Protected endpoint (JWT required)
@@ -359,14 +390,19 @@ export class BlogsController {
    * - User must be the owner of the blog
    *
    * @param {string} id - Blog UUID
-   * @param {UpdateBlogDto} updateBlogDto - Blog update data
+   * @param body - HybridEncryptedPayloadDto
    * @param {Account} user - Authenticated user
    * @returns {Promise<{data: BlogResponseDto, message: string}>} Updated blog
    */
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update a blog' })
+  @ApiOperation({
+    summary: 'Update a blog (hybrid RSA+AES-GCM encrypted body)',
+    description:
+      'Accepts a hybrid-encrypted body: { encryptedKey, iv, encryptedData }. ' +
+      'Encrypt the UpdateBlogDto JSON with AES-GCM and wrap the AES key with RSA-OAEP-SHA256.',
+  })
   @ApiResponseData({
     type: BlogResponseDto,
     status: MESSAGES.statusCode.success,
@@ -374,9 +410,17 @@ export class BlogsController {
   })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateBlogDto: UpdateBlogDto,
+    @Body() body: HybridEncryptedPayloadDto,
     @User() user: Account,
   ): Promise<{ data: BlogResponseDto; message: string }> {
+    // Hybrid-decrypt → parse original UpdateBlogDto fields
+    const plaintext = this.rsaCryptoService.hybridDecrypt(body);
+    let updateBlogDto: UpdateBlogDto;
+    try {
+      updateBlogDto = JSON.parse(plaintext);
+    } catch {
+      throw new BadRequestException('Invalid JSON payload after decryption');
+    }
     const blog = await this.blogsService.update(id, updateBlogDto, user);
     return {
       data: blog,

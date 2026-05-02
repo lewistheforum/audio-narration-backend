@@ -8,6 +8,7 @@ import { Account } from '../accounts/entities/accounts.entity';
 import { BlogNotification } from '../notifications/entities/blog-notification.entity';
 import { SocketGatewayModule } from '../socket-gateway/socket-gateway.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { RsaCryptoService } from 'src/common/services/rsa-crypto.service';
 
 /**
  * Blogs Module
@@ -21,7 +22,7 @@ import { AccountsModule } from '../accounts/accounts.module';
     AccountsModule,
   ],
   controllers: [BlogsController],
-  providers: [BlogRepository, BlogsService],
+  providers: [BlogRepository, BlogsService, RsaCryptoService],
   exports: [BlogRepository],
 })
 export class BlogsModule {}
