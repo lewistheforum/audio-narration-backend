@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { DatabaseHealthService } from './common/health/database-health.service';
+
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
@@ -77,9 +77,6 @@ async function bootstrap(): Promise<void> {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
-
-  const databaseHealthService = app.get(DatabaseHealthService);
-  await databaseHealthService.checkAllConnections();
 
   const PORT = process.env.PORT || 4000;
 

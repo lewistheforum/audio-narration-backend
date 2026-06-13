@@ -1,38 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { buildTypeOrmOptions } from './config/typeorm.config';
-import { RedisModule } from './config/redis.config';
+import { MongooseModule } from '@nestjs/mongoose';
+import { AudioNarrationModule } from './modules/audio-narration/audio-narration.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { AccountsModule } from './modules/accounts/accounts.module';
-import { HealthModule } from './common/health/health.module';
-import { MailerModule } from './modules/mailer/mailer.module';
-import { SocketGatewayModule } from './modules/socket-gateway/socket-gateway.module';
-import { ConversationModule } from './modules/conversations/conversation.module';
-import { MessagesModule } from './modules/messages/messages.module';
-import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
-import { BlogsModule } from './modules/blogs/blogs.module';
-import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
-import { SchedulesModule } from './modules/schedules/schedules.module';
-import { ReportsModule } from './modules/reports/reports.module';
-import { TransactionsModule } from './modules/transactions/transactions.module';
-import { ClinicLegalDocumentsModule } from './modules/clinic-legal-documents/clinic-legal-documents.module';
-import { ClinicServicesModule } from './modules/clinic-services/clinic-services.module';
-import { ServiceConfigsModule } from './modules/service-configs/service-configs.module';
-import { AppointmentsModule } from './modules/appointments/appointments.module';
-import { AiModule } from './modules/ai/ai.module';
-import { SeedersModule } from './common/seeders/seeders.module';
-import { AdminModule } from './modules/admin/admin.module';
-import { PatientsModule } from './modules/accounts/api-admin-patients/patients.module';
-import { Account } from './modules/accounts/entities/accounts.entity';
-import { ClinicAdminsModule } from './modules/accounts/api-admin-clinic-admin/clinic-admins.module';
-import { ClinicManagersModule } from './modules/accounts/api-clinic-admin/clinic-managers.module';
-import { ManagedAccountsModule } from './modules/accounts/api-clinic-manager/managed-accounts.module';
-import { StaffPatientsModule } from './modules/accounts/api-staff/staff-patients.module';
-import { ClinicSubscriptionGuard } from './common/guards/clinic-subscription.guard';
 
 @Module({
   imports: [
@@ -43,49 +14,19 @@ import { ClinicSubscriptionGuard } from './common/guards/clinic-subscription.gua
 
     ScheduleModule.forRoot(),
 
-    TypeOrmModule.forRootAsync({
+    MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => buildTypeOrmOptions(config),
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGO_URI'),
+        dbName: configService.get<string>('MONGO_DATABASE'),
+      }),
     }),
 
-    TypeOrmModule.forFeature([Account]),
-
-    RedisModule,
-
     AuthModule,
-    AccountsModule,
-    HealthModule,
-    MailerModule,
-    SocketGatewayModule,
-    ConversationModule,
-    MessagesModule,
-    PrescriptionsModule,
-    NotificationsModule,
-    BlogsModule,
-    SubscriptionsModule,
-    SchedulesModule,
-    ReportsModule,
-    TransactionsModule,
-    ClinicLegalDocumentsModule,
-    ClinicServicesModule,
-    ServiceConfigsModule,
-    AppointmentsModule,
-    AiModule,
-    SeedersModule,
-    AdminModule,
-    PatientsModule,
-    ClinicAdminsModule,
-    ClinicManagersModule,
-    ManagedAccountsModule,
-    StaffPatientsModule,
+    AudioNarrationModule,
   ],
   controllers: [],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ClinicSubscriptionGuard,
-    },
-  ],
+  providers: [],
 })
 export class AppModule {}

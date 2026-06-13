@@ -1,6 +1,0 @@
-export enum ContractType {
-  PROBATION = 'PROBATION',
-  FIXED_TERM = 'FIXED_TERM',
-  INDEFINITE = 'INDEFINITE',
-  SERVICE = 'SERVICE',
-}
