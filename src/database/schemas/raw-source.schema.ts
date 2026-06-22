@@ -2,27 +2,30 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
-export type UserDocument = User & Document;
+export type RawSourceDocument = RawSource & Document;
 
 @Schema({ timestamps: true })
-export class User {
+export class RawSource {
   @Prop({ type: String, default: uuidv4 })
   _id: string;
 
-  @Prop({ required: true })
-  username: string;
-
-  @Prop({ required: true, unique: true })
-  email: string;
+  @Prop()
+  originalUrl: string;
 
   @Prop()
-  phone: string;
-
-  @Prop({ required: true })
-  password: string;
+  type: string;
 
   @Prop()
-  deletedAt?: Date;
+  videoLength: number;
+
+  @Prop()
+  path: string;
+
+  @Prop()
+  fileSize: number;
+
+  @Prop()
+  fileType: string;
 
   @Prop()
   createdAt?: Date;
@@ -31,4 +34,4 @@ export class User {
   updatedAt?: Date;
 }
 
-export const UserSchema = SchemaFactory.createForClass(User);
+export const RawSourceSchema = SchemaFactory.createForClass(RawSource);
