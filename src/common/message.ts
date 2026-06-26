@@ -45,7 +45,7 @@ const successMessage = {
     'Doctor account created successfully with PENDING status. Doctor must complete profile before login.',
   // Email Verification
   emailVerifiedSuccess:
-    'Email verified successfully. Your account is now ACTIVE. Welcome to Medicare!',
+    'Email verified successfully. Your account is now ACTIVE. Welcome to Audio Narration!',
   verificationCodeSentSuccess:
     'Verification code sent to your email. Code expires in 10 minutes. Please check your inbox.',
   // Password Management
@@ -120,7 +120,7 @@ const failMessage = {
   userAlreadyBanned: 'User is already banned',
   userNotBanned: 'User is not banned',
   userAccountBanned:
-    'Your account has been banned. Please contact support at support@medicare.com',
+    'Your account has been banned. Please contact support at support@audionarration.com',
   userAccountInactive:
     'Your account is suspended. Please contact support to reactivate',
   userAccountDeleted:

@@ -34,7 +34,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api');
 
   const config = new DocumentBuilder()
-    .setTitle('Medicare API')
+    .setTitle('Audio Narration API')
     .setDescription(
       'A comprehensive healthcare platform API for patient management, clinic services, messaging, and doctor discovery',
     )
