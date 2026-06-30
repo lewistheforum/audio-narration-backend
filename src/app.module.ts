@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AudioNarrationModule } from './modules/audio-narration/audio-narration.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuthModule } from './modules/auth/auth.module';
     }),
 
     AuthModule,
+    UsersModule,
     AudioNarrationModule,
   ],
   controllers: [],
